@@ -72,6 +72,9 @@ importers:
       '@h1ve/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      bullmq:
+        specifier: ^5.34.8
+        version: 5.66.5
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(postgres@3.4.8)

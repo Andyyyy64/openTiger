@@ -1,107 +1,246 @@
 import { db } from "@h1ve/db";
-import { tasks, leases } from "@h1ve/db/schema";
-import { eq, and, lt, isNull, or, notInArray } from "drizzle-orm";
+import { tasks, agents } from "@h1ve/db/schema";
+import { eq } from "drizzle-orm";
+import {
+  createTaskQueue,
+  enqueueTask,
+  createTaskWorker,
+  getQueueStats,
+  type TaskJobData,
+} from "@h1ve/queue";
+import type { Job } from "bullmq";
 
-// ディスパッチャー: タスクをWorkerに割り当てる
-// 1. queued状態のタスクを取得
-// 2. 依存関係を確認
-// 3. 優先度でソート
-// 4. 空いているWorkerにリース発行
+import {
+  cleanupExpiredLeases,
+  acquireLease,
+  releaseLease,
+  getAvailableTasks,
+  launchWorker,
+  stopAllWorkers,
+  getActiveWorkerCount,
+  reclaimDeadAgentLeases,
+  getAgentStats,
+  registerAgent,
+  type LaunchMode,
+} from "./scheduler/index.js";
 
-const POLL_INTERVAL_MS = 5000; // 5秒ごとにポーリング
-const LEASE_DURATION_MINUTES = 60; // リースの有効期限
-
-async function cleanupExpiredLeases(): Promise<void> {
-  // 期限切れリースを削除
-  const now = new Date();
-  await db.delete(leases).where(lt(leases.expiresAt, now));
+// ディスパッチャー設定
+interface DispatcherConfig {
+  pollIntervalMs: number;
+  maxConcurrentWorkers: number;
+  launchMode: LaunchMode;
+  repoUrl: string;
+  baseBranch: string;
+  workspacePath: string;
 }
 
-async function getQueuedTasks() {
-  // 依存関係が解決済みのqueuedタスクを取得
-  const queuedTasks = await db
-    .select()
-    .from(tasks)
-    .where(eq(tasks.status, "queued"));
+// デフォルト設定
+const DEFAULT_CONFIG: DispatcherConfig = {
+  pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS ?? "5000", 10),
+  maxConcurrentWorkers: parseInt(process.env.MAX_CONCURRENT_WORKERS ?? "5", 10),
+  launchMode: (process.env.LAUNCH_MODE as LaunchMode) ?? "process",
+  repoUrl: process.env.REPO_URL ?? "",
+  baseBranch: process.env.BASE_BRANCH ?? "main",
+  workspacePath: process.env.WORKSPACE_PATH ?? "/tmp/h1ve-workspace",
+};
 
-  // 既にリースが取得されているタスクを除外
-  const leasedTaskIds = await db.select({ taskId: leases.taskId }).from(leases);
-  const leasedIds = new Set(leasedTaskIds.map((l) => l.taskId));
+// ディスパッチャーの状態
+let isRunning = false;
+let taskQueue: ReturnType<typeof createTaskQueue> | null = null;
 
-  // 完了済みタスクのIDを取得
-  const doneTasks = await db
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(eq(tasks.status, "done"));
-  const doneIds = new Set(doneTasks.map((t) => t.id));
+// タスクをディスパッチ
+async function dispatchTask(
+  task: Awaited<ReturnType<typeof getAvailableTasks>>[0],
+  agentId: string,
+  config: DispatcherConfig
+): Promise<boolean> {
+  // リースを取得
+  const leaseResult = await acquireLease(task.id, agentId);
 
-  // 依存関係が解決済みかつリースされていないタスクをフィルタ
-  const availableTasks = queuedTasks.filter((task) => {
-    if (leasedIds.has(task.id)) return false;
-
-    // 全ての依存タスクが完了しているか確認
-    const deps = task.dependencies ?? [];
-    return deps.every((depId) => doneIds.has(depId));
-  });
-
-  // 優先度でソート（高い順）
-  return availableTasks.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
-}
-
-async function dispatchTask(taskId: string, agentId: string): Promise<boolean> {
-  // リースを取得（楽観的並行制御）
-  const expiresAt = new Date(Date.now() + LEASE_DURATION_MINUTES * 60 * 1000);
-
-  try {
-    await db.insert(leases).values({
-      taskId,
-      agentId,
-      expiresAt,
-    });
-
-    // タスクをrunning状態に更新
-    await db
-      .update(tasks)
-      .set({ status: "running", updatedAt: new Date() })
-      .where(eq(tasks.id, taskId));
-
-    console.log(`Task ${taskId} dispatched to agent ${agentId}`);
-    return true;
-  } catch (error) {
-    // リース取得に失敗（既に他のエージェントが取得済み）
-    console.log(`Failed to dispatch task ${taskId}: already leased`);
+  if (!leaseResult.success) {
+    console.log(`[Dispatch] Failed to acquire lease for task ${task.id}: ${leaseResult.error}`);
     return false;
   }
+
+  // タスクをrunning状態に更新
+  await db
+    .update(tasks)
+    .set({ status: "running", updatedAt: new Date() })
+    .where(eq(tasks.id, task.id));
+
+  // BullMQキューにジョブを追加
+  if (taskQueue) {
+    await enqueueTask(taskQueue, {
+      taskId: task.id,
+      agentId,
+      priority: task.priority,
+    });
+    console.log(`[Dispatch] Task ${task.id} enqueued for agent ${agentId}`);
+  }
+
+  // Workerを起動
+  const launchResult = await launchWorker({
+    mode: config.launchMode,
+    taskId: task.id,
+    agentId,
+    repoUrl: config.repoUrl,
+    baseBranch: config.baseBranch,
+    workspacePath: `${config.workspacePath}/${agentId}`,
+  });
+
+  if (!launchResult.success) {
+    console.error(`[Dispatch] Failed to launch worker: ${launchResult.error}`);
+    // リースを解放してタスクをqueuedに戻す
+    await releaseLease(task.id);
+    await db
+      .update(tasks)
+      .set({ status: "queued", updatedAt: new Date() })
+      .where(eq(tasks.id, task.id));
+    return false;
+  }
+
+  console.log(
+    `[Dispatch] Task "${task.title}" dispatched to agent ${agentId} (${config.launchMode} mode)`
+  );
+  return true;
 }
 
-async function runDispatchLoop(): Promise<void> {
-  console.log("Dispatcher started");
+// ディスパッチループ
+async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
+  console.log("=".repeat(60));
+  console.log("h1ve Dispatcher started");
+  console.log("=".repeat(60));
+  console.log(`Poll interval: ${config.pollIntervalMs}ms`);
+  console.log(`Max concurrent workers: ${config.maxConcurrentWorkers}`);
+  console.log(`Launch mode: ${config.launchMode}`);
+  console.log(`Repository: ${config.repoUrl}`);
+  console.log(`Base branch: ${config.baseBranch}`);
+  console.log("=".repeat(60));
 
-  while (true) {
+  while (isRunning) {
     try {
       // 期限切れリースをクリーンアップ
-      await cleanupExpiredLeases();
+      const expiredCount = await cleanupExpiredLeases();
+      if (expiredCount > 0) {
+        console.log(`[Cleanup] Released ${expiredCount} expired leases`);
+      }
 
-      // 利用可能なタスクを取得
-      const availableTasks = await getQueuedTasks();
+      // オフラインエージェントのリースを回収
+      const reclaimedCount = await reclaimDeadAgentLeases();
+      if (reclaimedCount > 0) {
+        console.log(`[Cleanup] Reclaimed ${reclaimedCount} leases from dead agents`);
+      }
 
-      if (availableTasks.length > 0) {
-        console.log(`Found ${availableTasks.length} available tasks`);
+      // 現在のWorker数をチェック
+      const activeWorkerCount = getActiveWorkerCount();
+      const availableSlots = config.maxConcurrentWorkers - activeWorkerCount;
 
-        // TODO: 空いているWorkerを取得してディスパッチ
-        // 現時点では単にログ出力
-        for (const task of availableTasks) {
-          console.log(`  - ${task.title} (priority: ${task.priority})`);
+      if (availableSlots > 0) {
+        // 利用可能なタスクを取得
+        const availableTasks = await getAvailableTasks();
+
+        if (availableTasks.length > 0) {
+          console.log(`[Dispatch] Found ${availableTasks.length} available tasks, ${availableSlots} slots available`);
+
+          // 利用可能なスロット分だけディスパッチ
+          const tasksToDispatch = availableTasks.slice(0, availableSlots);
+
+          for (const task of tasksToDispatch) {
+            // エージェントIDを生成
+            const agentId = `worker-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+            // エージェントを登録
+            await registerAgent(agentId, "worker");
+
+            // ディスパッチ
+            await dispatchTask(task, agentId, config);
+          }
         }
       }
+
+      // 統計情報を定期的に出力
+      if (Math.random() < 0.1) {
+        const stats = await getAgentStats();
+        const queueStats = taskQueue ? await getQueueStats(taskQueue) : null;
+        console.log(
+          `[Stats] Agents: ${stats.busy} busy, ${stats.idle} idle, ${stats.offline} offline | ` +
+          `Queue: ${queueStats?.waiting ?? 0} waiting, ${queueStats?.active ?? 0} active`
+        );
+      }
     } catch (error) {
-      console.error("Dispatch loop error:", error);
+      console.error("[Dispatch] Error in dispatch loop:", error);
     }
 
     // 次のポーリングまで待機
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    await new Promise((resolve) => setTimeout(resolve, config.pollIntervalMs));
   }
 }
 
+// BullMQワーカーを起動
+function startQueueWorker(): void {
+  const worker = createTaskWorker(async (job: Job<TaskJobData>) => {
+    console.log(`[Queue] Processing job ${job.id} for task ${job.data.taskId}`);
+    // 実際の処理はWorkerプロセスが行うため、ここでは監視のみ
+  });
+
+  worker.on("completed", (job) => {
+    console.log(`[Queue] Job ${job.id} completed`);
+  });
+
+  worker.on("failed", (job, error) => {
+    console.error(`[Queue] Job ${job?.id} failed:`, error.message);
+  });
+}
+
+// シグナルハンドラー
+function setupSignalHandlers(): void {
+  const shutdown = async (signal: string) => {
+    console.log(`\n[Shutdown] Received ${signal}, stopping dispatcher...`);
+    isRunning = false;
+
+    // 全Workerを停止
+    await stopAllWorkers();
+
+    // キューを閉じる
+    if (taskQueue) {
+      await taskQueue.close();
+    }
+
+    console.log("[Shutdown] Dispatcher stopped");
+    process.exit(0);
+  };
+
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+}
+
 // メイン処理
-runDispatchLoop().catch(console.error);
+async function main(): Promise<void> {
+  const config = { ...DEFAULT_CONFIG };
+
+  // 設定の検証
+  if (!config.repoUrl) {
+    console.error("Error: REPO_URL environment variable is required");
+    process.exit(1);
+  }
+
+  // シグナルハンドラーを設定
+  setupSignalHandlers();
+
+  // BullMQキューを初期化
+  taskQueue = createTaskQueue();
+  console.log("[Init] Task queue initialized");
+
+  // BullMQワーカーを起動
+  startQueueWorker();
+  console.log("[Init] Queue worker started");
+
+  // ディスパッチャーを開始
+  isRunning = true;
+  await runDispatchLoop(config);
+}
+
+main().catch((error) => {
+  console.error("Dispatcher crashed:", error);
+  process.exit(1);
+});

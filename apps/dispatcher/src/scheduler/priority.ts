@@ -1,0 +1,165 @@
+import { db } from "@h1ve/db";
+import { tasks, leases } from "@h1ve/db/schema";
+import { eq, and, inArray, notInArray } from "drizzle-orm";
+
+// タスク選択結果
+export interface AvailableTask {
+  id: string;
+  title: string;
+  goal: string;
+  priority: number;
+  riskLevel: string;
+  timeboxMinutes: number;
+  dependencies: string[];
+  allowedPaths: string[];
+  commands: string[];
+  context: Record<string, unknown> | null;
+}
+
+// 利用可能なタスクを優先度順で取得
+export async function getAvailableTasks(): Promise<AvailableTask[]> {
+  // queuedステータスのタスクを取得
+  const queuedTasks = await db
+    .select()
+    .from(tasks)
+    .where(eq(tasks.status, "queued"));
+
+  if (queuedTasks.length === 0) {
+    return [];
+  }
+
+  // リース済みタスクIDを取得
+  const leasedTasks = await db.select({ taskId: leases.taskId }).from(leases);
+  const leasedIds = new Set(leasedTasks.map((l) => l.taskId));
+
+  // 完了済みタスクIDを取得
+  const doneTasks = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(eq(tasks.status, "done"));
+  const doneIds = new Set(doneTasks.map((t) => t.id));
+
+  // フィルタリング: リースなし、依存関係解決済み
+  const available = queuedTasks.filter((task) => {
+    // リース済みは除外
+    if (leasedIds.has(task.id)) {
+      return false;
+    }
+
+    // 依存関係のチェック
+    const deps = task.dependencies ?? [];
+    const allDepsResolved = deps.every((depId) => doneIds.has(depId));
+
+    return allDepsResolved;
+  });
+
+  // 優先度スコアを計算してソート
+  const scored = available.map((task) => ({
+    task,
+    score: calculatePriorityScore(task),
+  }));
+
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.map(({ task }) => ({
+    id: task.id,
+    title: task.title,
+    goal: task.goal,
+    priority: task.priority ?? 0,
+    riskLevel: task.riskLevel ?? "low",
+    timeboxMinutes: task.timeboxMinutes ?? 60,
+    dependencies: task.dependencies ?? [],
+    allowedPaths: task.allowedPaths ?? [],
+    commands: task.commands ?? [],
+    context: task.context as Record<string, unknown> | null,
+  }));
+}
+
+// 優先度スコアを計算
+function calculatePriorityScore(task: {
+  priority: number | null;
+  riskLevel: string | null;
+  createdAt: Date;
+  timeboxMinutes: number | null;
+}): number {
+  let score = 0;
+
+  // 基本優先度（0-100）
+  score += (task.priority ?? 0) * 10;
+
+  // リスクレベルによる調整（低リスクを優先）
+  const riskMultiplier: Record<string, number> = {
+    low: 1.5,
+    medium: 1.0,
+    high: 0.5,
+  };
+  score *= riskMultiplier[task.riskLevel ?? "low"] ?? 1.0;
+
+  // 待機時間による調整（古いタスクを優先）
+  const waitingHours =
+    (Date.now() - task.createdAt.getTime()) / (1000 * 60 * 60);
+  score += Math.min(waitingHours * 2, 20); // 最大20ポイント
+
+  // 短いタスクを若干優先
+  const timebox = task.timeboxMinutes ?? 60;
+  if (timebox <= 30) {
+    score += 5;
+  }
+
+  return score;
+}
+
+// 依存関係グラフを構築
+export async function buildDependencyGraph(): Promise<
+  Map<string, Set<string>>
+> {
+  const allTasks = await db.select().from(tasks);
+  const graph = new Map<string, Set<string>>();
+
+  for (const task of allTasks) {
+    const deps = new Set(task.dependencies ?? []);
+    graph.set(task.id, deps);
+  }
+
+  return graph;
+}
+
+// 循環依存を検出
+export function detectCycles(graph: Map<string, Set<string>>): string[][] {
+  const cycles: string[][] = [];
+  const visited = new Set<string>();
+  const recursionStack = new Set<string>();
+  const path: string[] = [];
+
+  function dfs(node: string): boolean {
+    visited.add(node);
+    recursionStack.add(node);
+    path.push(node);
+
+    const deps = graph.get(node) ?? new Set();
+    for (const dep of deps) {
+      if (!visited.has(dep)) {
+        if (dfs(dep)) {
+          return true;
+        }
+      } else if (recursionStack.has(dep)) {
+        // 循環検出
+        const cycleStart = path.indexOf(dep);
+        cycles.push(path.slice(cycleStart));
+        return true;
+      }
+    }
+
+    path.pop();
+    recursionStack.delete(node);
+    return false;
+  }
+
+  for (const node of graph.keys()) {
+    if (!visited.has(node)) {
+      dfs(node);
+    }
+  }
+
+  return cycles;
+}

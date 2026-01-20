@@ -17,6 +17,7 @@
     "@h1ve/core": "workspace:*",
     "@h1ve/db": "workspace:*",
     "@h1ve/queue": "workspace:*",
+    "bullmq": "^5.34.8",
     "drizzle-orm": "^0.38.4"
   },
   "devDependencies": {

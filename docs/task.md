@@ -118,12 +118,12 @@
 
 ### apps/dispatcher: タスク割当
 
-- [x] `main.ts` - ディスパッチャーメインループ（スケルトン）
-- [ ] `scheduler/lease.ts` - リース取得・解放・期限切れ処理
-- [ ] `scheduler/priority.ts` - 優先度計算
-- [ ] `scheduler/deps.ts` - 依存関係解決
-- [ ] Worker起動（Docker or プロセス）
-- [ ] ハートビート監視
+- [x] `main.ts` - ディスパッチャーメインループ（本実装）
+- [x] `scheduler/lease.ts` - リース取得・解放・期限切れ処理
+- [x] `scheduler/priority.ts` - 優先度計算・依存関係解決
+- [x] `scheduler/worker-launcher.ts` - Worker起動（Docker / プロセス）
+- [x] `scheduler/heartbeat.ts` - ハートビート監視
+- [x] `scheduler/index.ts` - モジュールエクスポート
 - [ ] 失敗時のリトライ・再キューイング
 
 ### packages/queue: ジョブキュー
@@ -283,12 +283,12 @@
 |-------|----------|------|
 | Phase 1: 土台 | 19/22 | 86% |
 | Phase 2: Worker実行 | 18/26 | 69% |
-| Phase 3: Dispatcher | 2/9 | 22% |
+| Phase 3: Dispatcher | 7/8 | 88% |
 | Phase 4: Planner | 2/7 | 29% |
 | Phase 5: Judge | 2/8 | 25% |
 | Phase 6: Cycle Manager | 0/8 | 0% |
 | Phase 7: 運用 | 0/34 | 0% |
-| **合計** | **43/114** | **38%** |
+| **合計** | **48/113** | **42%** |
 
 ---
 
@@ -296,5 +296,6 @@
 
 1. ~~**DBマイグレーション実行** - `docker compose up -d` + `pnpm db:push`~~ **完了**
 2. ~~**Worker用Dockerfile作成** - 本番実行のためのサンドボックス~~ **完了**
-3. **Dispatcher本実装** - Worker自動起動の仕組み
+3. ~~**Dispatcher本実装** - Worker自動起動の仕組み~~ **完了**
 4. **Planner本実装** - 要件からタスク自動生成
+5. **Judge本実装** - PRの自動判定
