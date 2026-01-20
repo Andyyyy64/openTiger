@@ -1,0 +1,197 @@
+import { spawn } from "node:child_process";
+
+// Git操作の結果
+export interface GitResult {
+  success: boolean;
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+// Gitコマンドを実行
+async function execGit(args: string[], cwd: string): Promise<GitResult> {
+  return new Promise((resolve) => {
+    const process = spawn("git", args, { cwd });
+
+    let stdout = "";
+    let stderr = "";
+
+    process.stdout.on("data", (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    process.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    process.on("close", (code) => {
+      resolve({
+        success: code === 0,
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+        exitCode: code ?? -1,
+      });
+    });
+
+    process.on("error", (error) => {
+      resolve({
+        success: false,
+        stdout,
+        stderr: error.message,
+        exitCode: -1,
+      });
+    });
+  });
+}
+
+// リポジトリをクローン
+export async function cloneRepo(
+  repoUrl: string,
+  destPath: string,
+  branch?: string
+): Promise<GitResult> {
+  const args = ["clone", "--depth", "1"];
+  if (branch) {
+    args.push("--branch", branch);
+  }
+  args.push(repoUrl, destPath);
+
+  return execGit(args, ".");
+}
+
+// 最新を取得
+export async function fetchLatest(cwd: string): Promise<GitResult> {
+  return execGit(["fetch", "origin"], cwd);
+}
+
+// ブランチを作成してチェックアウト
+export async function createBranch(
+  cwd: string,
+  branchName: string,
+  baseBranch = "main"
+): Promise<GitResult> {
+  // まずベースブランチに切り替え
+  const checkoutResult = await execGit(["checkout", baseBranch], cwd);
+  if (!checkoutResult.success) {
+    return checkoutResult;
+  }
+
+  // 最新を取得
+  await execGit(["pull", "origin", baseBranch], cwd);
+
+  // 新しいブランチを作成
+  return execGit(["checkout", "-b", branchName], cwd);
+}
+
+// 現在のブランチ名を取得
+export async function getCurrentBranch(cwd: string): Promise<string | null> {
+  const result = await execGit(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
+  return result.success ? result.stdout : null;
+}
+
+// 変更をステージング
+export async function stageChanges(
+  cwd: string,
+  paths: string[] = ["."]
+): Promise<GitResult> {
+  return execGit(["add", ...paths], cwd);
+}
+
+// コミット
+export async function commit(
+  cwd: string,
+  message: string
+): Promise<GitResult> {
+  return execGit(["commit", "-m", message], cwd);
+}
+
+// プッシュ
+export async function push(
+  cwd: string,
+  branch: string,
+  force = false
+): Promise<GitResult> {
+  const args = ["push", "origin", branch];
+  if (force) {
+    args.push("--force");
+  }
+  return execGit(args, cwd);
+}
+
+// 差分を取得
+export async function getDiff(
+  cwd: string,
+  staged = false
+): Promise<GitResult> {
+  const args = ["diff"];
+  if (staged) {
+    args.push("--staged");
+  }
+  return execGit(args, cwd);
+}
+
+// 変更されたファイル一覧を取得
+export async function getChangedFiles(cwd: string): Promise<string[]> {
+  const result = await execGit(["status", "--porcelain"], cwd);
+  if (!result.success) {
+    return [];
+  }
+
+  return result.stdout
+    .split("\n")
+    .filter((line) => line.length > 0)
+    .map((line) => line.slice(3)); // " M ", "?? " などのプレフィックスを除去
+}
+
+// 変更行数を取得
+export async function getChangeStats(
+  cwd: string
+): Promise<{ additions: number; deletions: number }> {
+  const result = await execGit(["diff", "--stat", "--staged"], cwd);
+  if (!result.success) {
+    return { additions: 0, deletions: 0 };
+  }
+
+  // 最後の行から統計を抽出
+  const lines = result.stdout.split("\n");
+  const lastLine = lines.at(-1) ?? "";
+
+  const addMatch = lastLine.match(/(\d+) insertion/);
+  const delMatch = lastLine.match(/(\d+) deletion/);
+
+  return {
+    additions: addMatch?.[1] ? parseInt(addMatch[1], 10) : 0,
+    deletions: delMatch?.[1] ? parseInt(delMatch[1], 10) : 0,
+  };
+}
+
+// ブランチを削除
+export async function deleteBranch(
+  cwd: string,
+  branchName: string,
+  force = false
+): Promise<GitResult> {
+  const args = ["branch", force ? "-D" : "-d", branchName];
+  return execGit(args, cwd);
+}
+
+// リモートブランチを削除
+export async function deleteRemoteBranch(
+  cwd: string,
+  branchName: string
+): Promise<GitResult> {
+  return execGit(["push", "origin", "--delete", branchName], cwd);
+}
+
+// 変更を破棄してクリーンな状態に
+export async function resetHard(
+  cwd: string,
+  ref = "HEAD"
+): Promise<GitResult> {
+  return execGit(["reset", "--hard", ref], cwd);
+}
+
+// 未追跡ファイルを削除
+export async function cleanUntracked(cwd: string): Promise<GitResult> {
+  return execGit(["clean", "-fd"], cwd);
+}
