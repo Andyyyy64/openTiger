@@ -208,9 +208,9 @@
 
 ### 単体テスト (Vitest)
 
-- [ ] `packages/core` のドメインモデルテスト
-- [ ] `packages/llm` のパース・リトライロジックテスト
-- [ ] `packages/vcs` のGit操作・Webhook検証テスト
+- [x] `packages/core` のドメインモデルテスト
+- [x] `packages/llm` のパース・リトライロジックテスト
+- [x] `packages/vcs` のGit操作・Webhook検証テスト
 - [ ] `packages/queue` のジョブ管理テスト
 
 ### 結合テスト
@@ -221,8 +221,8 @@
 
 ### CI/CD (GitHub Actions)
 
-- [ ] PR作成時の自動チェック（Lint, Typecheck, Test）
-- [ ] カバレッジレポートの自動生成
+- [x] PR作成時の自動チェック（Lint, Typecheck, Test）
+- [x] カバレッジレポートの自動生成
 - [ ] Dockerイメージの自動ビルド・プッシュ
 
 ---
@@ -317,9 +317,9 @@
 | Phase 4: Planner | 9/9 | 100% |
 | Phase 5: Judge | 10/10 | 100% |
 | Phase 6: Cycle Manager | 8/8 | 100% |
-| Phase 7: テスト・CI/CD | 0/10 | 0% |
+| Phase 7: テスト・CI/CD | 5/10 | 50% |
 | Phase 8: 運用 | 0/34 | 0% |
-| **合計** | **83/130** | **64%** |
+| **合計** | **88/130** | **68%** |
 
 ---
 
