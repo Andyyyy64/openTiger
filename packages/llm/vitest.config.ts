@@ -4,7 +4,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    maxWorkers: 3,
     include: ["test/**/*.test.ts"],
     coverage: {
       provider: "v8",
