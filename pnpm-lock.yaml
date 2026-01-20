@@ -61,6 +61,34 @@ importers:
         specifier: ^3.0.4
         version: 3.2.4(@types/node@20.19.30)(tsx@4.21.0)
 
+  apps/cycle-manager:
+    dependencies:
+      '@h1ve/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@h1ve/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@h1ve/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
+      drizzle-orm:
+        specifier: ^0.38.4
+        version: 0.38.4(postgres@3.4.8)
+    devDependencies:
+      '@types/node':
+        specifier: ^20.17.14
+        version: 20.19.30
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.4(@types/node@20.19.30)(tsx@4.21.0)
+
   apps/dispatcher:
     dependencies:
       '@h1ve/core':

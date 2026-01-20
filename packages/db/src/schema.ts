@@ -100,6 +100,26 @@ export const agents = pgTable("agents", {
     .notNull(),
 });
 
+// サイクルテーブル: 運用サイクルの管理（クリーン再スタート用）
+export const cycles = pgTable("cycles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  number: integer("number").notNull(), // サイクル番号（1, 2, 3...）
+  status: text("status").default("running").notNull(), // running/completed/aborted
+  startedAt: timestamp("started_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  endedAt: timestamp("ended_at", { withTimezone: true }),
+  // サイクル終了条件
+  triggerType: text("trigger_type"), // time/task_count/failure_rate/manual
+  // サイクル開始時の状態スナップショット
+  stateSnapshot: jsonb("state_snapshot"),
+  // サイクル統計
+  stats: jsonb("stats"), // { tasksCompleted, tasksFailed, totalTokens, etc. }
+  // サイクル終了理由
+  endReason: text("end_reason"),
+  metadata: jsonb("metadata"),
+});
+
 // 型エクスポート
 export type TaskRecord = typeof tasks.$inferSelect;
 export type NewTaskRecord = typeof tasks.$inferInsert;
@@ -118,3 +138,6 @@ export type NewEventRecord = typeof events.$inferInsert;
 
 export type AgentRecord = typeof agents.$inferSelect;
 export type NewAgentRecord = typeof agents.$inferInsert;
+
+export type CycleRecord = typeof cycles.$inferSelect;
+export type NewCycleRecord = typeof cycles.$inferInsert;
