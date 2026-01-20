@@ -6,18 +6,23 @@ import { tasksRoute } from "./routes/tasks.js";
 import { runsRoute } from "./routes/runs.js";
 import { agentsRoute } from "./routes/agents.js";
 import { healthRoute } from "./routes/health.js";
+import { webhookRoute } from "./routes/webhook.js";
+import { authMiddleware, rateLimitMiddleware } from "./middleware/index.js";
 
 const app = new Hono();
 
 // ミドルウェア
 app.use("*", logger());
 app.use("*", cors());
+app.use("*", rateLimitMiddleware());
+app.use("*", authMiddleware());
 
 // ルート
 app.route("/health", healthRoute);
 app.route("/api/tasks", tasksRoute);
 app.route("/api/runs", runsRoute);
 app.route("/api/agents", agentsRoute);
+app.route("/api/webhook", webhookRoute);
 
 // ルートパス
 app.get("/", (c) => {
