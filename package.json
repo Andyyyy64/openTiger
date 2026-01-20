@@ -12,6 +12,7 @@
     "build": "turbo build",
     "test": "turbo test",
     "test:watch": "turbo test:watch",
+    "test:coverage": "turbo test:coverage",
     "lint": "turbo lint",
     "check": "turbo lint && turbo typecheck",
     "typecheck": "turbo typecheck",
@@ -25,6 +26,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.17.14",
+    "@vitest/coverage-v8": "^3.2.4",
     "prettier": "^3.4.2",
     "turbo": "^2.3.4",
     "typescript": "^5.7.3",
