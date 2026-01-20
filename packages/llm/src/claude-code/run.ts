@@ -1,5 +1,13 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
 import { z } from "zod";
+
+// 推論の深さを制御するeffortレベル（Opus 4.5向け）
+export const EffortLevel = z.enum(["low", "medium", "high"]);
+export type EffortLevel = z.infer<typeof EffortLevel>;
+
+// デフォルト設定（環境変数で上書き可能）
+const DEFAULT_MODEL = process.env.CLAUDE_MODEL;
+const DEFAULT_EFFORT: EffortLevel = (process.env.CLAUDE_EFFORT as EffortLevel) ?? "medium";
 
 // Claude Code実行オプション
 export const ClaudeCodeOptions = z.object({
@@ -15,6 +23,10 @@ export const ClaudeCodeOptions = z.object({
   allowedTools: z.array(z.string()).optional(),
   // 環境変数
   env: z.record(z.string()).optional(),
+  // 使用モデル（省略時はClaude Codeのデフォルト = Opus 4.5）
+  model: z.string().optional(),
+  // 推論の深さ（low: 高速・低コスト、medium: バランス、high: 最高精度）
+  effort: EffortLevel.optional(),
 });
 export type ClaudeCodeOptions = z.infer<typeof ClaudeCodeOptions>;
 
@@ -36,6 +48,16 @@ export async function runClaudeCode(
   // コマンド引数を構築
   const args: string[] = [];
 
+  // モデル指定（環境変数またはオプションで指定）
+  const model = options.model ?? DEFAULT_MODEL;
+  if (model) {
+    args.push("--model", model);
+  }
+
+  // effort パラメータ（Opus 4.5向け推論深さ制御）
+  const effort = options.effort ?? DEFAULT_EFFORT;
+  args.push("--effort", effort);
+
   if (options.instructionsPath) {
     args.push("--instructions", options.instructionsPath);
   }
@@ -44,7 +66,7 @@ export async function runClaudeCode(
   args.push("--prompt", options.task);
 
   // Claude Codeプロセスを起動
-  const process = spawn("claude", args, {
+  const childProcess = spawn("claude", args, {
     cwd: options.workdir,
     env: {
       ...globalThis.process.env,
@@ -57,17 +79,17 @@ export async function runClaudeCode(
   let stdout = "";
   let stderr = "";
 
-  process.stdout.on("data", (data: Buffer) => {
+  childProcess.stdout.on("data", (data: Buffer) => {
     stdout += data.toString();
   });
 
-  process.stderr.on("data", (data: Buffer) => {
+  childProcess.stderr.on("data", (data: Buffer) => {
     stderr += data.toString();
   });
 
   // 完了を待機
   return new Promise((resolve) => {
-    process.on("close", (code) => {
+    childProcess.on("close", (code) => {
       const durationMs = Date.now() - startTime;
 
       resolve({
@@ -79,7 +101,7 @@ export async function runClaudeCode(
       });
     });
 
-    process.on("error", (error) => {
+    childProcess.on("error", (error) => {
       const durationMs = Date.now() - startTime;
 
       resolve({
