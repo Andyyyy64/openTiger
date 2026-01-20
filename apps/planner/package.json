@@ -16,7 +16,8 @@
   "dependencies": {
     "@h1ve/core": "workspace:*",
     "@h1ve/db": "workspace:*",
-    "@h1ve/llm": "workspace:*"
+    "@h1ve/llm": "workspace:*",
+    "drizzle-orm": "^0.38.4"
   },
   "devDependencies": {
     "@types/node": "^20.17.14",

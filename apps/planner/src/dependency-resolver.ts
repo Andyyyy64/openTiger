@@ -1,0 +1,296 @@
+import { db } from "@h1ve/db";
+import { tasks } from "@h1ve/db/schema";
+import { eq, or } from "drizzle-orm";
+import type { CreateTaskInput } from "@h1ve/core";
+
+// 依存関係の推定結果
+export interface DependencyResolution {
+  taskIndex: number;
+  dependsOnIndices: number[];
+  dependsOnIds: string[];
+  confidence: number;
+  reason: string;
+}
+
+// タスク間の依存関係を推定
+export function inferDependencies(
+  tasks: CreateTaskInput[]
+): DependencyResolution[] {
+  const resolutions: DependencyResolution[] = [];
+
+  for (let i = 0; i < tasks.length; i++) {
+    const task = tasks[i];
+    if (!task) continue;
+
+    const dependsOnIndices: number[] = [];
+    const reasons: string[] = [];
+
+    for (let j = 0; j < i; j++) {
+      const prevTask = tasks[j];
+      if (!prevTask) continue;
+
+      // 依存関係の推定ルール
+
+      // 1. ファイルパスの重複: 前のタスクが変更するファイルを後のタスクが参照
+      const prevPaths = prevTask.allowedPaths;
+      const currPaths = task.allowedPaths;
+      const pathOverlap = prevPaths.some((p) =>
+        currPaths.some((c) => pathsOverlap(p, c))
+      );
+
+      if (pathOverlap) {
+        dependsOnIndices.push(j);
+        reasons.push(`File path overlap with task ${j}`);
+        continue;
+      }
+
+      // 2. context.filesの参照関係
+      const prevFiles = prevTask.context?.files ?? [];
+      const currFiles = task.context?.files ?? [];
+      const fileOverlap = prevFiles.some((f) => currFiles.includes(f));
+
+      if (fileOverlap) {
+        dependsOnIndices.push(j);
+        reasons.push(`Context file overlap with task ${j}`);
+        continue;
+      }
+
+      // 3. タイトルや説明からのキーワードマッチング
+      const prevKeywords = extractKeywords(prevTask.title + " " + prevTask.goal);
+      const currKeywords = extractKeywords(task.title + " " + task.goal);
+      const keywordOverlap = prevKeywords.filter((k) =>
+        currKeywords.includes(k)
+      );
+
+      if (keywordOverlap.length >= 2) {
+        dependsOnIndices.push(j);
+        reasons.push(`Keyword overlap: ${keywordOverlap.slice(0, 3).join(", ")}`);
+      }
+    }
+
+    // 信頼度を計算
+    const confidence = dependsOnIndices.length > 0 ? 0.7 : 1.0;
+
+    resolutions.push({
+      taskIndex: i,
+      dependsOnIndices,
+      dependsOnIds: [], // 後でIDに変換
+      confidence,
+      reason: reasons.join("; ") || "No dependencies detected",
+    });
+  }
+
+  return resolutions;
+}
+
+// パスが重複するかチェック（glob対応）
+function pathsOverlap(path1: string, path2: string): boolean {
+  // 単純な前方一致チェック
+  const normalized1 = path1.replace(/\*\*/g, "").replace(/\*/g, "");
+  const normalized2 = path2.replace(/\*\*/g, "").replace(/\*/g, "");
+
+  return (
+    normalized1.startsWith(normalized2) ||
+    normalized2.startsWith(normalized1) ||
+    normalized1 === normalized2
+  );
+}
+
+// テキストからキーワードを抽出
+function extractKeywords(text: string): string[] {
+  // 一般的な単語を除外
+  const stopWords = new Set([
+    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+    "of", "with", "by", "from", "as", "is", "was", "are", "were", "been",
+    "be", "have", "has", "had", "do", "does", "did", "will", "would",
+    "could", "should", "may", "might", "must", "shall", "can",
+    "this", "that", "these", "those", "it", "its",
+    "add", "update", "fix", "create", "implement", "remove", "delete",
+  ]);
+
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((word) => word.length > 2 && !stopWords.has(word));
+}
+
+// インデックスからタスクIDへの変換
+export async function resolveIndicesToIds(
+  resolutions: DependencyResolution[],
+  taskIds: string[]
+): Promise<DependencyResolution[]> {
+  return resolutions.map((r) => ({
+    ...r,
+    dependsOnIds: r.dependsOnIndices
+      .map((idx) => taskIds[idx])
+      .filter((id): id is string => id !== undefined),
+  }));
+}
+
+// 重複タスクの検出
+export interface DuplicateDetection {
+  taskIndex: number;
+  duplicateOfId?: string;
+  duplicateOfIndex?: number;
+  similarity: number;
+  reason: string;
+}
+
+// 新規タスクと既存タスクの重複をチェック
+export async function detectDuplicates(
+  newTasks: CreateTaskInput[]
+): Promise<DuplicateDetection[]> {
+  const detections: DuplicateDetection[] = [];
+
+  // 既存のキュー済み・実行中タスクを取得
+  const existingTasks = await db
+    .select()
+    .from(tasks)
+    .where(
+      or(
+        eq(tasks.status, "queued"),
+        eq(tasks.status, "running"),
+        eq(tasks.status, "blocked")
+      )
+    );
+
+  for (let i = 0; i < newTasks.length; i++) {
+    const newTask = newTasks[i];
+    if (!newTask) continue;
+
+    // 同一タイトルチェック
+    const sameTitleTask = existingTasks.find(
+      (t) => t.title.toLowerCase() === newTask.title.toLowerCase()
+    );
+
+    if (sameTitleTask) {
+      detections.push({
+        taskIndex: i,
+        duplicateOfId: sameTitleTask.id,
+        similarity: 1.0,
+        reason: "Identical title",
+      });
+      continue;
+    }
+
+    // 類似ゴールチェック
+    const similarGoalTask = existingTasks.find((t) => {
+      const similarity = calculateSimilarity(t.goal, newTask.goal);
+      return similarity > 0.8;
+    });
+
+    if (similarGoalTask) {
+      const similarity = calculateSimilarity(similarGoalTask.goal, newTask.goal);
+      detections.push({
+        taskIndex: i,
+        duplicateOfId: similarGoalTask.id,
+        similarity,
+        reason: "Similar goal",
+      });
+      continue;
+    }
+
+    // 同一ファイルパスと類似タイトルの組み合わせ
+    const pathOverlapTask = existingTasks.find((t) => {
+      const pathMatch = t.allowedPaths.some((p) =>
+        newTask.allowedPaths.some((np) => pathsOverlap(p, np))
+      );
+      const titleSimilarity = calculateSimilarity(t.title, newTask.title);
+      return pathMatch && titleSimilarity > 0.6;
+    });
+
+    if (pathOverlapTask) {
+      const similarity = calculateSimilarity(pathOverlapTask.title, newTask.title);
+      detections.push({
+        taskIndex: i,
+        duplicateOfId: pathOverlapTask.id,
+        similarity,
+        reason: "Same file paths with similar title",
+      });
+      continue;
+    }
+
+    // 重複なし
+    detections.push({
+      taskIndex: i,
+      similarity: 0,
+      reason: "No duplicate detected",
+    });
+  }
+
+  // 新規タスク間での重複もチェック
+  for (let i = 0; i < newTasks.length; i++) {
+    const task1 = newTasks[i];
+    if (!task1) continue;
+
+    for (let j = i + 1; j < newTasks.length; j++) {
+      const task2 = newTasks[j];
+      if (!task2) continue;
+
+      const similarity = calculateSimilarity(
+        task1.title + " " + task1.goal,
+        task2.title + " " + task2.goal
+      );
+
+      if (similarity > 0.8) {
+        // 後のタスクを重複としてマーク
+        const existing = detections.find((d) => d.taskIndex === j);
+        if (existing && (!existing.duplicateOfIndex || existing.similarity < similarity)) {
+          existing.duplicateOfIndex = i;
+          existing.similarity = similarity;
+          existing.reason = `Duplicate of new task ${i}`;
+        }
+      }
+    }
+  }
+
+  return detections;
+}
+
+// 文字列の類似度を計算（Jaccard係数ベース）
+function calculateSimilarity(str1: string, str2: string): number {
+  const words1 = new Set(extractKeywords(str1));
+  const words2 = new Set(extractKeywords(str2));
+
+  if (words1.size === 0 || words2.size === 0) {
+    return 0;
+  }
+
+  const intersection = new Set([...words1].filter((w) => words2.has(w)));
+  const union = new Set([...words1, ...words2]);
+
+  return intersection.size / union.size;
+}
+
+// 重複を除外したタスクリストを返す
+export function filterDuplicateTasks(
+  tasks: CreateTaskInput[],
+  detections: DuplicateDetection[],
+  similarityThreshold: number = 0.8
+): {
+  uniqueTasks: CreateTaskInput[];
+  skippedIndices: number[];
+  skippedReasons: string[];
+} {
+  const skippedIndices: number[] = [];
+  const skippedReasons: string[] = [];
+
+  for (const detection of detections) {
+    if (
+      detection.similarity >= similarityThreshold &&
+      (detection.duplicateOfId || detection.duplicateOfIndex !== undefined)
+    ) {
+      skippedIndices.push(detection.taskIndex);
+      skippedReasons.push(detection.reason);
+    }
+  }
+
+  const uniqueTasks = tasks.filter((_, i) => !skippedIndices.includes(i));
+
+  return {
+    uniqueTasks,
+    skippedIndices,
+    skippedReasons,
+  };
+}
