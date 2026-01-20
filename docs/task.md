@@ -44,9 +44,9 @@
 - [x] `routes/tasks.ts` - タスクCRUD
 - [x] `routes/runs.ts` - 実行履歴
 - [x] `routes/agents.ts` - エージェント管理
-- [ ] `routes/webhook.ts` - GitHub Webhook受信
-- [ ] 認証ミドルウェア
-- [ ] レート制限
+- [x] `routes/webhook.ts` - GitHub Webhook受信
+- [x] 認証ミドルウェア
+- [x] レート制限
 
 ### packages/policies: ポリシー定義
 
@@ -69,17 +69,17 @@
 
 - [x] `claude-code/run.ts` - Claude Code CLI wrapper
 - [x] `claude-code/parse.ts` - 出力パーサー
-- [ ] トークン使用量の計測
-- [ ] リトライロジック
-- [ ] タイムアウト処理の強化
+- [x] トークン使用量の計測
+- [x] リトライロジック
+- [x] タイムアウト処理の強化
 
 ### packages/vcs: GitHub連携
 
 - [x] `client.ts` - Octokitクライアント
 - [x] `pr.ts` - PR作成・マージ・コメント
 - [x] `git.ts` - Git操作（clone, branch, commit, push）
-- [ ] Webhook検証
-- [ ] Rate Limit対応
+- [x] Webhook検証
+- [x] Rate Limit対応
 
 ### apps/worker: 実行エンジン
 
@@ -124,14 +124,14 @@
 - [x] `scheduler/worker-launcher.ts` - Worker起動（Docker / プロセス）
 - [x] `scheduler/heartbeat.ts` - ハートビート監視
 - [x] `scheduler/index.ts` - モジュールエクスポート
-- [ ] 失敗時のリトライ・再キューイング
+- [x] 失敗時のリトライ・再キューイング
 
 ### packages/queue: ジョブキュー
 
 - [x] `index.ts` - BullMQ連携（キュー作成、ワーカー作成）
-- [ ] ジョブの優先度制御
-- [ ] 失敗ジョブの監視
-- [ ] デッドレター処理
+- [x] ジョブの優先度制御
+- [x] 失敗ジョブの監視
+- [x] デッドレター処理
 
 ---
 
@@ -148,8 +148,8 @@
 - [x] `strategies/from-issue.ts` - GitHub Issueからタスク生成
 - [x] `strategies/index.ts` - ストラテジーエクスポート
 - [x] タスク分割ロジック（30-90分粒度）
-- [ ] 依存関係の推定（インデックス→ID変換）
-- [ ] 重複タスクの検出
+- [x] 依存関係の推定（インデックス→ID変換）
+- [x] 重複タスクの検出
 
 ### instructions設計
 
@@ -285,14 +285,14 @@
 
 | Phase | 完了/全体 | 進捗 |
 |-------|----------|------|
-| Phase 1: 土台 | 19/22 | 86% |
-| Phase 2: Worker実行 | 18/26 | 69% |
-| Phase 3: Dispatcher | 7/8 | 88% |
-| Phase 4: Planner | 7/9 | 78% |
+| Phase 1: 土台 | 22/22 | 100% |
+| Phase 2: Worker実行 | 23/26 | 88% |
+| Phase 3: Dispatcher | 11/11 | 100% |
+| Phase 4: Planner | 9/9 | 100% |
 | Phase 5: Judge | 10/10 | 100% |
 | Phase 6: Cycle Manager | 8/8 | 100% |
 | Phase 7: 運用 | 0/34 | 0% |
-| **合計** | **69/117** | **59%** |
+| **合計** | **83/120** | **69%** |
 
 ---
 
