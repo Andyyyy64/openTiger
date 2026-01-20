@@ -91,23 +91,23 @@
 - [x] `steps/pr.ts` - PR作成
 - [x] `steps/index.ts` - ステップエクスポート
 - [x] `main.ts` - Workerメインループ
-- [ ] `sandbox/docker.ts` - Docker実行隔離
-- [ ] リトライロジック（テスト失敗時の自己修正）
-- [ ] ログ出力の構造化
+- [x] `sandbox/docker.ts` - Docker実行隔離
+- [x] リトライロジック（テスト失敗時の自己修正）
+- [x] ログ出力の構造化
 
 ### Worker用Dockerfile
 
 - [x] `ops/docker/worker.Dockerfile` - Worker用Dockerfile
 - [x] Git + Claude Code CLIのインストール
 - [x] セキュリティ設定（非root実行）
-- [ ] ネットワーク制限
+- [x] ネットワーク制限
 
 ### instructions設計
 
 - [x] `instructions/base.md` - 基本ルール
-- [ ] `instructions/coding.md` - コーディング規約
-- [ ] `instructions/refactor.md` - リファクタリング用
-- [ ] `instructions/bugfix.md` - バグ修正用
+- [x] `instructions/coding.md` - コーディング規約
+- [x] `instructions/refactor.md` - リファクタリング用
+- [x] `instructions/bugfix.md` - バグ修正用
 
 ---
 
@@ -318,19 +318,18 @@
 | Phase | 完了/全体 | 進捗 |
 |-------|----------|------|
 | Phase 1: 土台 | 22/22 | 100% |
-| Phase 2: Worker実行 | 23/26 | 88% |
+| Phase 2: Worker実行 | 26/26 | 100% |
 | Phase 3: Dispatcher | 11/11 | 100% |
 | Phase 4: Planner | 9/9 | 100% |
 | Phase 5: Judge | 10/10 | 100% |
 | Phase 6: Cycle Manager | 8/8 | 100% |
 | Phase 7: テスト・CI/CD | 5/10 | 50% |
 | Phase 8: 運用 | 0/34 | 0% |
-| **合計** | **88/130** | **68%** |
+| **合計** | **91/130** | **70%** |
 
 ---
 
 ## 次にやるべきこと（優先度順）
 
-1. **実行隔離と規約の整備** - Phase 2 残タスク (Docker sandbox, instructions)
-2. **結合テスト** - Phase 7 残タスク（実際のフロー検証）[優先度: 中]
-3. **ダッシュボード** - Phase 8 (React + Vite)
+1. **結合テスト** - Phase 7 残タスク（実際のフロー検証）[優先度: 中]
+2. **ダッシュボード** - Phase 8 (React + Vite)
