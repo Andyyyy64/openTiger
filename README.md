@@ -549,80 +549,17 @@ CREATE TABLE leases (
 
 ## 実装フェーズ
 
-### Phase 1: 土台（1〜2週間）
+詳細なタスク一覧と進捗は [docs/task.md](./docs/task.md) を参照。
 
-**目標**: 状態管理とAPIの基盤を作る
-
-- [ ] モノレポ初期化（pnpm + turbo）
-- [ ] `packages/db`: スキーマ定義、マイグレーション
-- [ ] `packages/core`: ドメインモデル
-- [ ] `apps/api`: 基本CRUD（Hono）
-- [ ] Docker Compose: Postgres + Redis
-
-**完了条件**: `pnpm test` が通り、APIでタスクのCRUDができる
-
-### Phase 2: Worker実行（1〜2週間）
-
-**目標**: Claude Codeを使ってPRを作れるようにする
-
-- [ ] `packages/llm`: Claude Code CLI wrapper
-- [ ] `apps/worker`: 実行ステップ実装
-- [ ] `packages/vcs`: GitHub PR作成
-- [ ] Worker用Dockerfile（サンドボックス）
-- [ ] instructions設計
-
-**完了条件**: 固定タスクを渡すとPRが1本作成される
-
-### Phase 3: Dispatcher（1週間）
-
-**目標**: 複数Workerを並列実行
-
-- [ ] `apps/dispatcher`: リース管理
-- [ ] `packages/queue`: BullMQ連携
-- [ ] 依存関係解決
-- [ ] 優先度スケジューリング
-
-**完了条件**: 10タスクを5 Workerで並列処理できる
-
-### Phase 4: Planner（1週間）
-
-**目標**: 要件からタスクを自動生成
-
-- [ ] `apps/planner`: タスク分割ロジック
-- [ ] instructions設計
-- [ ] GitHub Issue連携（任意）
-
-**完了条件**: requirement.md を渡すとtasksが生成される
-
-### Phase 5: Judge（1週間）
-
-**目標**: PRの自動判定
-
-- [ ] `apps/judge`: 評価ロジック
-- [ ] CI結果取得
-- [ ] ポリシー検証
-- [ ] 自動マージ（条件付き）
-
-**完了条件**: CI通過のlow-risk PRが自動マージされる
-
-### Phase 6: Cycle Manager（1週間）
-
-**目標**: 長時間運用の安定化
-
-- [ ] サイクル制御（時間/回数/失敗率）
-- [ ] クリーン再スタート
-- [ ] 監査ログ
-
-**完了条件**: 24時間連続稼働でドリフトなく動作
-
-### Phase 7: 運用（継続）
-
-**目標**: 本番運用の安定化
-
-- [ ] ダッシュボード
-- [ ] アラート設定
-- [ ] ランブック整備
-- [ ] コスト最適化
+| Phase | 内容 | 進捗 |
+|-------|------|------|
+| Phase 1 | 土台（モノレポ、DB、API） | 82% |
+| Phase 2 | Worker実行（Claude Code + PR作成） | 58% |
+| Phase 3 | Dispatcher（並列実行） | 22% |
+| Phase 4 | Planner（タスク自動生成） | 29% |
+| Phase 5 | Judge（PR自動判定） | 25% |
+| Phase 6 | Cycle Manager（長時間運用） | 0% |
+| Phase 7 | 運用（ダッシュボード等） | 0% |
 
 ---
 
