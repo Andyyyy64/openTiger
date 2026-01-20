@@ -102,6 +102,11 @@ USER worker
 # 環境変数のデフォルト値
 ENV NODE_ENV=production
 ENV WORKSPACE_PATH=/workspace
+ENV LOG_FORMAT=json
+
+# ネットワーク制限のためのラベル（docker-compose/k8sで使用）
+LABEL h1ve.network.policy="restricted"
+LABEL h1ve.network.allowed="api.anthropic.com,api.github.com,github.com"
 
 # ヘルスチェック
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

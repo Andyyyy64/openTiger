@@ -1,5 +1,18 @@
 # h1ve 開発環境用 Docker Compose
 
+# ネットワーク定義
+networks:
+  # 内部ネットワーク（DB、Redis）
+  internal:
+    driver: bridge
+    internal: true
+  # 外部アクセス用ネットワーク（API通信）
+  external:
+    driver: bridge
+  # Worker用制限ネットワーク（必要な外部のみ許可）
+  worker-net:
+    driver: bridge
+
 services:
   # PostgreSQL データベース
   postgres:
@@ -13,6 +26,9 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+      - external
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U h1ve"]
       interval: 10s
@@ -27,6 +43,8 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - internal
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -39,11 +57,11 @@ services:
     build:
       context: ../..
       dockerfile: ops/docker/worker.Dockerfile
-    container_name: h1ve-worker
     environment:
       DATABASE_URL: postgresql://h1ve:h1ve@postgres:5432/h1ve
       REDIS_URL: redis://redis:6379
       WORKSPACE_PATH: /workspace
+      LOG_FORMAT: json
       # 以下は実行時に指定
       # REPO_URL: https://github.com/owner/repo.git
       # TASK_ID: uuid-of-task
@@ -52,6 +70,9 @@ services:
       # GITHUB_TOKEN: ghp_xxx
     volumes:
       - worker_workspace:/workspace
+    networks:
+      - internal
+      - worker-net
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,9 +84,18 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 4G
+          cpus: "2"
         reservations:
-          memory: 512M
+          memory: 1G
+    # セキュリティ設定
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=1G,mode=1777
 
 volumes:
   postgres_data:
