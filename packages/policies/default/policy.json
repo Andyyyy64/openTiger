@@ -1,0 +1,30 @@
+{
+  "$schema": "../schemas/policy.schema.json",
+  "allowedPaths": ["**/*"],
+  "deniedPaths": [
+    ".env",
+    ".env.*",
+    "**/*.pem",
+    "**/*.key",
+    "**/secrets/**"
+  ],
+  "maxLinesChanged": 500,
+  "maxFilesChanged": 20,
+  "deniedCommands": [
+    "rm -rf /",
+    "rm -rf /*",
+    "sudo",
+    "chmod 777",
+    "curl.*|.*sh",
+    "wget.*|.*sh"
+  ],
+  "autoMerge": {
+    "enabled": false,
+    "maxRiskLevel": "low",
+    "requiredChecks": ["test", "lint", "typecheck"]
+  },
+  "tokenLimits": {
+    "perTask": 100000,
+    "perDay": 1000000
+  }
+}

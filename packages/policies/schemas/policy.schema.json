@@ -1,0 +1,77 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "h1ve Policy",
+  "description": "エージェントの行動制約を定義するポリシー",
+  "type": "object",
+  "properties": {
+    "allowedPaths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "変更を許可するパス（glob）",
+      "default": ["**/*"]
+    },
+    "deniedPaths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "変更を禁止するパス（glob）",
+      "default": []
+    },
+    "maxLinesChanged": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "変更行数の上限",
+      "default": 500
+    },
+    "maxFilesChanged": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "変更ファイル数の上限",
+      "default": 20
+    },
+    "deniedCommands": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "禁止コマンド（正規表現）",
+      "default": []
+    },
+    "autoMerge": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "自動マージを有効にするか",
+          "default": false
+        },
+        "maxRiskLevel": {
+          "type": "string",
+          "enum": ["low", "medium"],
+          "description": "自動マージを許可する最大リスクレベル",
+          "default": "low"
+        },
+        "requiredChecks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "必須のCIチェック名",
+          "default": []
+        }
+      }
+    },
+    "tokenLimits": {
+      "type": "object",
+      "properties": {
+        "perTask": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1タスクあたりのトークン上限",
+          "default": 100000
+        },
+        "perDay": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1日あたりのトークン上限",
+          "default": 1000000
+        }
+      }
+    }
+  }
+}
