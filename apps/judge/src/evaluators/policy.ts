@@ -1,0 +1,191 @@
+import type { Policy } from "@h1ve/core";
+import { getOctokit, getRepoInfo } from "@h1ve/vcs";
+
+// ポリシー評価結果
+export interface PolicyEvaluationResult {
+  pass: boolean;
+  reasons: string[];
+  suggestions: string[];
+  violations: PolicyViolation[];
+}
+
+// ポリシー違反の詳細
+export interface PolicyViolation {
+  type: "lines" | "files" | "path" | "command" | "pattern";
+  severity: "error" | "warning";
+  message: string;
+  file?: string;
+  line?: number;
+}
+
+// PRのdiff統計を取得
+export async function getPRDiffStats(prNumber: number): Promise<{
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  files: Array<{
+    filename: string;
+    additions: number;
+    deletions: number;
+    status: string;
+  }>;
+}> {
+  const octokit = getOctokit();
+  const { owner, repo } = getRepoInfo();
+
+  const pr = await octokit.pulls.get({
+    owner,
+    repo,
+    pull_number: prNumber,
+  });
+
+  const files = await octokit.pulls.listFiles({
+    owner,
+    repo,
+    pull_number: prNumber,
+    per_page: 100,
+  });
+
+  return {
+    additions: pr.data.additions,
+    deletions: pr.data.deletions,
+    changedFiles: pr.data.changed_files,
+    files: files.data.map((f) => ({
+      filename: f.filename,
+      additions: f.additions,
+      deletions: f.deletions,
+      status: f.status,
+    })),
+  };
+}
+
+// パスがパターンにマッチするか
+function matchPath(path: string, pattern: string): boolean {
+  // シンプルなglob風マッチング
+  const regexPattern = pattern
+    .replace(/\*\*/g, ".*")
+    .replace(/\*/g, "[^/]*")
+    .replace(/\?/g, ".");
+  const regex = new RegExp(`^${regexPattern}$`);
+  return regex.test(path);
+}
+
+// パスが許可されているか
+function isPathAllowed(
+  path: string,
+  allowedPaths: string[],
+  forbiddenPaths: string[]
+): boolean {
+  // 禁止パスに該当する場合は不許可
+  for (const forbidden of forbiddenPaths) {
+    if (matchPath(path, forbidden)) {
+      return false;
+    }
+  }
+
+  // 許可パスが指定されている場合は、いずれかにマッチする必要がある
+  if (allowedPaths.length > 0) {
+    return allowedPaths.some((allowed) => matchPath(path, allowed));
+  }
+
+  return true;
+}
+
+// ポリシーを評価
+export async function evaluatePolicy(
+  prNumber: number,
+  policy: Policy,
+  allowedPaths: string[] = []
+): Promise<PolicyEvaluationResult> {
+  const violations: PolicyViolation[] = [];
+  const reasons: string[] = [];
+  const suggestions: string[] = [];
+
+  try {
+    const diffStats = await getPRDiffStats(prNumber);
+
+    // 変更行数のチェック
+    const totalChanges = diffStats.additions + diffStats.deletions;
+    if (totalChanges > policy.maxLinesChanged) {
+      violations.push({
+        type: "lines",
+        severity: "error",
+        message: `Changes exceed maximum allowed lines (${totalChanges} > ${policy.maxLinesChanged})`,
+      });
+    }
+
+    // 変更ファイル数のチェック
+    if (diffStats.changedFiles > policy.maxFilesChanged) {
+      violations.push({
+        type: "files",
+        severity: "error",
+        message: `Changed files exceed maximum allowed (${diffStats.changedFiles} > ${policy.maxFilesChanged})`,
+      });
+    }
+
+    // ファイルパスのチェック
+    for (const file of diffStats.files) {
+      // 禁止パスへの変更
+      if (!isPathAllowed(file.filename, allowedPaths, policy.deniedPaths)) {
+        violations.push({
+          type: "path",
+          severity: "error",
+          message: `Changes to forbidden path: ${file.filename}`,
+          file: file.filename,
+        });
+      }
+    }
+
+    // 違反を理由に変換
+    for (const violation of violations) {
+      if (violation.severity === "error") {
+        reasons.push(violation.message);
+      }
+    }
+
+    // 改善提案
+    if (violations.some((v) => v.type === "lines")) {
+      suggestions.push("Consider splitting this PR into smaller changes");
+    }
+
+    if (violations.some((v) => v.type === "path")) {
+      suggestions.push("Move changes to allowed paths or request path permission");
+    }
+  } catch (error) {
+    console.error("Failed to evaluate policy:", error);
+    reasons.push("Failed to retrieve PR diff information");
+  }
+
+  return {
+    pass: violations.filter((v) => v.severity === "error").length === 0,
+    reasons,
+    suggestions,
+    violations,
+  };
+}
+
+// リスクレベルを評価
+export function evaluateRiskLevel(
+  diffStats: { additions: number; deletions: number; changedFiles: number },
+  policy: Policy
+): "low" | "medium" | "high" {
+  const totalChanges = diffStats.additions + diffStats.deletions;
+
+  // 高リスクの閾値（ポリシーの半分以上）
+  if (
+    totalChanges > policy.maxLinesChanged * 0.5 ||
+    diffStats.changedFiles > policy.maxFilesChanged * 0.5
+  ) {
+    return "high";
+  }
+
+  // 中リスクの閾値（ポリシーの25%以上）
+  if (
+    totalChanges > policy.maxLinesChanged * 0.25 ||
+    diffStats.changedFiles > policy.maxFilesChanged * 0.25
+  ) {
+    return "medium";
+  }
+
+  return "low";
+}

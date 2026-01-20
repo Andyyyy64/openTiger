@@ -106,6 +106,9 @@ importers:
       '@h1ve/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
+      drizzle-orm:
+        specifier: ^0.38.4
+        version: 0.38.4(postgres@3.4.8)
     devDependencies:
       '@types/node':
         specifier: ^20.17.14

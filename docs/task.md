@@ -164,13 +164,15 @@
 
 ### apps/judge: 採用判定
 
-- [x] `main.ts` - Judgeメインループ（スケルトン）
-- [ ] `evaluators/ci.ts` - CI結果取得・評価
-- [ ] `evaluators/policy.ts` - ポリシー違反チェック
-- [ ] `evaluators/llm.ts` - LLMコードレビュー
-- [ ] PRコメント投稿
-- [ ] 自動マージ実行
-- [ ] 差し戻し処理
+- [x] `main.ts` - Judgeメインループ（本実装）
+- [x] `evaluators/ci.ts` - CI結果取得・評価
+- [x] `evaluators/policy.ts` - ポリシー違反チェック
+- [x] `evaluators/llm.ts` - LLMコードレビュー
+- [x] `evaluators/index.ts` - 評価器エクスポート
+- [x] `pr-reviewer.ts` - PRコメント・判定・自動マージ
+- [x] PRコメント投稿
+- [x] 自動マージ実行
+- [x] 差し戻し処理
 
 ### instructions設計
 
@@ -287,10 +289,10 @@
 | Phase 2: Worker実行 | 18/26 | 69% |
 | Phase 3: Dispatcher | 7/8 | 88% |
 | Phase 4: Planner | 7/9 | 78% |
-| Phase 5: Judge | 2/8 | 25% |
+| Phase 5: Judge | 10/10 | 100% |
 | Phase 6: Cycle Manager | 0/8 | 0% |
 | Phase 7: 運用 | 0/34 | 0% |
-| **合計** | **53/115** | **46%** |
+| **合計** | **61/117** | **52%** |
 
 ---
 
@@ -300,5 +302,6 @@
 2. ~~**Worker用Dockerfile作成** - 本番実行のためのサンドボックス~~ **完了**
 3. ~~**Dispatcher本実装** - Worker自動起動の仕組み~~ **完了**
 4. ~~**Planner本実装** - 要件からタスク自動生成~~ **完了**
-5. **Judge本実装** - PRの自動判定
+5. ~~**Judge本実装** - PRの自動判定~~ **完了**
 6. **Cycle Manager** - 長時間運用の安定化
+7. **ダッシュボード** - React + Vite + Tailwind で可視化
