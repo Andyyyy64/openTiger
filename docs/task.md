@@ -201,7 +201,33 @@
 
 ---
 
-## Phase 7: 運用（本番運用の安定化）
+## Phase 7: テスト・CI/CD（品質保証基盤）
+
+**目標**: 継続的な品質保証と自動デプロイの基盤を構築  
+**完了条件**: CIですべてのテストがパスし、カバレッジが可視化される
+
+### 単体テスト (Vitest)
+
+- [ ] `packages/core` のドメインモデルテスト
+- [ ] `packages/llm` のパース・リトライロジックテスト
+- [ ] `packages/vcs` のGit操作・Webhook検証テスト
+- [ ] `packages/queue` のジョブ管理テスト
+
+### 結合テスト
+
+- [ ] APIエンドポイントの統合テスト
+- [ ] Workerのステップ実行フローテスト
+- [ ] Planner -> Dispatcher -> Worker の連鎖テスト
+
+### CI/CD (GitHub Actions)
+
+- [ ] PR作成時の自動チェック（Lint, Typecheck, Test）
+- [ ] カバレッジレポートの自動生成
+- [ ] Dockerイメージの自動ビルド・プッシュ
+
+---
+
+## Phase 8: 運用（ダッシュボード）
 
 **目標**: 本番運用の安定化
 
@@ -291,18 +317,14 @@
 | Phase 4: Planner | 9/9 | 100% |
 | Phase 5: Judge | 10/10 | 100% |
 | Phase 6: Cycle Manager | 8/8 | 100% |
-| Phase 7: 運用 | 0/34 | 0% |
-| **合計** | **83/120** | **69%** |
+| Phase 7: テスト・CI/CD | 0/10 | 0% |
+| Phase 8: 運用 | 0/34 | 0% |
+| **合計** | **83/130** | **64%** |
 
 ---
 
 ## 次にやるべきこと（優先度順）
 
-1. ~~**DBマイグレーション実行** - `docker compose up -d` + `pnpm db:push`~~ **完了**
-2. ~~**Worker用Dockerfile作成** - 本番実行のためのサンドボックス~~ **完了**
-3. ~~**Dispatcher本実装** - Worker自動起動の仕組み~~ **完了**
-4. ~~**Planner本実装** - 要件からタスク自動生成~~ **完了**
-5. ~~**Judge本実装** - PRの自動判定~~ **完了**
-6. ~~**Cycle Manager** - 長時間運用の安定化~~ **完了**
-7. **ダッシュボード** - React + Vite + Tailwind で可視化
-8. **残りのPhase 1-4タスク** - Webhook、認証、リトライロジック等
+1. **実行隔離と規約の整備** - Phase 2 残タスク (Docker, instructions)
+2. **テスト・CI/CD基盤** - Phase 7 (Vitest, GitHub Actions)
+3. **ダッシュボード** - Phase 8 (React + Vite)
