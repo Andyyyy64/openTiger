@@ -142,11 +142,13 @@
 
 ### apps/planner: タスク生成
 
-- [x] `main.ts` - Plannerメインループ（スケルトン）
-- [ ] `strategies/from-requirement.ts` - 要件ファイルからタスク生成
-- [ ] `strategies/from-issue.ts` - GitHub Issueからタスク生成
-- [ ] タスク分割ロジック（30-90分粒度）
-- [ ] 依存関係の推定
+- [x] `main.ts` - Plannerメインループ（本実装）
+- [x] `parser.ts` - 要件ファイルのパーサー
+- [x] `strategies/from-requirement.ts` - 要件ファイルからタスク生成
+- [x] `strategies/from-issue.ts` - GitHub Issueからタスク生成
+- [x] `strategies/index.ts` - ストラテジーエクスポート
+- [x] タスク分割ロジック（30-90分粒度）
+- [ ] 依存関係の推定（インデックス→ID変換）
 - [ ] 重複タスクの検出
 
 ### instructions設計
@@ -284,11 +286,11 @@
 | Phase 1: 土台 | 19/22 | 86% |
 | Phase 2: Worker実行 | 18/26 | 69% |
 | Phase 3: Dispatcher | 7/8 | 88% |
-| Phase 4: Planner | 2/7 | 29% |
+| Phase 4: Planner | 7/9 | 78% |
 | Phase 5: Judge | 2/8 | 25% |
 | Phase 6: Cycle Manager | 0/8 | 0% |
 | Phase 7: 運用 | 0/34 | 0% |
-| **合計** | **48/113** | **42%** |
+| **合計** | **53/115** | **46%** |
 
 ---
 
@@ -297,5 +299,6 @@
 1. ~~**DBマイグレーション実行** - `docker compose up -d` + `pnpm db:push`~~ **完了**
 2. ~~**Worker用Dockerfile作成** - 本番実行のためのサンドボックス~~ **完了**
 3. ~~**Dispatcher本実装** - Worker自動起動の仕組み~~ **完了**
-4. **Planner本実装** - 要件からタスク自動生成
+4. ~~**Planner本実装** - 要件からタスク自動生成~~ **完了**
 5. **Judge本実装** - PRの自動判定
+6. **Cycle Manager** - 長時間運用の安定化
