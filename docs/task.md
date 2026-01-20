@@ -213,7 +213,13 @@
 - [x] `packages/vcs` のGit操作・Webhook検証テスト
 - [ ] `packages/queue` のジョブ管理テスト
 
-### 結合テスト
+> **Note**: 単体テストは現状で十分。外部連携コード（Claude Code CLI、Git、GitHub API）の  
+> カバレッジ100%を目指すより、結合テストに注力する方が価値が高い。  
+> - `packages/core`: 97% (ドメインモデルは100%)  
+> - `packages/llm`: parse.ts 100%、run.ts は外部プロセス呼び出しのためモック不要  
+> - `packages/vcs`: webhook.ts 100%、git/pr/client は結合テストで検証
+
+### 結合テスト [優先度: 中]
 
 - [ ] APIエンドポイントの統合テスト
 - [ ] Workerのステップ実行フローテスト
@@ -325,6 +331,6 @@
 
 ## 次にやるべきこと（優先度順）
 
-1. **実行隔離と規約の整備** - Phase 2 残タスク (Docker, instructions)
-2. **テスト・CI/CD基盤** - Phase 7 (Vitest, GitHub Actions)
+1. **実行隔離と規約の整備** - Phase 2 残タスク (Docker sandbox, instructions)
+2. **結合テスト** - Phase 7 残タスク（実際のフロー検証）[優先度: 中]
 3. **ダッシュボード** - Phase 8 (React + Vite)
