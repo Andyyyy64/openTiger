@@ -33,6 +33,41 @@ services:
       timeout: 5s
       retries: 5
 
+  # Worker（必要に応じて複数起動可能）
+  # 使用例: docker compose up -d worker --scale worker=5
+  worker:
+    build:
+      context: ../..
+      dockerfile: ops/docker/worker.Dockerfile
+    container_name: h1ve-worker
+    environment:
+      DATABASE_URL: postgresql://h1ve:h1ve@postgres:5432/h1ve
+      REDIS_URL: redis://redis:6379
+      WORKSPACE_PATH: /workspace
+      # 以下は実行時に指定
+      # REPO_URL: https://github.com/owner/repo.git
+      # TASK_ID: uuid-of-task
+      # AGENT_ID: worker-1
+      # ANTHROPIC_API_KEY: sk-xxx
+      # GITHUB_TOKEN: ghp_xxx
+    volumes:
+      - worker_workspace:/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # デフォルトでは起動しない（明示的にスケール指定）
+    profiles:
+      - worker
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
 volumes:
   postgres_data:
   redis_data:
+  worker_workspace:

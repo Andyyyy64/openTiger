@@ -35,7 +35,7 @@
 - [x] `client.ts` - DBクライアント
 - [x] `drizzle.config.ts` - Drizzle設定
 - [ ] マイグレーションファイル生成（`pnpm db:generate`）
-- [ ] マイグレーション実行（`pnpm db:push`）
+- [x] マイグレーション実行（`pnpm db:push`）
 
 ### apps/api: 管理API
 
@@ -97,9 +97,9 @@
 
 ### Worker用Dockerfile
 
-- [ ] `ops/docker/worker.Dockerfile` - Worker用Dockerfile
-- [ ] Git + Claude Code CLIのインストール
-- [ ] セキュリティ設定（非root実行）
+- [x] `ops/docker/worker.Dockerfile` - Worker用Dockerfile
+- [x] Git + Claude Code CLIのインストール
+- [x] セキュリティ設定（非root実行）
 - [ ] ネットワーク制限
 
 ### instructions設計
@@ -281,20 +281,20 @@
 
 | Phase | 完了/全体 | 進捗 |
 |-------|----------|------|
-| Phase 1: 土台 | 18/22 | 82% |
-| Phase 2: Worker実行 | 15/26 | 58% |
+| Phase 1: 土台 | 19/22 | 86% |
+| Phase 2: Worker実行 | 18/26 | 69% |
 | Phase 3: Dispatcher | 2/9 | 22% |
 | Phase 4: Planner | 2/7 | 29% |
 | Phase 5: Judge | 2/8 | 25% |
 | Phase 6: Cycle Manager | 0/8 | 0% |
 | Phase 7: 運用 | 0/34 | 0% |
-| **合計** | **39/114** | **34%** |
+| **合計** | **43/114** | **38%** |
 
 ---
 
 ## 次にやるべきこと（優先度順）
 
-1. **DBマイグレーション実行** - `docker compose up -d` + `pnpm db:push`
-2. **Worker用Dockerfile作成** - 本番実行のためのサンドボックス
+1. ~~**DBマイグレーション実行** - `docker compose up -d` + `pnpm db:push`~~ **完了**
+2. ~~**Worker用Dockerfile作成** - 本番実行のためのサンドボックス~~ **完了**
 3. **Dispatcher本実装** - Worker自動起動の仕組み
 4. **Planner本実装** - 要件からタスク自動生成

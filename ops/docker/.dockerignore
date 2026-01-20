@@ -1,0 +1,42 @@
+# h1ve Docker用.dockerignore
+
+# Git
+.git
+.gitignore
+
+# Node.js
+node_modules
+**/node_modules
+
+# ビルド成果物
+**/dist
+**/*.tsbuildinfo
+
+# テスト
+**/coverage
+**/*.test.ts
+**/*.spec.ts
+
+# 開発用
+.env*
+*.log
+.turbo
+
+# エディタ
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ドキュメント
+docs
+README.md
+*.md
+
+# ローカル設定
+docker-compose*.yml
+ops
