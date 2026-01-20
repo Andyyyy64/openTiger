@@ -1,0 +1,49 @@
+# 依存関係
+node_modules/
+.pnpm-store/
+
+# ビルド成果物
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# テスト・カバレッジ
+coverage/
+.vitest/
+
+# 環境変数
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ログ
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Docker
+.docker/
+
+# 一時ファイル
+tmp/
+temp/
+.cache/
+
+# データベース（ローカル開発用）
+*.db
+*.sqlite
+*.sqlite3

@@ -1,0 +1,33 @@
+{
+  "name": "h1ve",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI Agent Orchestration System for Autonomous Coding",
+  "packageManager": "pnpm@9.15.4",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "test:watch": "turbo test:watch",
+    "lint": "turbo lint",
+    "check": "turbo lint && turbo typecheck",
+    "typecheck": "turbo typecheck",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
+    "clean": "turbo clean && rm -rf node_modules",
+    "db:generate": "pnpm --filter @h1ve/db generate",
+    "db:migrate": "pnpm --filter @h1ve/db migrate",
+    "db:push": "pnpm --filter @h1ve/db push",
+    "db:studio": "pnpm --filter @h1ve/db studio"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.14",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.4",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4"
+  }
+}
