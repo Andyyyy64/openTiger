@@ -1,7 +1,9 @@
-import { Queue, Worker, Job } from "bullmq";
+import { Queue, Worker, Job, QueueEvents } from "bullmq";
 
 // タスク実行キュー
 export const TASK_QUEUE_NAME = "h1ve:tasks";
+// デッドレターキュー（最終的に失敗したジョブ用）
+export const DEAD_LETTER_QUEUE_NAME = "h1ve:dead-letter";
 
 // Redis接続設定（URLベース）
 const getConnectionConfig = () => {
@@ -90,4 +92,168 @@ export async function getQueueStats(queue: Queue<TaskJobData>) {
     failed,
     total: waiting + active + completed + failed,
   };
+}
+
+// デッドレターキューを作成
+export function createDeadLetterQueue(): Queue<TaskJobData> {
+  return new Queue(DEAD_LETTER_QUEUE_NAME, {
+    connection: getConnectionConfig(),
+    defaultJobOptions: {
+      removeOnComplete: false,
+      removeOnFail: false,
+    },
+  });
+}
+
+// 失敗ジョブをデッドレターキューに移動
+export async function moveToDeadLetter(
+  job: Job<TaskJobData>,
+  deadLetterQueue: Queue<TaskJobData>,
+  reason: string
+): Promise<void> {
+  await deadLetterQueue.add(`dead:${job.data.taskId}`, job.data, {
+    priority: 0,
+    attempts: 0,
+  });
+
+  console.log(
+    `[Queue] Moved job ${job.id} to dead letter queue: ${reason}`
+  );
+}
+
+// 失敗ジョブを再キューイング
+export async function requeueFailedJob(
+  queue: Queue<TaskJobData>,
+  jobId: string,
+  options?: {
+    priority?: number;
+    delay?: number;
+  }
+): Promise<Job<TaskJobData> | null> {
+  const job = await queue.getJob(jobId);
+  if (!job) {
+    return null;
+  }
+
+  // 元のジョブデータで新しいジョブを作成
+  const newJob = await queue.add(`retry:${job.data.taskId}`, job.data, {
+    priority: options?.priority ?? job.data.priority,
+    delay: options?.delay ?? 0,
+  });
+
+  // 古いジョブを削除
+  await job.remove();
+
+  console.log(
+    `[Queue] Requeued failed job ${jobId} as ${newJob.id}`
+  );
+
+  return newJob;
+}
+
+// 失敗ジョブを一括で再キューイング
+export async function requeueAllFailedJobs(
+  queue: Queue<TaskJobData>
+): Promise<number> {
+  const failedJobs = await queue.getFailed();
+  let requeuedCount = 0;
+
+  for (const job of failedJobs) {
+    if (job.id) {
+      await requeueFailedJob(queue, job.id);
+      requeuedCount++;
+    }
+  }
+
+  return requeuedCount;
+}
+
+// キューイベントを監視
+export function createQueueEvents(): QueueEvents {
+  return new QueueEvents(TASK_QUEUE_NAME, {
+    connection: getConnectionConfig(),
+  });
+}
+
+// 失敗ジョブ監視コールバック
+export interface FailedJobHandler {
+  onFailed: (
+    jobId: string,
+    failedReason: string,
+    attemptsMade: number,
+    maxAttempts: number
+  ) => Promise<void> | void;
+  onDeadLetter: (jobId: string, data: TaskJobData) => Promise<void> | void;
+}
+
+// 失敗ジョブ監視を開始
+export function startFailedJobMonitor(
+  queueEvents: QueueEvents,
+  handler: FailedJobHandler,
+  queue: Queue<TaskJobData>,
+  deadLetterQueue?: Queue<TaskJobData>
+): void {
+  queueEvents.on("failed", async ({ jobId, failedReason }) => {
+    const job = await queue.getJob(jobId);
+    if (!job) return;
+
+    const attemptsMade = job.attemptsMade;
+    const maxAttempts = job.opts.attempts ?? 3;
+
+    await handler.onFailed(jobId, failedReason, attemptsMade, maxAttempts);
+
+    // 最大リトライ回数に達した場合、デッドレターキューに移動
+    if (attemptsMade >= maxAttempts && deadLetterQueue) {
+      await moveToDeadLetter(job, deadLetterQueue, failedReason);
+      await handler.onDeadLetter(jobId, job.data);
+    }
+  });
+
+  console.log("[Queue] Failed job monitor started");
+}
+
+// 優先度でジョブを並べ替え
+export async function reprioritizeJobs(
+  queue: Queue<TaskJobData>,
+  priorityFn: (data: TaskJobData) => number
+): Promise<number> {
+  const waitingJobs = await queue.getWaiting();
+  let updatedCount = 0;
+
+  for (const job of waitingJobs) {
+    const newPriority = priorityFn(job.data);
+    if (newPriority !== job.data.priority) {
+      // ジョブを削除して新しい優先度で再追加
+      await job.remove();
+      await queue.add(job.name ?? `task:${job.data.taskId}`, {
+        ...job.data,
+        priority: newPriority,
+      }, {
+        priority: newPriority,
+      });
+      updatedCount++;
+    }
+  }
+
+  return updatedCount;
+}
+
+// 古い失敗ジョブを削除
+export async function cleanOldFailedJobs(
+  queue: Queue<TaskJobData>,
+  maxAgeMs: number = 7 * 24 * 60 * 60 * 1000 // 7日
+): Promise<number> {
+  const failedJobs = await queue.getFailed();
+  const now = Date.now();
+  let removedCount = 0;
+
+  for (const job of failedJobs) {
+    const finishedOn = job.finishedOn;
+    if (finishedOn && now - finishedOn > maxAgeMs) {
+      await job.remove();
+      removedCount++;
+    }
+  }
+
+  return removedCount;
 }
