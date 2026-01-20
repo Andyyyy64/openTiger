@@ -5,6 +5,59 @@
 
 ---
 
+## プロジェクトステータス
+
+| フェーズ | 概要 | Implemented | Proven* | ステータス |
+| :--- | :--- | :--- | :--- | :--- |
+| Phase 1 | 土台（状態管理とAPIの基盤） | 100% | 90% | ✅ Done |
+| Phase 2 | Worker実行（Claude Code + PR作成） | 100% | 70% | 🚀 Active |
+| Phase 3 | Dispatcher（並列実行・割当） | 100% | 40% | 🚀 Active |
+| Phase 4 | Planner（タスク自動生成） | 100% | 30% | 🚀 Active |
+| Phase 5 | Judge（PR自動判定） | 100% | 20% | 🚧 In Progress |
+| Phase 6 | Cycle Manager（長時間運用） | 100% | 10% | 🚧 In Progress |
+| Phase 7 | 品質保証・Orchestration検証 | 50% | 5% | 🚧 In Progress |
+| Phase 8 | 運用・可視化（Dashboard） | 0% | 0% | 📅 Planned |
+
+`*Proven: 異常系（Rate limit/故障/再起動）、並列負荷、冪等性などが実地検証されている度合い`
+
+---
+
+## 🔄 軌道修正・運用強化タスク (MVP優先)
+
+実装は完了しているが、並列運用時に「詰む」ポイントを回避するための強化項目。
+
+### 1. 進捗表示の厳格化
+- [ ] `docs/task.md` の進捗表を Implemented/Proven の2軸に管理
+- [ ] 各フェーズの「Proven」条件（検証シナリオ）の定義
+
+### 2. Run Lifecycle & 冪等性の強化
+- [ ] `Soft Cancel` (安全な停止) と `Hard Kill` (強制終了) の実装
+- [ ] 異常終了したタスクの再キューイング条件の明文化
+- [ ] 同一タスクの再試行時にPR重複やブランチ衝突を防ぐ冪等性ロジック
+
+### 3. コンフリクト制御 (Target Area)
+- [ ] `packages/core/domain/task.ts` に `target_area` と `touches` フィールドを追加
+- [ ] Dispatcherによる `target_area` ごとの並列度制限の実装（設定可能に）
+
+### 4. Computed Risk による自動判定
+- [ ] Judgeに `computed_risk` 算出ロジックを実装（diffサイズ、パス、テスト有無ベース）
+- [ ] `risk_level` (自己申告) を `computed_risk` で上書きする仕組み
+- [ ] 自動マージ可能な条件の厳格化と実装
+
+### 5. セキュリティ・実行隔離の徹底
+- [ ] Workerコンテナに渡す環境変数の `Allowlist` 方式化
+- [ ] 実行禁止コマンドの実行側（Sandbox）でのハードブロック
+
+---
+
+## 🔮 Future Tasks (Post-MVP)
+
+- [ ] **Requirement Interview**: 人間との対話による要件定義支援モード
+- [ ] **API Fallback Strategy**: Maxプラン上限時の自動API切り替えロジック
+- [ ] **Cost-Aware Planning**: 予算に応じたタスク優先度・モデルの動的変更
+
+---
+
 ## Phase 1: 土台（状態管理とAPIの基盤）
 
 **目標**: 状態管理とAPIの基盤を作る  
@@ -315,21 +368,22 @@
 
 ## 進捗サマリー
 
-| Phase | 完了/全体 | 進捗 |
-|-------|----------|------|
-| Phase 1: 土台 | 22/22 | 100% |
-| Phase 2: Worker実行 | 26/26 | 100% |
-| Phase 3: Dispatcher | 11/11 | 100% |
-| Phase 4: Planner | 9/9 | 100% |
-| Phase 5: Judge | 10/10 | 100% |
-| Phase 6: Cycle Manager | 8/8 | 100% |
-| Phase 7: テスト・CI/CD | 5/10 | 50% |
-| Phase 8: 運用 | 0/34 | 0% |
-| **合計** | **91/130** | **70%** |
+| Phase | 完了/全体 | Implemented | Proven |
+|-------|----------|-------------|--------|
+| Phase 1: 土台 | 22/22 | 100% | 90% |
+| Phase 2: Worker実行 | 26/26 | 100% | 70% |
+| Phase 3: Dispatcher | 11/11 | 100% | 40% |
+| Phase 4: Planner | 9/9 | 100% | 30% |
+| Phase 5: Judge | 10/10 | 100% | 20% |
+| Phase 6: Cycle Manager | 8/8 | 100% | 10% |
+| Phase 7: テスト・CI/CD | 5/10 | 50% | 5% |
+| Phase 8: 運用 | 0/34 | 0% | 0% |
+| **合計** | **91/130** | **70%** | **33%** |
 
 ---
 
 ## 次にやるべきこと（優先度順）
 
-1. **結合テスト** - Phase 7 残タスク（実際のフロー検証）[優先度: 中]
-2. **ダッシュボード** - Phase 8 (React + Vite)
+1. **運用強化タスク** - ライフサイクル、コンフリクト制御、Computed Riskの実装
+2. **E2E統合テスト (Proven向上)** - 全体フロー（Planner -> PR -> Merge）の連続成功検証
+3. **ダッシュボード** - 可視化による運用の効率化
