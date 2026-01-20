@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "h1ve Task",
+  "description": "エージェントが実行するタスクの定義",
+  "type": "object",
+  "required": ["title", "goal", "allowedPaths", "commands"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "タスクの簡潔な説明"
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "description": "完了条件（機械判定可能な形式）"
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "files": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "関連ファイルパス"
+        },
+        "specs": {
+          "type": "string",
+          "description": "詳細仕様"
+        },
+        "notes": {
+          "type": "string",
+          "description": "補足情報"
+        }
+      }
+    },
+    "allowedPaths": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "変更を許可するパス（glob）"
+    },
+    "commands": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "検証コマンド（全て成功で完了）"
+    },
+    "priority": {
+      "type": "integer",
+      "default": 0,
+      "description": "優先度（高いほど先に実行）"
+    },
+    "riskLevel": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "default": "low",
+      "description": "リスクレベル"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "default": [],
+      "description": "先行タスクのID"
+    },
+    "timeboxMinutes": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 60,
+      "description": "想定作業時間（分）"
+    }
+  }
+}
