@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { tasksApi } from '../lib/api';
 import type { Task } from '@h1ve/core';
@@ -13,9 +14,9 @@ export const TasksPage: React.FC = () => {
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Tasks</h1>
-        <button className="bg-yellow-500 hover:bg-yellow-600 text-slate-950 px-4 py-2 rounded-lg font-semibold transition-colors">
+        <Link to="/tasks/new" className="bg-yellow-500 hover:bg-yellow-600 text-slate-950 px-4 py-2 rounded-lg font-semibold transition-colors">
           New Task
-        </button>
+        </Link>
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
@@ -46,7 +47,7 @@ export const TasksPage: React.FC = () => {
               tasks?.map((task: Task) => (
                 <tr key={task.id} className="hover:bg-slate-800/30 transition-colors">
                   <td className="px-6 py-4">
-                    <div className="font-medium">{task.title}</div>
+                    <Link to={`/tasks/${task.id}`} className="font-medium hover:text-yellow-500 transition-colors">{task.title}</Link>
                     <div className="text-xs text-slate-500 truncate max-w-xs">{task.goal}</div>
                   </td>
                   <td className="px-6 py-4">

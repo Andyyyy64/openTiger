@@ -1,4 +1,4 @@
-import type { Task, Run, Agent } from '@h1ve/core';
+import type { Task, Run, Agent, CreateTaskInput, Artifact } from '@h1ve/core';
 
 /**
  * Dashboard API Client
@@ -26,17 +26,22 @@ export async function fetchApi<T>(endpoint: string, options?: RequestInit): Prom
 
 // タスク関連
 export const tasksApi = {
-  list: () => fetchApi<Task[]>('/tasks'),
-  get: (id: string) => fetchApi<Task>(`/tasks/${id}`),
+  list: () => fetchApi<{ tasks: Task[] }>('/tasks').then(res => res.tasks),
+  get: (id: string) => fetchApi<{ task: Task }>(`/tasks/${id}`).then(res => res.task),
+  create: (input: CreateTaskInput) => fetchApi<{ task: Task }>('/tasks', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }).then(res => res.task),
 };
 
 // 実行履歴関連
 export const runsApi = {
-  list: () => fetchApi<Run[]>('/runs'),
-  get: (id: string) => fetchApi<Run>(`/runs/${id}`),
+  list: (taskId?: string) => 
+    fetchApi<{ runs: Run[] }>(`/runs${taskId ? `?taskId=${taskId}` : ''}`).then(res => res.runs),
+  get: (id: string) => fetchApi<{ run: Run, artifacts: Artifact[] }>(`/runs/${id}`),
 };
 
 // エージェント関連
 export const agentsApi = {
-  list: () => fetchApi<Agent[]>('/agents'),
+  list: () => fetchApi<{ agents: Agent[] }>('/agents').then(res => res.agents),
 };
