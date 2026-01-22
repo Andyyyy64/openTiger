@@ -3,9 +3,28 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@h1ve/db";
 import { runs, artifacts } from "@h1ve/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql, gte } from "drizzle-orm";
 
 export const runsRoute = new Hono();
+
+// 統計情報取得
+runsRoute.get("/stats", async (c) => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // 本日の消費トークン合計
+  const result = await db
+    .select({
+      totalTokens: sql<number>`sum(COALESCE(${runs.costTokens}, 0))`,
+    })
+    .from(runs)
+    .where(gte(runs.startedAt, today));
+
+  return c.json({
+    dailyTokens: Number(result[0]?.totalTokens ?? 0),
+    tokenLimit: parseInt(process.env.DAILY_TOKEN_LIMIT ?? "5000000", 10),
+  });
+});
 
 // 実行履歴一覧取得
 runsRoute.get("/", async (c) => {

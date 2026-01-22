@@ -39,6 +39,12 @@ export const runsApi = {
   list: (taskId?: string) => 
     fetchApi<{ runs: Run[] }>(`/runs${taskId ? `?taskId=${taskId}` : ''}`).then(res => res.runs),
   get: (id: string) => fetchApi<{ run: Run, artifacts: Artifact[] }>(`/runs/${id}`),
+  stats: () => fetchApi<{ dailyTokens: number, tokenLimit: number }>('/runs/stats'),
+};
+
+// システム状態
+export const systemApi = {
+  health: () => fetchApi<{ status: string, timestamp: string }>('/health'),
 };
 
 // エージェント関連
