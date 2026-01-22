@@ -10,13 +10,13 @@
 | フェーズ | 概要 | Implemented | Proven* | ステータス |
 | :--- | :--- | :--- | :--- | :--- |
 | Phase 1 | 土台（状態管理とAPIの基盤） | 100% | 90% | ✅ Done |
-| Phase 2 | Worker実行（Claude Code + PR作成） | 100% | 70% | 🚀 Active |
-| Phase 3 | Dispatcher（並列実行・割当） | 100% | 40% | 🚀 Active |
+| Phase 2 | Worker実行（Claude Code + PR作成） | 100% | 80% | 🚀 Active |
+| Phase 3 | Dispatcher（並列実行・割当） | 100% | 60% | 🚀 Active |
 | Phase 4 | Planner（タスク自動生成） | 100% | 30% | 🚀 Active |
-| Phase 5 | Judge（PR自動判定） | 100% | 20% | 🚧 In Progress |
-| Phase 6 | Cycle Manager（長時間運用） | 100% | 10% | 🚧 In Progress |
+| Phase 5 | Judge（PR自動判定） | 100% | 40% | 🚀 Active |
+| Phase 6 | Cycle Manager（長時間運用） | 100% | 20% | 🚀 Active |
 | Phase 7 | 品質保証・Orchestration検証 | 50% | 5% | 🚧 In Progress |
-| Phase 8 | 運用・可視化（Dashboard） | 0% | 0% | 📅 Planned |
+| Phase 8 | 運用・可視化（Dashboard） | 5% | 0% | 🚀 Active |
 
 `*Proven: 異常系（Rate limit/故障/再起動）、並列負荷、冪等性などが実地検証されている度合い`
 
@@ -32,21 +32,21 @@
 
 ### 2. Run Lifecycle & 冪等性の強化
 - [ ] `Soft Cancel` (安全な停止) と `Hard Kill` (強制終了) の実装
-- [ ] 異常終了したタスクの再キューイング条件の明文化
-- [ ] 同一タスクの再試行時にPR重複やブランチ衝突を防ぐ冪等性ロジック
+- [x] 異常終了したタスクの再キューイング条件の明文化
+- [x] 同一タスクの再試行時にPR重複やブランチ衝突を防ぐ冪等性ロジック
 
 ### 3. コンフリクト制御 (Target Area)
-- [ ] `packages/core/domain/task.ts` に `target_area` と `touches` フィールドを追加
-- [ ] Dispatcherによる `target_area` ごとの並列度制限の実装（設定可能に）
+- [x] `packages/core/domain/task.ts` に `target_area` と `touches` フィールドを追加
+- [x] Dispatcherによる `target_area` ごとの並列度制限の実装（設定可能に）
 
 ### 4. Computed Risk による自動判定
-- [ ] Judgeに `computed_risk` 算出ロジックを実装（diffサイズ、パス、テスト有無ベース）
-- [ ] `risk_level` (自己申告) を `computed_risk` で上書きする仕組み
+- [x] Judgeに `computed_risk` 算出ロジックを実装（diffサイズ、パス、テスト有無ベース）
+- [x] `risk_level` (自己申告) を `computed_risk` で上書きする仕組み
 - [ ] 自動マージ可能な条件の厳格化と実装
 
 ### 5. セキュリティ・実行隔離の徹底
-- [ ] Workerコンテナに渡す環境変数の `Allowlist` 方式化
-- [ ] 実行禁止コマンドの実行側（Sandbox）でのハードブロック
+- [x] Workerコンテナに渡す環境変数の `Allowlist` 方式化
+- [x] 実行禁止コマンドの実行側（Sandbox）でのハードブロック
 
 ---
 
@@ -371,19 +371,19 @@
 | Phase | 完了/全体 | Implemented | Proven |
 |-------|----------|-------------|--------|
 | Phase 1: 土台 | 22/22 | 100% | 90% |
-| Phase 2: Worker実行 | 26/26 | 100% | 70% |
-| Phase 3: Dispatcher | 11/11 | 100% | 40% |
+| Phase 2: Worker実行 | 26/26 | 100% | 80% |
+| Phase 3: Dispatcher | 11/11 | 100% | 60% |
 | Phase 4: Planner | 9/9 | 100% | 30% |
-| Phase 5: Judge | 10/10 | 100% | 20% |
-| Phase 6: Cycle Manager | 8/8 | 100% | 10% |
+| Phase 5: Judge | 10/10 | 100% | 40% |
+| Phase 6: Cycle Manager | 8/8 | 100% | 20% |
 | Phase 7: テスト・CI/CD | 5/10 | 50% | 5% |
-| Phase 8: 運用 | 0/34 | 0% | 0% |
-| **合計** | **91/130** | **70%** | **33%** |
+| Phase 8: 運用 | 0/34 | 5% | 0% |
+| **合計** | **91/130** | **70%** | **40%** |
 
 ---
 
 ## 次にやるべきこと（優先度順）
 
-1. **運用強化タスク** - ライフサイクル、コンフリクト制御、Computed Riskの実装
-2. **E2E統合テスト (Proven向上)** - 全体フロー（Planner -> PR -> Merge）の連続成功検証
-3. **ダッシュボード** - 可視化による運用の効率化
+1. **ダッシュボードの初期化** - React 19 + Vite + Tailwind v4 のセットアップ
+2. **運用強化タスクの残り** - Soft Cancel / Hard Kill の実装
+3. **E2E統合テスト (Proven向上)** - 全体フロー（Planner -> PR -> Merge）の連続成功検証
