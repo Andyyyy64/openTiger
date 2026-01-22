@@ -45,6 +45,53 @@ const DEFAULT_OPTIONS: Partial<DockerExecOptions> = {
   user: "1001:1001", // 非rootユーザー
 };
 
+// 許可された環境変数のリスト
+const ALLOWED_ENV_VARS = [
+  "ANTHROPIC_API_KEY",
+  "GITHUB_TOKEN",
+  "NODE_ENV",
+  "DEBUG",
+  "LANG",
+  "LC_ALL",
+  "TZ",
+];
+
+// 禁止コマンドのリスト
+const FORBIDDEN_COMMANDS = [
+  "rm -rf /",
+  "chmod",
+  "chown",
+  "sudo",
+  "su",
+  "apt",
+  "yum",
+  "dnf",
+  "curl",
+  "wget",
+];
+
+// 環境変数をフィルタリング（Allowlist方式）
+function filterEnvVars(env: Record<string, string>): Record<string, string> {
+  const filtered: Record<string, string> = {};
+  for (const key of ALLOWED_ENV_VARS) {
+    if (env[key]) {
+      filtered[key] = env[key];
+    }
+  }
+  return filtered;
+}
+
+// コマンドが許可されているかチェック
+function isCommandAllowed(command: string[]): boolean {
+  const fullCommand = command.join(" ").toLowerCase();
+  for (const forbidden of FORBIDDEN_COMMANDS) {
+    if (fullCommand.includes(forbidden.toLowerCase())) {
+      return false;
+    }
+  }
+  return true;
+}
+
 // Dockerコンテナ内でコマンドを実行
 export async function runInDocker(
   command: string[],
@@ -52,6 +99,17 @@ export async function runInDocker(
 ): Promise<DockerExecResult> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const startTime = Date.now();
+
+  // コマンドのバリデーション
+  if (!isCommandAllowed(command)) {
+    return {
+      success: false,
+      exitCode: -1,
+      stdout: "",
+      stderr: `Security Error: Command contains forbidden patterns.`,
+      durationMs: 0,
+    };
+  }
 
   // docker run コマンドを構築
   const dockerArgs: string[] = ["run", "--rm"];
@@ -92,7 +150,8 @@ export async function runInDocker(
 
   // 環境変数
   if (opts.env) {
-    for (const [key, value] of Object.entries(opts.env)) {
+    const filteredEnv = filterEnvVars(opts.env);
+    for (const [key, value] of Object.entries(filteredEnv)) {
       dockerArgs.push(`--env=${key}=${value}`);
     }
   }
