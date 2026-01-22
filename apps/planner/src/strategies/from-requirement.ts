@@ -135,6 +135,8 @@ function resolveDependencies(
     riskLevel: (task.riskLevel as "low" | "medium" | "high") ?? "low",
     dependencies: [], // 後で設定
     timeboxMinutes: task.timeboxMinutes ?? 60,
+    targetArea: undefined,
+    touches: [],
   }));
 
   return taskInputs;
@@ -220,6 +222,8 @@ export function generateSimpleTasks(requirement: Requirement): TaskGenerationRes
       riskLevel: determineRiskLevel(requirement),
       dependencies: [],
       timeboxMinutes: 60,
+      targetArea: undefined,
+      touches: [],
     });
   });
 

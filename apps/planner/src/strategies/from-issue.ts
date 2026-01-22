@@ -183,6 +183,8 @@ export async function generateTasksFromIssue(
     riskLevel: (task.riskLevel as "low" | "medium" | "high") ?? defaultRisk,
     dependencies: [],
     timeboxMinutes: task.timeboxMinutes ?? 60,
+    targetArea: undefined,
+    touches: [],
   }));
 
   return {
@@ -212,6 +214,8 @@ export function generateSimpleTaskFromIssue(
     riskLevel,
     dependencies: [],
     timeboxMinutes: 60,
+    targetArea: undefined,
+    touches: [],
   };
 
   return {

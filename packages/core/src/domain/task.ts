@@ -34,6 +34,8 @@ export const TaskSchema = z.object({
   priority: z.number().int().default(0),
   riskLevel: RiskLevel.default("low"),
   status: TaskStatus.default("queued"),
+  targetArea: z.string().optional(), // 担当領域（コンフリクト制御用）
+  touches: z.array(z.string()).default([]), // 変更対象のファイル/ディレクトリ
   dependencies: z.array(z.string().uuid()).default([]), // 先行タスクID
   timeboxMinutes: z.number().int().positive().default(60),
   createdAt: z.date(),

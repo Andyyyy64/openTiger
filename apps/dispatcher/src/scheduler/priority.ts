@@ -14,6 +14,8 @@ export interface AvailableTask {
   allowedPaths: string[];
   commands: string[];
   context: Record<string, unknown> | null;
+  targetArea: string | null;
+  touches: string[];
 }
 
 // 利用可能なタスクを優先度順で取得
@@ -32,6 +34,15 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
   const leasedTasks = await db.select({ taskId: leases.taskId }).from(leases);
   const leasedIds = new Set(leasedTasks.map((l) => l.taskId));
 
+  // 実行中のタスクから targetArea を取得
+  const runningTasks = await db
+    .select({ targetArea: tasks.targetArea })
+    .from(tasks)
+    .where(eq(tasks.status, "running"));
+  const activeTargetAreas = new Set(
+    runningTasks.map((t) => t.targetArea).filter((a): a is string => !!a)
+  );
+
   // 完了済みタスクIDを取得
   const doneTasks = await db
     .select({ id: tasks.id })
@@ -39,10 +50,15 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     .where(eq(tasks.status, "done"));
   const doneIds = new Set(doneTasks.map((t) => t.id));
 
-  // フィルタリング: リースなし、依存関係解決済み
+  // フィルタリング: リースなし、依存関係解決済み、targetArea の衝突なし
   const available = queuedTasks.filter((task) => {
     // リース済みは除外
     if (leasedIds.has(task.id)) {
+      return false;
+    }
+
+    // targetArea が衝突している場合は除外
+    if (task.targetArea && activeTargetAreas.has(task.targetArea)) {
       return false;
     }
 
@@ -72,6 +88,8 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     allowedPaths: task.allowedPaths ?? [],
     commands: task.commands ?? [],
     context: task.context as Record<string, unknown> | null,
+    targetArea: task.targetArea,
+    touches: task.touches ?? [],
   }));
 }
 

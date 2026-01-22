@@ -145,7 +145,18 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
           // 利用可能なスロット分だけディスパッチ
           const tasksToDispatch = availableTasks.slice(0, availableSlots);
 
+          // 現在のサイクルでディスパッチ予定の targetArea を追跡
+          const pendingTargetAreas = new Set<string>();
+
           for (const task of tasksToDispatch) {
+            // targetArea の重複チェック（同じサイクル内での衝突回避）
+            if (task.targetArea && pendingTargetAreas.has(task.targetArea)) {
+              continue;
+            }
+            if (task.targetArea) {
+              pendingTargetAreas.add(task.targetArea);
+            }
+
             // エージェントIDを生成
             const agentId = `worker-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
