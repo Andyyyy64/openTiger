@@ -1,5 +1,12 @@
 import { getOctokit, getRepoInfo } from "./client.js";
 
+// PR検索オプション
+export interface SearchPROptions {
+  head?: string;
+  base?: string;
+  state?: "open" | "closed" | "all";
+}
+
 // PR作成オプション
 export interface CreatePROptions {
   title: string;
@@ -16,6 +23,62 @@ export interface PRInfo {
   url: string;
   title: string;
   state: string;
+}
+
+// PRを検索
+export async function findPRs(options: SearchPROptions): Promise<PRInfo[]> {
+  const octokit = getOctokit();
+  const { owner, repo } = getRepoInfo();
+
+  const response = await octokit.pulls.list({
+    owner,
+    repo,
+    head: options.head ? `${owner}:${options.head}` : undefined,
+    base: options.base,
+    state: options.state ?? "open",
+  });
+
+  return response.data.map((pr) => ({
+    number: pr.number,
+    url: pr.html_url,
+    title: pr.title,
+    state: pr.state,
+  }));
+}
+
+// PRを更新
+export async function updatePR(
+  prNumber: number,
+  options: Partial<CreatePROptions>
+): Promise<PRInfo> {
+  const octokit = getOctokit();
+  const { owner, repo } = getRepoInfo();
+
+  const response = await octokit.pulls.update({
+    owner,
+    repo,
+    pull_number: prNumber,
+    title: options.title,
+    body: options.body,
+    state: "open",
+  });
+
+  // ラベルを更新（既存のラベルに追加）
+  if (options.labels && options.labels.length > 0) {
+    await octokit.issues.addLabels({
+      owner,
+      repo,
+      issue_number: prNumber,
+      labels: options.labels,
+    });
+  }
+
+  return {
+    number: response.data.number,
+    url: response.data.html_url,
+    title: response.data.title,
+    state: response.data.state,
+  };
 }
 
 // PRを作成

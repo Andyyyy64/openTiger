@@ -1,4 +1,4 @@
-import { createPR, type PRInfo } from "@h1ve/vcs";
+import { createPR, findPRs, updatePR, type PRInfo } from "@h1ve/vcs";
 import type { Task } from "@h1ve/core";
 
 export interface CreatePROptions {
@@ -13,6 +13,7 @@ export interface CreatePROptions {
 export interface CreatePRResult {
   success: boolean;
   pr?: PRInfo;
+  isUpdate?: boolean;
   error?: string;
 }
 
@@ -74,13 +75,13 @@ function generatePRBody(options: CreatePROptions): string {
   return lines.join("\n");
 }
 
-// PRを作成
+// PRを作成または更新
 export async function createTaskPR(
   options: CreatePROptions
 ): Promise<CreatePRResult> {
   const { branchName, task, baseBranch = "main" } = options;
 
-  console.log("Creating PR...");
+  console.log("Checking for existing PR...");
 
   const title = `[h1ve] ${task.title}`;
   const body = generatePRBody(options);
@@ -89,6 +90,31 @@ export async function createTaskPR(
   const labels = ["agent", "autogen", `${task.riskLevel}-risk`];
 
   try {
+    // 既存のPRを探す（同じブランチからのPR）
+    const existingPRs = await findPRs({
+      head: branchName,
+      base: baseBranch,
+      state: "open",
+    });
+
+    if (existingPRs.length > 0 && existingPRs[0]) {
+      const existingPR = existingPRs[0];
+      console.log(`Updating existing PR #${existingPR.number}...`);
+
+      const pr = await updatePR(existingPR.number, {
+        title,
+        body,
+        labels,
+      });
+
+      return {
+        success: true,
+        pr,
+        isUpdate: true,
+      };
+    }
+
+    console.log("Creating new PR...");
     const pr = await createPR({
       title,
       body,
@@ -103,10 +129,11 @@ export async function createTaskPR(
     return {
       success: true,
       pr,
+      isUpdate: false,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("Failed to create PR:", message);
+    console.error("Failed to create/update PR:", message);
 
     return {
       success: false,
