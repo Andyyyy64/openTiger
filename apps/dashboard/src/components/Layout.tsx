@@ -1,4 +1,5 @@
 import React from 'react';
+import { NavLink } from 'react-router-dom';
 import { LayoutDashboard, ListTodo, Activity, Settings, ShieldCheck } from 'lucide-react';
 
 interface LayoutProps {
@@ -19,21 +20,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
 
           <nav className="space-y-1">
-            <NavItem icon={<LayoutDashboard size={20} />} label="Overview" active />
-            <NavItem icon={<ListTodo size={20} />} label="Tasks" />
-            <NavItem icon={<Activity size={20} />} label="Runs" />
-            <NavItem icon={<ShieldCheck size={20} />} label="Agents" />
+            <NavItem to="/" icon={<LayoutDashboard size={20} />} label="Overview" />
+            <NavItem to="/tasks" icon={<ListTodo size={20} />} label="Tasks" />
+            <NavItem to="/runs" icon={<Activity size={20} />} label="Runs" />
+            <NavItem to="/agents" icon={<ShieldCheck size={20} />} label="Agents" />
           </nav>
         </div>
 
         <div className="mt-auto p-6 border-t border-slate-800">
-          <NavItem icon={<Settings size={20} />} label="Settings" />
+          <NavItem to="/settings" icon={<Settings size={20} />} label="Settings" />
         </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <header className="h-16 border-bottom border-slate-800 flex items-center justify-between px-8 bg-slate-950/50 backdrop-blur-md sticky top-0 z-10">
+        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-950/50 backdrop-blur-md sticky top-0 z-10">
           <div className="flex items-center gap-4">
             <span className="text-slate-400">System Status:</span>
             <span className="flex items-center gap-2 text-green-400 text-sm font-medium">
@@ -54,14 +55,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   );
 };
 
-const NavItem = ({ icon, label, active = false }: { icon: React.ReactNode, label: string, active?: boolean }) => (
-  <a
-    href="#"
-    className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-      active ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
-    }`}
+const NavItem = ({ to, icon, label }: { to: string, icon: React.ReactNode, label: string }) => (
+  <NavLink
+    to={to}
+    className={({ isActive }) => 
+      `flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+        isActive ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'
+      }`
+    }
   >
     {icon}
     <span className="font-medium">{label}</span>
-  </a>
+  </NavLink>
 );

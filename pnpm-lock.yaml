@@ -94,6 +94,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@h1ve/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@tanstack/react-query':
         specifier: ^5.64.2
         version: 5.90.19(react@19.2.3)
