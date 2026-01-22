@@ -16,7 +16,7 @@
 | Phase 5 | Judge（PR自動判定） | 100% | 40% | 🚀 Active |
 | Phase 6 | Cycle Manager（長時間運用） | 100% | 20% | 🚀 Active |
 | Phase 7 | 品質保証・Orchestration検証 | 50% | 5% | 🚧 In Progress |
-| Phase 8 | 運用・可視化（Dashboard） | 5% | 0% | 🚀 Active |
+| Phase 8 | 運用・可視化（Dashboard） | 15% | 0% | 🚀 Active |
 
 `*Proven: 異常系（Rate limit/故障/再起動）、並列負荷、冪等性などが実地検証されている度合い`
 
@@ -301,16 +301,16 @@
 
 #### プロジェクト初期化
 
-- [ ] Vite + React + TypeScript セットアップ
-- [ ] Tailwind CSS 設定
+- [x] Vite + React + TypeScript セットアップ
+- [x] Tailwind CSS 設定
 - [ ] API クライアント設定（fetch wrapper）
 - [ ] TanStack Query 設定
 - [ ] ルーティング設定（React Router）
 
 #### レイアウト・共通コンポーネント
 
-- [ ] サイドバー（ナビゲーション）
-- [ ] ヘッダー（ステータス表示）
+- [x] サイドバー（ナビゲーション）
+- [x] ヘッダー（ステータス表示）
 - [ ] ローディング・エラー表示
 
 #### タスク管理画面
