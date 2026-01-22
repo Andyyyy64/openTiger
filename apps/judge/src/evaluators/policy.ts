@@ -166,26 +166,55 @@ export async function evaluatePolicy(
 
 // リスクレベルを評価
 export function evaluateRiskLevel(
-  diffStats: { additions: number; deletions: number; changedFiles: number },
+  diffStats: {
+    additions: number;
+    deletions: number;
+    changedFiles: number;
+    files: Array<{ filename: string }>;
+  },
   policy: Policy
 ): "low" | "medium" | "high" {
   const totalChanges = diffStats.additions + diffStats.deletions;
 
-  // 高リスクの閾値（ポリシーの半分以上）
+  // 1. 変更量によるベースリスク
+  let risk: "low" | "medium" | "high" = "low";
+
   if (
     totalChanges > policy.maxLinesChanged * 0.5 ||
     diffStats.changedFiles > policy.maxFilesChanged * 0.5
   ) {
-    return "high";
-  }
-
-  // 中リスクの閾値（ポリシーの25%以上）
-  if (
+    risk = "high";
+  } else if (
     totalChanges > policy.maxLinesChanged * 0.25 ||
     diffStats.changedFiles > policy.maxFilesChanged * 0.25
   ) {
-    return "medium";
+    risk = "medium";
   }
 
-  return "low";
+  // 2. 機微なファイルパスによるリスク格上げ
+  const sensitivePatterns = [
+    "**/auth/**",
+    "**/security/**",
+    "**/db/schema.ts",
+    "**/.github/workflows/**",
+    "package.json",
+    "pnpm-lock.yaml",
+  ];
+
+  const touchesSensitiveFile = diffStats.files.some((file) =>
+    sensitivePatterns.some((pattern) => matchPath(file.filename, pattern))
+  );
+
+  if (touchesSensitiveFile) {
+    // 機微なファイルを触っている場合は最低でも medium
+    if (risk === "low") {
+      risk = "medium";
+    }
+    // すでに medium なら high に格上げ
+    else if (risk === "medium") {
+      risk = "high";
+    }
+  }
+
+  return risk;
 }

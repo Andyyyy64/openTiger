@@ -132,12 +132,17 @@ async function judgeSinglePR(
 
   // 2. ポリシー評価
   console.log("  - Checking policy compliance...");
+  const diffStats = await getPRDiffStats(pr.prNumber);
   const policyResult = await evaluatePolicy(
     pr.prNumber,
     config.policy,
     pr.allowedPaths
   );
   console.log(`    Policy: ${policyResult.pass ? "PASS" : "FAIL"}`);
+
+  // 計算されたリスクレベル
+  const computedRisk = evaluateRiskLevel(diffStats, config.policy);
+  console.log(`    Computed Risk: ${computedRisk} (Task Risk: ${pr.taskRiskLevel})`);
 
   // 3. LLM評価
   let llmResult;
@@ -162,8 +167,14 @@ async function judgeSinglePR(
     llm: llmResult,
   };
 
-  // 判定
-  const result = makeJudgement(summary, config.policy, pr.taskRiskLevel);
+  // 判定（計算されたリスクと自己申告リスクのうち、高い方を採用）
+  const riskPriority = { low: 0, medium: 1, high: 2 };
+  const effectiveRisk =
+    riskPriority[computedRisk] > riskPriority[pr.taskRiskLevel]
+      ? computedRisk
+      : pr.taskRiskLevel;
+
+  const result = makeJudgement(summary, config.policy, effectiveRisk);
 
   console.log(`  => Verdict: ${result.verdict.toUpperCase()}`);
   if (result.autoMerge) {
@@ -250,11 +261,16 @@ async function reviewSinglePR(
 
   // ポリシー評価
   console.log("\n[2/3] Checking policy compliance...");
+  const diffStats = await getPRDiffStats(prNumber);
   const policyResult = await evaluatePolicy(prNumber, config.policy, []);
   console.log(`Policy: ${policyResult.pass ? "PASS" : "FAIL"}`);
   for (const v of policyResult.violations) {
     console.log(`  - ${v.severity}: ${v.message}`);
   }
+
+  // 計算されたリスクレベル
+  const computedRisk = evaluateRiskLevel(diffStats, config.policy);
+  console.log(`Computed Risk: ${computedRisk}`);
 
   // LLM評価
   let llmResult;
@@ -282,8 +298,8 @@ async function reviewSinglePR(
     llm: llmResult,
   };
 
-  // 判定
-  const result = makeJudgement(summary, config.policy, "low");
+  // 判定（計算されたリスクを採用）
+  const result = makeJudgement(summary, config.policy, computedRisk);
 
   console.log("\n" + "=".repeat(60));
   console.log(`VERDICT: ${result.verdict.toUpperCase()}`);
