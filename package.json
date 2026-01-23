@@ -22,7 +22,8 @@
     "db:generate": "pnpm --filter @h1ve/db generate",
     "db:migrate": "pnpm --filter @h1ve/db migrate",
     "db:push": "pnpm --filter @h1ve/db push",
-    "db:studio": "pnpm --filter @h1ve/db studio"
+    "db:studio": "pnpm --filter @h1ve/db studio",
+    "restart": "docker compose down -v && docker compose up -d postgres redis && sleep 3 && pnpm db:push && sleep 3 && pnpm dev"
   },
   "devDependencies": {
     "@types/node": "^20.17.14",

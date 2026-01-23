@@ -46,10 +46,17 @@ async function launchAsProcess(
     REPO_URL: config.repoUrl,
     BASE_BRANCH: config.baseBranch,
     WORKSPACE_PATH: config.workspacePath,
+    // 重要な環境変数を明示的に上書き/保持
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    OPENCODE_MODEL: process.env.OPENCODE_MODEL,
+    DATABASE_URL: process.env.DATABASE_URL,
+    REDIS_URL: process.env.REDIS_URL,
     ...config.env,
   };
 
   try {
+    console.log(`[Dispatcher] Launching worker process for task ${config.taskId}...`);
     const workerProcess = spawn("pnpm", ["--filter", "@h1ve/worker", "start"], {
       env,
       stdio: ["ignore", "pipe", "pipe"],
@@ -113,7 +120,8 @@ async function launchAsDocker(
     WORKSPACE_PATH: "/workspace",
     DATABASE_URL: process.env.DATABASE_URL ?? "",
     REDIS_URL: process.env.REDIS_URL ?? "",
-    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? "",
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
+    OPENCODE_MODEL: process.env.OPENCODE_MODEL ?? "",
     GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? "",
     ...config.env,
   };

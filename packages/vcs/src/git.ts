@@ -11,7 +11,13 @@ export interface GitResult {
 // Gitコマンドを実行
 async function execGit(args: string[], cwd: string): Promise<GitResult> {
   return new Promise((resolve) => {
-    const process = spawn("git", args, { cwd });
+    const process = spawn("git", args, {
+      cwd,
+      env: {
+        ...globalThis.process.env,
+        GIT_TERMINAL_PROMPT: "0", // インタラクティブな入力を無効化
+      },
+    });
 
     let stdout = "";
     let stderr = "";
@@ -51,10 +57,8 @@ export async function cloneRepo(
   branch?: string,
   token?: string
 ): Promise<GitResult> {
+  // 空のリポジトリやブランチ未指定の場合でも動作するように、まずは通常のクローンを試みる
   const args = ["clone", "--depth", "1"];
-  if (branch) {
-    args.push("--branch", branch);
-  }
 
   let authenticatedUrl = repoUrl;
   if (token && repoUrl.startsWith("https://github.com/")) {
@@ -64,9 +68,18 @@ export async function cloneRepo(
     );
   }
 
-  args.push(authenticatedUrl, destPath);
+  // ブランチ指定がある場合でも、まずはクローンを優先するためにここでは指定しない
+  // または、エラー時にフォールバックするロジックにする
+  const cloneArgs = [...args, authenticatedUrl, destPath];
+  const result = await execGit(cloneArgs, ".");
 
-  return execGit(args, ".");
+  // 特定のブランチを指定してクローンしようとして失敗した場合、ブランチ指定なしで再試行
+  if (!result.success && branch) {
+    console.warn(`Failed to clone branch ${branch}, retrying without branch specification...`);
+    return execGit([...args, authenticatedUrl, destPath], ".");
+  }
+
+  return result;
 }
 
 // 最新を取得
@@ -80,14 +93,17 @@ export async function createBranch(
   branchName: string,
   baseBranch = "main"
 ): Promise<GitResult> {
-  // まずベースブランチに切り替え
+  // まずベースブランチに切り替えを試みる
   const checkoutResult = await execGit(["checkout", baseBranch], cwd);
-  if (!checkoutResult.success) {
-    return checkoutResult;
+  
+  if (checkoutResult.success) {
+    // ベースブランチが存在する場合、最新を取得
+    await execGit(["pull", "origin", baseBranch], cwd);
+  } else {
+    // ベースブランチが存在しない（空のリポジトリなど）場合、
+    // 現在のブランチ（通常は空のHEAD）から新しいブランチを作成する
+    console.warn(`Base branch ${baseBranch} not found, creating ${branchName} from current HEAD`);
   }
-
-  // 最新を取得
-  await execGit(["pull", "origin", baseBranch], cwd);
 
   // 新しいブランチを作成
   return execGit(["checkout", "-b", branchName], cwd);

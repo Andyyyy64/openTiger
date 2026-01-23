@@ -48,6 +48,11 @@ export async function checkoutRepository(
     await mkdir(workspacePath, { recursive: true });
 
     console.log(`Cloning repository to: ${repoPath}`);
+    if (githubToken) {
+      console.log("Using GitHub token for authentication");
+    } else {
+      console.warn("No GitHub token provided for clone");
+    }
     const cloneResult = await cloneRepo(
       repoUrl,
       repoPath,
