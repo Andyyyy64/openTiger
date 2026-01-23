@@ -1,5 +1,5 @@
 # h1ve Worker用Dockerfile
-# サンドボックス環境でClaude Codeを使用してタスクを実行
+# サンドボックス環境でOpenCodeを使用してタスクを実行
 
 # ==============================
 # ベースステージ: 依存関係のインストール
@@ -15,6 +15,9 @@ RUN apk add --no-cache \
     openssh-client \
     curl \
     bash
+
+# OpenCode CLIをインストール
+RUN npm install -g opencode-ai
 
 # GitHub CLIをインストール
 RUN apk add --no-cache github-cli
@@ -106,7 +109,7 @@ ENV LOG_FORMAT=json
 
 # ネットワーク制限のためのラベル（docker-compose/k8sで使用）
 LABEL h1ve.network.policy="restricted"
-LABEL h1ve.network.allowed="api.anthropic.com,api.github.com,github.com"
+LABEL h1ve.network.allowed="api.github.com,github.com,generativelanguage.googleapis.com,opencode.ai"
 
 # ヘルスチェック
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

@@ -1,8 +1,8 @@
 // サンドボックス実行モジュール
 export {
   runInDocker,
-  runClaudeCodeInSandbox,
-  createClaudeCodeDockerOptions,
+  runOpenCodeInSandbox,
+  createOpenCodeDockerOptions,
   checkDockerAvailable,
   checkImageExists,
   type DockerExecOptions,

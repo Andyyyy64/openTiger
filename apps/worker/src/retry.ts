@@ -136,7 +136,7 @@ export async function withRetry<T>(
 }
 
 // テスト失敗時の自己修正リトライ
-// Claude Codeに前回の失敗を伝えて修正を依頼
+// OpenCodeに前回の失敗を伝えて修正を依頼
 export interface SelfHealingConfig extends RetryConfig {
   // 失敗情報を含めたプロンプトを生成する関数
   createRetryPrompt: (

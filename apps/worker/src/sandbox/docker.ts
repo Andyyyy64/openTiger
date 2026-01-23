@@ -48,6 +48,7 @@ const DEFAULT_OPTIONS: Partial<DockerExecOptions> = {
 // 許可された環境変数のリスト
 const ALLOWED_ENV_VARS = [
   "ANTHROPIC_API_KEY",
+  "GEMINI_API_KEY",
   "GITHUB_TOKEN",
   "NODE_ENV",
   "DEBUG",
@@ -206,8 +207,8 @@ export async function runInDocker(
   });
 }
 
-// Claude Code実行用のDocker設定を生成
-export function createClaudeCodeDockerOptions(
+// OpenCode実行用のDocker設定を生成
+export function createOpenCodeDockerOptions(
   workspacePath: string,
   env?: Record<string, string>
 ): DockerExecOptions {
@@ -222,35 +223,31 @@ export function createClaudeCodeDockerOptions(
       },
     ],
     env: {
-      // Claude Code用の環境変数
-      ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? "",
+      // OpenCode用の環境変数
+      GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
       // GitHub認証（PR作成用）
       GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? "",
       // 追加の環境変数
       ...env,
     },
-    network: "bridge", // Claude Code はAPI通信が必要
+    network: "bridge", // OpenCode はAPI通信が必要
     timeoutSeconds: 3600,
-    memoryLimit: 8 * 1024 * 1024 * 1024, // 8GB（Claude Codeは重い）
-    cpuLimit: 4,
+    memoryLimit: 4 * 1024 * 1024 * 1024, // 4GB（Gemini FlashならClaudeより軽量）
+    cpuLimit: 2,
   };
 }
 
-// サンドボックス内でClaude Codeを実行
-export async function runClaudeCodeInSandbox(
+// サンドボックス内でOpenCodeを実行
+export async function runOpenCodeInSandbox(
   workspacePath: string,
   task: string,
   instructionsPath?: string,
   additionalEnv?: Record<string, string>
 ): Promise<DockerExecResult> {
-  const options = createClaudeCodeDockerOptions(workspacePath, additionalEnv);
+  const options = createOpenCodeDockerOptions(workspacePath, additionalEnv);
 
-  // Claude Code コマンドを構築
-  const command = ["claude", "--prompt", task];
-
-  if (instructionsPath) {
-    command.push("--instructions", instructionsPath);
-  }
+  // OpenCode コマンドを構築
+  const command = ["opencode", "run", task];
 
   return runInDocker(command, options);
 }

@@ -1,7 +1,7 @@
 import { writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Task } from "@h1ve/core";
-import { runClaudeCode, type ClaudeCodeResult } from "@h1ve/llm";
+import { runOpenCode, type OpenCodeResult } from "@h1ve/llm";
 
 export interface ExecuteOptions {
   repoPath: string;
@@ -11,11 +11,11 @@ export interface ExecuteOptions {
 
 export interface ExecuteResult {
   success: boolean;
-  claudeResult: ClaudeCodeResult;
+  openCodeResult: OpenCodeResult;
   error?: string;
 }
 
-// タスクからClaude Code用のプロンプトを生成
+// タスクからOpenCode用のプロンプトを生成
 function buildTaskPrompt(task: Task): string {
   const lines: string[] = [
     `# Task: ${task.title}`,
@@ -56,7 +56,7 @@ function buildTaskPrompt(task: Task): string {
   return lines.join("\n");
 }
 
-// Claude Codeを実行してタスクを遂行
+// OpenCodeを実行してタスクを遂行
 export async function executeTask(
   options: ExecuteOptions
 ): Promise<ExecuteResult> {
@@ -64,34 +64,33 @@ export async function executeTask(
 
   const prompt = buildTaskPrompt(task);
 
-  console.log("Executing Claude Code...");
+  console.log("Executing OpenCode...");
   console.log("Task:", task.title);
 
-  // Claude Codeを実行
-  const claudeResult = await runClaudeCode({
+  // OpenCodeを実行
+  const openCodeResult = await runOpenCode({
     workdir: repoPath,
     task: prompt,
-    instructionsPath,
     timeoutSeconds: task.timeboxMinutes * 60,
   });
 
-  if (!claudeResult.success) {
-    console.error("Claude Code execution failed");
-    console.error("Exit code:", claudeResult.exitCode);
-    console.error("Stderr:", claudeResult.stderr);
+  if (!openCodeResult.success) {
+    console.error("OpenCode execution failed");
+    console.error("Exit code:", openCodeResult.exitCode);
+    console.error("Stderr:", openCodeResult.stderr);
 
     return {
       success: false,
-      claudeResult,
-      error: `Claude Code failed with exit code ${claudeResult.exitCode}: ${claudeResult.stderr}`,
+      openCodeResult,
+      error: `OpenCode failed with exit code ${openCodeResult.exitCode}: ${openCodeResult.stderr}`,
     };
   }
 
-  console.log("Claude Code execution completed");
-  console.log("Duration:", Math.round(claudeResult.durationMs / 1000), "seconds");
+  console.log("OpenCode execution completed");
+  console.log("Duration:", Math.round(openCodeResult.durationMs / 1000), "seconds");
 
   return {
     success: true,
-    claudeResult,
+    openCodeResult,
   };
 }

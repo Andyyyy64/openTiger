@@ -108,8 +108,8 @@ export async function runWorker(
       ref: branchName,
     });
 
-    // Step 3: Claude Codeでタスクを実行
-    console.log("\n[3/6] Executing task with Claude Code...");
+    // Step 3: OpenCodeでタスクを実行
+    console.log("\n[3/6] Executing task with OpenCode...");
     const executeResult = await executeTask({
       repoPath,
       task: taskData,
@@ -194,7 +194,7 @@ export async function runWorker(
       .set({
         status: "success",
         finishedAt: new Date(),
-        costTokens: executeResult.claudeResult.durationMs, // TODO: 実際のトークン数
+        costTokens: executeResult.openCodeResult.durationMs, // TODO: 実際のトークン数
       })
       .where(eq(runs.id, runId));
 

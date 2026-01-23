@@ -1,0 +1,17 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "google/gemini-3-flash-preview",
+  "provider": {
+    "gemini": {
+      "options": {
+        "apiKey": "{env:GEMINI_API_KEY}"
+      }
+    }
+  },
+  "permission": {
+    "edit": "allow",
+    "bash": "allow",
+    "read": "allow",
+    "write": "allow"
+  }
+}
