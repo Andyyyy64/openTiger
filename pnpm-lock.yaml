@@ -45,6 +45,9 @@ importers:
       '@hono/zod-validator':
         specifier: ^0.4.2
         version: 0.4.3(hono@4.11.4)(zod@3.25.76)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -79,6 +82,9 @@ importers:
       '@h1ve/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -174,6 +180,9 @@ importers:
       bullmq:
         specifier: ^5.34.8
         version: 5.66.5
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -205,6 +214,9 @@ importers:
       '@h1ve/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -233,6 +245,9 @@ importers:
       '@h1ve/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -264,6 +279,9 @@ importers:
       '@h1ve/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)

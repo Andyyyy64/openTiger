@@ -1,4 +1,5 @@
 import { spawn, ChildProcess } from "node:child_process";
+import { join } from "node:path";
 import { db } from "@h1ve/db";
 import { agents } from "@h1ve/db/schema";
 import { eq } from "drizzle-orm";
@@ -50,6 +51,7 @@ async function launchAsProcess(
     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     OPENCODE_MODEL: process.env.OPENCODE_MODEL,
+    OPENCODE_CONFIG: process.env.OPENCODE_CONFIG ?? join(process.cwd(), "../../opencode.json"),
     DATABASE_URL: process.env.DATABASE_URL,
     REDIS_URL: process.env.REDIS_URL,
     ...config.env,

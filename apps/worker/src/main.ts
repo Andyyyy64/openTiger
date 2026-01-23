@@ -292,11 +292,11 @@ async function main() {
     process.exit(1);
   }
 
-  // エージェント登録
+  // エージェント登録（既存の状態を維持しつつハートビートのみ更新）
   await db.insert(agents).values({
     id: agentId,
     role: "worker",
-    status: "idle",
+    status: "busy", // 起動時は作業中として登録
     lastHeartbeat: new Date(),
     metadata: {
       model: process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview",
@@ -305,7 +305,6 @@ async function main() {
   }).onConflictDoUpdate({
     target: agents.id,
     set: {
-      status: "idle",
       lastHeartbeat: new Date(),
     },
   });
