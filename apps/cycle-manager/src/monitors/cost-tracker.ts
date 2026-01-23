@@ -209,7 +209,7 @@ export async function recordCostAlert(
   await recordEvent({
     type: `cost.${alertType}`,
     entityType: "system",
-    entityId: "cost-tracker",
+    entityId: "00000000-0000-0000-0000-000000000000",
     payload: details,
   });
 

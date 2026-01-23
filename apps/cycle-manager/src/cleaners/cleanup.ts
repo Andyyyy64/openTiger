@@ -206,7 +206,7 @@ export async function performFullCleanup(
   await recordEvent({
     type: "cycle.cleanup",
     entityType: "cycle",
-    entityId: "system",
+    entityId: "00000000-0000-0000-0000-000000000000",
     payload: { ...result },
   });
 

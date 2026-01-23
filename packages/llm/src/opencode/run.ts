@@ -66,7 +66,7 @@ async function executeOpenCodeOnce(
   options: OpenCodeOptions
 ): Promise<Omit<OpenCodeResult, "retryCount">> {
   const startTime = Date.now();
-  const args: string[] = ["run"];
+  const args: string[] = ["run", "--yes"];
 
   const model = options.model ?? DEFAULT_MODEL;
   if (model) {
@@ -82,6 +82,7 @@ async function executeOpenCodeOnce(
       ...options.env,
     },
     timeout: options.timeoutSeconds * 1000,
+    stdio: ["ignore", "pipe", "pipe"],
   });
 
   let stdout = "";

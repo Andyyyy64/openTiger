@@ -42,6 +42,9 @@ export function clearAnomalies(): void {
   detectedAnomalies = [];
 }
 
+// システムエンティティ用の固定UUID
+const SYSTEM_ENTITY_ID = "00000000-0000-0000-0000-000000000000";
+
 // 異常を記録
 async function reportAnomaly(alert: AnomalyAlert): Promise<void> {
   detectedAnomalies.push(alert);
@@ -49,7 +52,7 @@ async function reportAnomaly(alert: AnomalyAlert): Promise<void> {
   await recordEvent({
     type: `anomaly.${alert.type}`,
     entityType: "system",
-    entityId: "anomaly-detector",
+    entityId: SYSTEM_ENTITY_ID,
     payload: {
       severity: alert.severity,
       message: alert.message,

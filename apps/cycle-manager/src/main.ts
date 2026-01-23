@@ -126,7 +126,7 @@ async function runMonitorLoop(): Promise<void> {
       await recordEvent({
         type: "cost.limit_exceeded",
         entityType: "system",
-        entityId: "cost-tracker",
+        entityId: "00000000-0000-0000-0000-000000000000",
         payload: costStatus,
       });
     }
