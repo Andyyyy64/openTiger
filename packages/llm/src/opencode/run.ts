@@ -88,11 +88,17 @@ async function executeOpenCodeOnce(
   let stderr = "";
 
   childProcess.stdout.on("data", (data: Buffer) => {
-    stdout += data.toString();
+    const chunk = data.toString();
+    stdout += chunk;
+    // リアルタイムでログに出力
+    process.stdout.write(chunk);
   });
 
   childProcess.stderr.on("data", (data: Buffer) => {
-    stderr += data.toString();
+    const chunk = data.toString();
+    stderr += chunk;
+    // リアルタイムでログに出力
+    process.stderr.write(chunk);
   });
 
   return new Promise((resolve) => {
