@@ -25,9 +25,10 @@ export interface RiskItem {
 
 // Markdownセクションを抽出
 function extractSection(content: string, sectionName: string): string {
+  // # または ## で始まるセクションに対応
   const regex = new RegExp(
-    `## ${sectionName}\\s*\\n([\\s\\S]*?)(?=\\n## |$)`,
-    "i"
+    `^#{1,2}\\s+${sectionName}\\s*\\n([\\s\\S]*?)(?=\\n#{1,2}\\s+|$)`,
+    "im"
   );
   const match = content.match(regex);
   const captured = match?.[1];
@@ -138,8 +139,8 @@ export function parseRequirementContent(content: string): Requirement {
   const notesSection = extractSection(content, "Notes");
 
   // スコープのサブセクションをパース
-  const inScopeMatch = scopeSection.match(/### In Scope\s*\n([\s\S]*?)(?=### |$)/i);
-  const outOfScopeMatch = scopeSection.match(/### Out of Scope\s*\n([\s\S]*?)(?=### |$)/i);
+  const inScopeMatch = scopeSection.match(/^#{2,3}\s+In Scope\s*\n([\s\S]*?)(?=###? |$)/im);
+  const outOfScopeMatch = scopeSection.match(/^#{2,3}\s+Out of Scope\s*\n([\s\S]*?)(?=###? |$)/im);
   const inScopeContent = inScopeMatch?.[1] ?? "";
   const outOfScopeContent = outOfScopeMatch?.[1] ?? "";
 
