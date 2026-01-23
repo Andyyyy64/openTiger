@@ -2,6 +2,7 @@ import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { db } from "@h1ve/db";
 import { tasks, agents } from "@h1ve/db/schema";
+import { eq } from "drizzle-orm";
 import type { CreateTaskInput } from "@h1ve/core";
 import "dotenv/config";
 
@@ -258,7 +259,9 @@ async function main(): Promise<void> {
   }
 
   // エージェント登録
-  const agentId = process.env.AGENT_ID ?? `planner-${Date.now()}`;
+  const agentId = process.env.AGENT_ID ?? "planner-1";
+  await db.delete(agents).where(eq(agents.id, agentId));
+
   await db.insert(agents).values({
     id: agentId,
     role: "planner",

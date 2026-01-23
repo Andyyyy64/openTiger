@@ -276,9 +276,15 @@ importers:
       '@h1ve/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@h1ve/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
       '@h1ve/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
+      bullmq:
+        specifier: ^5.66.5
+        version: 5.66.5
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3

@@ -376,7 +376,9 @@ async function main(): Promise<void> {
   }
 
   // エージェント登録
-  const agentId = process.env.AGENT_ID ?? `judge-${Date.now()}`;
+  const agentId = process.env.AGENT_ID ?? "judge-1";
+  await db.delete(agents).where(eq(agents.id, agentId));
+  
   await db.insert(agents).values({
     id: agentId,
     role: "judge",

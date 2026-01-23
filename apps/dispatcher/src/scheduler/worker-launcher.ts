@@ -201,7 +201,11 @@ export async function launchWorker(
   if (config.mode === "docker") {
     return launchAsDocker(config);
   }
-  return launchAsProcess(config);
+  
+  // 常駐Worker（キュー待機モード）を使用する場合、新規プロセス起動はスキップ
+  // すでに Worker が起動していることを前提とする
+  console.log(`[Launcher] Task ${config.taskId} assigned to worker ${config.agentId} via queue.`);
+  return { success: true, pid: 0 };
 }
 
 // Workerを停止

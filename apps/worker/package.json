@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch --env-file=../../.env src/main.ts",
+    "dev": "WORKER_INDEX=1 tsx watch --env-file=../../.env src/main.ts",
+    "dev:2": "WORKER_INDEX=2 tsx watch --env-file=../../.env src/main.ts",
+    "dev:3": "WORKER_INDEX=3 tsx watch --env-file=../../.env src/main.ts",
+    "dev:4": "WORKER_INDEX=4 tsx watch --env-file=../../.env src/main.ts",
     "build": "tsc",
     "start": "node dist/main.js",
     "test": "vitest run --passWithNoTests",
@@ -18,7 +21,9 @@
     "@h1ve/core": "workspace:*",
     "@h1ve/db": "workspace:*",
     "@h1ve/llm": "workspace:*",
+    "@h1ve/queue": "workspace:*",
     "@h1ve/vcs": "workspace:*",
+    "bullmq": "^5.66.5",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.38.4",
     "minimatch": "^10.0.1"

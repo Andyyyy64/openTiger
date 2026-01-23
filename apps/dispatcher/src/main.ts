@@ -21,6 +21,7 @@ import {
   reclaimDeadAgentLeases,
   getAgentStats,
   registerAgent,
+  getAvailableAgents,
   type LaunchMode,
 } from "./scheduler/index.js";
 
@@ -157,14 +158,17 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
               pendingTargetAreas.add(task.targetArea);
             }
 
-            // エージェントIDを生成
-            const agentId = `worker-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+            // 利用可能な常駐エージェントを取得
+            const availableAgentsList = await getAvailableAgents();
+            const workerAgent = availableAgentsList.find((id: string) => id.startsWith("worker-"));
 
-            // エージェントを登録
-            await registerAgent(agentId, "worker");
+            if (!workerAgent) {
+              console.log("[Dispatch] No idle workers available in pool.");
+              continue;
+            }
 
             // ディスパッチ
-            await dispatchTask(task, agentId, config);
+            await dispatchTask(task, workerAgent, config);
           }
         }
       }

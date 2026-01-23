@@ -4,6 +4,8 @@ import { eq, and } from "drizzle-orm";
 import type { Task, Policy } from "@h1ve/core";
 import { DEFAULT_POLICY } from "@h1ve/core";
 import "dotenv/config";
+import { createTaskWorker, type TaskJobData } from "@h1ve/queue";
+import type { Job } from "bullmq";
 
 import {
   checkoutRepository,
@@ -299,8 +301,9 @@ export async function runWorker(
 
 // キューからタスクを受け取って実行するワーカープロセス
 async function main() {
-  const agentId = process.env.AGENT_ID ?? `worker-${Date.now()}`;
-  const workspacePath = process.env.WORKSPACE_PATH ?? "/tmp/h1ve-workspace";
+  const workerIndex = process.env.WORKER_INDEX;
+  const agentId = process.env.AGENT_ID ?? (workerIndex ? `worker-${workerIndex}` : `worker-${Date.now()}`);
+  const workspacePath = process.env.WORKSPACE_PATH ?? `/tmp/h1ve-workspace/${agentId}`;
   const repoUrl = process.env.REPO_URL ?? "";
   const baseBranch = process.env.BASE_BRANCH ?? "main";
 
@@ -310,6 +313,11 @@ async function main() {
   }
 
   // エージェント登録
+  // 起動時に自分と同じ役割の古いエージェント（オフラインのものなど）を掃除する
+  if (workerIndex) {
+    await db.delete(agents).where(eq(agents.id, agentId));
+  }
+
   await db.insert(agents).values({
     id: agentId,
     role: "worker",
@@ -340,7 +348,7 @@ async function main() {
   const taskId = process.env.TASK_ID;
 
   if (taskId) {
-    // 指定されたタスクを実行
+    // 指定されたタスクを実行（単発実行モード）
     const [taskData] = await db
       .select()
       .from(tasks)
@@ -364,8 +372,37 @@ async function main() {
     process.exit(result.success ? 0 : 1);
   }
 
-  // キュー待機モード（未実装）
-  console.log("Queue mode not implemented yet. Set TASK_ID to run a specific task.");
+  // キュー待機モード（常駐モード）
+  console.log(`Worker ${agentId} entering queue mode...`);
+  
+  const worker = createTaskWorker(async (job: Job<TaskJobData>) => {
+    console.log(`[Queue] Received task ${job.data.taskId}`);
+    
+    const [taskData] = await db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.id, job.data.taskId));
+
+    if (!taskData) {
+      throw new Error(`Task not found: ${job.data.taskId}`);
+    }
+
+    await runWorker(
+      taskData as unknown as Task,
+      {
+        agentId,
+        workspacePath,
+        repoUrl,
+        baseBranch,
+      }
+    );
+  });
+
+  worker.on("failed", (job: Job<TaskJobData> | undefined, err: Error) => {
+    console.error(`[Queue] Job ${job?.id} failed:`, err);
+  });
+
+  console.log("Worker is ready and waiting for tasks from queue.");
 }
 
 main().catch((error) => {

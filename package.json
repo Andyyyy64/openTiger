@@ -8,7 +8,8 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "turbo dev --concurrency 20",
+    "dev": "turbo run dev dev:2 dev:3 dev:4 --concurrency 30",
+    "dev:all": "turbo run dev dev:1 dev:2 dev:3 dev:4 --concurrency 30",
     "build": "turbo build",
     "test": "turbo test",
     "test:watch": "turbo test:watch",
