@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
+    "dev": "tsx watch --env-file=../../.env src/main.ts",
     "build": "tsc",
     "start": "node dist/main.js",
     "test": "vitest run --passWithNoTests",

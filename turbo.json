@@ -8,7 +8,8 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": ["REPO_URL", "GITHUB_TOKEN", "GITHUB_OWNER", "GITHUB_REPO", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "API_SECRET", "DATABASE_URL", "REDIS_URL"]
     },
     "test": {
       "dependsOn": ["^build"],
