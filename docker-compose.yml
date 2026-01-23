@@ -45,6 +45,7 @@ services:
       - redis_data:/data
     networks:
       - internal
+      - external
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
