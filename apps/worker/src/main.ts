@@ -182,6 +182,7 @@ export async function runWorker(
     // Step 6: PRを作成
     console.log("\n[6/6] Creating PR...");
     const prResult = await createTaskPR({
+      repoPath,
       branchName,
       task: taskData,
       baseBranch,
@@ -198,16 +199,28 @@ export async function runWorker(
     }
 
     // PRをartifactとして記録
-    await db.insert(artifacts).values({
-      runId,
-      type: "pr",
-      ref: String(prResult.pr!.number),
-      url: prResult.pr!.url,
-      metadata: {
-        title: prResult.pr!.title,
-        state: prResult.pr!.state,
-      },
-    });
+    if (prResult.pr) {
+      await db.insert(artifacts).values({
+        runId,
+        type: "pr",
+        ref: String(prResult.pr.number),
+        url: prResult.pr.url,
+        metadata: {
+          title: prResult.pr.title,
+          state: prResult.pr.state,
+        },
+      });
+    } else {
+      // 直接プッシュした場合はその旨を記録
+      await db.insert(artifacts).values({
+        runId,
+        type: "commit",
+        ref: baseBranch,
+        metadata: {
+          message: "Direct push to base branch (base branch did not exist)",
+        },
+      });
+    }
 
     // 実行成功を記録
     await db
@@ -233,14 +246,18 @@ export async function runWorker(
 
     console.log("\n" + "=".repeat(60));
     console.log("Task completed successfully!");
-    console.log(`PR: ${prResult.pr!.url}`);
+    if (prResult.pr) {
+      console.log(`PR: ${prResult.pr.url}`);
+    } else {
+      console.log(`Changes pushed directly to ${baseBranch}`);
+    }
     console.log("=".repeat(60));
 
     return {
       success: true,
       taskId,
       runId,
-      prUrl: prResult.pr!.url,
+      prUrl: prResult.pr?.url,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

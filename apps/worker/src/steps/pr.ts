@@ -1,7 +1,8 @@
-import { createPR, findPRs, updatePR, type PRInfo } from "@h1ve/vcs";
+import { createPR, findPRs, updatePR, type PRInfo, remoteBranchExists, push } from "@h1ve/vcs";
 import type { Task } from "@h1ve/core";
 
 export interface CreatePROptions {
+  repoPath: string; // リポジトリパスを追加
   branchName: string;
   task: Task;
   baseBranch?: string;
@@ -79,7 +80,29 @@ function generatePRBody(options: CreatePROptions): string {
 export async function createTaskPR(
   options: CreatePROptions
 ): Promise<CreatePRResult> {
-  const { branchName, task, baseBranch = "main" } = options;
+  const { repoPath, branchName, task, baseBranch = "main" } = options;
+
+  // ベースブランチがリモートに存在するか確認
+  const baseExists = await remoteBranchExists(repoPath, baseBranch);
+  
+  if (!baseExists) {
+    console.log(`Base branch ${baseBranch} does not exist on remote. Pushing directly to ${baseBranch}...`);
+    // ベースブランチが存在しない場合（空のリポジトリなど）、直接ベースブランチとしてプッシュする
+    const pushResult = await push(repoPath, `${branchName}:${baseBranch}`, true);
+    
+    if (!pushResult.success) {
+      return {
+        success: false,
+        error: `Failed to push directly to non-existent base branch ${baseBranch}: ${pushResult.stderr}`,
+      };
+    }
+
+    console.log(`Successfully pushed directly to ${baseBranch}. No PR needed.`);
+    return {
+      success: true,
+      isUpdate: false,
+    };
+  }
 
   console.log("Checking for existing PR...");
 

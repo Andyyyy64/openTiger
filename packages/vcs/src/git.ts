@@ -175,8 +175,14 @@ export async function getChangedFiles(cwd: string): Promise<string[]> {
 
   return result.stdout
     .split("\n")
-    .filter((line) => line.length > 0)
-    .map((line) => line.slice(3)); // " M ", "?? " などのプレフィックスを除去
+    .filter((line) => line.length > 2)
+    .map((line) => {
+      // Porcelain形式は先頭2文字がステータス、その後ろにパスが続く
+      // 2文字目以降をすべて取得してトリムすることで、スペースの数に関わらずパスを抽出
+      const path = line.slice(2).trim();
+      // 引用符で囲まれている場合は除去
+      return path.replace(/^"|"$/g, "");
+    });
 }
 
 // 変更行数を取得
@@ -217,6 +223,18 @@ export async function deleteRemoteBranch(
   branchName: string
 ): Promise<GitResult> {
   return execGit(["push", "origin", "--delete", branchName], cwd);
+}
+
+// リモートブランチが存在するかチェック
+export async function remoteBranchExists(
+  cwd: string,
+  branchName: string
+): Promise<boolean> {
+  const result = await execGit(
+    ["ls-remote", "--heads", "origin", branchName],
+    cwd
+  );
+  return result.success && result.stdout.includes(`refs/heads/${branchName}`);
 }
 
 // 変更を破棄してクリーンな状態に
