@@ -20,10 +20,10 @@ app.use("*", authMiddleware());
 
 // ルート
 app.route("/health", healthRoute);
-app.route("/api/tasks", tasksRoute);
-app.route("/api/runs", runsRoute);
-app.route("/api/agents", agentsRoute);
-app.route("/api/webhook", webhookRoute);
+app.route("/tasks", tasksRoute);
+app.route("/runs", runsRoute);
+app.route("/agents", agentsRoute);
+app.route("/webhook", webhookRoute);
 
 // ルートパス
 app.get("/", (c) => {
