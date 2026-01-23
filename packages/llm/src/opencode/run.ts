@@ -66,7 +66,7 @@ async function executeOpenCodeOnce(
   options: OpenCodeOptions
 ): Promise<Omit<OpenCodeResult, "retryCount">> {
   const startTime = Date.now();
-  const args: string[] = ["run", "--yes"];
+  const args: string[] = ["run"];
 
   const model = options.model ?? DEFAULT_MODEL;
   if (model) {
