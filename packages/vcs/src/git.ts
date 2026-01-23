@@ -48,13 +48,23 @@ async function execGit(args: string[], cwd: string): Promise<GitResult> {
 export async function cloneRepo(
   repoUrl: string,
   destPath: string,
-  branch?: string
+  branch?: string,
+  token?: string
 ): Promise<GitResult> {
   const args = ["clone", "--depth", "1"];
   if (branch) {
     args.push("--branch", branch);
   }
-  args.push(repoUrl, destPath);
+
+  let authenticatedUrl = repoUrl;
+  if (token && repoUrl.startsWith("https://github.com/")) {
+    authenticatedUrl = repoUrl.replace(
+      "https://github.com/",
+      `https://x-access-token:${token}@github.com/`
+    );
+  }
+
+  args.push(authenticatedUrl, destPath);
 
   return execGit(args, ".");
 }

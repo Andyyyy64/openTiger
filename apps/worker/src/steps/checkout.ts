@@ -13,6 +13,7 @@ export interface CheckoutOptions {
   workspacePath: string;
   taskId: string;
   baseBranch?: string;
+  githubToken?: string;
 }
 
 export interface CheckoutResult {
@@ -25,7 +26,13 @@ export interface CheckoutResult {
 export async function checkoutRepository(
   options: CheckoutOptions
 ): Promise<CheckoutResult> {
-  const { repoUrl, workspacePath, taskId, baseBranch = "main" } = options;
+  const {
+    repoUrl,
+    workspacePath,
+    taskId,
+    baseBranch = "main",
+    githubToken,
+  } = options;
 
   // タスクごとの作業ディレクトリ
   const repoPath = join(workspacePath, taskId);
@@ -41,7 +48,12 @@ export async function checkoutRepository(
     await mkdir(workspacePath, { recursive: true });
 
     console.log(`Cloning repository to: ${repoPath}`);
-    const cloneResult = await cloneRepo(repoUrl, repoPath, baseBranch);
+    const cloneResult = await cloneRepo(
+      repoUrl,
+      repoPath,
+      baseBranch,
+      githubToken
+    );
 
     if (!cloneResult.success) {
       return {

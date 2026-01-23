@@ -79,6 +79,7 @@ export async function runWorker(
       workspacePath,
       taskId,
       baseBranch,
+      githubToken: process.env.GITHUB_TOKEN,
     });
 
     if (!checkoutResult.success) {
