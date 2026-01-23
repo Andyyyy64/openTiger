@@ -111,8 +111,18 @@ export async function createBranch(
 
 // 現在のブランチ名を取得
 export async function getCurrentBranch(cwd: string): Promise<string | null> {
+  // 通常のリポジトリ用
   const result = await execGit(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
-  return result.success ? result.stdout : null;
+  if (result.success) {
+    return result.stdout;
+  }
+
+  // 空のリポジトリ（コミットがない状態）用
+  const symbolicResult = await execGit(
+    ["symbolic-ref", "--short", "HEAD"],
+    cwd
+  );
+  return symbolicResult.success ? symbolicResult.stdout : null;
 }
 
 // 変更をステージング
