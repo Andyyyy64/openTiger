@@ -1,8 +1,9 @@
 import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { db } from "@h1ve/db";
-import { tasks } from "@h1ve/db/schema";
+import { tasks, agents } from "@h1ve/db/schema";
 import type { CreateTaskInput } from "@h1ve/core";
+import "dotenv/config";
 
 import {
   parseRequirementFile,
@@ -255,6 +256,25 @@ async function main(): Promise<void> {
   if (args.includes("--no-llm")) {
     config.useLlm = false;
   }
+
+  // エージェント登録
+  const agentId = process.env.AGENT_ID ?? `planner-${Date.now()}`;
+  await db.insert(agents).values({
+    id: agentId,
+    role: "planner",
+    status: "idle",
+    lastHeartbeat: new Date(),
+    metadata: {
+      model: process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview",
+      provider: "gemini",
+    },
+  }).onConflictDoUpdate({
+    target: agents.id,
+    set: {
+      status: "idle",
+      lastHeartbeat: new Date(),
+    },
+  });
 
   // 要件ファイルパスを取得
   const requirementPath = args.find((arg) => !arg.startsWith("--"));

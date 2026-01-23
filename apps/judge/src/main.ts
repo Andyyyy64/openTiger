@@ -1,8 +1,9 @@
 import { resolve } from "node:path";
 import { db } from "@h1ve/db";
-import { artifacts, runs, tasks } from "@h1ve/db/schema";
+import { artifacts, runs, tasks, agents } from "@h1ve/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
 import { DEFAULT_POLICY, type Policy } from "@h1ve/core";
+import "dotenv/config";
 
 import {
   evaluateCI,
@@ -373,6 +374,25 @@ async function main(): Promise<void> {
   if (args.includes("--no-llm")) {
     config.useLlm = false;
   }
+
+  // エージェント登録
+  const agentId = process.env.AGENT_ID ?? `judge-${Date.now()}`;
+  await db.insert(agents).values({
+    id: agentId,
+    role: "judge",
+    status: "idle",
+    lastHeartbeat: new Date(),
+    metadata: {
+      model: process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview",
+      provider: "gemini",
+    },
+  }).onConflictDoUpdate({
+    target: agents.id,
+    set: {
+      status: "idle",
+      lastHeartbeat: new Date(),
+    },
+  });
 
   // PR番号が指定されている場合は単一レビュー
   const prArg = args.find((arg) => /^\d+$/.test(arg));

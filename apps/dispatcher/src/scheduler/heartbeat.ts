@@ -166,6 +166,17 @@ export async function registerAgent(
       role,
       status: "idle",
       lastHeartbeat: new Date(),
+      metadata: {
+        model: process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview",
+        provider: "gemini",
+      },
+    })
+    .onConflictDoUpdate({
+      target: agents.id,
+      set: {
+        status: "idle",
+        lastHeartbeat: new Date(),
+      },
     })
     .returning();
 

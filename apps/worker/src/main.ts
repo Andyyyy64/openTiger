@@ -1,5 +1,5 @@
 import { db } from "@h1ve/db";
-import { tasks, runs, artifacts, leases } from "@h1ve/db/schema";
+import { tasks, runs, artifacts, leases, agents } from "@h1ve/db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Task, Policy } from "@h1ve/core";
 import { DEFAULT_POLICY } from "@h1ve/core";
@@ -271,6 +271,24 @@ async function main() {
     console.error("REPO_URL environment variable is required");
     process.exit(1);
   }
+
+  // エージェント登録
+  await db.insert(agents).values({
+    id: agentId,
+    role: "worker",
+    status: "idle",
+    lastHeartbeat: new Date(),
+    metadata: {
+      model: process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview",
+      provider: "gemini",
+    },
+  }).onConflictDoUpdate({
+    target: agents.id,
+    set: {
+      status: "idle",
+      lastHeartbeat: new Date(),
+    },
+  });
 
   console.log(`Worker ${agentId} started`);
   console.log(`Workspace: ${workspacePath}`);
