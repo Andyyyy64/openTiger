@@ -33,7 +33,19 @@ export const AgentsPage: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-100 group-hover:text-yellow-500 transition-colors">{agent.id}</h3>
-                    <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">{agent.role}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">{agent.role}</p>
+                      {agent.metadata?.provider && (
+                        <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">
+                          {agent.metadata.provider}
+                        </span>
+                      )}
+                      {agent.metadata?.model && (
+                        <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700">
+                          {agent.metadata.model}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${agent.status === 'busy' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>

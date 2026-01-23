@@ -42,12 +42,13 @@ agentsRoute.get("/:id", async (c) => {
 const registerAgentSchema = z.object({
   id: z.string(),
   role: z.enum(["planner", "worker", "judge"]),
-  metadata: z
-    .object({
-      model: z.string().optional(),
-      version: z.string().optional(),
-    })
-    .optional(),
+    metadata: z
+      .object({
+        model: z.string().optional(),
+        provider: z.string().optional(),
+        version: z.string().optional(),
+      })
+      .optional(),
 });
 
 // エージェント登録

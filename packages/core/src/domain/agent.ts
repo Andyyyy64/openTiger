@@ -26,6 +26,7 @@ export const AgentSchema = z.object({
   metadata: z
     .object({
       model: z.string().optional(), // 使用モデル
+      provider: z.string().optional(), // プロバイダー
       version: z.string().optional(), // エージェントバージョン
     })
     .optional(),
@@ -40,6 +41,7 @@ export const RegisterAgentInput = z.object({
   metadata: z
     .object({
       model: z.string().optional(),
+      provider: z.string().optional(),
       version: z.string().optional(),
     })
     .optional(),
