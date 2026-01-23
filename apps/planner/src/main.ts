@@ -6,6 +6,25 @@ import { eq } from "drizzle-orm";
 import type { CreateTaskInput } from "@h1ve/core";
 import "dotenv/config";
 
+// ハートビートの間隔（ミリ秒）
+const HEARTBEAT_INTERVAL = 30000; // 30秒
+
+// ハートビートを送信する関数
+async function startHeartbeat(agentId: string) {
+  return setInterval(async () => {
+    try {
+      await db
+        .update(agents)
+        .set({
+          lastHeartbeat: new Date(),
+        })
+        .where(eq(agents.id, agentId));
+    } catch (error) {
+      console.error(`[Heartbeat] Failed to send heartbeat for ${agentId}:`, error);
+    }
+  }, HEARTBEAT_INTERVAL);
+}
+
 import {
   parseRequirementFile,
   parseRequirementContent,
@@ -278,6 +297,9 @@ async function main(): Promise<void> {
       lastHeartbeat: new Date(),
     },
   });
+
+  // ハートビート開始
+  const heartbeatTimer = startHeartbeat(agentId);
 
   // 要件ファイルパスを取得
   const requirementPath = args.find((arg) => !arg.startsWith("--"));

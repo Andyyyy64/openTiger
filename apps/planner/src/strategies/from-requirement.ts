@@ -1,4 +1,4 @@
-import { runClaudeCode } from "@h1ve/llm";
+import { runOpenCode } from "@h1ve/llm";
 import type { CreateTaskInput } from "@h1ve/core";
 import type { Requirement } from "../parser.js";
 
@@ -153,16 +153,15 @@ export async function generateTasksFromRequirement(
 ): Promise<TaskGenerationResult> {
   const prompt = buildPrompt(requirement);
 
-  // Claude Codeを実行
-  const result = await runClaudeCode({
+  // OpenCodeを実行
+  const result = await runOpenCode({
     workdir: options.workdir,
-    instructionsPath: options.instructionsPath,
     task: prompt,
     timeoutSeconds: options.timeoutSeconds ?? 300,
   });
 
   if (!result.success) {
-    throw new Error(`Claude Code failed: ${result.stderr}`);
+    throw new Error(`OpenCode failed: ${result.stderr}`);
   }
 
   // レスポンスをパース

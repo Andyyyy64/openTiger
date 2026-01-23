@@ -246,10 +246,6 @@ async function main(): Promise<void> {
   taskQueue = createTaskQueue();
   console.log("[Init] Task queue initialized");
 
-  // BullMQワーカーを起動
-  startQueueWorker();
-  console.log("[Init] Queue worker started");
-
   // ディスパッチャーを開始
   isRunning = true;
   await runDispatchLoop(config);

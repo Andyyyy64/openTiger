@@ -1,4 +1,4 @@
-import { runClaudeCode } from "@h1ve/llm";
+import { runOpenCode } from "@h1ve/llm";
 import type { CreateTaskInput } from "@h1ve/core";
 
 // GitHub Issue情報
@@ -134,16 +134,15 @@ export async function generateTasksFromIssue(
 ): Promise<IssueAnalysisResult> {
   const prompt = buildPromptFromIssue(issue, options.allowedPaths);
 
-  // Claude Codeを実行
-  const result = await runClaudeCode({
+  // OpenCodeを実行
+  const result = await runOpenCode({
     workdir: options.workdir,
-    instructionsPath: options.instructionsPath,
     task: prompt,
     timeoutSeconds: options.timeoutSeconds ?? 300,
   });
 
   if (!result.success) {
-    throw new Error(`Claude Code failed: ${result.stderr}`);
+    throw new Error(`OpenCode failed: ${result.stderr}`);
   }
 
   // レスポンスをパース

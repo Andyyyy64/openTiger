@@ -388,7 +388,13 @@ async function main() {
   console.log(`Worker ${agentId} entering queue mode...`);
   
   const worker = createTaskWorker(async (job: Job<TaskJobData>) => {
-    console.log(`[Queue] Received task ${job.data.taskId}`);
+    // 自分宛てのタスクか確認
+    if (job.data.agentId !== agentId) {
+      // 自分宛てでなければスキップ
+      return;
+    }
+
+    console.log(`[Queue] Received task ${job.data.taskId} for me (${agentId})`);
     
     const [taskData] = await db
       .select()
