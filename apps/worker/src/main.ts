@@ -3,6 +3,7 @@ import { tasks, runs, artifacts, leases } from "@h1ve/db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Task, Policy } from "@h1ve/core";
 import { DEFAULT_POLICY } from "@h1ve/core";
+import "dotenv/config";
 
 import {
   checkoutRepository,

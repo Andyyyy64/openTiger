@@ -2,6 +2,7 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import "dotenv/config";
 import { tasksRoute } from "./routes/tasks.js";
 import { runsRoute } from "./routes/runs.js";
 import { agentsRoute } from "./routes/agents.js";
