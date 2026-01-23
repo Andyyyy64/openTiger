@@ -246,6 +246,12 @@ export async function runWorker(
     // リースを解放
     await db.delete(leases).where(eq(leases.taskId, taskId));
 
+    // エージェントをidleに戻す
+    await db
+      .update(agents)
+      .set({ status: "idle", currentTaskId: null })
+      .where(eq(agents.id, agentId));
+
     console.log("\n" + "=".repeat(60));
     console.log("Task completed successfully!");
     if (prResult.pr) {
@@ -289,6 +295,12 @@ export async function runWorker(
 
     // リースを解放
     await db.delete(leases).where(eq(leases.taskId, taskId));
+
+    // エージェントをidleに戻す
+    await db
+      .update(agents)
+      .set({ status: "idle", currentTaskId: null })
+      .where(eq(agents.id, agentId));
 
     return {
       success: false,
