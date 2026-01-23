@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
     devDependencies:
       '@types/node':
         specifier: ^20.17.14
@@ -41,6 +45,9 @@ importers:
       '@hono/zod-validator':
         specifier: ^0.4.2
         version: 0.4.3(hono@4.11.4)(zod@3.25.76)
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -75,6 +82,9 @@ importers:
       '@h1ve/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -170,6 +180,9 @@ importers:
       bullmq:
         specifier: ^5.34.8
         version: 5.66.5
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -201,6 +214,9 @@ importers:
       '@h1ve/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -229,6 +245,9 @@ importers:
       '@h1ve/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -260,6 +279,9 @@ importers:
       '@h1ve/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -1769,6 +1791,10 @@ packages:
   detect-libc@2.1.2:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
+
+  dotenv@17.2.3:
+    resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
+    engines: {node: '>=12'}
 
   drizzle-kit@0.30.6:
     resolution: {integrity: sha512-U4wWit0fyZuGuP7iNmRleQyK2V8wCuv57vf5l3MnG4z4fzNTjY/U13M8owyQ5RavqvqxBifWORaR3wIUzlN64g==}
@@ -3901,6 +3927,8 @@ snapshots:
   denque@2.1.0: {}
 
   detect-libc@2.1.2: {}
+
+  dotenv@17.2.3: {}
 
   drizzle-kit@0.30.6:
     dependencies:

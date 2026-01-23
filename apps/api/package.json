@@ -19,6 +19,7 @@
     "@h1ve/db": "workspace:*",
     "@hono/node-server": "^1.13.8",
     "@hono/zod-validator": "^0.4.2",
+    "dotenv": "^17.2.3",
     "drizzle-orm": "^0.38.4",
     "hono": "^4.7.2",
     "zod": "^3.24.1"

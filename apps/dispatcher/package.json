@@ -19,6 +19,7 @@
     "@h1ve/db": "workspace:*",
     "@h1ve/queue": "workspace:*",
     "bullmq": "^5.34.8",
+    "dotenv": "^17.2.3",
     "drizzle-orm": "^0.38.4"
   },
   "devDependencies": {

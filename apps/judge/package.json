@@ -19,6 +19,7 @@
     "@h1ve/db": "workspace:*",
     "@h1ve/llm": "workspace:*",
     "@h1ve/vcs": "workspace:*",
+    "dotenv": "^17.2.3",
     "drizzle-orm": "^0.38.4"
   },
   "devDependencies": {
