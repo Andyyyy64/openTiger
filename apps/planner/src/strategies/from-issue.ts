@@ -30,6 +30,21 @@ function buildPromptFromIssue(issue: GitHubIssue, allowedPaths: string[]): strin
 2. **判定可能**: テストやコマンドで成功/失敗を判定できる
 3. **独立性**: 可能な限り他のタスクに依存しない
 4. **範囲限定**: 変更するファイル/ディレクトリを明確にする
+5. **既存構成遵守**: 既存のモノレポ構成と技術スタックを必ず守る
+6. **許可パス遵守**: allowedPaths の外に触る必要があるタスクは作らない
+
+## 既存構成と技術スタックの厳守
+
+- 既存のディレクトリ構成（apps/ と packages/）を前提にする
+- 既存の採用技術を尊重し、Issueの前提に従う
+- 要件にない新規ツールやフレームワークを持ち込まない
+- 新規アプリ追加はIssueに明示がある場合のみ
+
+## allowedPaths の扱い
+
+- allowedPaths 外の変更が必要ならタスクを作らず warnings に理由を書く
+- 依存関係の追加やルート変更が必要なら「依存関係タスク」に分離する
+- 依存関係タスクの allowedPaths にはルートの必要ファイルを含める
 
 ## GitHub Issue #${issue.number}
 
