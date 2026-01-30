@@ -73,11 +73,15 @@ export async function checkAllAgentsHealth(): Promise<AgentHealth[]> {
 }
 
 // 利用可能なエージェントを取得
-export async function getAvailableAgents(): Promise<string[]> {
+export async function getAvailableAgents(role?: string): Promise<string[]> {
+  const conditions = [eq(agents.status, "idle")];
+  if (role) {
+    conditions.push(eq(agents.role, role));
+  }
   const allAgents = await db
     .select()
     .from(agents)
-    .where(eq(agents.status, "idle"));
+    .where(and(...conditions));
 
   const now = new Date();
   const threshold = new Date(now.getTime() - HEARTBEAT_TIMEOUT_SECONDS * 1000);

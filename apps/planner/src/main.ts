@@ -3,10 +3,11 @@ import { spawn } from "node:child_process";
 import { createWriteStream, mkdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
-import { db } from "@h1ve/db";
+import { db, closeDb } from "@h1ve/db";
 import { tasks, agents, events } from "@h1ve/db/schema";
 import { eq, desc } from "drizzle-orm";
 import dotenv from "dotenv";
+import { getRepoMode, getLocalRepoPath } from "@h1ve/core";
 
 // ハートビートの間隔（ミリ秒）
 const HEARTBEAT_INTERVAL = 30000; // 30秒
@@ -93,9 +94,19 @@ const envPath = process.env.DOTENV_CONFIG_PATH
   ?? resolve(import.meta.dirname, "../../../.env");
 dotenv.config({ path: envPath });
 
+function resolvePlannerWorkdir(): string {
+  const repoMode = getRepoMode();
+  const localRepoPath = getLocalRepoPath();
+  // local modeでは実リポジトリを点検対象にする
+  if (repoMode === "local" && localRepoPath) {
+    return localRepoPath;
+  }
+  return process.cwd();
+}
+
 // デフォルト設定
 const DEFAULT_CONFIG: PlannerConfig = {
-  workdir: process.cwd(),
+  workdir: resolvePlannerWorkdir(),
   instructionsPath: resolve(
     import.meta.dirname,
     "../instructions/planning.md"
@@ -159,15 +170,6 @@ function isInitializationTask(task: PlannedTaskInput): boolean {
 
 function normalizeVerificationCommands(commands: string[]): string[] {
   return commands.map((command) => {
-    const trimmed = command.trim();
-    const isApiFilter = /--filter\s+\S*api\b/.test(trimmed);
-    const isDevCommand = /\bdev\b/.test(trimmed);
-
-    if (trimmed.startsWith("pnpm") && isApiFilter && isDevCommand) {
-      // 常駐コマンドは検証として使わない
-      return "pnpm --filter api test";
-    }
-
     return command;
   });
 }
@@ -202,8 +204,86 @@ function normalizeGeneratedTasks(result: TaskGenerationResult): TaskGenerationRe
   return { ...result, tasks };
 }
 
+// テスト関連の手がかりから担当ロールを推定する
+function inferTaskRole(task: PlannedTaskInput): "worker" | "tester" {
+  const hintText = [
+    task.title,
+    task.goal,
+    task.context?.specs,
+    task.context?.notes,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+  const testerPatterns = [
+    /\be2e\b/,
+    /\bplaywright\b/,
+    /\bvitest\b/,
+    /\bcypress\b/,
+    /\btest(s)?\s*(add|create|write|implement|update|fix)\b/,
+    /テスト(追加|作成|実装|更新|修正|強化)/,
+    /フレーク|flaky/,
+  ];
+  if (testerPatterns.some((pattern) => pattern.test(hintText))) {
+    return "tester";
+  }
+
+  const pathHints = [
+    ...(task.allowedPaths ?? []),
+    ...(task.context?.files ?? []),
+  ]
+    .join(" ")
+    .toLowerCase();
+  if (/(test|__tests__|spec|playwright|e2e)/.test(pathHints)) {
+    return "tester";
+  }
+
+  return "worker";
+}
+
+function applyTaskRolePolicy(result: TaskGenerationResult): TaskGenerationResult {
+  const tasks = result.tasks.map((task) => {
+    if (task.role) {
+      return task;
+    }
+    return { ...task, role: inferTaskRole(task) };
+  });
+  return { ...result, tasks };
+}
+
 function isCheckCommand(command: string): boolean {
   return /\b(pnpm|npm)\b[^\n]*\b(run\s+)?check\b/.test(command);
+}
+
+function isDevCommand(command: string): boolean {
+  return /\b(pnpm|npm|yarn|bun)\b[^\n]*\b(run\s+)?dev\b/.test(command);
+}
+
+function ensureDevCommand(commands: string[], devCommand?: string): string[] {
+  if (!devCommand) {
+    return commands;
+  }
+  if (commands.some((command) => isDevCommand(command))) {
+    return commands;
+  }
+  return [...commands, devCommand];
+}
+
+function applyDevCommandPolicy(
+  result: TaskGenerationResult,
+  devCommand?: string
+): TaskGenerationResult {
+  if (!devCommand) {
+    return result;
+  }
+  const tasks = result.tasks.map((task) => {
+    const updatedCommands = ensureDevCommand(task.commands, devCommand);
+    if (updatedCommands === task.commands) {
+      return task;
+    }
+    return { ...task, commands: updatedCommands };
+  });
+  return { ...result, tasks };
 }
 
 function filterVerificationCommands(
@@ -246,6 +326,100 @@ async function hasRootCheckScript(workdir: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function taskTouchesFrontend(task: PlannedTaskInput): boolean {
+  const text = [
+    task.title,
+    task.goal,
+    task.context?.specs,
+    task.context?.notes,
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+  const textHints = ["frontend", "フロント", "ui", "画面", "web"];
+  if (textHints.some((hint) => text.includes(hint))) {
+    return true;
+  }
+  const paths = [
+    ...(task.allowedPaths ?? []),
+    ...(task.context?.files ?? []),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return /apps\/web|web\/|frontend|ui/.test(paths);
+}
+
+function hasE2ECommand(commands: string[]): boolean {
+  return commands.some((command) => /\b(e2e|playwright)\b/i.test(command));
+}
+
+// フロントタスクのtesterにE2E検証を補う
+function applyTesterCommandPolicy(
+  result: TaskGenerationResult,
+  e2eCommand?: string
+): TaskGenerationResult {
+  if (!e2eCommand) {
+    return result;
+  }
+  const tasks = result.tasks.map((task) => {
+    if (task.role !== "tester") {
+      return task;
+    }
+    if (!taskTouchesFrontend(task) || hasE2ECommand(task.commands)) {
+      return task;
+    }
+    return {
+      ...task,
+      commands: [...task.commands, e2eCommand],
+    };
+  });
+  return { ...result, tasks };
+}
+
+async function hasRootDevScript(workdir: string): Promise<boolean> {
+  // ルートのpackage.jsonにdevスクリプトがあるか確認する
+  try {
+    const raw = await readFile(join(workdir, "package.json"), "utf-8");
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.scripts?.dev === "string";
+  } catch {
+    return false;
+  }
+}
+
+async function resolveDevVerificationCommand(
+  workdir: string
+): Promise<string | undefined> {
+  if (!(await hasRootDevScript(workdir))) {
+    return undefined;
+  }
+  if (await pathIsFile(join(workdir, "pnpm-lock.yaml"))) {
+    return "pnpm run dev";
+  }
+  if (await pathIsFile(join(workdir, "yarn.lock"))) {
+    return "yarn dev";
+  }
+  if (await pathIsFile(join(workdir, "package-lock.json"))) {
+    return "npm run dev";
+  }
+  return "npm run dev";
+}
+
+async function resolveE2EVerificationCommand(
+  workdir: string
+): Promise<string | undefined> {
+  if (await pathIsFile(join(workdir, "pnpm-lock.yaml"))) {
+    return "pnpm run e2e";
+  }
+  if (await pathIsFile(join(workdir, "yarn.lock"))) {
+    return "yarn e2e";
+  }
+  if (await pathIsFile(join(workdir, "package-lock.json"))) {
+    return "npm run e2e";
+  }
+  return "npm run e2e";
 }
 
 function clipText(text: string, maxLength: number): string {
@@ -488,6 +662,7 @@ function generateInitializationTasks(requirement: Requirement): TaskGenerationRe
   const task: PlannedTaskInput = {
     title: "モノレポ構成の初期化",
     goal: "pnpm workspaces が使える状態になり、pnpm -r list が成功する",
+    role: "worker",
     context: {
       files: [
         "package.json",
@@ -631,6 +806,8 @@ async function planFromRequirement(
   if (!checkScriptAvailable) {
     console.log("[Planner] checkスクリプトがないため検証コマンドを調整します。");
   }
+  const devCommand = await resolveDevVerificationCommand(config.workdir);
+  const e2eCommand = await resolveE2EVerificationCommand(config.workdir);
   const repoUninitialized = await isRepoUninitialized(config.workdir);
   let inspectionNotes: string | undefined;
   if (config.useLlm && config.inspectCodebase && !repoUninitialized) {
@@ -670,7 +847,10 @@ async function planFromRequirement(
   }
 
   result = normalizeGeneratedTasks(result);
+  result = applyTaskRolePolicy(result);
   result = applyVerificationCommandPolicy(result, checkScriptAvailable);
+  result = applyTesterCommandPolicy(result, e2eCommand);
+  result = applyDevCommandPolicy(result, devCommand);
   result = attachJudgeFeedbackToTasks(result, judgeFeedback);
   result = attachInspectionToTasks(result, inspectionNotes);
 
@@ -825,6 +1005,8 @@ export async function planFromContent(
   const judgeFeedback = await loadJudgeFeedback();
   requirement = attachJudgeFeedbackToRequirement(requirement, judgeFeedback);
   const checkScriptAvailable = await hasRootCheckScript(fullConfig.workdir);
+  const devCommand = await resolveDevVerificationCommand(fullConfig.workdir);
+  const e2eCommand = await resolveE2EVerificationCommand(fullConfig.workdir);
   const repoUninitialized = await isRepoUninitialized(fullConfig.workdir);
   let inspectionNotes: string | undefined;
   if (fullConfig.useLlm && fullConfig.inspectCodebase && !repoUninitialized) {
@@ -841,9 +1023,17 @@ export async function planFromContent(
   if (repoUninitialized) {
     return attachInspectionToTasks(
       attachJudgeFeedbackToTasks(
-        applyVerificationCommandPolicy(
-          normalizeGeneratedTasks(generateInitializationTasks(requirement)),
-          checkScriptAvailable
+        applyDevCommandPolicy(
+          applyTesterCommandPolicy(
+            applyVerificationCommandPolicy(
+              applyTaskRolePolicy(
+                normalizeGeneratedTasks(generateInitializationTasks(requirement))
+              ),
+              checkScriptAvailable
+            ),
+            e2eCommand
+          ),
+          devCommand
         ),
         judgeFeedback
       ),
@@ -860,9 +1050,15 @@ export async function planFromContent(
       });
       return attachInspectionToTasks(
         attachJudgeFeedbackToTasks(
-          applyVerificationCommandPolicy(
-            normalizeGeneratedTasks(result),
-            checkScriptAvailable
+          applyDevCommandPolicy(
+            applyTesterCommandPolicy(
+              applyVerificationCommandPolicy(
+                applyTaskRolePolicy(normalizeGeneratedTasks(result)),
+                checkScriptAvailable
+              ),
+              e2eCommand
+            ),
+            devCommand
           ),
           judgeFeedback
         ),
@@ -871,9 +1067,17 @@ export async function planFromContent(
     } catch {
       return attachInspectionToTasks(
         attachJudgeFeedbackToTasks(
-          applyVerificationCommandPolicy(
-            normalizeGeneratedTasks(generateSimpleTasks(requirement)),
-            checkScriptAvailable
+          applyDevCommandPolicy(
+            applyTesterCommandPolicy(
+              applyVerificationCommandPolicy(
+                applyTaskRolePolicy(
+                  normalizeGeneratedTasks(generateSimpleTasks(requirement))
+                ),
+                checkScriptAvailable
+              ),
+              e2eCommand
+            ),
+            devCommand
           ),
           judgeFeedback
         ),
@@ -884,9 +1088,15 @@ export async function planFromContent(
 
   return attachInspectionToTasks(
     attachJudgeFeedbackToTasks(
-      applyVerificationCommandPolicy(
-        normalizeGeneratedTasks(generateSimpleTasks(requirement)),
-        checkScriptAvailable
+      applyDevCommandPolicy(
+        applyTesterCommandPolicy(
+          applyVerificationCommandPolicy(
+            applyTaskRolePolicy(normalizeGeneratedTasks(generateSimpleTasks(requirement))),
+            checkScriptAvailable
+          ),
+          e2eCommand
+        ),
+        devCommand
       ),
       judgeFeedback
     ),
@@ -1004,6 +1214,8 @@ async function main(): Promise<void> {
       .set({ status: "idle", lastHeartbeat: new Date() })
       .where(eq(agents.id, agentId));
     clearInterval(heartbeatTimer);
+    // 単発実行の終了でDB接続を閉じる
+    await closeDb();
   }
 }
 

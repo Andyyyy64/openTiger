@@ -17,7 +17,16 @@ export {
 
 export {
   evaluateLLM,
+  evaluateLLMDiff,
   evaluateSimple,
   type LLMEvaluationResult,
   type CodeIssue,
 } from "./llm.js";
+
+export {
+  getLocalDiffStats,
+  getLocalDiffText,
+  evaluateLocalCI,
+  evaluateLocalPolicy,
+  type LocalDiffStats,
+} from "./local.js";

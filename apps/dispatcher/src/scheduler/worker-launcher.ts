@@ -12,6 +12,7 @@ export interface WorkerLaunchConfig {
   mode: LaunchMode;
   taskId: string;
   agentId: string;
+  agentRole?: string;
   repoUrl: string;
   baseBranch: string;
   workspacePath: string;
@@ -44,9 +45,13 @@ async function launchAsProcess(
     ...process.env,
     TASK_ID: config.taskId,
     AGENT_ID: config.agentId,
+    AGENT_ROLE: config.agentRole ?? "worker",
     REPO_URL: config.repoUrl,
     BASE_BRANCH: config.baseBranch,
     WORKSPACE_PATH: config.workspacePath,
+    REPO_MODE: process.env.REPO_MODE,
+    LOCAL_REPO_PATH: process.env.LOCAL_REPO_PATH,
+    LOCAL_WORKTREE_ROOT: process.env.LOCAL_WORKTREE_ROOT,
     // 重要な環境変数を明示的に上書き/保持
     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
@@ -117,9 +122,13 @@ async function launchAsDocker(
   const allEnv = {
     TASK_ID: config.taskId,
     AGENT_ID: config.agentId,
+    AGENT_ROLE: config.agentRole ?? "worker",
     REPO_URL: config.repoUrl,
     BASE_BRANCH: config.baseBranch,
     WORKSPACE_PATH: "/workspace",
+    REPO_MODE: process.env.REPO_MODE ?? "",
+    LOCAL_REPO_PATH: process.env.LOCAL_REPO_PATH ?? "",
+    LOCAL_WORKTREE_ROOT: process.env.LOCAL_WORKTREE_ROOT ?? "",
     DATABASE_URL: process.env.DATABASE_URL ?? "",
     REDIS_URL: process.env.REDIS_URL ?? "",
     GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",

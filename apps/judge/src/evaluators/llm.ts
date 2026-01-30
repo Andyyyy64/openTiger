@@ -215,6 +215,105 @@ export async function evaluateLLM(
   }
 }
 
+export async function evaluateLLMDiff(
+  diff: string,
+  taskGoal: string,
+  options: {
+    workdir: string;
+    instructionsPath?: string;
+    timeoutSeconds?: number;
+  }
+): Promise<LLMEvaluationResult> {
+  try {
+    if (!diff || diff.trim().length === 0) {
+      return {
+        pass: true,
+        confidence: 0.5,
+        reasons: ["No changes to review"],
+        suggestions: [],
+        codeIssues: [],
+      };
+    }
+
+    const prompt = buildReviewPrompt(diff, taskGoal);
+    const judgeModel = process.env.JUDGE_MODEL ?? "google/gemini-3-pro-preview";
+
+    const result = await runOpenCode({
+      workdir: options.workdir,
+      instructionsPath: options.instructionsPath,
+      task: prompt,
+      model: judgeModel,
+      timeoutSeconds: options.timeoutSeconds ?? 300,
+    });
+
+    if (!result.success) {
+      console.warn("LLM review failed:", result.stderr);
+      return {
+        pass: true,
+        confidence: 0,
+        reasons: ["LLM review failed, manual review recommended"],
+        suggestions: ["Request human review"],
+        codeIssues: [],
+      };
+    }
+
+    const parsed = extractJsonFromResponse(result.stdout) as {
+      pass: boolean;
+      confidence: number;
+      issues?: Array<{
+        severity: string;
+        category: string;
+        message: string;
+        file?: string;
+        line?: number;
+        suggestion?: string;
+      }>;
+      summary?: string;
+    };
+
+    const codeIssues: CodeIssue[] = (parsed.issues ?? []).map((issue) => ({
+      severity: (issue.severity as "error" | "warning" | "info") ?? "warning",
+      category: (issue.category as CodeIssue["category"]) ?? "maintainability",
+      message: issue.message,
+      file: issue.file,
+      line: issue.line,
+      suggestion: issue.suggestion,
+    }));
+
+    const reasons: string[] = [];
+    const suggestions: string[] = [];
+
+    if (!parsed.pass) {
+      reasons.push(parsed.summary ?? "Code review found issues");
+    }
+
+    const criticalIssues = codeIssues.filter((i) => i.severity === "error");
+    for (const issue of criticalIssues) {
+      reasons.push(`${issue.category}: ${issue.message}`);
+      if (issue.suggestion) {
+        suggestions.push(issue.suggestion);
+      }
+    }
+
+    return {
+      pass: parsed.pass,
+      confidence: parsed.confidence,
+      reasons,
+      suggestions,
+      codeIssues,
+    };
+  } catch (error) {
+    console.error("LLM evaluation error:", error);
+    return {
+      pass: true,
+      confidence: 0,
+      reasons: ["LLM evaluation encountered an error"],
+      suggestions: ["Request human review"],
+      codeIssues: [],
+    };
+  }
+}
+
 // LLMなしでシンプルに評価（フォールバック用）
 export function evaluateSimple(): LLMEvaluationResult {
   return {

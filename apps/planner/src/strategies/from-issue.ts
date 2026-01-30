@@ -32,6 +32,7 @@ function buildPromptFromIssue(issue: GitHubIssue, allowedPaths: string[]): strin
 4. **範囲限定**: 変更するファイル/ディレクトリを明確にする
 5. **既存構成遵守**: 既存のモノレポ構成と技術スタックを必ず守る
 6. **許可パス遵守**: allowedPaths の外に触る必要があるタスクは作らない
+7. **役割分担**: 実装は worker、テスト作成/追加は tester に割り当てる
 
 ## 既存構成と技術スタックの厳守
 
@@ -70,13 +71,14 @@ ${allowedPaths.map(p => `- ${p}`).join("\n")}
     {
       "title": "簡潔なタスク名",
       "goal": "機械判定可能な完了条件",
+      "role": "worker or tester",
       "context": {
         "files": ["関連ファイルパス"],
         "specs": "詳細仕様",
         "notes": "補足情報"
       },
       "allowedPaths": ["変更許可パス"],
-      "commands": ["検証コマンド"],
+      "commands": ["検証コマンド（pnpm test / pnpm run dev など）"],
       "priority": 10,
       "riskLevel": "low",
       "dependsOn": [],
@@ -90,7 +92,9 @@ ${allowedPaths.map(p => `- ${p}`).join("\n")}
 ## 注意事項
 
 - タスクは実行順序を考慮し、dependsOnで依存関係を明示
-- 各タスクのcommandは成功/失敗を返すもの
+ - 各タスクのcommandは成功/失敗を返すもの
+ - dev起動の確認も含める
+- フロントが絡むタスクはE2Eを必須とし、クリティカルパスを最低限カバーする
 - riskLevelは "low" / "medium" / "high"
 - timeboxMinutesは30〜90の範囲
 - Issueのラベルからリスクレベルを推定
@@ -167,6 +171,7 @@ export async function generateTasksFromIssue(
     tasks: Array<{
       title: string;
       goal: string;
+      role?: string;
       context?: { files?: string[]; specs?: string; notes?: string };
       allowedPaths: string[];
       commands: string[];
@@ -189,6 +194,7 @@ export async function generateTasksFromIssue(
   const tasks: CreateTaskInput[] = parsed.tasks.map((task, index) => ({
     title: task.title,
     goal: task.goal,
+    role: (task.role as "worker" | "tester" | undefined) ?? "worker",
     context: {
       ...task.context,
       notes: `GitHub Issue #${issue.number}: ${issue.title}\n${task.context?.notes ?? ""}`,
@@ -220,6 +226,7 @@ export function generateSimpleTaskFromIssue(
   const task: CreateTaskInput = {
     title: issue.title,
     goal: `Resolve GitHub Issue #${issue.number}`,
+    role: "worker",
     context: {
       specs: issue.body,
       notes: `Labels: ${issue.labels.join(", ") || "none"}`,

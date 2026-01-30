@@ -9,6 +9,7 @@ export interface AvailableTask {
   goal: string;
   priority: number;
   riskLevel: string;
+  role: string;
   timeboxMinutes: number;
   dependencies: string[];
   allowedPaths: string[];
@@ -123,6 +124,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     goal: task.goal,
     priority: task.priority ?? 0,
     riskLevel: task.riskLevel ?? "low",
+    role: task.role ?? "worker",
     timeboxMinutes: task.timeboxMinutes ?? 60,
     dependencies: task.dependencies ?? [],
     allowedPaths: task.allowedPaths ?? [],

@@ -27,6 +27,7 @@ function buildPrompt(requirement: Requirement): string {
 4. **範囲限定**: 変更するファイル/ディレクトリを明確にする
 5. **既存構成遵守**: 既存のモノレポ構成と技術スタックを必ず守る
 6. **許可パス遵守**: allowedPaths の外に触る必要があるタスクは作らない
+7. **役割分担**: 実装は worker、テスト作成/追加は tester に割り当てる
 
 ## 既存構成と技術スタックの厳守
 
@@ -83,13 +84,14 @@ ${requirement.notes || "(なし)"}
     {
       "title": "簡潔なタスク名",
       "goal": "機械判定可能な完了条件（テストが通る、コマンドが成功する等）",
+      "role": "worker or tester",
       "context": {
         "files": ["関連ファイルパス"],
         "specs": "詳細仕様",
         "notes": "補足情報"
       },
       "allowedPaths": ["変更許可パス（glob）"],
-      "commands": ["検証コマンド（pnpm test等）"],
+      "commands": ["検証コマンド（pnpm test / pnpm run dev など）"],
       "priority": 10,
       "riskLevel": "low",
       "dependsOn": [],
@@ -104,7 +106,8 @@ ${requirement.notes || "(なし)"}
 
 - タスクは実行順序を考慮し、dependsOnで依存関係を明示（インデックスで参照）
 - 各タスクのcommandは必ず成功/失敗を返すもの
-- 検証コマンドは必ず終了するものにし、pnpm devのような常駐コマンドは使わない
+- 検証コマンドは必ず成功/失敗を返し、dev起動の確認も含める
+- フロントが絡むタスクはE2Eを必須とし、クリティカルパスを最低限カバーする
 - riskLevelは "low" / "medium" / "high" のいずれか
 - timeboxMinutesは30〜90の範囲で
 - 曖昧なゴール（「改善する」等）は避ける
@@ -135,6 +138,7 @@ function resolveDependencies(
   tasks: Array<{
     title: string;
     goal: string;
+    role?: string;
     context?: { files?: string[]; specs?: string; notes?: string };
     allowedPaths: string[];
     commands: string[];
@@ -148,6 +152,7 @@ function resolveDependencies(
   const taskInputs: PlannedTaskInput[] = tasks.map((task, index) => ({
     title: task.title,
     goal: task.goal,
+    role: (task.role as "worker" | "tester" | undefined) ?? "worker",
     context: task.context,
     allowedPaths: task.allowedPaths,
     commands: task.commands,
@@ -192,6 +197,7 @@ export async function generateTasksFromRequirement(
     tasks: Array<{
       title: string;
       goal: string;
+      role?: string;
       context?: { files?: string[]; specs?: string; notes?: string };
       allowedPaths: string[];
       commands: string[];
@@ -234,12 +240,13 @@ export function generateSimpleTasks(requirement: Requirement): TaskGenerationRes
     tasks.push({
       title: `Implement: ${criterion.slice(0, 50)}${criterion.length > 50 ? "..." : ""}`,
       goal: criterion,
+      role: "worker",
       context: {
         specs: requirement.goal,
         notes: requirement.notes,
       },
       allowedPaths: requirement.allowedPaths,
-      commands: ["pnpm test", "pnpm run check"],
+      commands: ["pnpm test", "pnpm run check", "pnpm run dev"],
       priority: (requirement.acceptanceCriteria.length - index) * 10,
       riskLevel: determineRiskLevel(requirement),
       dependencies: [],

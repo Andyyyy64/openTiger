@@ -4,7 +4,14 @@ import { resolve, join } from "node:path";
 import { db } from "@h1ve/db";
 import { artifacts, runs, tasks, agents, events } from "@h1ve/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
-import { DEFAULT_POLICY, PolicySchema, type Policy } from "@h1ve/core";
+import {
+  DEFAULT_POLICY,
+  PolicySchema,
+  type Policy,
+  getRepoMode,
+  getLocalRepoPath,
+  applyRepoModePolicyOverrides,
+} from "@h1ve/core";
 import "dotenv/config";
 
 // ハートビートの間隔（ミリ秒）
@@ -30,10 +37,23 @@ import {
   evaluateCI,
   evaluatePolicy,
   evaluateLLM,
+  evaluateLLMDiff,
   evaluateSimple,
   evaluateRiskLevel,
   getPRDiffStats,
+  evaluateLocalCI,
+  evaluateLocalPolicy,
+  getLocalDiffStats,
+  getLocalDiffText,
 } from "./evaluators/index.js";
+import {
+  checkoutBranch,
+  mergeBranch,
+  getChangedFiles,
+  isMergeInProgress,
+  abortMerge,
+  cleanUntracked,
+} from "@h1ve/vcs";
 
 import {
   makeJudgement,
@@ -86,6 +106,7 @@ interface JudgeConfig {
   useLlm: boolean;
   dryRun: boolean;
   policy: Policy;
+  mode: "git" | "local";
 }
 
 // デフォルト設定
@@ -97,6 +118,7 @@ const DEFAULT_CONFIG: JudgeConfig = {
   useLlm: process.env.USE_LLM !== "false",
   dryRun: process.env.DRY_RUN === "true",
   policy: DEFAULT_POLICY,
+  mode: "git",
 };
 
 async function recordJudgeReview(
@@ -139,6 +161,51 @@ async function recordJudgeReview(
       `[Judge] Failed to record review event for PR #${pr.prNumber}:`,
       error
     );
+  }
+}
+
+async function recordLocalReview(
+  target: {
+    taskId: string;
+    runId: string;
+    worktreePath: string;
+    baseBranch: string;
+    branchName: string;
+    baseRepoPath?: string;
+  },
+  result: JudgeResult,
+  summary: EvaluationSummary,
+  agentId: string,
+  dryRun: boolean,
+  mergeResult?: { success: boolean; error?: string }
+): Promise<void> {
+  try {
+    await db.insert(events).values({
+      type: "judge.review",
+      entityType: "task",
+      entityId: target.taskId,
+      agentId,
+      payload: {
+        mode: "local",
+        taskId: target.taskId,
+        runId: target.runId,
+        worktreePath: target.worktreePath,
+        baseBranch: target.baseBranch,
+        branchName: target.branchName,
+        baseRepoPath: target.baseRepoPath,
+        verdict: result.verdict,
+        autoMerge: result.autoMerge,
+        riskLevel: result.riskLevel,
+        confidence: result.confidence,
+        reasons: result.reasons,
+        suggestions: result.suggestions,
+        summary,
+        dryRun,
+        mergeResult,
+      },
+    });
+  } catch (error) {
+    console.error("[Judge] Failed to record local review event:", error);
   }
 }
 
@@ -252,6 +319,88 @@ async function getPendingPRs(): Promise<
   return pendingPRs;
 }
 
+async function getPendingWorktrees(): Promise<
+  Array<{
+    worktreePath: string;
+    baseBranch: string;
+    branchName: string;
+    baseRepoPath?: string;
+    taskId: string;
+    runId: string;
+    taskGoal: string;
+    taskRiskLevel: "low" | "medium" | "high";
+    allowedPaths: string[];
+  }>
+> {
+  const result = await db
+    .select({
+      worktreePath: artifacts.ref,
+      metadata: artifacts.metadata,
+      taskId: runs.taskId,
+      runId: runs.id,
+    })
+    .from(artifacts)
+    .innerJoin(runs, eq(artifacts.runId, runs.id))
+    .where(
+      and(
+        eq(artifacts.type, "worktree"),
+        eq(runs.status, "success"),
+        isNotNull(artifacts.ref)
+      )
+    );
+
+  const pendingWorktrees: Array<{
+    worktreePath: string;
+    baseBranch: string;
+    branchName: string;
+    baseRepoPath?: string;
+    taskId: string;
+    runId: string;
+    taskGoal: string;
+    taskRiskLevel: "low" | "medium" | "high";
+    allowedPaths: string[];
+  }> = [];
+
+  for (const row of result) {
+    if (!row.worktreePath) continue;
+    const metadata = row.metadata;
+    const baseBranch =
+      typeof metadata === "object" && metadata && "baseBranch" in metadata
+        ? String((metadata as { baseBranch?: unknown }).baseBranch ?? "main")
+        : (process.env.BASE_BRANCH ?? "main");
+    const branchName =
+      typeof metadata === "object" && metadata && "branchName" in metadata
+        ? String((metadata as { branchName?: unknown }).branchName ?? "HEAD")
+        : "HEAD";
+
+    const taskResult = await db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.id, row.taskId));
+
+    const task = taskResult[0];
+    if (!task) continue;
+    if (task.status === "done") continue;
+
+    pendingWorktrees.push({
+      worktreePath: row.worktreePath,
+      baseBranch,
+      branchName,
+      baseRepoPath:
+        typeof metadata === "object" && metadata && "baseRepoPath" in metadata
+          ? String((metadata as { baseRepoPath?: unknown }).baseRepoPath ?? "")
+          : getLocalRepoPath(),
+      taskId: row.taskId,
+      runId: row.runId,
+      taskGoal: task.goal,
+      taskRiskLevel: (task.riskLevel as "low" | "medium" | "high") ?? "low",
+      allowedPaths: task.allowedPaths ?? [],
+    });
+  }
+
+  return pendingWorktrees;
+}
+
 // 単一のPRを評価
 async function judgeSinglePR(
   pr: {
@@ -322,6 +471,153 @@ async function judgeSinglePR(
   }
 
   return { result, summary };
+}
+
+async function judgeSingleWorktree(
+  target: {
+    worktreePath: string;
+    baseBranch: string;
+    branchName: string;
+    baseRepoPath?: string;
+    taskGoal: string;
+    taskRiskLevel: "low" | "medium" | "high";
+    allowedPaths: string[];
+  },
+  config: JudgeConfig
+): Promise<{ result: JudgeResult; summary: EvaluationSummary }> {
+  console.log(`\n[Evaluating Worktree ${target.worktreePath}]`);
+  const evaluationPolicy = adjustPolicyForAutoMerge(config.policy);
+
+  const ciResult = evaluateLocalCI();
+
+  const diffStats = await getLocalDiffStats(
+    target.worktreePath,
+    target.baseBranch,
+    target.branchName
+  );
+
+  const policyResult = await evaluateLocalPolicy(
+    target.worktreePath,
+    target.baseBranch,
+    target.branchName,
+    evaluationPolicy,
+    target.allowedPaths
+  );
+
+  const computedRisk = evaluateRiskLevel(diffStats, evaluationPolicy);
+
+  let llmResult;
+  if (config.useLlm && ciResult.pass && policyResult.pass) {
+    const diffText = await getLocalDiffText(
+      target.worktreePath,
+      target.baseBranch,
+      target.branchName
+    );
+    llmResult = await evaluateLLMDiff(diffText, target.taskGoal, {
+      workdir: config.workdir,
+      instructionsPath: config.instructionsPath,
+    });
+  } else {
+    llmResult = evaluateSimple();
+  }
+
+  const summary: EvaluationSummary = {
+    ci: ciResult,
+    policy: policyResult,
+    llm: llmResult,
+  };
+
+  const riskPriority = { low: 0, medium: 1, high: 2 };
+  const effectiveRisk =
+    riskPriority[computedRisk] > riskPriority[target.taskRiskLevel]
+      ? computedRisk
+      : target.taskRiskLevel;
+
+  const result = makeJudgement(summary, config.policy, effectiveRisk);
+  return { result, summary };
+}
+
+async function mergeLocalBranch(target: {
+  baseRepoPath?: string;
+  baseBranch: string;
+  branchName: string;
+}): Promise<{ success: boolean; error?: string }> {
+  if (!target.baseRepoPath) {
+    return { success: false, error: "baseRepoPath is missing" };
+  }
+
+  const dirtyFiles = await getChangedFiles(target.baseRepoPath);
+  if (dirtyFiles.length > 0) {
+    const mergeInProgress = await isMergeInProgress(target.baseRepoPath);
+    if (mergeInProgress) {
+      const abortResult = await abortMerge(target.baseRepoPath);
+      if (!abortResult.success) {
+        return {
+          success: false,
+          error: `failed to abort merge: ${abortResult.stderr}`,
+        };
+      }
+    }
+
+    const stillDirty = await getChangedFiles(target.baseRepoPath);
+    if (stillDirty.length > 0) {
+      // ローカル作業用のベースは未追跡ファイルを掃除してから再判定する
+      const cleanResult = await cleanUntracked(target.baseRepoPath);
+      if (!cleanResult.success) {
+        return {
+          success: false,
+          error: `failed to clean untracked files: ${cleanResult.stderr}`,
+        };
+      }
+      const afterClean = await getChangedFiles(target.baseRepoPath);
+      if (afterClean.length > 0) {
+        return {
+          success: false,
+          error: "base repo has uncommitted changes",
+        };
+      }
+    }
+  }
+
+  const checkoutResult = await checkoutBranch(
+    target.baseRepoPath,
+    target.baseBranch
+  );
+  if (!checkoutResult.success) {
+    return {
+      success: false,
+      error: `failed to checkout base branch: ${checkoutResult.stderr}`,
+    };
+  }
+
+  // まずはfast-forwardで安全に取り込み、失敗時はマージコミットを許可する
+  const ffResult = await mergeBranch(
+    target.baseRepoPath,
+    target.branchName,
+    { ffOnly: true }
+  );
+  if (!ffResult.success) {
+    const mergeResult = await mergeBranch(
+      target.baseRepoPath,
+      target.branchName,
+      { ffOnly: false, noEdit: true }
+    );
+    if (!mergeResult.success) {
+      const abortResult = await abortMerge(target.baseRepoPath);
+      if (!abortResult.success) {
+        return {
+          success: false,
+          error: `failed to abort merge: ${abortResult.stderr}`,
+        };
+      }
+      return {
+        success: false,
+        error: `failed to merge branch: ${mergeResult.stderr}`,
+      };
+    }
+  }
+
+  return { success: true };
 }
 
 // レビューループ
@@ -401,6 +697,79 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
     }
 
     // 次のポーリングまで待機
+    await new Promise((resolve) => setTimeout(resolve, config.pollIntervalMs));
+  }
+}
+
+async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
+  console.log("=".repeat(60));
+  console.log("h1ve Judge (local mode) started");
+  console.log("=".repeat(60));
+  console.log(`Poll interval: ${config.pollIntervalMs}ms`);
+  console.log(`Use LLM: ${config.useLlm}`);
+  console.log(`Dry run: ${config.dryRun}`);
+  console.log("=".repeat(60));
+
+  while (true) {
+    try {
+      const pendingWorktrees = await getPendingWorktrees();
+
+      if (pendingWorktrees.length > 0) {
+        console.log(`\nFound ${pendingWorktrees.length} worktrees to review`);
+
+        for (const target of pendingWorktrees) {
+          try {
+            const { result, summary } = await judgeSingleWorktree(target, config);
+            let mergeResult: { success: boolean; error?: string } | undefined;
+
+            if (!config.dryRun) {
+              let nextStatus: "done" | "blocked";
+              if (result.verdict === "approve") {
+                mergeResult = await mergeLocalBranch({
+                  baseRepoPath: target.baseRepoPath,
+                  baseBranch: target.baseBranch,
+                  branchName: target.branchName,
+                });
+                nextStatus = mergeResult.success ? "done" : "blocked";
+                if (!mergeResult.success) {
+                  console.error(
+                    "[Judge] Failed to merge local branch:",
+                    mergeResult.error
+                  );
+                }
+              } else {
+                nextStatus = "blocked";
+              }
+              await db
+                .update(tasks)
+                .set({ status: nextStatus, updatedAt: new Date() })
+                .where(eq(tasks.id, target.taskId));
+            }
+
+            await recordLocalReview(
+              {
+                taskId: target.taskId,
+                runId: target.runId,
+                worktreePath: target.worktreePath,
+                baseBranch: target.baseBranch,
+                branchName: target.branchName,
+                baseRepoPath: target.baseRepoPath,
+              },
+              result,
+              summary,
+              config.agentId,
+              config.dryRun,
+              mergeResult
+            );
+          } catch (error) {
+            console.error(`  Error processing worktree ${target.worktreePath}:`, error);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Judge loop error:", error);
+    }
+
     await new Promise((resolve) => setTimeout(resolve, config.pollIntervalMs));
   }
 }
@@ -511,6 +880,7 @@ Environment Variables:
   DRY_RUN=true             Enable dry run mode
   GITHUB_TOKEN=xxx         GitHub API token
   JUDGE_MODEL=xxx          Judge LLM model
+  JUDGE_MODE=git|local|auto Judge execution mode
 
 Example:
   pnpm --filter @h1ve/judge start 42
@@ -535,6 +905,7 @@ async function main(): Promise<void> {
     agentId,
     policy: await loadPolicyConfig(),
   };
+  config.policy = applyRepoModePolicyOverrides(config.policy);
 
   if (args.includes("--dry-run")) {
     config.dryRun = true;
@@ -578,7 +949,20 @@ async function main(): Promise<void> {
   }
 
   // ポーリングモード
-  await runJudgeLoop(config);
+  const repoMode = getRepoMode();
+  const judgeMode = process.env.JUDGE_MODE;
+  const effectiveMode =
+    judgeMode === "git" || judgeMode === "local"
+      ? judgeMode
+      : repoMode === "local"
+        ? "local"
+        : "git";
+
+  if (effectiveMode === "local") {
+    await runLocalJudgeLoop({ ...config, mode: "local" });
+  } else {
+    await runJudgeLoop({ ...config, mode: "git" });
+  }
 }
 
 main().catch((error) => {

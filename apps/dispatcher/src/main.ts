@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { db } from "@h1ve/db";
 import { tasks, agents } from "@h1ve/db/schema";
 import { eq } from "drizzle-orm";
+import { getRepoMode, getLocalRepoPath, getLocalWorktreeRoot } from "@h1ve/core";
 import {
   createTaskQueue,
   enqueueTask,
@@ -68,9 +69,12 @@ interface DispatcherConfig {
   pollIntervalMs: number;
   maxConcurrentWorkers: number;
   launchMode: LaunchMode;
+  repoMode: "git" | "local";
   repoUrl: string;
   baseBranch: string;
   workspacePath: string;
+  localRepoPath?: string;
+  localWorktreeRoot?: string;
 }
 
 // デフォルト設定
@@ -78,9 +82,12 @@ const DEFAULT_CONFIG: DispatcherConfig = {
   pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS ?? "5000", 10),
   maxConcurrentWorkers: parseInt(process.env.MAX_CONCURRENT_WORKERS ?? "5", 10),
   launchMode: (process.env.LAUNCH_MODE as LaunchMode) ?? "process",
+  repoMode: getRepoMode(),
   repoUrl: process.env.REPO_URL ?? "",
   baseBranch: process.env.BASE_BRANCH ?? "main",
   workspacePath: process.env.WORKSPACE_PATH ?? "/tmp/h1ve-workspace",
+  localRepoPath: getLocalRepoPath(),
+  localWorktreeRoot: getLocalWorktreeRoot(),
 };
 
 // ディスパッチャーの状態
@@ -100,6 +107,7 @@ function getTaskQueueForAgent(agentId: string): ReturnType<typeof createTaskQueu
 async function dispatchTask(
   task: Awaited<ReturnType<typeof getAvailableTasks>>[0],
   agentId: string,
+  agentRole: string,
   config: DispatcherConfig
 ): Promise<boolean> {
   // リースを取得
@@ -130,9 +138,15 @@ async function dispatchTask(
     mode: config.launchMode,
     taskId: task.id,
     agentId,
+    agentRole,
     repoUrl: config.repoUrl,
     baseBranch: config.baseBranch,
     workspacePath: `${config.workspacePath}/${agentId}`,
+    env: {
+      REPO_MODE: config.repoMode,
+      LOCAL_REPO_PATH: config.localRepoPath ?? "",
+      LOCAL_WORKTREE_ROOT: config.localWorktreeRoot ?? "",
+    },
   });
 
   if (!launchResult.success) {
@@ -146,9 +160,9 @@ async function dispatchTask(
     return false;
   }
 
-  console.log(
-    `[Dispatch] Task "${task.title}" dispatched to agent ${agentId} (${config.launchMode} mode)`
-  );
+    console.log(
+      `[Dispatch] Task "${task.title}" dispatched to agent ${agentId} (${agentRole}, ${config.launchMode} mode)`
+    );
   return true;
 }
 
@@ -160,6 +174,7 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
   console.log(`Poll interval: ${config.pollIntervalMs}ms`);
   console.log(`Max concurrent workers: ${config.maxConcurrentWorkers}`);
   console.log(`Launch mode: ${config.launchMode}`);
+  console.log(`Repo mode: ${config.repoMode}`);
   console.log(`Repository: ${config.repoUrl}`);
   console.log(`Base branch: ${config.baseBranch}`);
   console.log("=".repeat(60));
@@ -205,16 +220,17 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
             }
 
             // 利用可能な常駐エージェントを取得
-            const availableAgentsList = await getAvailableAgents();
-            const workerAgent = availableAgentsList.find((id: string) => id.startsWith("worker-"));
+            const requiredRole = task.role ?? "worker";
+            const availableAgentsList = await getAvailableAgents(requiredRole);
+            const selectedAgent = availableAgentsList[0];
 
-            if (!workerAgent) {
-              console.log("[Dispatch] No idle workers available in pool.");
+            if (!selectedAgent) {
+              console.log(`[Dispatch] No idle ${requiredRole} agents available in pool.`);
               continue;
             }
 
             // ディスパッチ
-            await dispatchTask(task, workerAgent, config);
+            await dispatchTask(task, selectedAgent, requiredRole, config);
           }
         }
       }
@@ -297,8 +313,12 @@ async function main(): Promise<void> {
   const config = { ...DEFAULT_CONFIG };
 
   // 設定の検証
-  if (!config.repoUrl) {
-    console.error("Error: REPO_URL environment variable is required");
+  if (config.repoMode === "git" && !config.repoUrl) {
+    console.error("Error: REPO_URL environment variable is required for git mode");
+    process.exit(1);
+  }
+  if (config.repoMode === "local" && !config.localRepoPath) {
+    console.error("Error: LOCAL_REPO_PATH environment variable is required for local mode");
     process.exit(1);
   }
 
