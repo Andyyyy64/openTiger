@@ -79,6 +79,20 @@
 - [ ] `docs/architecture.md` / `docs/security.md` / `docs/instructions-guide.md` の自動更新方針を定義（何を自動、何を手動で残すか）
 - [ ] doc更新が失敗した場合の戻し（docserが直せないときに再分割/差分縮小へ落とす）
 
+### 8. tester（テスト専用エージェント）の導入
+
+無限運用では「テストがない/薄い」「フレークで止まる」「E2Eが重くて回らない」が発生しやすい。  
+testerはテストの作成・実行・結果要約・フレーク対処を担当し、Workerは実装完遂に集中させる。
+
+- [ ] testerエージェントを導入し、テスト関連パス（例: `**/*.test.ts`, `apps/**/test/**`, `packages/**/test/**`, `playwright/**`）を主な許可範囲にする
+- [ ] Vitestによるunit/integration（結合）テストの方針を明文化（どこまでをunit、どこからをintegrationとするか）
+- [ ] PlaywrightによるE2E（UI操作含む）テストの方針を明文化（staging前提/ローカル前提、seed、待機戦略、スクショ差分）
+- [ ] テスト失敗時の一次切り分け（テスト不備/実装バグ/環境要因/フレーク）を自動化し、次アクション（修正タスク/リトライ/隔離）へ繋ぐ
+- [ ] フレーク検知と自動リトライ（一定回数で「不安定」として隔離し、別タスクに落とす）
+- [ ] 変更差分からテスト実行範囲を推定（高速化のため: unitのみ / integration追加 / E2E追加）
+- [ ] E2E結果のアーティファクト保存（trace/video/screenshot）と `runs/artifacts` への紐付け
+- [ ] testerが生成したテスト追加PRをJudgeに渡す運用（「実装PRに追従」「先にテストPRを通す」などの標準化）
+
 ---
 
 ## 🔮 Future Tasks (Post-MVP)
@@ -88,6 +102,7 @@
 - [ ] Requirementの版管理（差分・履歴・確定/編集中ステータス）
 - [ ] Requirement確定後にPlannerへ引き渡すワークフロー（API/UI/CLI）
 - [ ] docserの運用ルール整備（コード変更PRに同梱するか、別PRで追従するかの標準化）
+- [ ] testerの運用ルール整備（E2Eを常時回す/条件付きで回す、失敗時の扱い、コスト上限）
 - [ ] **API Fallback Strategy**: Maxプラン上限時の自動API切り替えロジック
 - [ ] **Cost-Aware Planning**: 予算に応じたタスク優先度・モデルの動的変更
 
