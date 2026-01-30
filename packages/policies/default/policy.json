@@ -19,12 +19,13 @@
     "wget.*|.*sh"
   ],
   "autoMerge": {
-    "enabled": false,
-    "maxRiskLevel": "low",
+    "enabled": true,
+    "level": "low",
+    "maxRiskLevel": "medium",
     "requiredChecks": ["test", "lint", "typecheck"]
   },
   "tokenLimits": {
-    "perTask": 100000,
-    "perDay": 1000000
+    "perTask": 1000000,
+    "perDay": 50000000
   }
 }

@@ -25,8 +25,10 @@ export const PolicySchema = z.object({
   autoMerge: z
     .object({
       enabled: z.boolean().default(false),
+      // 自動マージ判定の厳しさ（lowほど緩く、highほど厳しい）
+      level: z.enum(["low", "medium", "high"]).default("medium"),
       // 自動マージを許可するリスクレベル
-      maxRiskLevel: z.enum(["low", "medium"]).default("low"),
+      maxRiskLevel: z.enum(["low", "medium", "high"]).default("low"),
       // 必須のCIチェック名
       requiredChecks: z.array(z.string()).default([]),
     })
@@ -35,8 +37,8 @@ export const PolicySchema = z.object({
   // トークン制限
   tokenLimits: z
     .object({
-      perTask: z.number().int().positive().default(100000),
-      perDay: z.number().int().positive().default(1000000),
+      perTask: z.number().int().positive().default(1000000),
+      perDay: z.number().int().positive().default(50000000),
     })
     .default({}),
 });

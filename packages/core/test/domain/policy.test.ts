@@ -39,8 +39,8 @@ describe("PolicySchema", () => {
       expect(result.data.maxFilesChanged).toBe(20);
       expect(result.data.autoMerge.enabled).toBe(false);
       expect(result.data.autoMerge.maxRiskLevel).toBe("low");
-      expect(result.data.tokenLimits.perTask).toBe(100000);
-      expect(result.data.tokenLimits.perDay).toBe(1000000);
+      expect(result.data.tokenLimits.perTask).toBe(1000000);
+      expect(result.data.tokenLimits.perDay).toBe(50000000);
     }
   });
 
@@ -117,7 +117,7 @@ describe("DEFAULT_POLICY", () => {
   });
 
   it("デフォルトのトークン制限が設定されている", () => {
-    expect(DEFAULT_POLICY.tokenLimits.perTask).toBe(100000);
-    expect(DEFAULT_POLICY.tokenLimits.perDay).toBe(1000000);
+    expect(DEFAULT_POLICY.tokenLimits.perTask).toBe(1000000);
+    expect(DEFAULT_POLICY.tokenLimits.perDay).toBe(50000000);
   });
 });

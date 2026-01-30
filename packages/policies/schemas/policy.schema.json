@@ -42,9 +42,15 @@
           "description": "自動マージを有効にするか",
           "default": false
         },
+        "level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "自動マージ判定の厳しさ（lowほど緩く、highほど厳しい）",
+          "default": "medium"
+        },
         "maxRiskLevel": {
           "type": "string",
-          "enum": ["low", "medium"],
+          "enum": ["low", "medium", "high"],
           "description": "自動マージを許可する最大リスクレベル",
           "default": "low"
         },
@@ -63,13 +69,13 @@
           "type": "integer",
           "minimum": 1,
           "description": "1タスクあたりのトークン上限",
-          "default": 100000
+          "default": 1000000
         },
         "perDay": {
           "type": "integer",
           "minimum": 1,
           "description": "1日あたりのトークン上限",
-          "default": 1000000
+          "default": 50000000
         }
       }
     }
