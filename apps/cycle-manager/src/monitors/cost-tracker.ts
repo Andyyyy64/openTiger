@@ -11,8 +11,8 @@ interface CostConfig {
 }
 
 const defaultCostConfig: CostConfig = {
-  dailyTokenLimit: parseInt(process.env.DAILY_TOKEN_LIMIT ?? "1000000", 10),
-  hourlyTokenLimit: parseInt(process.env.HOURLY_TOKEN_LIMIT ?? "100000", 10),
+  dailyTokenLimit: parseInt(process.env.DAILY_TOKEN_LIMIT ?? "50000000", 10),
+  hourlyTokenLimit: parseInt(process.env.HOURLY_TOKEN_LIMIT ?? "5000000", 10),
   warningThreshold: 0.8, // 80%で警告
 };
 
