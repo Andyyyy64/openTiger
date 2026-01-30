@@ -7,6 +7,7 @@ export interface ExecuteOptions {
   repoPath: string;
   task: Task;
   instructionsPath?: string;
+  model?: string;
 }
 
 export interface ExecuteResult {
@@ -60,10 +61,11 @@ function buildTaskPrompt(task: Task): string {
 export async function executeTask(
   options: ExecuteOptions
 ): Promise<ExecuteResult> {
-  const { repoPath, task, instructionsPath } = options;
+  const { repoPath, task, instructionsPath, model } = options;
 
   const prompt = buildTaskPrompt(task);
   const workerModel =
+    model ??
     process.env.WORKER_MODEL ??
     process.env.OPENCODE_MODEL ??
     "google/gemini-3-flash-preview";

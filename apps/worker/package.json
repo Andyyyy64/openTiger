@@ -8,6 +8,8 @@
     "dev:2": "WORKER_INDEX=2 tsx watch --env-file=../../.env src/main.ts",
     "dev:3": "WORKER_INDEX=3 tsx watch --env-file=../../.env src/main.ts",
     "dev:4": "WORKER_INDEX=4 tsx watch --env-file=../../.env src/main.ts",
+    "dev:tester": "AGENT_ROLE=tester WORKER_INDEX=1 tsx watch --env-file=../../.env src/main.ts",
+    "dev:tester:2": "AGENT_ROLE=tester WORKER_INDEX=2 tsx watch --env-file=../../.env src/main.ts",
     "build": "tsc",
     "start": "node dist/main.js",
     "test": "vitest run --passWithNoTests",

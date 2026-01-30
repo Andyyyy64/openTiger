@@ -1,4 +1,5 @@
 import { createPR, findPRs, updatePR, type PRInfo, remoteBranchExists, push } from "@h1ve/vcs";
+import { getRepoMode } from "@h1ve/core";
 import type { Task } from "@h1ve/core";
 
 export interface CreatePROptions {
@@ -80,6 +81,14 @@ function generatePRBody(options: CreatePROptions): string {
 export async function createTaskPR(
   options: CreatePROptions
 ): Promise<CreatePRResult> {
+  const repoMode = getRepoMode();
+  if (repoMode === "local") {
+    console.log("Local mode: skipping PR creation");
+    return {
+      success: true,
+      isUpdate: false,
+    };
+  }
   const { repoPath, branchName, task, baseBranch = "main" } = options;
 
   // ベースブランチがリモートに存在するか確認

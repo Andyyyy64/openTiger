@@ -2,7 +2,13 @@ import { db } from "@h1ve/db";
 import { tasks, runs, artifacts, leases, agents } from "@h1ve/db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Task, Policy } from "@h1ve/core";
-import { DEFAULT_POLICY } from "@h1ve/core";
+import {
+  DEFAULT_POLICY,
+  getRepoMode,
+  getLocalRepoPath,
+  getLocalWorktreeRoot,
+  applyRepoModePolicyOverrides,
+} from "@h1ve/core";
 import "dotenv/config";
 import {
   createTaskWorker,
@@ -23,6 +29,7 @@ import {
   commitAndPush,
   createTaskPR,
 } from "./steps/index.js";
+import { generateBranchName } from "./steps/branch.js";
 
 // ハートビートの間隔（ミリ秒）
 const HEARTBEAT_INTERVAL = 30000; // 30秒
@@ -49,10 +56,12 @@ async function startHeartbeat(agentId: string) {
 // Worker設定
 export interface WorkerConfig {
   agentId: string;
+  role?: string;
   workspacePath: string;
   repoUrl: string;
   baseBranch?: string;
   instructionsPath?: string;
+  model?: string;
   policy?: Policy;
   logPath?: string;
 }
@@ -74,18 +83,23 @@ export async function runWorker(
 ): Promise<WorkerResult> {
   const {
     agentId,
+    role,
     workspacePath,
     repoUrl,
     baseBranch = "main",
     instructionsPath,
+    model,
     policy = DEFAULT_POLICY,
     logPath,
   } = config;
+  const repoMode = getRepoMode();
+  const effectivePolicy = applyRepoModePolicyOverrides(policy);
 
   const taskId = taskData.id;
+  const agentLabel = role === "tester" ? "Tester" : "Worker";
 
   console.log("=".repeat(60));
-  console.log(`Worker ${agentId} starting task: ${taskData.title}`);
+  console.log(`${agentLabel} ${agentId} starting task: ${taskData.title}`);
   console.log("=".repeat(60));
 
   // 実行記録を作成
@@ -113,7 +127,14 @@ export async function runWorker(
     .set({ logPath: taskLogPath })
     .where(eq(runs.id, runId));
 
+  let worktreeBasePath: string | undefined;
+  let worktreePath: string | undefined;
+
   try {
+    const localBranchName = repoMode === "local"
+      ? generateBranchName(agentId, taskId)
+      : undefined;
+
     // Step 1: リポジトリをチェックアウト
     console.log("\n[1/7] Checking out repository...");
     const checkoutResult = await checkoutRepository({
@@ -122,6 +143,10 @@ export async function runWorker(
       taskId,
       baseBranch,
       githubToken: process.env.GITHUB_TOKEN,
+      repoMode,
+      localRepoPath: getLocalRepoPath(),
+      localWorktreeRoot: `${getLocalWorktreeRoot()}/${agentId}`,
+      branchName: localBranchName,
     });
 
     if (!checkoutResult.success) {
@@ -129,21 +154,28 @@ export async function runWorker(
     }
 
     const repoPath = checkoutResult.repoPath;
+    worktreeBasePath = checkoutResult.baseRepoPath;
+    worktreePath = checkoutResult.worktreePath;
 
     // Step 2: 作業ブランチを作成
-    console.log("\n[2/7] Creating work branch...");
-    const branchResult = await createWorkBranch({
-      repoPath,
-      agentId,
-      taskId,
-      baseBranch,
-    });
+    let branchName: string;
+    if (repoMode === "local") {
+      branchName = localBranchName ?? generateBranchName(agentId, taskId);
+    } else {
+      console.log("\n[2/7] Creating work branch...");
+      const branchResult = await createWorkBranch({
+        repoPath,
+        agentId,
+        taskId,
+        baseBranch,
+      });
 
-    if (!branchResult.success) {
-      throw new Error(branchResult.error);
+      if (!branchResult.success) {
+        throw new Error(branchResult.error);
+      }
+
+      branchName = branchResult.branchName;
     }
-
-    const branchName = branchResult.branchName;
 
     // ブランチをartifactとして記録
     await db.insert(artifacts).values({
@@ -152,12 +184,27 @@ export async function runWorker(
       ref: branchName,
     });
 
+    if (repoMode === "local" && worktreePath && worktreeBasePath) {
+      await db.insert(artifacts).values({
+        runId,
+        type: "worktree",
+        ref: worktreePath,
+        metadata: {
+          baseRepoPath: worktreeBasePath,
+          worktreePath,
+          baseBranch,
+          branchName,
+        },
+      });
+    }
+
     // Step 3: OpenCodeでタスクを実行
     console.log("\n[3/7] Executing task with OpenCode...");
     const executeResult = await executeTask({
       repoPath,
       task: taskData,
       instructionsPath,
+      model,
     });
 
     if (!executeResult.success) {
@@ -177,7 +224,14 @@ export async function runWorker(
       repoPath,
       commands: taskData.commands,
       allowedPaths: taskData.allowedPaths,
-      policy,
+      policy: effectivePolicy,
+      baseBranch,
+      headBranch: branchName,
+      // local modeではロックファイルの変更で止めない
+      allowLockfileOutsidePaths: repoMode === "local",
+      // local modeでは.env.exampleの作成で止めない
+      allowEnvExampleOutsidePaths: repoMode === "local",
+      allowNoChanges: shouldAllowNoChanges(taskData),
     });
 
     if (!verifyResult.success) {
@@ -240,7 +294,7 @@ export async function runWorker(
           state: prResult.pr.state,
         },
       });
-    } else {
+    } else if (repoMode === "git") {
       // 直接プッシュした場合はその旨を記録
       await db.insert(artifacts).values({
         runId,
@@ -263,7 +317,8 @@ export async function runWorker(
       .where(eq(runs.id, runId));
 
     // PRがある場合はJudgeの自動レビュー待ちにする
-    const nextStatus = prResult.pr ? "blocked" : "done";
+    const needsReview = repoMode === "local" || Boolean(prResult.pr);
+    const nextStatus = needsReview ? "blocked" : "done";
     await db
       .update(tasks)
       .set({
@@ -286,7 +341,7 @@ export async function runWorker(
     if (prResult.pr) {
       console.log(`PR: ${prResult.pr.url}`);
     } else {
-      console.log(`Changes pushed directly to ${baseBranch}`);
+      console.log(`Changes committed to ${branchName}`);
     }
     console.log("=".repeat(60));
 
@@ -339,6 +394,13 @@ export async function runWorker(
     };
   } finally {
     setTaskLogPath();
+    if (repoMode === "local" && worktreeBasePath && worktreePath) {
+      const { removeWorktree } = await import("@h1ve/vcs");
+      await removeWorktree({
+        baseRepoPath: worktreeBasePath,
+        worktreePath,
+      });
+    }
   }
 }
 
@@ -355,6 +417,37 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
+function shouldAllowNoChanges(task: Task): boolean {
+  const text = `${task.title} ${task.goal}`.toLowerCase();
+  const allowHints = [
+    "検証",
+    "ビルド",
+    "確認",
+    "typecheck",
+    "lint",
+    "test",
+    "build",
+    "check",
+  ];
+  const denyHints = [
+    "実装",
+    "追加",
+    "作成",
+    "修正",
+    "変更",
+    "更新",
+    "導入",
+    "構築",
+    "開発",
+  ];
+
+  const allows = allowHints.some((hint) => text.includes(hint));
+  const denies = denyHints.some((hint) => text.includes(hint));
+
+  // 検証目的のタスクは変更なしでも評価を継続する
+  return allows && !denies;
+}
+
 async function validateExpectedFiles(
   repoPath: string,
   task: Task
@@ -368,26 +461,31 @@ async function validateExpectedFiles(
   const missing: string[] = [];
 
   for (const file of files) {
-    if (hasGlobPattern(file)) {
+    const normalizedFile = file.trim();
+    if (!normalizedFile) {
       continue;
     }
 
-    const targetPath = join(repoPath, file);
+    if (hasGlobPattern(normalizedFile)) {
+      continue;
+    }
 
-    if (file.endsWith("/")) {
+    const targetPath = join(repoPath, normalizedFile);
+
+    if (normalizedFile.endsWith("/")) {
       try {
         const stats = await stat(targetPath);
         if (!stats.isDirectory()) {
-          missing.push(file);
+          missing.push(normalizedFile);
         }
       } catch {
-        missing.push(file);
+        missing.push(normalizedFile);
       }
       continue;
     }
 
     if (!(await pathExists(targetPath))) {
-      missing.push(file);
+      missing.push(normalizedFile);
     }
   }
 
@@ -472,21 +570,33 @@ function buildTaskLogPath(
 // キューからタスクを受け取って実行するワーカープロセス
 async function main() {
   const workerIndex = process.env.WORKER_INDEX;
-  const agentId = process.env.AGENT_ID ?? (workerIndex ? `worker-${workerIndex}` : `worker-${Date.now()}`);
+  const agentRole = process.env.AGENT_ROLE ?? "worker";
+  const agentId = process.env.AGENT_ID
+    ?? (workerIndex ? `${agentRole}-${workerIndex}` : `${agentRole}-${Date.now()}`);
   const workspacePath = process.env.WORKSPACE_PATH ?? `/tmp/h1ve-workspace/${agentId}`;
   const repoUrl = process.env.REPO_URL ?? "";
   const baseBranch = process.env.BASE_BRANCH ?? "main";
-  const workerModel =
-    process.env.WORKER_MODEL ??
-    process.env.OPENCODE_MODEL ??
-    "google/gemini-3-flash-preview";
+  const repoMode = getRepoMode();
+  const agentModel =
+    agentRole === "tester"
+      ? process.env.TESTER_MODEL ?? process.env.OPENCODE_MODEL
+      : process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL;
+  const effectiveModel = agentModel ?? "google/gemini-3-flash-preview";
   // 指示ファイルは環境変数があれば優先する
   const instructionsPath =
-    process.env.WORKER_INSTRUCTIONS_PATH ??
-    resolve(import.meta.dirname, "../instructions/base.md");
+    agentRole === "tester"
+      ? process.env.TESTER_INSTRUCTIONS_PATH
+        ?? resolve(import.meta.dirname, "../instructions/tester.md")
+      : process.env.WORKER_INSTRUCTIONS_PATH
+        ?? resolve(import.meta.dirname, "../instructions/base.md");
+  const agentLabel = agentRole === "tester" ? "Tester" : "Worker";
 
-  if (!repoUrl) {
-    console.error("REPO_URL environment variable is required");
+  if (repoMode === "git" && !repoUrl) {
+    console.error("REPO_URL environment variable is required for git mode");
+    process.exit(1);
+  }
+  if (repoMode === "local" && !getLocalRepoPath()) {
+    console.error("LOCAL_REPO_PATH environment variable is required for local mode");
     process.exit(1);
   }
 
@@ -500,11 +610,11 @@ async function main() {
 
   await db.insert(agents).values({
     id: agentId,
-    role: "worker",
+    role: agentRole,
     status: "idle", // 起動時は待機中として登録
     lastHeartbeat: new Date(),
     metadata: {
-      model: workerModel, // Workerは速度重視のモデルで実装を進める
+      model: effectiveModel, // 役割ごとのモデルを記録する
       provider: "gemini",
     },
   }).onConflictDoUpdate({
@@ -517,9 +627,9 @@ async function main() {
   // ハートビート開始
   const heartbeatTimer = startHeartbeat(agentId);
 
-  console.log(`Worker ${agentId} started`);
+  console.log(`${agentLabel} ${agentId} started`);
   console.log(`Workspace: ${workspacePath}`);
-  console.log(`Repository: ${repoUrl}`);
+  console.log(`Repository: ${repoUrl || "(local mode)"}`);
   console.log(`Base branch: ${baseBranch}`);
   console.log("Waiting for tasks...");
 
@@ -543,10 +653,12 @@ async function main() {
       taskData as unknown as Task,
       {
         agentId,
+        role: agentRole,
         workspacePath,
         repoUrl,
         baseBranch,
         instructionsPath,
+        model: effectiveModel,
         logPath,
       }
     );
@@ -555,7 +667,7 @@ async function main() {
   }
 
   // キュー待機モード（常駐モード）
-  console.log(`Worker ${agentId} entering queue mode...`);
+  console.log(`${agentLabel} ${agentId} entering queue mode...`);
   
   const worker = createTaskWorker(async (job: Job<TaskJobData>) => {
     if (job.data.agentId && job.data.agentId !== agentId) {
@@ -579,10 +691,12 @@ async function main() {
       taskData as unknown as Task,
       {
         agentId,
+        role: agentRole,
         workspacePath,
         repoUrl,
         baseBranch,
         instructionsPath,
+        model: effectiveModel,
         logPath,
       }
     );
@@ -592,7 +706,7 @@ async function main() {
     console.error(`[Queue] Job ${job?.id} failed:`, err);
   });
 
-  console.log("Worker is ready and waiting for tasks from queue.");
+  console.log(`${agentLabel} is ready and waiting for tasks from queue.`);
 }
 
 main().catch((error) => {

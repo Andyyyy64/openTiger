@@ -1,7 +1,12 @@
 import { spawn } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getChangedFiles, getChangeStats } from "@h1ve/vcs";
+import {
+  getChangedFiles,
+  getChangeStats,
+  getChangedFilesBetweenRefs,
+  getDiffStatsBetweenRefs,
+} from "@h1ve/vcs";
 import type { Policy } from "@h1ve/core";
 import { minimatch } from "minimatch";
 
@@ -10,6 +15,11 @@ export interface VerifyOptions {
   commands: string[];
   allowedPaths: string[];
   policy: Policy;
+  baseBranch?: string;
+  headBranch?: string;
+  allowLockfileOutsidePaths?: boolean;
+  allowEnvExampleOutsidePaths?: boolean;
+  allowNoChanges?: boolean;
 }
 
 export interface CommandResult {
@@ -31,7 +41,9 @@ export interface VerifyResult {
 
 const GENERATED_PATHS = ["node_modules/**", "dist/**", ".turbo/**", "coverage/**"];
 const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
+const ENV_EXAMPLE_PATHS = ["**/.env.example"];
 const GENERATED_EXTENSIONS = [".js", ".d.ts", ".d.ts.map"];
+const DEV_COMMAND_WARMUP_MS = 8000;
 
 // コマンドを実行
 async function runCommand(
@@ -104,6 +116,103 @@ function includesInstallCommand(commands: string[]): boolean {
 
 function isCheckCommand(command: string): boolean {
   return /\b(pnpm|npm)\b[^\n]*\b(run\s+)?check\b/.test(command);
+}
+
+function isDevCommand(command: string): boolean {
+  return /\b(pnpm|npm|yarn|bun)\b[^\n]*\b(run\s+)?dev\b/.test(command);
+}
+
+// pnpm/npmのtestコマンドは引数の前に"--"が必要なので補正する
+function normalizeVerificationCommand(command: string): string {
+  const match = command.match(/\b(pnpm|npm)\b[^\n]*\btest\b/);
+  if (!match || match.index === undefined) {
+    return command;
+  }
+  const endIndex = match.index + match[0].length;
+  const rest = command.slice(endIndex);
+  const trimmedRest = rest.trim();
+  if (!trimmedRest) {
+    return command;
+  }
+  if (trimmedRest.startsWith("-- ")) {
+    return command;
+  }
+  if (/^(&&|\|\||;|\|)/.test(trimmedRest)) {
+    return command;
+  }
+  return `${command.slice(0, endIndex)} -- ${trimmedRest}`;
+}
+
+// dev起動は常駐するため、短時間だけ起動して落ちないことを確認する
+async function runDevCommand(
+  command: string,
+  cwd: string,
+  warmupMs = DEV_COMMAND_WARMUP_MS
+): Promise<CommandResult> {
+  const startTime = Date.now();
+  let stdout = "";
+  let stderr = "";
+  let timedOut = false;
+
+  return new Promise((resolve) => {
+    const child = spawn("sh", ["-c", command], {
+      cwd,
+      detached: true,
+    });
+    const killProcessGroup = (signal: NodeJS.Signals): void => {
+      if (child.pid) {
+        try {
+          globalThis.process.kill(-child.pid, signal);
+          return;
+        } catch {
+          // フォールバックで単体プロセスを止める
+        }
+      }
+      child.kill(signal);
+    };
+
+    const killTimer = setTimeout(() => {
+      timedOut = true;
+      killProcessGroup("SIGTERM");
+      setTimeout(() => {
+        killProcessGroup("SIGKILL");
+      }, 2000);
+    }, warmupMs);
+
+    child.stdout.on("data", (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    child.on("close", (code) => {
+      clearTimeout(killTimer);
+      const durationMs = Date.now() - startTime;
+      const success = timedOut ? true : code === 0;
+      resolve({
+        command,
+        success,
+        stdout: timedOut
+          ? `${stdout}\n[dev-check] warmup completed, process terminated`
+          : stdout,
+        stderr,
+        durationMs,
+      });
+    });
+
+    child.on("error", (error) => {
+      clearTimeout(killTimer);
+      resolve({
+        command,
+        success: false,
+        stdout,
+        stderr: error.message,
+        durationMs: Date.now() - startTime,
+      });
+    });
+  });
 }
 
 function touchesPackageManifest(files: string[]): boolean {
@@ -197,16 +306,56 @@ function checkPolicyViolations(
 export async function verifyChanges(
   options: VerifyOptions
 ): Promise<VerifyResult> {
-  const { repoPath, commands, allowedPaths, policy } = options;
+  const {
+    repoPath,
+    commands,
+    allowedPaths,
+    policy,
+    baseBranch,
+    headBranch,
+    allowLockfileOutsidePaths = false,
+    allowEnvExampleOutsidePaths = false,
+    allowNoChanges = false,
+  } = options;
 
   console.log("Verifying changes...");
 
   // 変更されたファイルを取得
-  const changedFiles = await getChangedFiles(repoPath);
+  let changedFiles = await getChangedFiles(repoPath);
+  let stats: { additions: number; deletions: number } = { additions: 0, deletions: 0 };
+  let usesCommittedDiff = false;
+
+  // 既にコミット済みで差分が消えている場合は、baseとheadの差分で確認する
+  if (changedFiles.length === 0 && baseBranch && headBranch) {
+    const committedFiles = await getChangedFilesBetweenRefs(
+      repoPath,
+      baseBranch,
+      headBranch
+    );
+    if (committedFiles.length > 0) {
+      changedFiles = committedFiles;
+      const diffStats = await getDiffStatsBetweenRefs(
+        repoPath,
+        baseBranch,
+        headBranch
+      );
+      stats = {
+        additions: diffStats.additions,
+        deletions: diffStats.deletions,
+      };
+      usesCommittedDiff = true;
+    }
+  }
   const effectiveAllowedPaths =
-    includesInstallCommand(commands) || touchesPackageManifest(changedFiles)
+    includesInstallCommand(commands)
+    || touchesPackageManifest(changedFiles)
+    || allowLockfileOutsidePaths
       ? mergeAllowedPaths(allowedPaths, LOCKFILE_PATHS)
       : allowedPaths;
+  const finalAllowedPaths =
+    allowEnvExampleOutsidePaths
+      ? mergeAllowedPaths(effectiveAllowedPaths, ENV_EXAMPLE_PATHS)
+      : effectiveAllowedPaths;
   // 生成物はポリシー検証とコミット対象から除外する
   const relevantFiles = [];
   for (const file of changedFiles) {
@@ -220,7 +369,7 @@ export async function verifyChanges(
   }
   console.log(`Changed files: ${changedFiles.length}`);
 
-  if (changedFiles.length === 0) {
+  if (changedFiles.length === 0 && !allowNoChanges) {
     return {
       success: false,
       commandResults: [],
@@ -231,7 +380,7 @@ export async function verifyChanges(
     };
   }
 
-  if (relevantFiles.length === 0) {
+  if (relevantFiles.length === 0 && !allowNoChanges) {
     return {
       success: false,
       commandResults: [],
@@ -243,14 +392,16 @@ export async function verifyChanges(
   }
 
   // 変更統計を取得
-  const stats = await getChangeStats(repoPath);
+  if (!usesCommittedDiff) {
+    stats = await getChangeStats(repoPath);
+  }
   console.log(`Changes: +${stats.additions} -${stats.deletions}`);
 
   // ポリシー違反をチェック
   const policyViolations = checkPolicyViolations(
     relevantFiles,
     stats,
-    effectiveAllowedPaths,
+    finalAllowedPaths,
     policy
   );
 
@@ -290,8 +441,14 @@ export async function verifyChanges(
       continue;
     }
 
-    console.log(`Running: ${command}`);
-    const result = await runCommand(command, repoPath);
+    const normalizedCommand = normalizeVerificationCommand(command);
+    if (normalizedCommand !== command) {
+      console.log(`Normalized verification command: ${command} -> ${normalizedCommand}`);
+    }
+    console.log(`Running: ${normalizedCommand}`);
+    const result = isDevCommand(normalizedCommand)
+      ? await runDevCommand(normalizedCommand, repoPath)
+      : await runCommand(normalizedCommand, repoPath);
     commandResults.push(result);
 
     if (result.success) {

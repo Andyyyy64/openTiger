@@ -1,4 +1,5 @@
 import { stageChanges, commit, push } from "@h1ve/vcs";
+import { getRepoMode } from "@h1ve/core";
 import type { Task } from "@h1ve/core";
 
 export interface CommitOptions {
@@ -42,6 +43,7 @@ export async function commitAndPush(
   options: CommitOptions
 ): Promise<CommitResult> {
   const { repoPath, branchName, task, changedFiles } = options;
+  const repoMode = getRepoMode();
 
   console.log("Staging changes...");
 
@@ -63,26 +65,35 @@ export async function commitAndPush(
   // コミット
   const commitResult = await commit(repoPath, commitMessage);
   if (!commitResult.success) {
-    return {
-      success: false,
-      commitMessage,
-      error: `Failed to commit: ${commitResult.stderr}`,
-    };
+    const combined = `${commitResult.stdout}\n${commitResult.stderr}`.toLowerCase();
+    // 既にコミット済みの差分がある場合はそのまま進める
+    if (!combined.includes("nothing to commit")) {
+      return {
+        success: false,
+        commitMessage,
+        error: `Failed to commit: ${commitResult.stderr}`,
+      };
+    }
+    console.log("No new changes to commit, skipping commit step");
   }
 
   console.log("Pushing to remote...");
 
-  // プッシュ
-  const pushResult = await push(repoPath, branchName);
-  if (!pushResult.success) {
-    return {
-      success: false,
-      commitMessage,
-      error: `Failed to push: ${pushResult.stderr}`,
-    };
+  if (repoMode === "git") {
+    // プッシュ
+    const pushResult = await push(repoPath, branchName);
+    if (!pushResult.success) {
+      return {
+        success: false,
+        commitMessage,
+        error: `Failed to push: ${pushResult.stderr}`,
+      };
+    }
+  } else {
+    console.log("Local mode: skipping push");
   }
 
-  console.log("Changes committed and pushed successfully");
+  console.log("Changes committed successfully");
 
   return {
     success: true,

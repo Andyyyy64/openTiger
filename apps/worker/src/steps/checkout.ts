@@ -2,11 +2,20 @@ import { existsSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  addWorktree,
+  isGitRepo,
   cloneRepo,
   fetchLatest,
   resetHard,
   cleanUntracked,
+  removeWorktree,
 } from "@h1ve/vcs";
+import {
+  getRepoMode,
+  getLocalRepoPath,
+  getLocalWorktreeRoot,
+  type RepoMode,
+} from "@h1ve/core";
 
 export interface CheckoutOptions {
   repoUrl: string;
@@ -14,11 +23,18 @@ export interface CheckoutOptions {
   taskId: string;
   baseBranch?: string;
   githubToken?: string;
+  repoMode?: RepoMode;
+  localRepoPath?: string;
+  localWorktreeRoot?: string;
+  branchName?: string;
 }
 
 export interface CheckoutResult {
   success: boolean;
   repoPath: string;
+  baseRepoPath?: string;
+  worktreePath?: string;
+  branchName?: string;
   error?: string;
 }
 
@@ -32,12 +48,67 @@ export async function checkoutRepository(
     taskId,
     baseBranch = "main",
     githubToken,
+    repoMode = getRepoMode(),
+    localRepoPath = getLocalRepoPath(),
+    localWorktreeRoot = getLocalWorktreeRoot(),
+    branchName,
   } = options;
 
   // タスクごとの作業ディレクトリ
   const repoPath = join(workspacePath, taskId);
 
   try {
+    if (repoMode === "local") {
+      if (!localRepoPath) {
+        return {
+          success: false,
+          repoPath,
+          error: "LOCAL_REPO_PATH is required for local mode",
+        };
+      }
+      if (!(await isGitRepo(localRepoPath))) {
+        return {
+          success: false,
+          repoPath,
+          error: `LOCAL_REPO_PATH is not a git repository: ${localRepoPath}`,
+        };
+      }
+
+      const worktreePath = join(localWorktreeRoot, taskId);
+      if (existsSync(worktreePath)) {
+        await removeWorktree({
+          baseRepoPath: localRepoPath,
+          worktreePath,
+        });
+        await rm(worktreePath, { recursive: true, force: true });
+      }
+
+      await mkdir(join(localWorktreeRoot), { recursive: true });
+
+      const addResult = await addWorktree({
+        baseRepoPath: localRepoPath,
+        worktreePath,
+        baseBranch,
+        branchName,
+      });
+
+      if (!addResult.success) {
+        return {
+          success: false,
+          repoPath: worktreePath,
+          error: `Worktree add failed: ${addResult.stderr}`,
+        };
+      }
+
+      return {
+        success: true,
+        repoPath: worktreePath,
+        baseRepoPath: localRepoPath,
+        worktreePath,
+        branchName,
+      };
+    }
+
     // 既存のディレクトリがある場合はクリーンアップ
     if (existsSync(repoPath)) {
       console.log(`Cleaning existing directory: ${repoPath}`);
