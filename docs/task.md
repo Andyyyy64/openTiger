@@ -67,6 +67,18 @@
 
 - [ ] Planner/JudgeはPro、WorkerはFlashの運用ルールを明文化
 
+### 7. ドキュメントの作成/自動更新
+
+無限運用では「コードは進むがドキュメントが腐る」が起きやすい。  
+ドキュメント更新をタスクとして扱い、変更検知と自動更新の経路を用意する。
+
+- [ ] ドキュメント更新専用のエージェント（docser）を用意し、`docs/**` と `ops/runbooks/**` を主な許可範囲にする
+- [ ] 変更差分からドキュメント更新が必要かを判定するルール（例: public API変更、env追加、運用フロー変更）
+- [ ] ドキュメント更新タスクの自動生成（PR差分/イベントログを入力としてPlannerが生成）
+- [ ] `docs/task.md` の進捗サマリー（完了/全体, Implemented/Proven）を自動更新できる仕組み（機械集計 + 書き戻し）
+- [ ] `docs/architecture.md` / `docs/security.md` / `docs/instructions-guide.md` の自動更新方針を定義（何を自動、何を手動で残すか）
+- [ ] doc更新が失敗した場合の戻し（docserが直せないときに再分割/差分縮小へ落とす）
+
 ---
 
 ## 🔮 Future Tasks (Post-MVP)
@@ -75,6 +87,7 @@
 - [ ] Requirement Interviewの会話ログ永続化（requirements / sessions のデータモデル追加）
 - [ ] Requirementの版管理（差分・履歴・確定/編集中ステータス）
 - [ ] Requirement確定後にPlannerへ引き渡すワークフロー（API/UI/CLI）
+- [ ] docserの運用ルール整備（コード変更PRに同梱するか、別PRで追従するかの標準化）
 - [ ] **API Fallback Strategy**: Maxプラン上限時の自動API切り替えロジック
 - [ ] **Cost-Aware Planning**: 予算に応じたタスク優先度・モデルの動的変更
 
