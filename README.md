@@ -99,6 +99,22 @@ PRの重複作成防止や、ブランチの強制上書きなど、リトライ
 
 Dispatcherがタスクの「担当領域」を理解し、同じ領域への同時変更によるコンフリクトを最小化する。
 
+#### 7. 反復プランニング（Plan → Execute → Inspect → Replan）
+
+```
+Plan → Execute → Inspect → Replan → ...（完了まで反復）
+```
+
+Plannerが計画した後、複数Workerの完了を待ち、最新のコードベースを超詳細に点検する。  
+点検は同一サイクル内で複数回繰り返し、要件との差異に基づいて次の計画を再生成する。  
+タスクが枯渇した場合はCycle ManagerがPlannerを自動で再実行し、差異がなければ再計画をスキップする。
+
+### モデルの役割分担
+
+- **Planner / Judge**: Gemini 3 Pro（計画・判断の精度を優先）
+- **Worker**: Gemini 3 Flash（速度重視で実装を進める）
+- 環境変数でモデルを分離指定（`PLANNER_MODEL`, `JUDGE_MODEL`, `WORKER_MODEL`）
+
 ---
 
 ## アーキテクチャ
@@ -122,7 +138,7 @@ Dispatcherがタスクの「担当領域」を理解し、同じ領域への同�
 ├─────────────────────────────────────────────────────────────────┤
 │                          State Layer                              │
 │  ┌──────────┐  ┌───────┐  ┌───────────┐  ┌────────────────┐    │
-│  │ Postgres │  │ Redis │  │  GitHub   │  │  Claude Code   │    │
+│  │ Postgres │  │ Redis │  │  GitHub   │  │ OpenCode/LLM  │    │
 │  │  (状態)   │  │(Queue)│  │ (PR/CI)   │  │ (実行エンジン)  │    │
 │  └──────────┘  └───────┘  └───────────┘  └────────────────┘    │
 └─────────────────────────────────────────────────────────────────┘
@@ -140,13 +156,14 @@ Dispatcherがタスクの「担当領域」を理解し、同じ領域への同�
 3. Dispatcher: タスク割当 → lease発行 → Worker起動
        │
        ▼
-4. Worker: Claude Code実行 → コード変更 → PR作成
+4. Worker: OpenCode実行 → コード変更 → PR作成
        │
        ▼
 5. Judge: CI結果 + ポリシー + LLMレビュー → 採用/差し戻し
        │
        ▼
 6. Cycle Manager: 定期リセット → 次サイクル開始
+7. Planner: 全Worker完了後にコードベースを再点検 → 再計画（必要に応じて反復）
 ```
 
 ---
@@ -190,13 +207,13 @@ h1ve/
 │   │   │   ├── steps/            # 実行ステップ
 │   │   │   │   ├── checkout.ts
 │   │   │   │   ├── branch.ts
-│   │   │   │   ├── execute.ts    # Claude Code実行
+│   │   │   │   ├── execute.ts    # OpenCode実行
 │   │   │   │   ├── verify.ts     # テスト実行
 │   │   │   │   ├── commit.ts
 │   │   │   │   └── pr.ts
 │   │   │   └── sandbox/
 │   │   │       └── docker.ts     # 実行隔離
-│   │   ├── instructions/         # Claude Code用プロンプト
+│   │   ├── instructions/         # OpenCode用プロンプト
 │   │   │   ├── base.md
 │   │   │   └── coding.md
 │   │   └── Dockerfile
@@ -328,12 +345,12 @@ POST   /webhook/github     // GitHub Webhook
 
 ### Worker (`apps/worker`)
 
-Claude Codeを実行してPRを作成する。
+OpenCodeを実行してPRを作成する。
 
 ```
 1. リポジトリをcheckout
 2. 作業ブランチ作成 (agent/<id>/<task-id>)
-3. Claude Code実行（instructions + task）
+3. OpenCode実行（instructions + task）
 4. 変更をverify（lint/test）
 5. コミット & プッシュ
 6. PR作成
@@ -588,7 +605,7 @@ CREATE TABLE leases (
 | Phase | 内容 | 進捗 |
 |-------|------|------|
 | Phase 1 | 土台（モノレポ、DB、API） | 82% |
-| Phase 2 | Worker実行（Claude Code + PR作成） | 58% |
+| Phase 2 | Worker実行（OpenCode + PR作成） | 58% |
 | Phase 3 | Dispatcher（並列実行） | 22% |
 | Phase 4 | Planner（タスク自動生成） | 29% |
 | Phase 5 | Judge（PR自動判定） | 25% |
@@ -606,7 +623,7 @@ CREATE TABLE leases (
 - Docker & Docker Compose
 - PostgreSQL 16+
 - Redis 7+
-- Claude Code CLI
+- OpenCode CLI
 
 ### インストール
 
@@ -650,6 +667,15 @@ ANTHROPIC_API_KEY=sk-ant-xxxx
 
 # Security
 API_SECRET=your-api-secret
+
+# Planner
+PLANNER_USE_REMOTE=false
+PLANNER_REPO_URL=https://github.com/your-org/your-repo
+AUTO_REPLAN=true
+REPLAN_REQUIREMENT_PATH=/path/to/requirement.md
+REPLAN_INTERVAL_MS=300000
+REPLAN_COMMAND="pnpm --filter @h1ve/planner start"
+REPLAN_WORKDIR=/path/to/h1ve
 ```
 
 ---
@@ -669,7 +695,7 @@ API_SECRET=your-api-secret
 | E2E | Playwright |
 | コンテナ | Docker |
 | VCS | GitHub |
-| LLM | Claude Code |
+| LLM | OpenCode (Gemini) |
 
 ---
 
@@ -704,7 +730,9 @@ API_SECRET=your-api-secret
 pnpm ops:cost-report
 
 # 上限設定（.env）
-DAILY_TOKEN_LIMIT=1000000
+DAILY_TOKEN_LIMIT=50000000
+HOURLY_TOKEN_LIMIT=5000000
+TASK_TOKEN_LIMIT=1000000
 MAX_CONCURRENT_WORKERS=10
 ```
 
@@ -738,4 +766,4 @@ MIT
 
 - [Cursor: Scaling Long-Running Autonomous Coding](https://cursor.com/ja/blog/scaling-agents)
 - [wilsonzlin/fastrender](https://github.com/wilsonzlin/fastrender) - Cursor研究で構築されたブラウザ
-- [Claude Code Best Practices](https://docs.anthropic.com/claude-code)
+- [OpenCode](https://opencode.ai/)
