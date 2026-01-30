@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { access, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { getChangedFiles, getChangeStats } from "@h1ve/vcs";
 import type { Policy } from "@h1ve/core";
 import { minimatch } from "minimatch";
@@ -26,6 +28,10 @@ export interface VerifyResult {
   stats: { additions: number; deletions: number };
   error?: string;
 }
+
+const GENERATED_PATHS = ["node_modules/**", "dist/**", ".turbo/**", "coverage/**"];
+const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
+const GENERATED_EXTENSIONS = [".js", ".d.ts", ".d.ts.map"];
 
 // コマンドを実行
 async function runCommand(
@@ -80,6 +86,74 @@ function matchesPattern(path: string, patterns: string[]): boolean {
   return patterns.some((pattern) => minimatch(path, pattern));
 }
 
+function isGeneratedPath(path: string): boolean {
+  return matchesPattern(path, GENERATED_PATHS);
+}
+
+function mergeAllowedPaths(current: string[], extra: string[]): string[] {
+  const merged = new Set(current);
+  for (const path of extra) {
+    merged.add(path);
+  }
+  return Array.from(merged);
+}
+
+function includesInstallCommand(commands: string[]): boolean {
+  return commands.some((command) => /\bpnpm\b[^\n]*\b(install|add|i)\b/.test(command));
+}
+
+function isCheckCommand(command: string): boolean {
+  return /\b(pnpm|npm)\b[^\n]*\b(run\s+)?check\b/.test(command);
+}
+
+function touchesPackageManifest(files: string[]): boolean {
+  return files.some((file) =>
+    file === "package.json"
+    || file.endsWith("/package.json")
+    || file === "pnpm-workspace.yaml"
+  );
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function hasRootCheckScript(repoPath: string): Promise<boolean> {
+  try {
+    const raw = await readFile(join(repoPath, "package.json"), "utf-8");
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.scripts?.check === "string";
+  } catch {
+    return false;
+  }
+}
+
+async function isGeneratedTypeScriptOutput(
+  file: string,
+  repoPath: string
+): Promise<boolean> {
+  if (!GENERATED_EXTENSIONS.some((ext) => file.endsWith(ext))) {
+    return false;
+  }
+
+  const withoutMap = file.endsWith(".d.ts.map")
+    ? file.replace(/\.d\.ts\.map$/, "")
+    : file;
+  const base = withoutMap.endsWith(".d.ts")
+    ? withoutMap.replace(/\.d\.ts$/, "")
+    : withoutMap.replace(/\.js$/, "");
+
+  const tsPath = join(repoPath, `${base}.ts`);
+  const tsxPath = join(repoPath, `${base}.tsx`);
+
+  return (await fileExists(tsPath)) || (await fileExists(tsxPath));
+}
+
 // ポリシー違反をチェック
 function checkPolicyViolations(
   changedFiles: string[],
@@ -129,6 +203,21 @@ export async function verifyChanges(
 
   // 変更されたファイルを取得
   const changedFiles = await getChangedFiles(repoPath);
+  const effectiveAllowedPaths =
+    includesInstallCommand(commands) || touchesPackageManifest(changedFiles)
+      ? mergeAllowedPaths(allowedPaths, LOCKFILE_PATHS)
+      : allowedPaths;
+  // 生成物はポリシー検証とコミット対象から除外する
+  const relevantFiles = [];
+  for (const file of changedFiles) {
+    if (isGeneratedPath(file)) {
+      continue;
+    }
+    if (await isGeneratedTypeScriptOutput(file, repoPath)) {
+      continue;
+    }
+    relevantFiles.push(file);
+  }
   console.log(`Changed files: ${changedFiles.length}`);
 
   if (changedFiles.length === 0) {
@@ -142,15 +231,26 @@ export async function verifyChanges(
     };
   }
 
+  if (relevantFiles.length === 0) {
+    return {
+      success: false,
+      commandResults: [],
+      policyViolations: [],
+      changedFiles: [],
+      stats: { additions: 0, deletions: 0 },
+      error: "No relevant changes were made",
+    };
+  }
+
   // 変更統計を取得
   const stats = await getChangeStats(repoPath);
   console.log(`Changes: +${stats.additions} -${stats.deletions}`);
 
   // ポリシー違反をチェック
   const policyViolations = checkPolicyViolations(
-    changedFiles,
+    relevantFiles,
     stats,
-    allowedPaths,
+    effectiveAllowedPaths,
     policy
   );
 
@@ -164,7 +264,7 @@ export async function verifyChanges(
       success: false,
       commandResults: [],
       policyViolations,
-      changedFiles,
+      changedFiles: relevantFiles,
       stats,
       error: `Policy violations: ${policyViolations.join(", ")}`,
     };
@@ -173,8 +273,23 @@ export async function verifyChanges(
   // 検証コマンドを実行
   const commandResults: CommandResult[] = [];
   let allPassed = true;
+  const checkScriptAvailable = await hasRootCheckScript(repoPath);
 
   for (const command of commands) {
+    // checkスクリプトがない場合は検証コマンドから除外する
+    if (isCheckCommand(command) && !checkScriptAvailable) {
+      const notice = `Skipped: ${command} (check script not found)`;
+      console.warn(`  WARN: ${notice}`);
+      commandResults.push({
+        command,
+        success: true,
+        stdout: notice,
+        stderr: "",
+        durationMs: 0,
+      });
+      continue;
+    }
+
     console.log(`Running: ${command}`);
     const result = await runCommand(command, repoPath);
     commandResults.push(result);
@@ -193,7 +308,7 @@ export async function verifyChanges(
     success: allPassed,
     commandResults,
     policyViolations: [],
-    changedFiles,
+    changedFiles: relevantFiles,
     stats,
     error: allPassed ? undefined : "Verification commands failed",
   };

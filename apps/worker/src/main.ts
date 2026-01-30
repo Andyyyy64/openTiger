@@ -4,8 +4,16 @@ import { eq, and } from "drizzle-orm";
 import type { Task, Policy } from "@h1ve/core";
 import { DEFAULT_POLICY } from "@h1ve/core";
 import "dotenv/config";
-import { createTaskWorker, type TaskJobData } from "@h1ve/queue";
+import {
+  createTaskWorker,
+  getTaskQueueName,
+  type TaskJobData,
+} from "@h1ve/queue";
 import type { Job } from "bullmq";
+import { createWriteStream } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { access, stat } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 
 import {
   checkoutRepository,
@@ -18,6 +26,9 @@ import {
 
 // ハートビートの間隔（ミリ秒）
 const HEARTBEAT_INTERVAL = 30000; // 30秒
+
+const logStreams = new Set<ReturnType<typeof createWriteStream>>();
+let taskLogStream: ReturnType<typeof createWriteStream> | null = null;
 
 // ハートビートを送信する関数
 async function startHeartbeat(agentId: string) {
@@ -43,6 +54,7 @@ export interface WorkerConfig {
   baseBranch?: string;
   instructionsPath?: string;
   policy?: Policy;
+  logPath?: string;
 }
 
 // 実行結果
@@ -67,6 +79,7 @@ export async function runWorker(
     baseBranch = "main",
     instructionsPath,
     policy = DEFAULT_POLICY,
+    logPath,
   } = config;
 
   const taskId = taskData.id;
@@ -82,6 +95,7 @@ export async function runWorker(
       taskId,
       agentId,
       status: "running",
+      logPath,
     })
     .returning();
 
@@ -91,10 +105,17 @@ export async function runWorker(
   }
 
   const runId = runRecord.id;
+  const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
+  const taskLogPath = buildTaskLogPath(logDir, taskId, runId, agentId);
+  setTaskLogPath(taskLogPath);
+  await db
+    .update(runs)
+    .set({ logPath: taskLogPath })
+    .where(eq(runs.id, runId));
 
   try {
     // Step 1: リポジトリをチェックアウト
-    console.log("\n[1/6] Checking out repository...");
+    console.log("\n[1/7] Checking out repository...");
     const checkoutResult = await checkoutRepository({
       repoUrl,
       workspacePath,
@@ -110,7 +131,7 @@ export async function runWorker(
     const repoPath = checkoutResult.repoPath;
 
     // Step 2: 作業ブランチを作成
-    console.log("\n[2/6] Creating work branch...");
+    console.log("\n[2/7] Creating work branch...");
     const branchResult = await createWorkBranch({
       repoPath,
       agentId,
@@ -132,7 +153,7 @@ export async function runWorker(
     });
 
     // Step 3: OpenCodeでタスクを実行
-    console.log("\n[3/6] Executing task with OpenCode...");
+    console.log("\n[3/7] Executing task with OpenCode...");
     const executeResult = await executeTask({
       repoPath,
       task: taskData,
@@ -143,8 +164,15 @@ export async function runWorker(
       throw new Error(executeResult.error);
     }
 
-    // Step 4: 変更を検証
-    console.log("\n[4/6] Verifying changes...");
+    // Step 4: 期待ファイルのチェック
+    console.log("\n[4/7] Checking expected files...");
+    const missingFiles = await validateExpectedFiles(repoPath, taskData);
+    if (missingFiles.length > 0) {
+      throw new Error(`Missing expected files: ${missingFiles.join(", ")}`);
+    }
+
+    // Step 5: 変更を検証
+    console.log("\n[5/7] Verifying changes...");
     const verifyResult = await verifyChanges({
       repoPath,
       commands: taskData.commands,
@@ -156,8 +184,8 @@ export async function runWorker(
       throw new Error(verifyResult.error);
     }
 
-    // Step 5: コミットしてプッシュ
-    console.log("\n[5/6] Committing and pushing...");
+    // Step 6: コミットしてプッシュ
+    console.log("\n[6/7] Committing and pushing...");
     const commitResult = await commitAndPush({
       repoPath,
       branchName,
@@ -181,8 +209,8 @@ export async function runWorker(
       },
     });
 
-    // Step 6: PRを作成
-    console.log("\n[6/6] Creating PR...");
+    // Step 7: PRを作成
+    console.log("\n[7/7] Creating PR...");
     const prResult = await createTaskPR({
       repoPath,
       branchName,
@@ -234,11 +262,12 @@ export async function runWorker(
       })
       .where(eq(runs.id, runId));
 
-    // タスクを完了に更新
+    // PRがある場合はJudgeの自動レビュー待ちにする
+    const nextStatus = prResult.pr ? "blocked" : "done";
     await db
       .update(tasks)
       .set({
-        status: "done",
+        status: nextStatus,
         updatedAt: new Date(),
       })
       .where(eq(tasks.id, taskId));
@@ -308,7 +337,136 @@ export async function runWorker(
       runId,
       error: errorMessage,
     };
+  } finally {
+    setTaskLogPath();
   }
+}
+
+function hasGlobPattern(path: string): boolean {
+  return /[*?[\]]/.test(path);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function validateExpectedFiles(
+  repoPath: string,
+  task: Task
+): Promise<string[]> {
+  // タスクの想定ファイルが存在するかを事前に確認する
+  const files = task.context?.files ?? [];
+  if (files.length === 0) {
+    return [];
+  }
+
+  const missing: string[] = [];
+
+  for (const file of files) {
+    if (hasGlobPattern(file)) {
+      continue;
+    }
+
+    const targetPath = join(repoPath, file);
+
+    if (file.endsWith("/")) {
+      try {
+        const stats = await stat(targetPath);
+        if (!stats.isDirectory()) {
+          missing.push(file);
+        }
+      } catch {
+        missing.push(file);
+      }
+      continue;
+    }
+
+    if (!(await pathExists(targetPath))) {
+      missing.push(file);
+    }
+  }
+
+  return missing;
+}
+
+function setTaskLogPath(logPath?: string): void {
+  // タスク単位のログを出し分ける
+  if (taskLogStream) {
+    logStreams.delete(taskLogStream);
+    taskLogStream.end();
+    taskLogStream = null;
+  }
+
+  if (!logPath) {
+    return;
+  }
+
+  try {
+    mkdirSync(dirname(logPath), { recursive: true });
+  } catch (error) {
+    console.error(`[Logger] Failed to create task log dir: ${logPath}`, error);
+    return;
+  }
+
+  taskLogStream = createWriteStream(logPath, { flags: "a" });
+  logStreams.add(taskLogStream);
+  console.log(`[Logger] Task logs are written to ${logPath}`);
+}
+
+function setupProcessLogging(agentId: string): string | undefined {
+  const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
+
+  try {
+    mkdirSync(logDir, { recursive: true });
+  } catch (error) {
+    console.error(`[Logger] Failed to create log dir: ${logDir}`, error);
+    return;
+  }
+
+  const logPath = join(logDir, `${agentId}.log`);
+  const stream = createWriteStream(logPath, { flags: "a" });
+  logStreams.add(stream);
+
+  // 標準出力/標準エラーをファイルにも記録する
+  const stdoutWrite = process.stdout.write.bind(process.stdout);
+  const stderrWrite = process.stderr.write.bind(process.stderr);
+
+  process.stdout.write = ((chunk, encoding, callback) => {
+    for (const target of logStreams) {
+      target.write(chunk);
+    }
+    return stdoutWrite(chunk, encoding as never, callback as never);
+  }) as typeof process.stdout.write;
+
+  process.stderr.write = ((chunk, encoding, callback) => {
+    for (const target of logStreams) {
+      target.write(chunk);
+    }
+    return stderrWrite(chunk, encoding as never, callback as never);
+  }) as typeof process.stderr.write;
+
+  process.on("exit", () => {
+    for (const target of logStreams) {
+      target.end();
+    }
+  });
+
+  console.log(`[Logger] Worker logs are written to ${logPath}`);
+  return logPath;
+}
+
+function buildTaskLogPath(
+  logDir: string,
+  taskId: string,
+  runId: string,
+  agentId: string
+): string {
+  return join(logDir, "tasks", taskId, `${agentId}-${runId}.log`);
 }
 
 // キューからタスクを受け取って実行するワーカープロセス
@@ -318,11 +476,21 @@ async function main() {
   const workspacePath = process.env.WORKSPACE_PATH ?? `/tmp/h1ve-workspace/${agentId}`;
   const repoUrl = process.env.REPO_URL ?? "";
   const baseBranch = process.env.BASE_BRANCH ?? "main";
+  const workerModel =
+    process.env.WORKER_MODEL ??
+    process.env.OPENCODE_MODEL ??
+    "google/gemini-3-flash-preview";
+  // 指示ファイルは環境変数があれば優先する
+  const instructionsPath =
+    process.env.WORKER_INSTRUCTIONS_PATH ??
+    resolve(import.meta.dirname, "../instructions/base.md");
 
   if (!repoUrl) {
     console.error("REPO_URL environment variable is required");
     process.exit(1);
   }
+
+  const logPath = setupProcessLogging(agentId);
 
   // エージェント登録
   // 起動時に自分と同じ役割の古いエージェント（オフラインのものなど）を掃除する
@@ -336,7 +504,7 @@ async function main() {
     status: "idle", // 起動時は待機中として登録
     lastHeartbeat: new Date(),
     metadata: {
-      model: process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview",
+      model: workerModel, // Workerは速度重視のモデルで実装を進める
       provider: "gemini",
     },
   }).onConflictDoUpdate({
@@ -378,6 +546,8 @@ async function main() {
         workspacePath,
         repoUrl,
         baseBranch,
+        instructionsPath,
+        logPath,
       }
     );
 
@@ -388,13 +558,13 @@ async function main() {
   console.log(`Worker ${agentId} entering queue mode...`);
   
   const worker = createTaskWorker(async (job: Job<TaskJobData>) => {
-    // 自分宛てのタスクか確認
-    if (job.data.agentId !== agentId) {
-      // 自分宛てでなければスキップ
-      return;
+    if (job.data.agentId && job.data.agentId !== agentId) {
+      throw new Error(
+        `Task ${job.data.taskId} is assigned to ${job.data.agentId}, not ${agentId}`
+      );
     }
 
-    console.log(`[Queue] Received task ${job.data.taskId} for me (${agentId})`);
+    console.log(`[Queue] Received task ${job.data.taskId} for ${agentId}`);
     
     const [taskData] = await db
       .select()
@@ -412,9 +582,11 @@ async function main() {
         workspacePath,
         repoUrl,
         baseBranch,
+        instructionsPath,
+        logPath,
       }
     );
-  });
+  }, getTaskQueueName(agentId));
 
   worker.on("failed", (job: Job<TaskJobData> | undefined, err: Error) => {
     console.error(`[Queue] Job ${job?.id} failed:`, err);

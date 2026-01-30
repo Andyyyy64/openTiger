@@ -63,6 +63,10 @@ export async function executeTask(
   const { repoPath, task, instructionsPath } = options;
 
   const prompt = buildTaskPrompt(task);
+  const workerModel =
+    process.env.WORKER_MODEL ??
+    process.env.OPENCODE_MODEL ??
+    "google/gemini-3-flash-preview";
 
   console.log("Executing OpenCode...");
   console.log("Task:", task.title);
@@ -70,7 +74,9 @@ export async function executeTask(
   // OpenCodeを実行
   const openCodeResult = await runOpenCode({
     workdir: repoPath,
+    instructionsPath,
     task: prompt,
+    model: workerModel, // Workerは速度重視のモデルで実装を進める
     timeoutSeconds: task.timeboxMinutes * 60,
   });
 
