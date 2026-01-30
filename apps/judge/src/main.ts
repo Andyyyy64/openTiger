@@ -1,8 +1,10 @@
-import { resolve } from "node:path";
+import { createWriteStream, mkdirSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { resolve, join } from "node:path";
 import { db } from "@h1ve/db";
-import { artifacts, runs, tasks, agents } from "@h1ve/db/schema";
+import { artifacts, runs, tasks, agents, events } from "@h1ve/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
-import { DEFAULT_POLICY, type Policy } from "@h1ve/core";
+import { DEFAULT_POLICY, PolicySchema, type Policy } from "@h1ve/core";
 import "dotenv/config";
 
 // ハートビートの間隔（ミリ秒）
@@ -40,8 +42,44 @@ import {
   type JudgeResult,
 } from "./pr-reviewer.js";
 
+function setupProcessLogging(logName: string): string | undefined {
+  const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
+
+  try {
+    mkdirSync(logDir, { recursive: true });
+  } catch (error) {
+    console.error(`[Logger] Failed to create log dir: ${logDir}`, error);
+    return;
+  }
+
+  const logPath = join(logDir, `${logName}.log`);
+  const stream = createWriteStream(logPath, { flags: "a" });
+
+  // ターミナルが流れても追跡できるようにログをファイルに残す
+  const stdoutWrite = process.stdout.write.bind(process.stdout);
+  const stderrWrite = process.stderr.write.bind(process.stderr);
+
+  process.stdout.write = ((chunk, encoding, callback) => {
+    stream.write(chunk);
+    return stdoutWrite(chunk, encoding as never, callback as never);
+  }) as typeof process.stdout.write;
+
+  process.stderr.write = ((chunk, encoding, callback) => {
+    stream.write(chunk);
+    return stderrWrite(chunk, encoding as never, callback as never);
+  }) as typeof process.stderr.write;
+
+  process.on("exit", () => {
+    stream.end();
+  });
+
+  console.log(`[Logger] Judge logs are written to ${logPath}`);
+  return logPath;
+}
+
 // Judge設定
 interface JudgeConfig {
+  agentId: string;
   pollIntervalMs: number;
   workdir: string;
   instructionsPath: string;
@@ -52,6 +90,7 @@ interface JudgeConfig {
 
 // デフォルト設定
 const DEFAULT_CONFIG: JudgeConfig = {
+  agentId: process.env.AGENT_ID ?? "judge-1",
   pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS ?? "30000", 10),
   workdir: process.cwd(),
   instructionsPath: resolve(import.meta.dirname, "../instructions/review.md"),
@@ -59,6 +98,86 @@ const DEFAULT_CONFIG: JudgeConfig = {
   dryRun: process.env.DRY_RUN === "true",
   policy: DEFAULT_POLICY,
 };
+
+async function recordJudgeReview(
+  pr: {
+    prNumber: number;
+    prUrl: string;
+    taskId: string;
+    runId: string;
+  },
+  result: JudgeResult,
+  summary: EvaluationSummary,
+  actionResult: { commented: boolean; approved: boolean; merged: boolean },
+  agentId: string,
+  dryRun: boolean
+): Promise<void> {
+  try {
+    await db.insert(events).values({
+      type: "judge.review",
+      entityType: "task",
+      entityId: pr.taskId,
+      agentId,
+      payload: {
+        prNumber: pr.prNumber,
+        prUrl: pr.prUrl,
+        runId: pr.runId,
+        taskId: pr.taskId,
+        verdict: result.verdict,
+        autoMerge: result.autoMerge,
+        riskLevel: result.riskLevel,
+        confidence: result.confidence,
+        reasons: result.reasons,
+        suggestions: result.suggestions,
+        summary,
+        actions: actionResult,
+        dryRun,
+      },
+    });
+  } catch (error) {
+    console.error(
+      `[Judge] Failed to record review event for PR #${pr.prNumber}:`,
+      error
+    );
+  }
+}
+
+async function loadPolicyConfig(): Promise<Policy> {
+  const policyPath = process.env.POLICY_PATH
+    ?? resolve(import.meta.dirname, "../../../packages/policies/default/policy.json");
+
+  try {
+    const raw = await readFile(policyPath, "utf-8");
+    const parsed = JSON.parse(raw);
+    const policy = PolicySchema.parse(parsed);
+    console.log(`[Judge] Loaded policy from ${policyPath}`);
+    return policy;
+  } catch (error) {
+    console.warn(`[Judge] Failed to load policy from ${policyPath}, using defaults`, error);
+    return DEFAULT_POLICY;
+  }
+}
+
+function adjustPolicyForAutoMerge(policy: Policy): Policy {
+  const level = policy.autoMerge.level ?? "medium";
+  const scale = (() => {
+    switch (level) {
+      case "low":
+        // 自動マージを優先するため許容幅を広げる
+        return { lines: 15, files: 10 };
+      case "high":
+        return { lines: 0.5, files: 0.5 };
+      default:
+        return { lines: 1, files: 1 };
+    }
+  })();
+
+  return {
+    ...policy,
+    maxLinesChanged: Math.max(1, Math.round(policy.maxLinesChanged * scale.lines)),
+    maxFilesChanged: Math.max(1, Math.round(policy.maxFilesChanged * scale.files)),
+  };
+}
 
 // レビュー待ちのPRを取得
 async function getPendingPRs(): Promise<
@@ -144,6 +263,7 @@ async function judgeSinglePR(
   config: JudgeConfig
 ): Promise<{ result: JudgeResult; summary: EvaluationSummary }> {
   console.log(`\n[Evaluating PR #${pr.prNumber}]`);
+  const evaluationPolicy = adjustPolicyForAutoMerge(config.policy);
 
   // 1. CI評価
   console.log("  - Checking CI status...");
@@ -155,13 +275,13 @@ async function judgeSinglePR(
   const diffStats = await getPRDiffStats(pr.prNumber);
   const policyResult = await evaluatePolicy(
     pr.prNumber,
-    config.policy,
+    evaluationPolicy,
     pr.allowedPaths
   );
   console.log(`    Policy: ${policyResult.pass ? "PASS" : "FAIL"}`);
 
   // 計算されたリスクレベル
-  const computedRisk = evaluateRiskLevel(diffStats, config.policy);
+  const computedRisk = evaluateRiskLevel(diffStats, evaluationPolicy);
   console.log(`    Computed Risk: ${computedRisk} (Task Risk: ${pr.taskRiskLevel})`);
 
   // 3. LLM評価
@@ -225,28 +345,51 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
         for (const pr of pendingPRs) {
           try {
             const { result, summary } = await judgeSinglePR(pr, config);
+            let actionResult = {
+              commented: false,
+              approved: false,
+              merged: false,
+            };
 
-            if (config.dryRun) {
-              console.log("  [Dry run - no action taken]");
-              continue;
+            let actionError: unknown;
+
+            try {
+              if (config.dryRun) {
+                console.log("  [Dry run - no action taken]");
+              } else {
+                // レビューとアクションを実行
+                actionResult = await reviewAndAct(pr.prNumber, result, summary);
+                console.log(
+                  `  Actions: commented=${actionResult.commented}, approved=${actionResult.approved}, merged=${actionResult.merged}`
+                );
+
+                // 自動マージされた場合、タスクを完了に更新
+                if (actionResult.merged) {
+                  await db
+                    .update(tasks)
+                    .set({
+                      status: "done",
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(tasks.id, pr.taskId));
+                  console.log(`  Task ${pr.taskId} marked as done`);
+                }
+              }
+            } catch (error) {
+              actionError = error;
             }
 
-            // レビューとアクションを実行
-            const actionResult = await reviewAndAct(pr.prNumber, result, summary);
-            console.log(
-              `  Actions: commented=${actionResult.commented}, approved=${actionResult.approved}, merged=${actionResult.merged}`
+            await recordJudgeReview(
+              pr,
+              result,
+              summary,
+              actionResult,
+              config.agentId,
+              config.dryRun
             );
 
-            // 自動マージされた場合、タスクを完了に更新
-            if (actionResult.merged) {
-              await db
-                .update(tasks)
-                .set({
-                  status: "done",
-                  updatedAt: new Date(),
-                })
-                .where(eq(tasks.id, pr.taskId));
-              console.log(`  Task ${pr.taskId} marked as done`);
+            if (actionError) {
+              throw actionError;
             }
           } catch (error) {
             console.error(`  Error processing PR #${pr.prNumber}:`, error);
@@ -367,6 +510,7 @@ Environment Variables:
   USE_LLM=false            Disable LLM review
   DRY_RUN=true             Enable dry run mode
   GITHUB_TOKEN=xxx         GitHub API token
+  JUDGE_MODEL=xxx          Judge LLM model
 
 Example:
   pnpm --filter @h1ve/judge start 42
@@ -383,8 +527,14 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
+  const agentId = process.env.AGENT_ID ?? "judge-1";
+
   // 設定を構築
-  const config = { ...DEFAULT_CONFIG };
+  const config = {
+    ...DEFAULT_CONFIG,
+    agentId,
+    policy: await loadPolicyConfig(),
+  };
 
   if (args.includes("--dry-run")) {
     config.dryRun = true;
@@ -395,16 +545,17 @@ async function main(): Promise<void> {
   }
 
   // エージェント登録
-  const agentId = process.env.AGENT_ID ?? "judge-1";
+  setupProcessLogging(agentId);
+  const judgeModel = process.env.JUDGE_MODEL ?? "google/gemini-3-pro-preview";
   await db.delete(agents).where(eq(agents.id, agentId));
-  
+
   await db.insert(agents).values({
     id: agentId,
     role: "judge",
     status: "idle",
     lastHeartbeat: new Date(),
     metadata: {
-      model: process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview",
+      model: judgeModel, // Judgeは高精度モデルでレビュー品質を優先する
       provider: "gemini",
     },
   }).onConflictDoUpdate({

@@ -61,13 +61,44 @@ export async function getPRDiffStats(prNumber: number): Promise<{
 
 // パスがパターンにマッチするか
 function matchPath(path: string, pattern: string): boolean {
-  // シンプルなglob風マッチング
-  const regexPattern = pattern
-    .replace(/\*\*/g, ".*")
-    .replace(/\*/g, "[^/]*")
-    .replace(/\?/g, ".");
-  const regex = new RegExp(`^${regexPattern}$`);
-  return regex.test(path);
+  // globのワイルドカードを正規表現に安全に変換する
+  let regexPattern = "";
+
+  for (let i = 0; i < pattern.length; i++) {
+    const char = pattern[i];
+    if (!char) {
+      continue;
+    }
+
+    if (char === "*") {
+      if (pattern[i + 1] === "*") {
+        regexPattern += ".*";
+        i++;
+        continue;
+      }
+      regexPattern += "[^/]*";
+      continue;
+    }
+
+    if (char === "?") {
+      regexPattern += ".";
+      continue;
+    }
+
+    regexPattern += char.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  }
+
+  return new RegExp(`^${regexPattern}$`).test(path);
+}
+
+function isLockfile(path: string): boolean {
+  return path === "pnpm-lock.yaml";
+}
+
+function isPackageManifest(path: string): boolean {
+  return path === "package.json"
+    || path.endsWith("/package.json")
+    || path === "pnpm-workspace.yaml";
 }
 
 // パスが許可されているか
@@ -103,6 +134,9 @@ export async function evaluatePolicy(
 
   try {
     const diffStats = await getPRDiffStats(prNumber);
+    const hasManifestChanges = diffStats.files.some((file) =>
+      isPackageManifest(file.filename)
+    );
 
     // 変更行数のチェック
     const totalChanges = diffStats.additions + diffStats.deletions;
@@ -125,6 +159,10 @@ export async function evaluatePolicy(
 
     // ファイルパスのチェック
     for (const file of diffStats.files) {
+      // 依存更新に伴うロックファイル変更は許容する
+      if (isLockfile(file.filename) && hasManifestChanges) {
+        continue;
+      }
       // 禁止パスへの変更
       if (!isPathAllowed(file.filename, allowedPaths, policy.deniedPaths)) {
         violations.push({

@@ -25,6 +25,8 @@ export async function getCIStatus(prNumber: number): Promise<{
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
 
+  let checks: CICheckDetail[] = [];
+
   try {
     // PRの情報を取得
     const pr = await octokit.pulls.get({
@@ -36,11 +38,23 @@ export async function getCIStatus(prNumber: number): Promise<{
     const headSha = pr.data.head.sha;
 
     // Check Runsを取得
-    const checkRuns = await octokit.checks.listForRef({
-      owner,
-      repo,
-      ref: headSha,
-    });
+    try {
+      const checkRuns = await octokit.checks.listForRef({
+        owner,
+        repo,
+        ref: headSha,
+      });
+
+      // Check Runsの詳細を収集
+      checks = checkRuns.data.check_runs.map((run) => ({
+        name: run.name,
+        status: mapCheckStatus(run.status, run.conclusion),
+        conclusion: run.conclusion,
+        url: run.html_url,
+      }));
+    } catch (error) {
+      console.warn("Failed to list check runs, falling back to combined status.", error);
+    }
 
     // Combined Statusも取得（古いステータスAPI用）
     const combinedStatus = await octokit.repos.getCombinedStatusForRef({
@@ -48,14 +62,6 @@ export async function getCIStatus(prNumber: number): Promise<{
       repo,
       ref: headSha,
     });
-
-    // Check Runsの詳細を収集
-    const checks: CICheckDetail[] = checkRuns.data.check_runs.map((run) => ({
-      name: run.name,
-      status: mapCheckStatus(run.status, run.conclusion),
-      conclusion: run.conclusion,
-      url: run.html_url,
-    }));
 
     // Combined Statusのステータスも追加
     for (const status of combinedStatus.data.statuses) {

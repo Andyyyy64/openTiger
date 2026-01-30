@@ -1,4 +1,4 @@
-import { runClaudeCode } from "@h1ve/llm";
+import { runOpenCode } from "@h1ve/llm";
 import { getOctokit, getRepoInfo } from "@h1ve/vcs";
 
 // LLM評価結果
@@ -131,12 +131,14 @@ export async function evaluateLLM(
 
     // レビュープロンプトを構築
     const prompt = buildReviewPrompt(diff, options.taskGoal);
+    const judgeModel = process.env.JUDGE_MODEL ?? "google/gemini-3-pro-preview";
 
-    // Claude Codeを実行
-    const result = await runClaudeCode({
+    // OpenCodeを実行
+    const result = await runOpenCode({
       workdir: options.workdir,
       instructionsPath: options.instructionsPath,
       task: prompt,
+      model: judgeModel, // Judgeは高精度モデルでレビュー品質を優先する
       timeoutSeconds: options.timeoutSeconds ?? 300,
     });
 

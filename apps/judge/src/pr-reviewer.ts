@@ -59,9 +59,30 @@ export function makeJudgement(
 
   // LLM評価
   suggestions.push(...summary.llm.suggestions);
+  // 自動マージレベルに応じてLLMの扱いを調整する
+  const maxRiskLevel = resolveAutoMergeMaxRisk(
+    policy.autoMerge.level,
+    policy.autoMerge.maxRiskLevel
+  );
+  const canAutoMerge =
+    policy.autoMerge.enabled && isRiskAllowed(taskRiskLevel, maxRiskLevel);
+  const allowLlmBypass = policy.autoMerge.level === "low" && canAutoMerge;
 
   if (!summary.llm.pass) {
     reasons.push(...summary.llm.reasons);
+    if (allowLlmBypass) {
+      suggestions.push(
+        "LLM指摘は参考情報として扱い、低リスクのため自動マージを優先します。"
+      );
+      return {
+        verdict: "approve",
+        reasons: [],
+        suggestions,
+        autoMerge: canAutoMerge,
+        riskLevel: taskRiskLevel,
+        confidence: summary.llm.confidence,
+      };
+    }
     // LLMの確信度が低い場合は人間レビューを要求
     if (summary.llm.confidence < 0.7) {
       return {
@@ -83,8 +104,11 @@ export function makeJudgement(
     };
   }
 
-  // 高リスクの場合は人間レビューを要求
-  if (taskRiskLevel === "high") {
+  // 自動マージの判定（levelがある場合はそちらを優先する）
+  const shouldRequireHuman =
+    taskRiskLevel === "high" && maxRiskLevel === "low";
+
+  if (shouldRequireHuman) {
     return {
       verdict: "needs_human",
       reasons: ["High-risk change requires human review"],
@@ -94,13 +118,6 @@ export function makeJudgement(
       confidence: summary.llm.confidence,
     };
   }
-
-  // 自動マージの判定
-  const canAutoMerge =
-    policy.autoMerge.enabled &&
-    (taskRiskLevel === "low" ||
-      (taskRiskLevel === "medium" && policy.autoMerge.maxRiskLevel !== "low"));
-
   return {
     verdict: "approve",
     reasons: [],
@@ -109,6 +126,33 @@ export function makeJudgement(
     riskLevel: taskRiskLevel,
     confidence: summary.llm.confidence,
   };
+}
+
+function resolveAutoMergeMaxRisk(
+  level: "low" | "medium" | "high" | undefined,
+  fallback: "low" | "medium" | "high"
+): "low" | "medium" | "high" {
+  if (!level) {
+    return fallback;
+  }
+
+  // lowは緩め（highまで許可）、highは厳しめ（lowのみ許可）
+  switch (level) {
+    case "low":
+      return "high";
+    case "medium":
+      return "medium";
+    case "high":
+      return "low";
+  }
+}
+
+function isRiskAllowed(
+  taskRisk: "low" | "medium" | "high",
+  maxRisk: "low" | "medium" | "high"
+): boolean {
+  const priority = { low: 0, medium: 1, high: 2 };
+  return priority[taskRisk] <= priority[maxRisk];
 }
 
 // レビューコメントを生成
@@ -264,6 +308,7 @@ export async function reviewAndAct(
   let commented = false;
   let merged = false;
   let approved = false;
+  const isSelfAuthored = await isSelfAuthoredPR(prNumber);
 
   try {
     // コメントを投稿
@@ -273,8 +318,12 @@ export async function reviewAndAct(
     // 判定に基づいてアクション
     switch (result.verdict) {
       case "approve":
-        await approvePR(prNumber);
-        approved = true;
+        if (isSelfAuthored) {
+          console.log(`Skipping approve for own PR #${prNumber}`);
+        } else {
+          await approvePR(prNumber);
+          approved = true;
+        }
 
         if (result.autoMerge) {
           merged = await autoMergePR(prNumber);
@@ -285,7 +334,11 @@ export async function reviewAndAct(
         break;
 
       case "request_changes":
-        await requestChanges(prNumber, result.reasons);
+        if (isSelfAuthored) {
+          console.log(`Skipping request changes for own PR #${prNumber}`);
+        } else {
+          await requestChanges(prNumber, result.reasons);
+        }
         break;
 
       case "needs_human":
@@ -297,4 +350,24 @@ export async function reviewAndAct(
   }
 
   return { commented, merged, approved };
+}
+
+async function isSelfAuthoredPR(prNumber: number): Promise<boolean> {
+  try {
+    const octokit = getOctokit();
+    const { owner, repo } = getRepoInfo();
+
+    // PR作成者と認証ユーザーを比較して自己PRか判定する
+    const [pr, user] = await Promise.all([
+      octokit.pulls.get({ owner, repo, pull_number: prNumber }),
+      octokit.users.getAuthenticated(),
+    ]);
+
+    const author = pr.data.user?.login?.toLowerCase();
+    const viewer = user.data.login?.toLowerCase();
+    return !!author && !!viewer && author === viewer;
+  } catch (error) {
+    console.error("Failed to detect PR author:", error);
+    return false;
+  }
 }
