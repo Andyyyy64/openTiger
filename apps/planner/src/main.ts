@@ -39,6 +39,7 @@ import {
   type PlannedTaskInput,
   type TaskGenerationResult,
 } from "./strategies/index.js";
+import { inspectCodebase, formatInspectionNotes } from "./inspection.js";
 
 function setupProcessLogging(logName: string): string | undefined {
   const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
@@ -82,6 +83,8 @@ interface PlannerConfig {
   useLlm: boolean;
   dryRun: boolean;
   timeoutSeconds: number;
+  inspectCodebase: boolean;
+  inspectionTimeoutSeconds: number;
   repoUrl?: string;
   baseBranch: string;
 }
@@ -100,6 +103,8 @@ const DEFAULT_CONFIG: PlannerConfig = {
   useLlm: process.env.USE_LLM !== "false",
   dryRun: process.env.DRY_RUN === "true",
   timeoutSeconds: parseInt(process.env.PLANNER_TIMEOUT ?? "300", 10),
+  inspectCodebase: process.env.PLANNER_INSPECT !== "false",
+  inspectionTimeoutSeconds: parseInt(process.env.PLANNER_INSPECT_TIMEOUT ?? "180", 10),
   repoUrl: process.env.PLANNER_REPO_URL
     ?? (process.env.PLANNER_USE_REMOTE === "true" ? process.env.REPO_URL : undefined),
   baseBranch: process.env.BASE_BRANCH ?? "main",
@@ -398,6 +403,49 @@ function attachJudgeFeedbackToTasks(
   return { ...result, tasks };
 }
 
+function attachInspectionToRequirement(
+  requirement: Requirement,
+  inspectionNotes: string | undefined
+): Requirement {
+  // 差分点検の内容を要件に残してタスク生成へ引き継ぐ
+  if (!inspectionNotes) {
+    return requirement;
+  }
+
+  const notes = requirement.notes
+    ? `${requirement.notes}\n\n${inspectionNotes}`
+    : inspectionNotes;
+
+  return { ...requirement, notes };
+}
+
+function attachInspectionToTasks(
+  result: TaskGenerationResult,
+  inspectionNotes: string | undefined
+): TaskGenerationResult {
+  // 差分点検の内容をWorkerにも共有して探索を深める
+  if (!inspectionNotes) {
+    return result;
+  }
+
+  const tasks = result.tasks.map((task) => {
+    const context = task.context ?? {};
+    const notes = context.notes
+      ? `${context.notes}\n\n${inspectionNotes}`
+      : inspectionNotes;
+
+    return {
+      ...task,
+      context: {
+        ...context,
+        notes,
+      },
+    };
+  });
+
+  return { ...result, tasks };
+}
+
 function requiresLockfile(commands: string[]): boolean {
   return commands.some((command) => {
     const trimmed = command.trim();
@@ -583,11 +631,24 @@ async function planFromRequirement(
   if (!checkScriptAvailable) {
     console.log("[Planner] checkスクリプトがないため検証コマンドを調整します。");
   }
+  const repoUninitialized = await isRepoUninitialized(config.workdir);
+  let inspectionNotes: string | undefined;
+  if (config.useLlm && config.inspectCodebase && !repoUninitialized) {
+    console.log("\n[Planner] Inspecting codebase with LLM...");
+    const inspection = await inspectCodebase(requirement, {
+      workdir: config.workdir,
+      timeoutSeconds: config.inspectionTimeoutSeconds,
+    });
+    if (inspection) {
+      inspectionNotes = formatInspectionNotes(inspection);
+      requirement = attachInspectionToRequirement(requirement, inspectionNotes);
+    }
+  }
 
   // タスクを生成
   let result: TaskGenerationResult;
 
-  if (await isRepoUninitialized(config.workdir)) {
+  if (repoUninitialized) {
     console.log("\n[Planner] Repository is not initialized. Generating init task only.");
     result = generateInitializationTasks(requirement);
   } else if (config.useLlm) {
@@ -611,6 +672,7 @@ async function planFromRequirement(
   result = normalizeGeneratedTasks(result);
   result = applyVerificationCommandPolicy(result, checkScriptAvailable);
   result = attachJudgeFeedbackToTasks(result, judgeFeedback);
+  result = attachInspectionToTasks(result, inspectionNotes);
 
   // 結果を表示
   console.log(`\n[Generated ${result.tasks.length} tasks]`);
@@ -763,14 +825,29 @@ export async function planFromContent(
   const judgeFeedback = await loadJudgeFeedback();
   requirement = attachJudgeFeedbackToRequirement(requirement, judgeFeedback);
   const checkScriptAvailable = await hasRootCheckScript(fullConfig.workdir);
+  const repoUninitialized = await isRepoUninitialized(fullConfig.workdir);
+  let inspectionNotes: string | undefined;
+  if (fullConfig.useLlm && fullConfig.inspectCodebase && !repoUninitialized) {
+    const inspection = await inspectCodebase(requirement, {
+      workdir: fullConfig.workdir,
+      timeoutSeconds: fullConfig.inspectionTimeoutSeconds,
+    });
+    if (inspection) {
+      inspectionNotes = formatInspectionNotes(inspection);
+      requirement = attachInspectionToRequirement(requirement, inspectionNotes);
+    }
+  }
 
-  if (await isRepoUninitialized(fullConfig.workdir)) {
-    return attachJudgeFeedbackToTasks(
-      applyVerificationCommandPolicy(
-        normalizeGeneratedTasks(generateInitializationTasks(requirement)),
-        checkScriptAvailable
+  if (repoUninitialized) {
+    return attachInspectionToTasks(
+      attachJudgeFeedbackToTasks(
+        applyVerificationCommandPolicy(
+          normalizeGeneratedTasks(generateInitializationTasks(requirement)),
+          checkScriptAvailable
+        ),
+        judgeFeedback
       ),
-      judgeFeedback
+      inspectionNotes
     );
   }
 
@@ -781,30 +858,39 @@ export async function planFromContent(
         instructionsPath: fullConfig.instructionsPath,
         timeoutSeconds: fullConfig.timeoutSeconds,
       });
-      return attachJudgeFeedbackToTasks(
-        applyVerificationCommandPolicy(
-          normalizeGeneratedTasks(result),
-          checkScriptAvailable
+      return attachInspectionToTasks(
+        attachJudgeFeedbackToTasks(
+          applyVerificationCommandPolicy(
+            normalizeGeneratedTasks(result),
+            checkScriptAvailable
+          ),
+          judgeFeedback
         ),
-        judgeFeedback
+        inspectionNotes
       );
     } catch {
-      return attachJudgeFeedbackToTasks(
-        applyVerificationCommandPolicy(
-          normalizeGeneratedTasks(generateSimpleTasks(requirement)),
-          checkScriptAvailable
+      return attachInspectionToTasks(
+        attachJudgeFeedbackToTasks(
+          applyVerificationCommandPolicy(
+            normalizeGeneratedTasks(generateSimpleTasks(requirement)),
+            checkScriptAvailable
+          ),
+          judgeFeedback
         ),
-        judgeFeedback
+        inspectionNotes
       );
     }
   }
 
-  return attachJudgeFeedbackToTasks(
-    applyVerificationCommandPolicy(
-      normalizeGeneratedTasks(generateSimpleTasks(requirement)),
-      checkScriptAvailable
+  return attachInspectionToTasks(
+    attachJudgeFeedbackToTasks(
+      applyVerificationCommandPolicy(
+        normalizeGeneratedTasks(generateSimpleTasks(requirement)),
+        checkScriptAvailable
+      ),
+      judgeFeedback
     ),
-    judgeFeedback
+    inspectionNotes
   );
 }
 
@@ -827,6 +913,8 @@ Environment Variables:
   DRY_RUN=true          Enable dry run mode
   PLANNER_TIMEOUT=300   LLM timeout in seconds
   PLANNER_MODEL=xxx     Planner LLM model
+  PLANNER_INSPECT=false Skip codebase inspection
+  PLANNER_INSPECT_TIMEOUT=180  LLM inspection timeout in seconds
 
 Example:
   pnpm --filter @h1ve/planner start docs/requirements/feature-x.md
