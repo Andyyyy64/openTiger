@@ -37,6 +37,7 @@ Cursorの研究で示された「役割分離パイプライン」を忠実に�
 |-----------------|------|
 | Planner agent | `apps/planner` - タスク生成・分割 |
 | Worker agent | `apps/worker` - 実装・PR作成 |
+| Tester agent | `apps/worker` - テスト作成・実行（testerロール） |
 | Judge agent | `apps/judge` - 採用/差し戻し判定 |
 | Shared state | PostgreSQL (tasks/runs/artifacts) |
 | Lock問題回避 | 期限付きリース（lease） |
@@ -113,7 +114,10 @@ Plannerが計画した後、複数Workerの完了を待ち、最新のコード�
 
 - **Planner / Judge**: Gemini 3 Pro（計画・判断の精度を優先）
 - **Worker**: Gemini 3 Flash（速度重視で実装を進める）
-- 環境変数でモデルを分離指定（`PLANNER_MODEL`, `JUDGE_MODEL`, `WORKER_MODEL`）
+- **checker**: 高精度モデルでコードベースを点検し、差分や不整合の修正タスクを生成
+- **tester**: テスト生成・実行・フレーク切り分けを担当
+- **docser**: ドキュメントの自動更新・整合性の維持を担当
+- 環境変数でモデルを分離指定（`PLANNER_MODEL`, `JUDGE_MODEL`, `WORKER_MODEL`, `TESTER_MODEL`）
 
 ---
 
@@ -124,9 +128,9 @@ Plannerが計画した後、複数Workerの完了を待ち、最新のコード�
 │                         h1ve Orchestrator                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
-│  ┌─────────┐    ┌────────────┐    ┌─────────┐    ┌─────────┐   │
-│  │ Planner │───▶│ Dispatcher │───▶│ Workers │───▶│  Judge  │   │
-│  └─────────┘    └────────────┘    └─────────┘    └─────────┘   │
+│  ┌─────────┐    ┌────────────┐    ┌─────────┐    ┌────────┐    │
+│  │ Planner │───▶│ Dispatcher │───▶│ Workers │───▶│ Tester │───▶│ Judge │
+│  └─────────┘    └────────────┘    └─────────┘    └────────┘    │
 │       │                                                │         │
 │       │         ┌──────────────────────────────────────┘         │
 │       │         │                                                 │
@@ -159,11 +163,14 @@ Plannerが計画した後、複数Workerの完了を待ち、最新のコード�
 4. Worker: OpenCode実行 → コード変更 → PR作成
        │
        ▼
-5. Judge: CI結果 + ポリシー + LLMレビュー → 採用/差し戻し
+5. Tester: テスト作成/追加 → テスト実行 → 結果要約
        │
        ▼
-6. Cycle Manager: 定期リセット → 次サイクル開始
-7. Planner: 全Worker完了後にコードベースを再点検 → 再計画（必要に応じて反復）
+6. Judge: CI結果 + ポリシー + LLMレビュー → 採用/差し戻し
+       │
+       ▼
+7. Cycle Manager: 定期リセット → 次サイクル開始
+8. Planner: 全Worker完了後にコードベースを再点検 → 再計画（必要に応じて反復）
 ```
 
 ---
@@ -215,7 +222,8 @@ h1ve/
 │   │   │       └── docker.ts     # 実行隔離
 │   │   ├── instructions/         # OpenCode用プロンプト
 │   │   │   ├── base.md
-│   │   │   └── coding.md
+│   │   │   ├── coding.md
+│   │   │   └── tester.md
 │   │   └── Dockerfile
 │   │
 │   ├── planner/                  # タスク生成
@@ -508,6 +516,11 @@ CREATE TABLE leases (
       "items": { "type": "string" },
       "description": "検証コマンド（全て成功で完了）"
     },
+    "role": {
+      "type": "string",
+      "enum": ["worker", "tester"],
+      "description": "担当ロール（実装はworker、テストはtester）"
+    },
     "priority": {
       "type": "integer",
       "default": 0
@@ -676,7 +689,21 @@ REPLAN_REQUIREMENT_PATH=/path/to/requirement.md
 REPLAN_INTERVAL_MS=300000
 REPLAN_COMMAND="pnpm --filter @h1ve/planner start"
 REPLAN_WORKDIR=/path/to/h1ve
+
+# Repo mode
+REPO_MODE=git
+LOCAL_REPO_PATH=/path/to/local/repo
+LOCAL_WORKTREE_ROOT=/tmp/h1ve-worktree
+
+# Judge
+JUDGE_MODE=auto
 ```
+
+### Repo mode（git / local）
+
+- `REPO_MODE=git` は従来通りPRベースで運用する
+- `REPO_MODE=local` は `LOCAL_REPO_PATH` を基点に `git worktree` を作成して作業する
+- local modeはPRを作成しないが、Judgeは差分とテスト結果で判定する
 
 ---
 

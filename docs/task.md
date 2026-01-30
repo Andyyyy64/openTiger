@@ -84,14 +84,41 @@
 無限運用では「テストがない/薄い」「フレークで止まる」「E2Eが重くて回らない」が発生しやすい。  
 testerはテストの作成・実行・結果要約・フレーク対処を担当し、Workerは実装完遂に集中させる。
 
-- [ ] testerエージェントを導入し、テスト関連パス（例: `**/*.test.ts`, `apps/**/test/**`, `packages/**/test/**`, `playwright/**`）を主な許可範囲にする
+- [x] testerエージェントを導入し、テスト関連タスクをroleでルーティングする
+- [ ] testerの許可パス指針を明文化（例: `**/*.test.ts`, `apps/**/test/**`, `packages/**/test/**`, `playwright/**`）
 - [ ] Vitestによるunit/integration（結合）テストの方針を明文化（どこまでをunit、どこからをintegrationとするか）
 - [ ] PlaywrightによるE2E（UI操作含む）テストの方針を明文化（staging前提/ローカル前提、seed、待機戦略、スクショ差分）
 - [ ] テスト失敗時の一次切り分け（テスト不備/実装バグ/環境要因/フレーク）を自動化し、次アクション（修正タスク/リトライ/隔離）へ繋ぐ
 - [ ] フレーク検知と自動リトライ（一定回数で「不安定」として隔離し、別タスクに落とす）
 - [ ] 変更差分からテスト実行範囲を推定（高速化のため: unitのみ / integration追加 / E2E追加）
+- [ ] Worker → Tester → Judge の標準フローを固定化し、タスク生成時に依存関係を自動付与
 - [ ] E2E結果のアーティファクト保存（trace/video/screenshot）と `runs/artifacts` への紐付け
 - [ ] testerが生成したテスト追加PRをJudgeに渡す運用（「実装PRに追従」「先にテストPRを通す」などの標準化）
+
+### 9. repo mode（git/local切替）の導入
+
+git運用を維持しつつ、ローカルリポジトリでも同じ品質ゲートを回せるようにする。  
+local modeでも差分/テスト/判定の流れを維持し、PRの有無だけを切替える。
+
+- [ ] `REPO_MODE=git|local` の切替を導入（未指定はgit）
+- [ ] local mode用に `LOCAL_REPO_PATH` / `LOCAL_WORKTREE_ROOT` を追加
+- [ ] local modeは `git worktree` で作業領域を分離（並列安全）
+- [ ] Workerのcheckout/commit/pr処理をmodeで分岐（localはpush/PRなし）
+- [ ] Judgeにlocalモード判定（PRなしでdiffとテスト結果を評価）
+- [ ] worktreeの自動クリーンアップ（成功/失敗/サイクル終了時）
+- [ ] READMEにlocal modeの前提と運用手順を追記
+
+### 10. checker（コードベース点検エージェント）の導入
+
+コードベースを詳細に探索し、バグ・矛盾・不整合を検知して修正タスクを自動生成する。  
+Plannerの差分点検とは別系統で、実装品質の継続的改善を担う。
+
+- [ ] checker/fixerエージェントを導入し、`apps/**` と `packages/**` を主な許可範囲にする
+- [ ] ルールベース検出（未使用import、死んだコード、型不整合、TODOの放置など）を整理
+- [ ] LLMによる探索レビューで「仕様逸脱/矛盾/影響範囲」を抽出する手順を定義
+- [ ] 検出結果を「修正タスク」に変換し、Plannerに渡すフローを実装
+- [ ] 重大度（high/medium/low）で優先度を自動調整する仕組みを追加
+- [ ] 誤検出率を下げるためのフィルタ（差分重要度、直近変更、所有領域）を追加
 
 ---
 
