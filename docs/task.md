@@ -41,6 +41,8 @@
 - [ ] `Soft Cancel` (安全な停止) と `Hard Kill` (強制終了) の実装
 - [x] 異常終了したタスクの再キューイング条件の明文化
 - [x] 同一タスクの再試行時にPR重複やブランチ衝突を防ぐ冪等性ロジック
+- [ ] Judgeが `request_changes` / `needs_human` を返した場合にタスクが停滞しない戻し処理（blocked解除・再実行方針の確立）
+- [ ] `failed` / `blocked` の再投入（再試行・分割・スキップ）の自動ポリシーを実装（無限運用で止まらないため）
 
 ### 3. コンフリクト制御 (Target Area)
 
@@ -57,6 +59,9 @@
 
 - [x] Workerコンテナに渡す環境変数の `Allowlist` 方式化
 - [x] 実行禁止コマンドの実行側（Sandbox）でのハードブロック
+- [ ] `LaunchMode=process` でも同等の制約が効くようにする（もしくはデフォルトを `docker` に寄せる）
+- [ ] OpenCode/検証コマンドを「常に」サンドボックス経由で実行する（経路の一元化）
+- [ ] Worker Dockerイメージ名の統一（`h1ve/worker:latest` と `h1ve-worker:latest` の混在解消）
 
 ### 6. 役割別モデル構成の標準化
 
@@ -67,6 +72,9 @@
 ## 🔮 Future Tasks (Post-MVP)
 
 - [ ] **Requirement Interview**: 人間との対話による要件定義支援モード
+- [ ] Requirement Interviewの会話ログ永続化（requirements / sessions のデータモデル追加）
+- [ ] Requirementの版管理（差分・履歴・確定/編集中ステータス）
+- [ ] Requirement確定後にPlannerへ引き渡すワークフロー（API/UI/CLI）
 - [ ] **API Fallback Strategy**: Maxプラン上限時の自動API切り替えロジック
 - [ ] **Cost-Aware Planning**: 予算に応じたタスク優先度・モデルの動的変更
 
@@ -108,6 +116,7 @@
 
 - [x] `index.ts` - Honoサーバ起動
 - [x] `routes/health.ts` - ヘルスチェック
+- [ ] `routes/health.ts` にDB接続確認を追加
 - [x] `routes/tasks.ts` - タスクCRUD
 - [x] `routes/runs.ts` - 実行履歴
 - [x] `routes/agents.ts` - エージェント管理
@@ -136,9 +145,10 @@
 
 - [x] `claude-code/run.ts` - Claude Code CLI wrapper
 - [x] `claude-code/parse.ts` - 出力パーサー
-- [x] トークン使用量の計測
+- [x] OpenCodeのトークン使用量抽出（stdoutから解析）
 - [x] リトライロジック
 - [x] タイムアウト処理の強化
+- [ ] OpenCodeのtokenUsageを `runs.costTokens` に正しく反映（durationMsの代用を廃止）
 
 ### packages/vcs: GitHub連携
 
@@ -161,6 +171,8 @@
 - [x] `sandbox/docker.ts` - Docker実行隔離
 - [x] リトライロジック（テスト失敗時の自己修正）
 - [x] ログ出力の構造化
+- [ ] `verify.ts` のコマンド実行に `policy.deniedCommands` を反映（禁止コマンドを二重で防ぐ）
+- [ ] Workerがジョブ受領/開始/終了をイベントとして記録（Dispatcherが進捗を検知できるようにする）
 
 ### Worker用Dockerfile
 
@@ -192,6 +204,8 @@
 - [x] `scheduler/heartbeat.ts` - ハートビート監視
 - [x] `scheduler/index.ts` - モジュールエクスポート
 - [x] 失敗時のリトライ・再キューイング
+- [ ] enqueue後に「Workerが受領した」ことをDBで確認する（受領できない場合の自動復旧）
+- [ ] 常駐Workerが存在しない/死んでいる場合に、`running` が積み上がらないガードを追加
 
 ### packages/queue: ジョブキュー
 
@@ -240,6 +254,9 @@
 - [x] PRコメント投稿
 - [x] 自動マージ実行
 - [x] 差し戻し処理
+- [ ] `request_changes` の場合に自動で「修正タスク」を生成して再投入（同一PRを更新するか、修正用PRを別にするかを方針化）
+- [ ] `needs_human` を「人間待ち」で詰まらせない（追加分割・追加検証・リスク縮小に自動で落とす）
+- [ ] PR判定結果を次のPlanner入力（再計画）へ機械的に反映する（失敗理由→次タスク生成）
 
 ### instructions設計
 
@@ -263,7 +280,7 @@
 ### 監査ログ
 
 - [x] イベントログ記録
-- [x] コスト集計
+- [ ] コスト集計（OpenCodeトークンを正として集計できる状態にする）
 - [x] 異常検知
 
 ---
@@ -400,6 +417,7 @@
 
 ## 次にやるべきこと（優先度順）
 
-1. **ダッシュボードの初期化** - React 19 + Vite + Tailwind v4 のセットアップ
-2. **運用強化タスクの残り** - Soft Cancel / Hard Kill の実装
-3. **E2E統合テスト (Proven向上)** - 全体フロー（Planner -> PR -> Merge）の連続成功検証
+1. **Judge後の停滞解消** - request_changes/needs_human を自動で次のタスクへ繋ぐ（無限運用で止まらないため）
+2. **実行隔離の実効性** - OpenCode/検証コマンドを常にサンドボックス経由に統一
+3. **コスト/トークンの正確化** - tokenUsageをDBへ反映し、cycle-managerのコスト集計を成立させる
+4. **E2E統合テスト (Proven向上)** - 全体フロー（Plan -> Execute -> Judge -> Replan）の連続成功検証
