@@ -3,6 +3,7 @@
 export {
   generateTasksFromRequirement,
   generateSimpleTasks,
+  type PlannedTaskInput,
   type TaskGenerationResult,
 } from "./from-requirement.js";
 

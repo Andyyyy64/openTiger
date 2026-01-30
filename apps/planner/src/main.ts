@@ -1,16 +1,18 @@
-import { readFile, stat } from "node:fs/promises";
-import { resolve } from "node:path";
+import { stat, mkdtemp, rm, readFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { createWriteStream, mkdirSync } from "node:fs";
+import { resolve, join } from "node:path";
+import { tmpdir } from "node:os";
 import { db } from "@h1ve/db";
-import { tasks, agents } from "@h1ve/db/schema";
-import { eq } from "drizzle-orm";
-import type { CreateTaskInput } from "@h1ve/core";
-import "dotenv/config";
+import { tasks, agents, events } from "@h1ve/db/schema";
+import { eq, desc } from "drizzle-orm";
+import dotenv from "dotenv";
 
 // ハートビートの間隔（ミリ秒）
 const HEARTBEAT_INTERVAL = 30000; // 30秒
 
 // ハートビートを送信する関数
-async function startHeartbeat(agentId: string) {
+function startHeartbeat(agentId: string): NodeJS.Timeout {
   return setInterval(async () => {
     try {
       await db
@@ -34,8 +36,44 @@ import {
 import {
   generateTasksFromRequirement,
   generateSimpleTasks,
+  type PlannedTaskInput,
   type TaskGenerationResult,
 } from "./strategies/index.js";
+
+function setupProcessLogging(logName: string): string | undefined {
+  const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
+
+  try {
+    mkdirSync(logDir, { recursive: true });
+  } catch (error) {
+    console.error(`[Logger] Failed to create log dir: ${logDir}`, error);
+    return;
+  }
+
+  const logPath = join(logDir, `${logName}.log`);
+  const stream = createWriteStream(logPath, { flags: "a" });
+
+  // ターミナルが流れても追跡できるようにログをファイルに残す
+  const stdoutWrite = process.stdout.write.bind(process.stdout);
+  const stderrWrite = process.stderr.write.bind(process.stderr);
+
+  process.stdout.write = ((chunk, encoding, callback) => {
+    stream.write(chunk);
+    return stdoutWrite(chunk, encoding as never, callback as never);
+  }) as typeof process.stdout.write;
+
+  process.stderr.write = ((chunk, encoding, callback) => {
+    stream.write(chunk);
+    return stderrWrite(chunk, encoding as never, callback as never);
+  }) as typeof process.stderr.write;
+
+  process.on("exit", () => {
+    stream.end();
+  });
+
+  console.log(`[Logger] Planner logs are written to ${logPath}`);
+  return logPath;
+}
 
 // Plannerの設定
 interface PlannerConfig {
@@ -44,7 +82,13 @@ interface PlannerConfig {
   useLlm: boolean;
   dryRun: boolean;
   timeoutSeconds: number;
+  repoUrl?: string;
+  baseBranch: string;
 }
+
+const envPath = process.env.DOTENV_CONFIG_PATH
+  ?? resolve(import.meta.dirname, "../../../.env");
+dotenv.config({ path: envPath });
 
 // デフォルト設定
 const DEFAULT_CONFIG: PlannerConfig = {
@@ -56,10 +100,379 @@ const DEFAULT_CONFIG: PlannerConfig = {
   useLlm: process.env.USE_LLM !== "false",
   dryRun: process.env.DRY_RUN === "true",
   timeoutSeconds: parseInt(process.env.PLANNER_TIMEOUT ?? "300", 10),
+  repoUrl: process.env.PLANNER_REPO_URL
+    ?? (process.env.PLANNER_USE_REMOTE === "true" ? process.env.REPO_URL : undefined),
+  baseBranch: process.env.BASE_BRANCH ?? "main",
 };
 
+const INIT_ALLOWED_PATHS = [
+  "package.json",
+  "pnpm-workspace.yaml",
+  "pnpm-lock.yaml",
+  ".gitignore",
+  "apps/**",
+  "packages/**",
+];
+
+const INIT_ROOT_FILES = [
+  "package.json",
+  "pnpm-workspace.yaml",
+  "pnpm-lock.yaml",
+  ".gitignore",
+];
+const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
+
+function mergeAllowedPaths(current: string[], extra: string[]): string[] {
+  const seen = new Set(current);
+  const merged = [...current];
+
+  for (const path of extra) {
+    if (!seen.has(path)) {
+      merged.push(path);
+      seen.add(path);
+    }
+  }
+
+  return merged;
+}
+
+function isInitializationTask(task: PlannedTaskInput): boolean {
+  const title = task.title.toLowerCase();
+  const hintMatches =
+    ["init", "initialize", "bootstrap", "setup", "scaffold", "monorepo", "workspace"]
+      .some((hint) => title.includes(hint))
+    || ["初期化", "セットアップ", "構成", "モノレポ", "ワークスペース", "基盤"]
+      .some((hint) => task.title.includes(hint));
+
+  if (hintMatches) {
+    return true;
+  }
+
+  const files = task.context?.files ?? [];
+  return files.some((file) => INIT_ROOT_FILES.includes(file));
+}
+
+function normalizeVerificationCommands(commands: string[]): string[] {
+  return commands.map((command) => {
+    const trimmed = command.trim();
+    const isApiFilter = /--filter\s+\S*api\b/.test(trimmed);
+    const isDevCommand = /\bdev\b/.test(trimmed);
+
+    if (trimmed.startsWith("pnpm") && isApiFilter && isDevCommand) {
+      // 常駐コマンドは検証として使わない
+      return "pnpm --filter api test";
+    }
+
+    return command;
+  });
+}
+
+function normalizeGeneratedTasks(result: TaskGenerationResult): TaskGenerationResult {
+  const tasks = result.tasks.map((task) => {
+    let normalized: PlannedTaskInput = { ...task };
+    const normalizedCommands = normalizeVerificationCommands(task.commands);
+
+    if (normalizedCommands !== task.commands) {
+      normalized = { ...normalized, commands: normalizedCommands };
+    }
+
+    if (isInitializationTask(task)) {
+      normalized = {
+        ...normalized,
+        allowedPaths: mergeAllowedPaths(task.allowedPaths, INIT_ALLOWED_PATHS),
+      };
+    }
+
+    if (requiresLockfile(task.commands)) {
+      // install に付随する lockfile の変更を許可する
+      normalized = {
+        ...normalized,
+        allowedPaths: mergeAllowedPaths(task.allowedPaths, LOCKFILE_PATHS),
+      };
+    }
+
+    return normalized;
+  });
+
+  return { ...result, tasks };
+}
+
+function isCheckCommand(command: string): boolean {
+  return /\b(pnpm|npm)\b[^\n]*\b(run\s+)?check\b/.test(command);
+}
+
+function filterVerificationCommands(
+  commands: string[],
+  checkScriptAvailable: boolean
+): string[] {
+  if (checkScriptAvailable) {
+    return commands;
+  }
+
+  return commands.filter((command) => !isCheckCommand(command));
+}
+
+function applyVerificationCommandPolicy(
+  result: TaskGenerationResult,
+  checkScriptAvailable: boolean
+): TaskGenerationResult {
+  // checkスクリプトの有無に合わせて検証コマンドを揃える
+  if (checkScriptAvailable) {
+    return result;
+  }
+
+  const tasks = result.tasks.map((task) => {
+    const filtered = filterVerificationCommands(task.commands, checkScriptAvailable);
+    if (filtered.length === task.commands.length) {
+      return task;
+    }
+    return { ...task, commands: filtered };
+  });
+
+  return { ...result, tasks };
+}
+
+async function hasRootCheckScript(workdir: string): Promise<boolean> {
+  // ルートのpackage.jsonにcheckスクリプトがあるか確認する
+  try {
+    const raw = await readFile(join(workdir, "package.json"), "utf-8");
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.scripts?.check === "string";
+  } catch {
+    return false;
+  }
+}
+
+function clipText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) {
+    return text;
+  }
+  return `${text.slice(0, maxLength)}...`;
+}
+
+function normalizeStringList(items: unknown, maxItems: number): string[] {
+  if (!Array.isArray(items)) {
+    return [];
+  }
+
+  return items
+    .filter((item): item is string => typeof item === "string")
+    .slice(0, maxItems)
+    .map((item) => clipText(item, 200));
+}
+
+function extractIssueMessages(value: unknown, maxItems: number): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const messages = value
+    .map((item) => {
+      if (typeof item === "object" && item !== null && "message" in item) {
+        const message = (item as { message?: unknown }).message;
+        if (typeof message === "string") {
+          return message;
+        }
+      }
+      return undefined;
+    })
+    .filter((item): item is string => typeof item === "string");
+
+  return messages.slice(0, maxItems).map((item) => clipText(item, 200));
+}
+
+function formatJudgeFeedbackEntry(payload: Record<string, unknown>): string | undefined {
+  const rawPrNumber = payload.prNumber;
+  const prNumber = typeof rawPrNumber === "number"
+    ? rawPrNumber
+    : typeof rawPrNumber === "string" && !Number.isNaN(Number(rawPrNumber))
+      ? Number(rawPrNumber)
+      : undefined;
+  const verdict = typeof payload.verdict === "string" ? payload.verdict : "unknown";
+  const reasons = normalizeStringList(payload.reasons, 3);
+  const suggestions = normalizeStringList(payload.suggestions, 3);
+  const summary = payload.summary;
+  const codeIssues =
+    typeof summary === "object"
+    && summary !== null
+    && "llm" in summary
+    && typeof (summary as { llm?: unknown }).llm === "object"
+    ? extractIssueMessages(
+      (summary as { llm?: { codeIssues?: unknown } }).llm?.codeIssues,
+      3
+    )
+    : [];
+
+  const details: string[] = [];
+
+  if (reasons.length > 0) {
+    details.push(`理由: ${reasons.join(" / ")}`);
+  }
+
+  if (suggestions.length > 0) {
+    details.push(`改善案: ${suggestions.join(" / ")}`);
+  }
+
+  if (codeIssues.length > 0) {
+    details.push(`指摘: ${codeIssues.join(" / ")}`);
+  }
+
+  const label = prNumber ? `PR #${prNumber}` : "PR";
+  if (details.length === 0) {
+    return `${label} (${verdict})`;
+  }
+
+  return `${label} (${verdict}) ${details.join(" | ")}`;
+}
+
+async function loadJudgeFeedback(limit: number = 5): Promise<string | undefined> {
+  // Judgeのレビュー結果を直近分だけ取得する
+  const rows = await db
+    .select({
+      payload: events.payload,
+    })
+    .from(events)
+    .where(eq(events.type, "judge.review"))
+    .orderBy(desc(events.createdAt))
+    .limit(limit);
+
+  const lines = rows
+    .map((row) => {
+      const payload = row.payload;
+      if (typeof payload !== "object" || payload === null) {
+        return undefined;
+      }
+      return formatJudgeFeedbackEntry(payload as Record<string, unknown>);
+    })
+    .filter((line): line is string => typeof line === "string");
+
+  if (lines.length === 0) {
+    return;
+  }
+
+  return lines.map((line) => `- ${line}`).join("\n");
+}
+
+function attachJudgeFeedbackToRequirement(
+  requirement: Requirement,
+  feedback: string | undefined
+): Requirement {
+  // 要件のノートにJudgeの結果を補足する
+  if (!feedback) {
+    return requirement;
+  }
+
+  const feedbackBlock = `Judgeフィードバック:\n${feedback}`;
+  const notes = requirement.notes
+    ? `${requirement.notes}\n\n${feedbackBlock}`
+    : feedbackBlock;
+
+  return { ...requirement, notes };
+}
+
+function attachJudgeFeedbackToTasks(
+  result: TaskGenerationResult,
+  feedback: string | undefined
+): TaskGenerationResult {
+  // Workerに引き継ぐためタスクのノートへ反映する
+  if (!feedback) {
+    return result;
+  }
+
+  const feedbackBlock = `Judgeフィードバック:\n${feedback}`;
+  const tasks = result.tasks.map((task) => {
+    const context = task.context ?? {};
+    const notes = context.notes
+      ? `${context.notes}\n\n${feedbackBlock}`
+      : feedbackBlock;
+
+    return {
+      ...task,
+      context: {
+        ...context,
+        notes,
+      },
+    };
+  });
+
+  return { ...result, tasks };
+}
+
+function requiresLockfile(commands: string[]): boolean {
+  return commands.some((command) => {
+    const trimmed = command.trim();
+    return /\bpnpm\b[^\n]*\b(install|add|i)\b/.test(trimmed);
+  });
+}
+
+async function pathIsDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function pathIsFile(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function isRepoUninitialized(workdir: string): Promise<boolean> {
+  const hasApps = await pathIsDirectory(join(workdir, "apps"));
+  const hasPackages = await pathIsDirectory(join(workdir, "packages"));
+
+  if (hasApps || hasPackages) {
+    return false;
+  }
+
+  const hasRootPackage = await pathIsFile(join(workdir, "package.json"));
+  const hasWorkspace = await pathIsFile(join(workdir, "pnpm-workspace.yaml"));
+
+  return !hasRootPackage && !hasWorkspace;
+}
+
+function generateInitializationTasks(requirement: Requirement): TaskGenerationResult {
+  const allowedPaths = mergeAllowedPaths(requirement.allowedPaths, INIT_ALLOWED_PATHS);
+  const task: PlannedTaskInput = {
+    title: "モノレポ構成の初期化",
+    goal: "pnpm workspaces が使える状態になり、pnpm -r list が成功する",
+    context: {
+      files: [
+        "package.json",
+        "pnpm-workspace.yaml",
+        ".gitignore",
+        "apps/",
+        "packages/",
+      ],
+      specs: "apps/ と packages/ の土台と最小限のpackage.jsonを用意する",
+      notes: requirement.goal,
+    },
+    allowedPaths,
+    commands: ["pnpm install", "pnpm -r list"],
+    priority: 100,
+    riskLevel: "low",
+    dependencies: [],
+    dependsOnIndexes: [],
+    timeboxMinutes: 45,
+    targetArea: undefined,
+    touches: [],
+  };
+
+  return {
+    tasks: [task],
+    warnings: [
+      "モノレポ構成が見つからないため初期化タスクのみ生成しました。初期化完了後にPlannerを再実行してください。",
+    ],
+    totalEstimatedMinutes: task.timeboxMinutes ?? 45,
+  };
+}
+
 // タスクをDBに保存
-async function saveTasks(taskInputs: CreateTaskInput[]): Promise<string[]> {
+async function saveTasks(taskInputs: PlannedTaskInput[]): Promise<string[]> {
   const savedIds: string[] = [];
 
   for (const input of taskInputs) {
@@ -90,17 +503,37 @@ async function saveTasks(taskInputs: CreateTaskInput[]): Promise<string[]> {
 // 依存関係を解決してDBのIDで更新
 async function resolveDependencies(
   savedIds: string[],
-  originalTasks: CreateTaskInput[]
+  originalTasks: PlannedTaskInput[]
 ): Promise<void> {
   // 元のタスクにdependsOnがあった場合、インデックスからIDに変換
   for (let i = 0; i < originalTasks.length; i++) {
     const original = originalTasks[i];
     const savedId = savedIds[i];
-    
+
     if (!original || !savedId) continue;
 
-    // dependenciesがインデックス参照だった場合の処理
-    // 現時点では依存関係は空で作成し、後で手動設定を想定
+    const dependsOnIndexes = original.dependsOnIndexes ?? [];
+    if (dependsOnIndexes.length === 0) continue;
+
+    const dependencyIds = dependsOnIndexes
+      .map((depIndex) => savedIds[depIndex])
+      .filter((depId): depId is string => typeof depId === "string");
+
+    if (dependencyIds.length === 0) {
+      console.warn(`[Planner] dependencies resolve failed for task ${savedId}`);
+      continue;
+    }
+
+    if (dependencyIds.length !== dependsOnIndexes.length) {
+      console.warn(
+        `[Planner] dependencies mismatch for task ${savedId} (indexes: ${dependsOnIndexes.join(", ")})`
+      );
+    }
+
+    await db
+      .update(tasks)
+      .set({ dependencies: dependencyIds, updatedAt: new Date() })
+      .where(eq(tasks.id, savedId));
   }
 }
 
@@ -141,10 +574,23 @@ async function planFromRequirement(
   console.log(`Acceptance Criteria: ${requirement.acceptanceCriteria.length} items`);
   console.log(`Allowed Paths: ${requirement.allowedPaths.join(", ")}`);
 
+  const judgeFeedback = await loadJudgeFeedback();
+  if (judgeFeedback) {
+    console.log("\n[Planner] Loaded judge feedback for context.");
+    requirement = attachJudgeFeedbackToRequirement(requirement, judgeFeedback);
+  }
+  const checkScriptAvailable = await hasRootCheckScript(config.workdir);
+  if (!checkScriptAvailable) {
+    console.log("[Planner] checkスクリプトがないため検証コマンドを調整します。");
+  }
+
   // タスクを生成
   let result: TaskGenerationResult;
 
-  if (config.useLlm) {
+  if (await isRepoUninitialized(config.workdir)) {
+    console.log("\n[Planner] Repository is not initialized. Generating init task only.");
+    result = generateInitializationTasks(requirement);
+  } else if (config.useLlm) {
     console.log("\n[Generating tasks with LLM...]");
     try {
       result = await generateTasksFromRequirement(requirement, {
@@ -161,6 +607,10 @@ async function planFromRequirement(
     console.log("\n[Generating tasks without LLM...]");
     result = generateSimpleTasks(requirement);
   }
+
+  result = normalizeGeneratedTasks(result);
+  result = applyVerificationCommandPolicy(result, checkScriptAvailable);
+  result = attachJudgeFeedbackToTasks(result, judgeFeedback);
 
   // 結果を表示
   console.log(`\n[Generated ${result.tasks.length} tasks]`);
@@ -204,32 +654,158 @@ async function planFromRequirement(
   console.log("=".repeat(60));
 }
 
+// Plannerが参照する作業ディレクトリを用意
+async function preparePlannerWorkdir(config: PlannerConfig): Promise<{
+  workdir: string;
+  cleanup: () => Promise<void>;
+}> {
+  if (!config.repoUrl) {
+    console.log(`[Planner] Using local workdir: ${config.workdir}`);
+    return {
+      workdir: config.workdir,
+      cleanup: async () => undefined,
+    };
+  }
+
+  console.log(`[Planner] Using remote repo: ${config.repoUrl}`);
+  const tempDir = await mkdtemp(join(tmpdir(), "h1ve-planner-"));
+  const repoDir = join(tempDir, "repo");
+  const token = process.env.GITHUB_TOKEN;
+  const cloneResult = await gitCloneRepo(config.repoUrl, repoDir, token, config.baseBranch);
+
+  if (!cloneResult.success) {
+    await rm(tempDir, { recursive: true, force: true });
+    throw new Error(`Planner failed to clone repo: ${cloneResult.stderr}`);
+  }
+
+  return {
+    workdir: repoDir,
+    cleanup: async () => {
+      await rm(tempDir, { recursive: true, force: true });
+    },
+  };
+}
+
+async function gitCloneRepo(
+  repoUrl: string,
+  destPath: string,
+  token?: string,
+  baseBranch?: string
+): Promise<{ success: boolean; stderr: string }> {
+  let authenticatedUrl = repoUrl;
+  if (token && repoUrl.startsWith("https://github.com/")) {
+    authenticatedUrl = repoUrl.replace(
+      "https://github.com/",
+      `https://x-access-token:${token}@github.com/`
+    );
+  }
+
+  const runClone = (args: string[]) =>
+    new Promise<{ success: boolean; stderr: string }>((resolveResult) => {
+      const child = spawn("git", args, {
+        env: {
+          ...process.env,
+          GIT_TERMINAL_PROMPT: "0", // 認証待ちで止めない
+        },
+      });
+
+      let stderr = "";
+      child.stderr.on("data", (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      child.on("close", (code) => {
+        resolveResult({
+          success: code === 0,
+          stderr: stderr.trim(),
+        });
+      });
+
+      child.on("error", (error) => {
+        resolveResult({
+          success: false,
+          stderr: error.message,
+        });
+      });
+    });
+
+  const args = ["clone", "--depth", "1"];
+  if (baseBranch) {
+    args.push("--branch", baseBranch);
+  }
+  args.push(authenticatedUrl, destPath);
+
+  const result = await runClone(args);
+  if (result.success || !baseBranch) {
+    return result;
+  }
+
+  console.warn(
+    `[Planner] Failed to clone branch ${baseBranch}, retrying default branch`
+  );
+
+  return runClone(["clone", "--depth", "1", authenticatedUrl, destPath]);
+}
+
 // 要件テキストから直接タスクを生成（API用）
 export async function planFromContent(
   content: string,
   config: Partial<PlannerConfig> = {}
 ): Promise<TaskGenerationResult> {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
-  const requirement = parseRequirementContent(content);
+  let requirement = parseRequirementContent(content);
 
   const validationErrors = validateRequirement(requirement);
   if (validationErrors.length > 0) {
     throw new Error(`Validation failed: ${validationErrors.join(", ")}`);
   }
 
+  const judgeFeedback = await loadJudgeFeedback();
+  requirement = attachJudgeFeedbackToRequirement(requirement, judgeFeedback);
+  const checkScriptAvailable = await hasRootCheckScript(fullConfig.workdir);
+
+  if (await isRepoUninitialized(fullConfig.workdir)) {
+    return attachJudgeFeedbackToTasks(
+      applyVerificationCommandPolicy(
+        normalizeGeneratedTasks(generateInitializationTasks(requirement)),
+        checkScriptAvailable
+      ),
+      judgeFeedback
+    );
+  }
+
   if (fullConfig.useLlm) {
     try {
-      return await generateTasksFromRequirement(requirement, {
+      const result = await generateTasksFromRequirement(requirement, {
         workdir: fullConfig.workdir,
         instructionsPath: fullConfig.instructionsPath,
         timeoutSeconds: fullConfig.timeoutSeconds,
       });
+      return attachJudgeFeedbackToTasks(
+        applyVerificationCommandPolicy(
+          normalizeGeneratedTasks(result),
+          checkScriptAvailable
+        ),
+        judgeFeedback
+      );
     } catch {
-      return generateSimpleTasks(requirement);
+      return attachJudgeFeedbackToTasks(
+        applyVerificationCommandPolicy(
+          normalizeGeneratedTasks(generateSimpleTasks(requirement)),
+          checkScriptAvailable
+        ),
+        judgeFeedback
+      );
     }
   }
 
-  return generateSimpleTasks(requirement);
+  return attachJudgeFeedbackToTasks(
+    applyVerificationCommandPolicy(
+      normalizeGeneratedTasks(generateSimpleTasks(requirement)),
+      checkScriptAvailable
+    ),
+    judgeFeedback
+  );
 }
 
 // ヘルプを表示
@@ -250,6 +826,7 @@ Environment Variables:
   USE_LLM=false         Disable LLM generation
   DRY_RUN=true          Enable dry run mode
   PLANNER_TIMEOUT=300   LLM timeout in seconds
+  PLANNER_MODEL=xxx     Planner LLM model
 
 Example:
   pnpm --filter @h1ve/planner start docs/requirements/feature-x.md
@@ -279,6 +856,8 @@ async function main(): Promise<void> {
 
   // エージェント登録
   const agentId = process.env.AGENT_ID ?? "planner-1";
+  setupProcessLogging(agentId);
+  const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
   await db.delete(agents).where(eq(agents.id, agentId));
 
   await db.insert(agents).values({
@@ -287,7 +866,7 @@ async function main(): Promise<void> {
     status: "idle",
     lastHeartbeat: new Date(),
     metadata: {
-      model: process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview",
+      model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
       provider: "gemini",
     },
   }).onConflictDoUpdate({
@@ -318,8 +897,26 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // 実行
-  await planFromRequirement(resolve(requirementPath), config);
+  // 実行中はbusyに切り替える
+  await db
+    .update(agents)
+    .set({ status: "busy", lastHeartbeat: new Date() })
+    .where(eq(agents.id, agentId));
+
+  try {
+    const { workdir, cleanup } = await preparePlannerWorkdir(config);
+    try {
+      await planFromRequirement(resolve(requirementPath), { ...config, workdir });
+    } finally {
+      await cleanup();
+    }
+  } finally {
+    await db
+      .update(agents)
+      .set({ status: "idle", lastHeartbeat: new Date() })
+      .where(eq(agents.id, agentId));
+    clearInterval(heartbeatTimer);
+  }
 }
 
 main().catch((error) => {

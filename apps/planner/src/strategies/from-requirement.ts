@@ -3,8 +3,12 @@ import type { CreateTaskInput } from "@h1ve/core";
 import type { Requirement } from "../parser.js";
 
 // タスク生成結果
+export interface PlannedTaskInput extends CreateTaskInput {
+  dependsOnIndexes?: number[]; // LLMの依存関係インデックスを保持して後で解決する
+}
+
 export interface TaskGenerationResult {
-  tasks: CreateTaskInput[];
+  tasks: PlannedTaskInput[];
   warnings: string[];
   totalEstimatedMinutes: number;
 }
@@ -100,6 +104,7 @@ ${requirement.notes || "(なし)"}
 
 - タスクは実行順序を考慮し、dependsOnで依存関係を明示（インデックスで参照）
 - 各タスクのcommandは必ず成功/失敗を返すもの
+- 検証コマンドは必ず終了するものにし、pnpm devのような常駐コマンドは使わない
 - riskLevelは "low" / "medium" / "high" のいずれか
 - timeboxMinutesは30〜90の範囲で
 - 曖昧なゴール（「改善する」等）は避ける
@@ -138,9 +143,9 @@ function resolveDependencies(
     dependsOn?: number[];
     timeboxMinutes?: number;
   }>
-): CreateTaskInput[] {
+): PlannedTaskInput[] {
   // 一旦全タスクを生成（依存関係は後で解決）
-  const taskInputs: CreateTaskInput[] = tasks.map((task, index) => ({
+  const taskInputs: PlannedTaskInput[] = tasks.map((task, index) => ({
     title: task.title,
     goal: task.goal,
     context: task.context,
@@ -149,6 +154,7 @@ function resolveDependencies(
     priority: task.priority ?? (tasks.length - index) * 10, // 順序から優先度を設定
     riskLevel: (task.riskLevel as "low" | "medium" | "high") ?? "low",
     dependencies: [], // 後で設定
+    dependsOnIndexes: task.dependsOn?.filter((dep) => Number.isInteger(dep)) ?? [],
     timeboxMinutes: task.timeboxMinutes ?? 60,
     targetArea: undefined,
     touches: [],
@@ -167,11 +173,13 @@ export async function generateTasksFromRequirement(
   }
 ): Promise<TaskGenerationResult> {
   const prompt = buildPrompt(requirement);
+  const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
 
   // OpenCodeを実行
   const result = await runOpenCode({
     workdir: options.workdir,
     task: prompt,
+    model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
     timeoutSeconds: options.timeoutSeconds ?? 300,
   });
 
@@ -219,7 +227,7 @@ export async function generateTasksFromRequirement(
 
 // タスクをLLMなしでシンプルに生成（フォールバック用）
 export function generateSimpleTasks(requirement: Requirement): TaskGenerationResult {
-  const tasks: CreateTaskInput[] = [];
+  const tasks: PlannedTaskInput[] = [];
 
   // 受け入れ条件からタスクを生成
   requirement.acceptanceCriteria.forEach((criterion, index) => {
@@ -235,6 +243,7 @@ export function generateSimpleTasks(requirement: Requirement): TaskGenerationRes
       priority: (requirement.acceptanceCriteria.length - index) * 10,
       riskLevel: determineRiskLevel(requirement),
       dependencies: [],
+      dependsOnIndexes: [],
       timeboxMinutes: 60,
       targetArea: undefined,
       touches: [],

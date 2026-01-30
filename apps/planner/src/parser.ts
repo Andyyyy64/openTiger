@@ -25,14 +25,30 @@ export interface RiskItem {
 
 // Markdownセクションを抽出
 function extractSection(content: string, sectionName: string): string {
-  // # または ## で始まるセクションに対応
-  const regex = new RegExp(
-    `^#{1,2}\\s+${sectionName}\\s*\\n([\\s\\S]*?)(?=\\n#{1,2}\\s+|$)`,
-    "im"
-  );
-  const match = content.match(regex);
-  const captured = match?.[1];
-  return captured ? captured.trim() : "";
+  const lines = content.split("\n");
+  const collected: string[] = [];
+  const target = sectionName.trim().toLowerCase();
+  let inSection = false;
+
+  for (const line of lines) {
+    const headerMatch = line.match(/^#{1,2}\s+(.+)\s*$/);
+    if (headerMatch) {
+      const header = headerMatch[1]?.trim().toLowerCase();
+      if (inSection) {
+        break;
+      }
+      if (header === target) {
+        inSection = true;
+      }
+      continue;
+    }
+
+    if (inSection) {
+      collected.push(line);
+    }
+  }
+
+  return collected.join("\n").trim();
 }
 
 // リストアイテムを抽出
@@ -41,7 +57,7 @@ function extractListItems(content: string): string[] {
   const items: string[] = [];
 
   for (const line of lines) {
-    const match = line.match(/^[-*]\s+\[?\s*[x ]?\s*\]?\s*(.+)/i);
+    const match = line.match(/^\s*[-*]\s+\[?\s*[x ]?\s*\]?\s*(.+)/i);
     const captured = match?.[1];
     if (captured) {
       items.push(captured.trim());
@@ -66,7 +82,7 @@ function extractPaths(content: string): string[] {
     }
 
     // リストアイテムのパス
-    const listMatch = line.match(/^[-*]\s+(.+)/);
+    const listMatch = line.match(/^\s*[-*]\s+(.+)/);
     const listCapture = listMatch?.[1];
     if (listCapture) {
       const path = listCapture.trim();

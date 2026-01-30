@@ -148,11 +148,13 @@ export async function generateTasksFromIssue(
   }
 ): Promise<IssueAnalysisResult> {
   const prompt = buildPromptFromIssue(issue, options.allowedPaths);
+  const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
 
   // OpenCodeを実行
   const result = await runOpenCode({
     workdir: options.workdir,
     task: prompt,
+    model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
     timeoutSeconds: options.timeoutSeconds ?? 300,
   });
 
