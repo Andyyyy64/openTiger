@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { mkdtemp, writeFile, rm, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 import { extractOpenCodeTokenUsage, type OpenCodeTokenUsage } from "./parse.js";
 
@@ -62,18 +65,41 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function buildOpenCodePrompt(options: OpenCodeOptions): Promise<string> {
+  if (!options.instructionsPath) {
+    return options.task;
+  }
+
+  // 指示ファイルがある場合はタスクの先頭に結合する
+  const instructions = await readFile(options.instructionsPath, "utf-8");
+  const trimmed = instructions.trim();
+  if (!trimmed) {
+    return options.task;
+  }
+
+  return `${trimmed}\n\n${options.task}`;
+}
+
 async function executeOpenCodeOnce(
   options: OpenCodeOptions
 ): Promise<Omit<OpenCodeResult, "retryCount">> {
   const startTime = Date.now();
   const args: string[] = ["run"];
+  const tempDir = await mkdtemp(join(tmpdir(), "h1ve-opencode-"));
+  const promptPath = join(tempDir, "prompt.txt");
+
+  // プロンプトをファイルで渡してCLIの引数制限やパース問題を避ける
+  const prompt = await buildOpenCodePrompt(options);
+  await writeFile(promptPath, prompt, "utf-8");
 
   const model = options.model ?? DEFAULT_MODEL;
   if (model) {
     args.push("--model", model);
   }
 
-  args.push(options.task);
+  args.push("--file", promptPath);
+  args.push("--");
+  args.push("添付したプロンプトを読んで指示に従ってください。");
 
   const childProcess = spawn("opencode", args, {
     cwd: options.workdir,
@@ -107,6 +133,8 @@ async function executeOpenCodeOnce(
       const durationMs = Date.now() - startTime;
       const tokenUsage = extractOpenCodeTokenUsage(stdout);
 
+      rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+
       resolve({
         success: code === 0,
         exitCode: code ?? -1,
@@ -119,6 +147,7 @@ async function executeOpenCodeOnce(
 
     childProcess.on("error", (error) => {
       const durationMs = Date.now() - startTime;
+      rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
       resolve({
         success: false,
         exitCode: -1,
