@@ -1,3 +1,5 @@
+import { createWriteStream, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import { db } from "@h1ve/db";
 import { tasks, agents } from "@h1ve/db/schema";
 import { eq } from "drizzle-orm";
@@ -7,6 +9,7 @@ import {
   createTaskWorker,
   getQueueStats,
   type TaskJobData,
+  getTaskQueueName,
 } from "@h1ve/queue";
 import type { Job } from "bullmq";
 
@@ -24,6 +27,41 @@ import {
   getAvailableAgents,
   type LaunchMode,
 } from "./scheduler/index.js";
+
+function setupProcessLogging(logName: string): string | undefined {
+  const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
+
+  try {
+    mkdirSync(logDir, { recursive: true });
+  } catch (error) {
+    console.error(`[Logger] Failed to create log dir: ${logDir}`, error);
+    return;
+  }
+
+  const logPath = join(logDir, `${logName}.log`);
+  const stream = createWriteStream(logPath, { flags: "a" });
+
+  // ターミナルが流れても追跡できるようにログをファイルに残す
+  const stdoutWrite = process.stdout.write.bind(process.stdout);
+  const stderrWrite = process.stderr.write.bind(process.stderr);
+
+  process.stdout.write = ((chunk, encoding, callback) => {
+    stream.write(chunk);
+    return stdoutWrite(chunk, encoding as never, callback as never);
+  }) as typeof process.stdout.write;
+
+  process.stderr.write = ((chunk, encoding, callback) => {
+    stream.write(chunk);
+    return stderrWrite(chunk, encoding as never, callback as never);
+  }) as typeof process.stderr.write;
+
+  process.on("exit", () => {
+    stream.end();
+  });
+
+  console.log(`[Logger] Dispatcher logs are written to ${logPath}`);
+  return logPath;
+}
 
 // ディスパッチャー設定
 interface DispatcherConfig {
@@ -47,7 +85,16 @@ const DEFAULT_CONFIG: DispatcherConfig = {
 
 // ディスパッチャーの状態
 let isRunning = false;
-let taskQueue: ReturnType<typeof createTaskQueue> | null = null;
+// エージェント専用キューを再利用するためのキャッシュ
+const taskQueues = new Map<string, ReturnType<typeof createTaskQueue>>();
+
+function getTaskQueueForAgent(agentId: string): ReturnType<typeof createTaskQueue> {
+  const existing = taskQueues.get(agentId);
+  if (existing) return existing;
+  const queue = createTaskQueue(getTaskQueueName(agentId));
+  taskQueues.set(agentId, queue);
+  return queue;
+}
 
 // タスクをディスパッチ
 async function dispatchTask(
@@ -70,14 +117,13 @@ async function dispatchTask(
     .where(eq(tasks.id, task.id));
 
   // BullMQキューにジョブを追加
-  if (taskQueue) {
-    await enqueueTask(taskQueue, {
-      taskId: task.id,
-      agentId,
-      priority: task.priority,
-    });
-    console.log(`[Dispatch] Task ${task.id} enqueued for agent ${agentId}`);
-  }
+  const agentQueue = getTaskQueueForAgent(agentId);
+  await enqueueTask(agentQueue, {
+    taskId: task.id,
+    agentId,
+    priority: task.priority,
+  });
+  console.log(`[Dispatch] Task ${task.id} enqueued for agent ${agentId}`);
 
   // Workerを起動
   const launchResult = await launchWorker({
@@ -176,10 +222,24 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
       // 統計情報を定期的に出力
       if (Math.random() < 0.1) {
         const stats = await getAgentStats();
-        const queueStats = taskQueue ? await getQueueStats(taskQueue) : null;
+        const queueStats = taskQueues.size
+          ? await Promise.all(
+              Array.from(taskQueues.values()).map((queue) => getQueueStats(queue))
+            )
+          : [];
+        const aggregatedStats = queueStats.reduce(
+          (acc, stat) => ({
+            waiting: acc.waiting + stat.waiting,
+            active: acc.active + stat.active,
+            completed: acc.completed + stat.completed,
+            failed: acc.failed + stat.failed,
+            total: acc.total + stat.total,
+          }),
+          { waiting: 0, active: 0, completed: 0, failed: 0, total: 0 }
+        );
         console.log(
           `[Stats] Agents: ${stats.busy} busy, ${stats.idle} idle, ${stats.offline} offline | ` +
-          `Queue: ${queueStats?.waiting ?? 0} waiting, ${queueStats?.active ?? 0} active`
+          `Queue: ${aggregatedStats.waiting} waiting, ${aggregatedStats.active} active`
         );
       }
     } catch (error) {
@@ -217,8 +277,10 @@ function setupSignalHandlers(): void {
     await stopAllWorkers();
 
     // キューを閉じる
-    if (taskQueue) {
-      await taskQueue.close();
+    if (taskQueues.size > 0) {
+      await Promise.all(
+        Array.from(taskQueues.values()).map((queue) => queue.close())
+      );
     }
 
     console.log("[Shutdown] Dispatcher stopped");
@@ -231,6 +293,7 @@ function setupSignalHandlers(): void {
 
 // メイン処理
 async function main(): Promise<void> {
+  setupProcessLogging(process.env.H1VE_LOG_NAME ?? "dispatcher");
   const config = { ...DEFAULT_CONFIG };
 
   // 設定の検証
@@ -241,10 +304,6 @@ async function main(): Promise<void> {
 
   // シグナルハンドラーを設定
   setupSignalHandlers();
-
-  // BullMQキューを初期化
-  taskQueue = createTaskQueue();
-  console.log("[Init] Task queue initialized");
 
   // ディスパッチャーを開始
   isRunning = true;

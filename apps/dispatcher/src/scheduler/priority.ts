@@ -1,6 +1,6 @@
 import { db } from "@h1ve/db";
-import { tasks, leases } from "@h1ve/db/schema";
-import { eq, and, inArray, notInArray } from "drizzle-orm";
+import { tasks, leases, runs } from "@h1ve/db/schema";
+import { eq, and, inArray, gt } from "drizzle-orm";
 
 // タスク選択結果
 export interface AvailableTask {
@@ -18,6 +18,19 @@ export interface AvailableTask {
   touches: string[];
 }
 
+const DEFAULT_RETRY_DELAY_MS = 5 * 60 * 1000;
+
+function getRetryDelayMs(): number {
+  const raw = process.env.DISPATCH_RETRY_DELAY_MS ?? String(DEFAULT_RETRY_DELAY_MS);
+  const parsed = Number.parseInt(raw, 10);
+
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return DEFAULT_RETRY_DELAY_MS;
+  }
+
+  return parsed;
+}
+
 // 利用可能なタスクを優先度順で取得
 export async function getAvailableTasks(): Promise<AvailableTask[]> {
   // queuedステータスのタスクを取得
@@ -28,6 +41,28 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
 
   if (queuedTasks.length === 0) {
     return [];
+  }
+
+  const cooldownBlockedIds = new Set<string>();
+  const retryDelayMs = getRetryDelayMs();
+
+  if (retryDelayMs > 0) {
+    const queuedIds = queuedTasks.map((task) => task.id);
+    const cutoff = new Date(Date.now() - retryDelayMs);
+    const recentFailures = await db
+      .select({ taskId: runs.taskId })
+      .from(runs)
+      .where(
+        and(
+          inArray(runs.taskId, queuedIds),
+          inArray(runs.status, ["failed", "cancelled"]),
+          gt(runs.finishedAt, cutoff)
+        )
+      );
+
+    for (const run of recentFailures) {
+      cooldownBlockedIds.add(run.taskId);
+    }
   }
 
   // リース済みタスクIDを取得
@@ -52,6 +87,11 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
 
   // フィルタリング: リースなし、依存関係解決済み、targetArea の衝突なし
   const available = queuedTasks.filter((task) => {
+    // 直近失敗の再配布はクールダウンする
+    if (cooldownBlockedIds.has(task.id)) {
+      return false;
+    }
+
     // リース済みは除外
     if (leasedIds.has(task.id)) {
       return false;
