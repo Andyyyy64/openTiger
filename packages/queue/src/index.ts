@@ -24,9 +24,15 @@ export interface TaskJobData {
   priority: number;
 }
 
+// エージェント専用のキュー名を生成
+export function getTaskQueueName(agentId?: string): string {
+  if (!agentId) return TASK_QUEUE_NAME;
+  return `${TASK_QUEUE_NAME}-${agentId}`;
+}
+
 // タスクキューを作成
-export function createTaskQueue(): Queue<TaskJobData> {
-  return new Queue(TASK_QUEUE_NAME, {
+export function createTaskQueue(queueName = TASK_QUEUE_NAME): Queue<TaskJobData> {
+  return new Queue(queueName, {
     connection: getConnectionConfig(),
     defaultJobOptions: {
       attempts: 3,
@@ -48,9 +54,10 @@ export function createTaskQueue(): Queue<TaskJobData> {
 
 // タスクワーカーを作成
 export function createTaskWorker(
-  processor: (job: Job<TaskJobData>) => Promise<void>
+  processor: (job: Job<TaskJobData>) => Promise<void>,
+  queueName = TASK_QUEUE_NAME
 ): Worker<TaskJobData> {
-  return new Worker(TASK_QUEUE_NAME, processor, {
+  return new Worker(queueName, processor, {
     connection: getConnectionConfig(),
     concurrency: parseInt(process.env.MAX_CONCURRENT_WORKERS ?? "5", 10),
   });
@@ -169,8 +176,8 @@ export async function requeueAllFailedJobs(
 }
 
 // キューイベントを監視
-export function createQueueEvents(): QueueEvents {
-  return new QueueEvents(TASK_QUEUE_NAME, {
+export function createQueueEvents(queueName = TASK_QUEUE_NAME): QueueEvents {
+  return new QueueEvents(queueName, {
     connection: getConnectionConfig(),
   });
 }
