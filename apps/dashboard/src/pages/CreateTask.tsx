@@ -14,6 +14,7 @@ export const CreateTaskPage: React.FC = () => {
     goal: '',
     priority: 10,
     riskLevel: 'low' as 'low' | 'medium' | 'high',
+    role: 'worker' as 'worker' | 'tester',
     timeboxMinutes: 60,
     allowedPaths: [''],
     commands: [''],
@@ -40,6 +41,7 @@ export const CreateTaskPage: React.FC = () => {
       goal: formData.goal,
       priority: formData.priority,
       riskLevel: formData.riskLevel,
+      role: formData.role,
       timeboxMinutes: formData.timeboxMinutes,
       allowedPaths: formData.allowedPaths.filter(p => p.trim() !== ''),
       commands: formData.commands.filter(c => c.trim() !== ''),
@@ -129,7 +131,7 @@ export const CreateTaskPage: React.FC = () => {
           </div>
 
           {/* Configuration */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-slate-400 mb-1">Priority</label>
               <input
@@ -149,6 +151,17 @@ export const CreateTaskPage: React.FC = () => {
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-1">Role</label>
+              <select
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all"
+                value={formData.role}
+                onChange={e => setFormData({ ...formData, role: e.target.value as 'worker' | 'tester' })}
+              >
+                <option value="worker">Worker</option>
+                <option value="tester">Tester</option>
               </select>
             </div>
             <div>

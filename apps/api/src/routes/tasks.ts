@@ -50,6 +50,7 @@ const createTaskSchema = z.object({
   commands: z.array(z.string()),
   priority: z.number().int().optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
+  role: z.enum(["worker", "tester"]).optional(),
   dependencies: z.array(z.string().uuid()).optional(),
   timeboxMinutes: z.number().int().positive().optional(),
 });
@@ -68,6 +69,7 @@ tasksRoute.post("/", zValidator("json", createTaskSchema), async (c) => {
       commands: body.commands,
       priority: body.priority ?? 0,
       riskLevel: body.riskLevel ?? "low",
+      role: body.role ?? "worker",
       dependencies: body.dependencies ?? [],
       timeboxMinutes: body.timeboxMinutes ?? 60,
     })
@@ -91,6 +93,7 @@ const updateTaskSchema = z.object({
   commands: z.array(z.string()).optional(),
   priority: z.number().int().optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
+  role: z.enum(["worker", "tester"]).optional(),
   status: z
     .enum(["queued", "running", "done", "failed", "blocked", "cancelled"])
     .optional(),

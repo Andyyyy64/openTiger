@@ -154,6 +154,13 @@ export const TaskDetailsPage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-slate-400 text-sm">
                   <PlayCircle size={16} />
+                  Role
+                </div>
+                <span className="text-sm font-bold text-white">{task.role ?? 'worker'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-slate-400 text-sm">
+                  <PlayCircle size={16} />
                   Timebox
                 </div>
                 <span className="text-sm font-bold text-white">{task.timeboxMinutes} min</span>
