@@ -4,6 +4,10 @@ import { z } from "zod";
 export const RiskLevel = z.enum(["low", "medium", "high"]);
 export type RiskLevel = z.infer<typeof RiskLevel>;
 
+// タスクの担当ロール
+export const TaskRole = z.enum(["worker", "tester"]);
+export type TaskRole = z.infer<typeof TaskRole>;
+
 // タスクのステータス
 export const TaskStatus = z.enum([
   "queued", // 待機中
@@ -33,6 +37,7 @@ export const TaskSchema = z.object({
   commands: z.array(z.string()), // 検証コマンド
   priority: z.number().int().default(0),
   riskLevel: RiskLevel.default("low"),
+  role: TaskRole.default("worker"),
   status: TaskStatus.default("queued"),
   targetArea: z.string().optional(), // 担当領域（コンフリクト制御用）
   touches: z.array(z.string()).default([]), // 変更対象のファイル/ディレクトリ

@@ -5,6 +5,7 @@ export const AgentRole = z.enum([
   "planner", // タスク生成・分割
   "worker", // 実装・PR作成
   "judge", // 採用判定
+  "tester", // テスト作成・実行
 ]);
 export type AgentRole = z.infer<typeof AgentRole>;
 

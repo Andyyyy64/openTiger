@@ -17,6 +17,7 @@ export const tasks = pgTable("tasks", {
   commands: text("commands").array().notNull(), // 検証コマンド
   priority: integer("priority").default(0).notNull(),
   riskLevel: text("risk_level").default("low").notNull(), // low/medium/high
+  role: text("role").default("worker").notNull(), // worker/tester
   status: text("status").default("queued").notNull(), // queued/running/done/failed/blocked/cancelled
   targetArea: text("target_area"), // 担当領域（コンフリクト制御用）
   touches: text("touches").array().default([]).notNull(), // 変更対象のファイル/ディレクトリ

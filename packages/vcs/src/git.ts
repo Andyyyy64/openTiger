@@ -8,6 +8,18 @@ export interface GitResult {
   exitCode: number;
 }
 
+export interface DiffStats {
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  files: Array<{
+    filename: string;
+    additions: number;
+    deletions: number;
+    status: string;
+  }>;
+}
+
 // Gitコマンドを実行
 async function execGit(args: string[], cwd: string): Promise<GitResult> {
   return new Promise((resolve) => {
@@ -48,6 +60,34 @@ async function execGit(args: string[], cwd: string): Promise<GitResult> {
       });
     });
   });
+}
+
+export async function isGitRepo(cwd: string): Promise<boolean> {
+  const result = await execGit(["rev-parse", "--is-inside-work-tree"], cwd);
+  return result.success && result.stdout === "true";
+}
+
+export async function addWorktree(options: {
+  baseRepoPath: string;
+  worktreePath: string;
+  baseBranch?: string;
+  branchName?: string;
+}): Promise<GitResult> {
+  const { baseRepoPath, worktreePath, baseBranch = "main", branchName } = options;
+  const args = ["worktree", "add"];
+  if (branchName) {
+    args.push("-B", branchName);
+  }
+  args.push(worktreePath, baseBranch);
+  return execGit(args, baseRepoPath);
+}
+
+export async function removeWorktree(options: {
+  baseRepoPath: string;
+  worktreePath: string;
+}): Promise<GitResult> {
+  const { baseRepoPath, worktreePath } = options;
+  return execGit(["worktree", "remove", "--force", worktreePath], baseRepoPath);
 }
 
 // リポジトリをクローン
@@ -125,6 +165,37 @@ export async function getCurrentBranch(cwd: string): Promise<string | null> {
   return symbolicResult.success ? symbolicResult.stdout : null;
 }
 
+export async function checkoutBranch(
+  cwd: string,
+  branchName: string
+): Promise<GitResult> {
+  return execGit(["checkout", branchName], cwd);
+}
+
+export async function isMergeInProgress(cwd: string): Promise<boolean> {
+  const result = await execGit(["rev-parse", "-q", "--verify", "MERGE_HEAD"], cwd);
+  return result.success;
+}
+
+export async function abortMerge(cwd: string): Promise<GitResult> {
+  return execGit(["merge", "--abort"], cwd);
+}
+
+export async function mergeBranch(
+  cwd: string,
+  branchName: string,
+  options: { ffOnly?: boolean; noEdit?: boolean } = {}
+): Promise<GitResult> {
+  const args = ["merge"];
+  if (options.ffOnly !== false) {
+    args.push("--ff-only");
+  } else if (options.noEdit !== false) {
+    args.push("--no-edit");
+  }
+  args.push(branchName);
+  return execGit(args, cwd);
+}
+
 // 変更をステージング
 export async function stageChanges(
   cwd: string,
@@ -164,6 +235,79 @@ export async function getDiff(
     args.push("--staged");
   }
   return execGit(args, cwd);
+}
+
+export async function getDiffBetweenRefs(
+  cwd: string,
+  baseRef: string,
+  headRef: string
+): Promise<GitResult> {
+  return execGit(["diff", `${baseRef}...${headRef}`], cwd);
+}
+
+export async function getChangedFilesBetweenRefs(
+  cwd: string,
+  baseRef: string,
+  headRef: string
+): Promise<string[]> {
+  const result = await execGit(
+    ["diff", "--name-only", `${baseRef}...${headRef}`],
+    cwd
+  );
+  if (!result.success) {
+    return [];
+  }
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+export async function getDiffStatsBetweenRefs(
+  cwd: string,
+  baseRef: string,
+  headRef: string
+): Promise<DiffStats> {
+  const result = await execGit(
+    ["diff", "--numstat", `${baseRef}...${headRef}`],
+    cwd
+  );
+  if (!result.success) {
+    return {
+      additions: 0,
+      deletions: 0,
+      changedFiles: 0,
+      files: [],
+    };
+  }
+
+  let additions = 0;
+  let deletions = 0;
+  const files: DiffStats["files"] = [];
+
+  for (const line of result.stdout.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const [addRaw, delRaw, filename] = trimmed.split("\t");
+    if (!filename) continue;
+    const fileAdditions = Number.isNaN(Number(addRaw)) ? 0 : Number(addRaw);
+    const fileDeletions = Number.isNaN(Number(delRaw)) ? 0 : Number(delRaw);
+    additions += fileAdditions;
+    deletions += fileDeletions;
+    files.push({
+      filename,
+      additions: fileAdditions,
+      deletions: fileDeletions,
+      status: "modified",
+    });
+  }
+
+  return {
+    additions,
+    deletions,
+    changedFiles: files.length,
+    files,
+  };
 }
 
 // 変更されたファイル一覧を取得

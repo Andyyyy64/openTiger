@@ -22,6 +22,7 @@ describe("TaskSchema", () => {
     commands: ["pnpm test --filter=@h1ve/auth", "pnpm typecheck"],
     priority: 10,
     riskLevel: "medium" as const,
+    role: "worker" as const,
     status: "queued" as const,
     dependencies: ["550e8400-e29b-41d4-a716-446655440001"],
     timeboxMinutes: 90,
@@ -76,6 +77,7 @@ describe("TaskSchema", () => {
     if (result.success) {
       expect(result.data.priority).toBe(0);
       expect(result.data.riskLevel).toBe("low");
+      expect(result.data.role).toBe("worker");
       expect(result.data.status).toBe("queued");
       expect(result.data.dependencies).toEqual([]);
       expect(result.data.timeboxMinutes).toBe(60);

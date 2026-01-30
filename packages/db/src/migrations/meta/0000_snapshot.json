@@ -485,6 +485,13 @@
           "notNull": true,
           "default": "'low'"
         },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'worker'"
+        },
         "status": {
           "name": "status",
           "type": "text",

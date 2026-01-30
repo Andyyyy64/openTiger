@@ -8,7 +8,7 @@ import {
 
 describe("AgentRole", () => {
   it("すべての有効な役割を受け入れる", () => {
-    const roles = ["planner", "worker", "judge"];
+    const roles = ["planner", "worker", "judge", "tester"];
     for (const role of roles) {
       expect(AgentRole.safeParse(role).success).toBe(true);
     }
