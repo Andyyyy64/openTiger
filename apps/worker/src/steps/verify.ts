@@ -39,7 +39,15 @@ export interface VerifyResult {
   error?: string;
 }
 
-const GENERATED_PATHS = ["node_modules/**", "dist/**", ".turbo/**", "coverage/**"];
+// テスト成果物はポリシー検証から除外する
+const GENERATED_PATHS = [
+  "node_modules/**",
+  "dist/**",
+  ".turbo/**",
+  "coverage/**",
+  "**/playwright-report/**",
+  "**/test-results/**",
+];
 const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
 const ENV_EXAMPLE_PATHS = ["**/.env.example"];
 const GENERATED_EXTENSIONS = [".js", ".d.ts", ".d.ts.map"];
