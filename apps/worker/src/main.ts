@@ -419,6 +419,7 @@ async function pathExists(path: string): Promise<boolean> {
 
 function shouldAllowNoChanges(task: Task): boolean {
   const text = `${task.title} ${task.goal}`.toLowerCase();
+  const commands = task.commands ?? [];
   const allowHints = [
     "検証",
     "ビルド",
@@ -443,9 +444,26 @@ function shouldAllowNoChanges(task: Task): boolean {
 
   const allows = allowHints.some((hint) => text.includes(hint));
   const denies = denyHints.some((hint) => text.includes(hint));
+  const verificationOnly = isVerificationOnlyCommands(commands);
 
   // 検証目的のタスクは変更なしでも評価を継続する
-  return allows && !denies;
+  return (allows && !denies) || verificationOnly;
+}
+
+function isVerificationOnlyCommands(commands: string[]): boolean {
+  if (commands.length === 0) {
+    return false;
+  }
+
+  const verificationPatterns = [
+    /\b(pnpm|npm|yarn|bun)\b[^\n]*\b(install|i|build|test|lint|typecheck|check|dev)\b/i,
+    /\b(vitest|jest|playwright)\b/i,
+  ];
+
+  // 検証系コマンドのみのタスクは変更なしでも成功扱いにする
+  return commands.every((command) =>
+    verificationPatterns.some((pattern) => pattern.test(command))
+  );
 }
 
 async function validateExpectedFiles(

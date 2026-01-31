@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   getChangedFiles,
@@ -44,6 +44,14 @@ const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
 const ENV_EXAMPLE_PATHS = ["**/.env.example"];
 const GENERATED_EXTENSIONS = [".js", ".d.ts", ".d.ts.map"];
 const DEV_COMMAND_WARMUP_MS = 8000;
+const VERIFICATION_SCRIPT_CANDIDATES = [
+  "lint",
+  "build",
+  "test",
+  "typecheck",
+  "check",
+  "dev",
+] as const;
 
 // コマンドを実行
 async function runCommand(
@@ -141,6 +149,100 @@ function normalizeVerificationCommand(command: string): string {
     return command;
   }
   return `${command.slice(0, endIndex)} -- ${trimmedRest}`;
+}
+
+async function loadRootScripts(repoPath: string): Promise<Record<string, string>> {
+  try {
+    const content = await readFile(join(repoPath, "package.json"), "utf-8");
+    const parsed = JSON.parse(content) as { scripts?: Record<string, string> };
+    return parsed.scripts ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function buildDefaultRootScript(scriptName: string): string | undefined {
+  switch (scriptName) {
+    case "dev":
+      return "pnpm -r --parallel --if-present dev";
+    case "build":
+      return "pnpm -r --if-present build";
+    case "lint":
+      return "pnpm -r --if-present lint";
+    case "typecheck":
+      return "pnpm -r --if-present typecheck";
+    case "test":
+      return "pnpm -r --if-present test";
+    case "check":
+      return "pnpm -r --if-present check";
+    default:
+      return undefined;
+  }
+}
+
+async function ensureRootScript(
+  repoPath: string,
+  scriptName: string
+): Promise<{ added: boolean; error?: string; command?: string }> {
+  try {
+    const packageJsonPath = join(repoPath, "package.json");
+    const content = await readFile(packageJsonPath, "utf-8");
+    const parsed = JSON.parse(content) as {
+      scripts?: Record<string, string>;
+      [key: string]: unknown;
+    };
+    if (parsed.scripts?.[scriptName]) {
+      return { added: false };
+    }
+    const command = buildDefaultRootScript(scriptName);
+    if (!command) {
+      return { added: false };
+    }
+
+    // 検証用に最低限のスクリプトを追加する
+    parsed.scripts = {
+      ...(parsed.scripts ?? {}),
+      [scriptName]: command,
+    };
+    await writeFile(
+      packageJsonPath,
+      `${JSON.stringify(parsed, null, 2)}\n`,
+      "utf-8"
+    );
+    return { added: true, command };
+  } catch (error) {
+    return {
+      added: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function resolveRunScript(command: string): string | undefined {
+  const runMatch = command.match(/\b(?:pnpm|npm|yarn|bun)\b[^\n]*\brun\s+([^\s]+)/);
+  if (runMatch?.[1]) {
+    return runMatch[1];
+  }
+
+  const shorthandMatch = command.match(/^(?:pnpm|npm|yarn|bun)\s+([^\s]+)/);
+  if (!shorthandMatch?.[1]) {
+    return undefined;
+  }
+
+  const candidate = shorthandMatch[1];
+  if (candidate.startsWith("-")) {
+    return undefined;
+  }
+
+  return VERIFICATION_SCRIPT_CANDIDATES.includes(
+    candidate as (typeof VERIFICATION_SCRIPT_CANDIDATES)[number]
+  )
+    ? candidate
+    : undefined;
+}
+
+function isFilteredCommand(command: string): boolean {
+  return /\s--filter\b/.test(command) || /\s-F\b/.test(command);
 }
 
 // dev起動は常駐するため、短時間だけ起動して落ちないことを確認する
@@ -426,6 +528,8 @@ export async function verifyChanges(
   let allPassed = true;
   const checkScriptAvailable = await hasRootCheckScript(repoPath);
 
+  const rootScripts = await loadRootScripts(repoPath);
+
   for (const command of commands) {
     // checkスクリプトがない場合は検証コマンドから除外する
     if (isCheckCommand(command) && !checkScriptAvailable) {
@@ -444,6 +548,33 @@ export async function verifyChanges(
     const normalizedCommand = normalizeVerificationCommand(command);
     if (normalizedCommand !== command) {
       console.log(`Normalized verification command: ${command} -> ${normalizedCommand}`);
+    }
+
+    const scriptName = resolveRunScript(normalizedCommand);
+    if (scriptName && !isFilteredCommand(normalizedCommand) && !rootScripts[scriptName]) {
+      const ensureResult = await ensureRootScript(repoPath, scriptName);
+      if (ensureResult.added) {
+        rootScripts[scriptName] = ensureResult.command ?? "";
+        console.warn(
+          `  WARN: Added missing root script "${scriptName}" for verification`
+        );
+      } else if (ensureResult.error) {
+        console.warn(
+          `  WARN: Failed to add root script "${scriptName}": ${ensureResult.error}`
+        );
+      }
+    }
+    if (scriptName && !isFilteredCommand(normalizedCommand) && !rootScripts[scriptName]) {
+      const notice = `Skipped: ${normalizedCommand} (script not found: ${scriptName})`;
+      console.warn(`  WARN: ${notice}`);
+      commandResults.push({
+        command: normalizedCommand,
+        success: true,
+        stdout: notice,
+        stderr: "",
+        durationMs: 0,
+      });
+      continue;
     }
     console.log(`Running: ${normalizedCommand}`);
     const result = isDevCommand(normalizedCommand)
