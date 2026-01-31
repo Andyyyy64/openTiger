@@ -62,6 +62,17 @@
         }
       }
     },
+    "baseRepoRecovery": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "ローカルベースリポジトリ復旧の厳しさ（lowほど緩く、highほど厳しい）",
+          "default": "medium"
+        }
+      }
+    },
     "tokenLimits": {
       "type": "object",
       "properties": {

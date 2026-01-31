@@ -34,6 +34,13 @@ export const PolicySchema = z.object({
     })
     .default({}),
 
+  // ローカルベースリポジトリ復旧の厳しさ
+  baseRepoRecovery: z
+    .object({
+      level: z.enum(["low", "medium", "high"]).default("medium"),
+    })
+    .default({}),
+
   // トークン制限
   tokenLimits: z
     .object({

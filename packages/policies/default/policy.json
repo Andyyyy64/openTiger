@@ -24,6 +24,9 @@
     "maxRiskLevel": "medium",
     "requiredChecks": ["test", "lint", "typecheck"]
   },
+  "baseRepoRecovery": {
+    "level": "medium"
+  },
   "tokenLimits": {
     "perTask": 1000000,
     "perDay": 50000000

@@ -6,6 +6,7 @@ export const ArtifactType = z.enum([
   "commit", // コミット
   "ci_result", // CI実行結果
   "branch", // ブランチ
+  "base_repo_diff", // ローカルベースリポジトリの差分
 ]);
 export type ArtifactType = z.infer<typeof ArtifactType>;
 

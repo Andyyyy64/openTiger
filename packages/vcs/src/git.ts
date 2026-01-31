@@ -393,3 +393,66 @@ export async function resetHard(
 export async function cleanUntracked(cwd: string): Promise<GitResult> {
   return execGit(["clean", "-fd"], cwd);
 }
+
+// 作業ツリーのdiffを取得
+export async function getWorkingTreeDiff(cwd: string): Promise<GitResult> {
+  return execGit(["diff", "HEAD", "--no-color"], cwd);
+}
+
+// 未追跡ファイル一覧を取得
+export async function getUntrackedFiles(cwd: string): Promise<string[]> {
+  const result = await execGit(["ls-files", "--others", "--exclude-standard"], cwd);
+  if (!result.success) {
+    return [];
+  }
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+// 変更をまとめてステージする
+export async function stageAll(cwd: string): Promise<GitResult> {
+  return execGit(["add", "-A"], cwd);
+}
+
+// 変更をコミットする
+export async function commitChanges(
+  cwd: string,
+  message: string
+): Promise<GitResult> {
+  return execGit(["commit", "-m", message], cwd);
+}
+
+// 変更をstashに退避する
+export async function stashChanges(
+  cwd: string,
+  message: string
+): Promise<GitResult> {
+  return execGit(["stash", "push", "-u", "-m", message], cwd);
+}
+
+// 最新のstash参照を取得（stash@{n} 形式）
+export async function getLatestStashRef(cwd: string): Promise<string | undefined> {
+  const result = await execGit(["stash", "list", "-1", "--pretty=format:%gd"], cwd);
+  if (!result.success || !result.stdout) {
+    return undefined;
+  }
+  return result.stdout.trim();
+}
+
+// stashを適用する
+export async function applyStash(
+  cwd: string,
+  stashRef: string
+): Promise<GitResult> {
+  return execGit(["stash", "apply", stashRef], cwd);
+}
+
+// stashを削除する
+export async function dropStash(
+  cwd: string,
+  stashRef: string
+): Promise<GitResult> {
+  return execGit(["stash", "drop", stashRef], cwd);
+}
