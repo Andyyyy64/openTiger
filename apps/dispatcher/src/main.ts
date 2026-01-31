@@ -1,5 +1,5 @@
 import { createWriteStream, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, relative, isAbsolute } from "node:path";
 import { db } from "@h1ve/db";
 import { tasks, agents } from "@h1ve/db/schema";
 import { eq } from "drizzle-orm";
@@ -89,6 +89,60 @@ const DEFAULT_CONFIG: DispatcherConfig = {
   localRepoPath: getLocalRepoPath(),
   localWorktreeRoot: getLocalWorktreeRoot(),
 };
+
+function isSubPath(baseDir: string, targetDir: string): boolean {
+  const relativePath = relative(baseDir, targetDir);
+  return (
+    relativePath === ""
+    || (!relativePath.startsWith("..") && !isAbsolute(relativePath))
+  );
+}
+
+function resolveWorkspacePath(config: DispatcherConfig): string {
+  const envPath = process.env.WORKSPACE_PATH?.trim();
+  const baseDir = resolve(process.cwd());
+
+  if (config.launchMode === "process") {
+    const fallbackPath = resolve(baseDir, ".h1ve-workspace");
+    if (!envPath) {
+      return fallbackPath;
+    }
+    const resolved = resolve(envPath);
+    if (isSubPath(baseDir, resolved)) {
+      return resolved;
+    }
+    // プロセス起動時は外部ディレクトリを避ける
+    console.warn(
+      "[Dispatcher] WORKSPACE_PATH is outside repo. Using local workspace instead."
+    );
+    return fallbackPath;
+  }
+
+  return envPath ? resolve(envPath) : "/tmp/h1ve-workspace";
+}
+
+function resolveLocalWorktreeRoot(config: DispatcherConfig): string | undefined {
+  const envPath = process.env.LOCAL_WORKTREE_ROOT?.trim();
+  const baseDir = resolve(process.cwd());
+
+  if (config.launchMode === "process") {
+    const fallbackPath = resolve(config.workspacePath, "worktrees");
+    if (!envPath) {
+      return fallbackPath;
+    }
+    const resolved = resolve(envPath);
+    if (isSubPath(baseDir, resolved)) {
+      return resolved;
+    }
+    // プロセス起動時は外部ディレクトリを避ける
+    console.warn(
+      "[Dispatcher] LOCAL_WORKTREE_ROOT is outside repo. Using local worktrees instead."
+    );
+    return fallbackPath;
+  }
+
+  return envPath ? resolve(envPath) : "/tmp/h1ve-worktree";
+}
 
 // ディスパッチャーの状態
 let isRunning = false;
@@ -311,6 +365,8 @@ function setupSignalHandlers(): void {
 async function main(): Promise<void> {
   setupProcessLogging(process.env.H1VE_LOG_NAME ?? "dispatcher");
   const config = { ...DEFAULT_CONFIG };
+  config.workspacePath = resolveWorkspacePath(config);
+  config.localWorktreeRoot = resolveLocalWorktreeRoot(config);
 
   // 設定の検証
   if (config.repoMode === "git" && !config.repoUrl) {
