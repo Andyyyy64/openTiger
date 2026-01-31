@@ -1178,8 +1178,10 @@ async function main(): Promise<void> {
   // ハートビート開始
   const heartbeatTimer = startHeartbeat(agentId);
 
-  // 要件ファイルパスを取得
-  const requirementPath = args.find((arg) => !arg.startsWith("--"));
+  // 引数がない場合は環境変数の要件パスを利用する
+  const requirementPath = args.find((arg) => !arg.startsWith("--"))
+    ?? process.env.REQUIREMENT_PATH
+    ?? process.env.REPLAN_REQUIREMENT_PATH;
 
   if (!requirementPath) {
     console.error("Error: Requirement file path is required");
