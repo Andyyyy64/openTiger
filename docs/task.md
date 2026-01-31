@@ -103,10 +103,11 @@ local modeでも差分/テスト/判定の流れを維持し、PRの有無だけ
 - [ ] `REPO_MODE=git|local` の切替を導入（未指定はgit）
 - [ ] local mode用に `LOCAL_REPO_PATH` / `LOCAL_WORKTREE_ROOT` を追加
 - [ ] local modeは `git worktree` で作業領域を分離（並列安全）
+- [x] local modeのベースリポジトリをstash/LLM判定で自動復旧する
 - [ ] Workerのcheckout/commit/pr処理をmodeで分岐（localはpush/PRなし）
 - [ ] Judgeにlocalモード判定（PRなしでdiffとテスト結果を評価）
 - [ ] worktreeの自動クリーンアップ（成功/失敗/サイクル終了時）
-- [ ] READMEにlocal modeの前提と運用手順を追記
+- [x] READMEにlocal modeの前提と運用手順を追記
 
 ### 10. checker（コードベース点検エージェント）の導入
 

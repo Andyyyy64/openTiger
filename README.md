@@ -697,6 +697,9 @@ LOCAL_WORKTREE_ROOT=/tmp/h1ve-worktree
 
 # Judge
 JUDGE_MODE=auto
+JUDGE_LOCAL_BASE_REPO_RECOVERY=llm
+JUDGE_LOCAL_BASE_REPO_RECOVERY_CONFIDENCE=0.7
+JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT=20000
 ```
 
 ### Repo mode（git / local）
@@ -704,6 +707,13 @@ JUDGE_MODE=auto
 - `REPO_MODE=git` は従来通りPRベースで運用する
 - `REPO_MODE=local` は `LOCAL_REPO_PATH` を基点に `git worktree` を作成して作業する
 - local modeはPRを作成しないが、Judgeは差分とテスト結果で判定する
+- `LOCAL_REPO_PATH` はシステム専用のクリーンなリポジトリに固定し、人間の作業リポジトリと併用しない
+- `LOCAL_REPO_PATH` が汚れると Judge のローカルマージが停止するため、汚れた場合は再クローンかリセットで復旧する
+- `JUDGE_LOCAL_BASE_REPO_RECOVERY` を `llm` にすると、未コミット変更をstashしてdiffを保存し、LLM判定で必要なら復帰/コミットする
+- 復帰の厳しさはポリシーの `baseRepoRecovery.level`（low/medium/high）で調整する
+- `baseRepoRecovery.level` の目安は low: 信頼度>=0.6で復帰, medium: 信頼度>=0.75かつerrorなし, high: 信頼度>=0.9かつwarning/errorなし
+- diff保存上限は level に応じて 20000/10000/5000 文字で切り詰める
+- `LAUNCH_MODE=process` の場合は、`WORKSPACE_PATH` と `LOCAL_WORKTREE_ROOT` がリポジトリ外だと自動でローカル配下に切り替える
 
 ---
 
