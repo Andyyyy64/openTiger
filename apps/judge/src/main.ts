@@ -50,6 +50,15 @@ import {
   checkoutBranch,
   mergeBranch,
   getChangedFiles,
+  resetHard,
+  getWorkingTreeDiff,
+  getUntrackedFiles,
+  stashChanges,
+  getLatestStashRef,
+  applyStash,
+  dropStash,
+  stageAll,
+  commitChanges,
   isMergeInProgress,
   abortMerge,
   cleanUntracked,
@@ -107,6 +116,9 @@ interface JudgeConfig {
   dryRun: boolean;
   policy: Policy;
   mode: "git" | "local";
+  baseRepoRecoveryMode: "none" | "stash" | "llm";
+  baseRepoRecoveryConfidence: number;
+  baseRepoRecoveryDiffLimit: number;
 }
 
 // デフォルト設定
@@ -119,7 +131,89 @@ const DEFAULT_CONFIG: JudgeConfig = {
   dryRun: process.env.DRY_RUN === "true",
   policy: DEFAULT_POLICY,
   mode: "git",
+  baseRepoRecoveryMode: "llm",
+  baseRepoRecoveryConfidence: 0.7,
+  baseRepoRecoveryDiffLimit: 20000,
 };
+
+const BASE_REPO_RECOVERY_MODES = ["none", "stash", "llm"] as const;
+
+function resolveBaseRepoRecoveryMode(): "none" | "stash" | "llm" {
+  const value = process.env.JUDGE_LOCAL_BASE_REPO_RECOVERY;
+  return BASE_REPO_RECOVERY_MODES.includes(
+    value as (typeof BASE_REPO_RECOVERY_MODES)[number]
+  )
+    ? (value as (typeof BASE_REPO_RECOVERY_MODES)[number])
+    : "llm";
+}
+
+function resolveBaseRepoRecoveryConfidence(): number {
+  const value = parseFloat(process.env.JUDGE_LOCAL_BASE_REPO_RECOVERY_CONFIDENCE ?? "");
+  if (Number.isFinite(value)) {
+    return Math.min(Math.max(value, 0), 1);
+  }
+  return 0.7;
+}
+
+function resolveBaseRepoRecoveryDiffLimit(): number {
+  const value = parseInt(process.env.JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT ?? "", 10);
+  if (Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  return 20000;
+}
+
+type BaseRepoRecoveryLevel = "low" | "medium" | "high";
+interface BaseRepoRecoveryRules {
+  level: BaseRepoRecoveryLevel;
+  minConfidence: number;
+  diffLimit: number;
+  requireNoErrors: boolean;
+  requireNoWarnings: boolean;
+}
+
+const BASE_REPO_RECOVERY_RULES: Record<BaseRepoRecoveryLevel, BaseRepoRecoveryRules> = {
+  low: {
+    level: "low",
+    minConfidence: 0.6,
+    diffLimit: 20000,
+    requireNoErrors: false,
+    requireNoWarnings: false,
+  },
+  medium: {
+    level: "medium",
+    minConfidence: 0.75,
+    diffLimit: 10000,
+    requireNoErrors: true,
+    requireNoWarnings: false,
+  },
+  high: {
+    level: "high",
+    minConfidence: 0.9,
+    diffLimit: 5000,
+    requireNoErrors: true,
+    requireNoWarnings: true,
+  },
+};
+
+function resolveBaseRepoRecoveryLevel(policy: Policy): BaseRepoRecoveryLevel {
+  return policy.baseRepoRecovery?.level ?? policy.autoMerge.level ?? "medium";
+}
+
+function resolveBaseRepoRecoveryRules(
+  policy: Policy,
+  config: JudgeConfig
+): BaseRepoRecoveryRules {
+  const level = resolveBaseRepoRecoveryLevel(policy);
+  const defaults = BASE_REPO_RECOVERY_RULES[level];
+  return {
+    level,
+    minConfidence: Math.max(defaults.minConfidence, config.baseRepoRecoveryConfidence),
+    diffLimit: Math.min(defaults.diffLimit, config.baseRepoRecoveryDiffLimit),
+    requireNoErrors: defaults.requireNoErrors,
+    requireNoWarnings: defaults.requireNoWarnings,
+  };
+}
 
 async function recordJudgeReview(
   pr: {
@@ -537,10 +631,179 @@ async function judgeSingleWorktree(
   return { result, summary };
 }
 
+async function recoverDirtyBaseRepo(options: {
+  baseRepoPath: string;
+  baseBranch: string;
+  runId: string;
+  taskId: string;
+  agentId: string;
+  workdir: string;
+  instructionsPath: string;
+  useLlm: boolean;
+  recoveryMode: "none" | "stash" | "llm";
+  recoveryRules: BaseRepoRecoveryRules;
+}): Promise<{ success: boolean; error?: string }> {
+  if (options.recoveryMode === "none") {
+    return { success: false, error: "base repo has uncommitted changes" };
+  }
+
+  const diffResult = await getWorkingTreeDiff(options.baseRepoPath);
+  const fullDiff = diffResult.success ? diffResult.stdout : "";
+  const untrackedFiles = await getUntrackedFiles(options.baseRepoPath);
+  const dirtyFiles = await getChangedFiles(options.baseRepoPath);
+
+  const diffTruncated = fullDiff.length > options.recoveryRules.diffLimit;
+  const diffForRecord = diffTruncated
+    ? `${fullDiff.slice(0, options.recoveryRules.diffLimit)}\n... (truncated)`
+    : fullDiff;
+
+  // ベースの変更を退避してマージ処理を止めない
+  const stashMessage = `h1ve base repo auto stash ${new Date().toISOString()}`;
+  const stashResult = await stashChanges(options.baseRepoPath, stashMessage);
+  if (!stashResult.success) {
+    return {
+      success: false,
+      error: `failed to stash changes: ${stashResult.stderr}`,
+    };
+  }
+
+  const stashRef = await getLatestStashRef(options.baseRepoPath);
+
+  try {
+    await db.insert(artifacts).values({
+      runId: options.runId,
+      type: "base_repo_diff",
+      ref: stashRef ?? null,
+      metadata: {
+        baseRepoPath: options.baseRepoPath,
+        baseBranch: options.baseBranch,
+        dirtyFiles,
+        untrackedFiles,
+        diff: diffForRecord,
+        diffTruncated,
+      },
+    });
+  } catch (error) {
+    console.warn("[Judge] Failed to save base repo diff artifact:", error);
+  }
+
+  await db.insert(events).values({
+    type: "judge.base_repo_stashed",
+    entityType: "run",
+    entityId: options.runId,
+    agentId: options.agentId,
+    payload: {
+      taskId: options.taskId,
+      baseRepoPath: options.baseRepoPath,
+      baseBranch: options.baseBranch,
+      stashRef,
+      dirtyFiles,
+      untrackedFiles,
+      diffTruncated,
+      recoveryLevel: options.recoveryRules.level,
+    },
+  });
+
+  if (!options.useLlm || options.recoveryMode !== "llm") {
+    return { success: true };
+  }
+
+  // stash した内容をLLMで判定して復帰の可否を決める
+  const llmResult = await evaluateLLMDiff(
+    fullDiff,
+    "ローカルベースリポジトリの未コミット変更です。システム専用リポジトリに残すべきか判断してください。",
+    {
+      workdir: options.workdir,
+      instructionsPath: options.instructionsPath,
+      timeoutSeconds: 300,
+    }
+  );
+
+  await db.insert(events).values({
+    type: "judge.base_repo_recovery_decision",
+    entityType: "run",
+    entityId: options.runId,
+    agentId: options.agentId,
+    payload: {
+      taskId: options.taskId,
+      stashRef,
+      pass: llmResult.pass,
+      confidence: llmResult.confidence,
+      reasons: llmResult.reasons,
+      suggestions: llmResult.suggestions,
+      recoveryLevel: options.recoveryRules.level,
+    },
+  });
+
+  const hasError = llmResult.codeIssues.some((issue) => issue.severity === "error");
+  const hasWarning = llmResult.codeIssues.some((issue) => issue.severity === "warning");
+  const meetsConfidence = llmResult.confidence >= options.recoveryRules.minConfidence;
+  const meetsErrors = !options.recoveryRules.requireNoErrors || !hasError;
+  const meetsWarnings = !options.recoveryRules.requireNoWarnings || !hasWarning;
+  const shouldRestore =
+    llmResult.pass && meetsConfidence && meetsErrors && meetsWarnings;
+  if (!shouldRestore || !stashRef) {
+    return { success: true };
+  }
+
+  const applyResult = await applyStash(options.baseRepoPath, stashRef);
+  if (!applyResult.success) {
+    console.warn("[Judge] Failed to apply stash:", applyResult.stderr);
+    await checkoutBranch(options.baseRepoPath, options.baseBranch);
+    await resetHard(options.baseRepoPath, options.baseBranch);
+    await cleanUntracked(options.baseRepoPath);
+    return { success: true };
+  }
+
+  // 復帰が妥当と判断された場合のみコミットしてベースをクリーンに保つ
+  const stageResult = await stageAll(options.baseRepoPath);
+  if (!stageResult.success) {
+    await checkoutBranch(options.baseRepoPath, options.baseBranch);
+    await resetHard(options.baseRepoPath, options.baseBranch);
+    await cleanUntracked(options.baseRepoPath);
+    return {
+      success: true,
+      error: `failed to stage recovered changes: ${stageResult.stderr}`,
+    };
+  }
+
+  const commitResult = await commitChanges(
+    options.baseRepoPath,
+    "chore: recover base repo changes"
+  );
+  if (!commitResult.success) {
+    const combinedMessage = `${commitResult.stdout}\n${commitResult.stderr}`;
+    if (!combinedMessage.includes("nothing to commit")) {
+      await checkoutBranch(options.baseRepoPath, options.baseBranch);
+      await resetHard(options.baseRepoPath, options.baseBranch);
+      await cleanUntracked(options.baseRepoPath);
+      return {
+        success: true,
+        error: `failed to commit recovered changes: ${commitResult.stderr}`,
+      };
+    }
+  }
+
+  const dropResult = await dropStash(options.baseRepoPath, stashRef);
+  if (!dropResult.success) {
+    console.warn("[Judge] Failed to drop stash:", dropResult.stderr);
+  }
+
+  return { success: true };
+}
+
 async function mergeLocalBranch(target: {
   baseRepoPath?: string;
   baseBranch: string;
   branchName: string;
+  runId: string;
+  taskId: string;
+  agentId: string;
+  workdir: string;
+  instructionsPath: string;
+  useLlm: boolean;
+  recoveryMode: "none" | "stash" | "llm";
+  recoveryRules: BaseRepoRecoveryRules;
 }): Promise<{ success: boolean; error?: string }> {
   if (!target.baseRepoPath) {
     return { success: false, error: "baseRepoPath is missing" };
@@ -559,8 +822,27 @@ async function mergeLocalBranch(target: {
       }
     }
 
-    const stillDirty = await getChangedFiles(target.baseRepoPath);
-    if (stillDirty.length > 0) {
+    const recoverResult = await recoverDirtyBaseRepo({
+      baseRepoPath: target.baseRepoPath,
+      baseBranch: target.baseBranch,
+      runId: target.runId,
+      taskId: target.taskId,
+      agentId: target.agentId,
+      workdir: target.workdir,
+      instructionsPath: target.instructionsPath,
+      useLlm: target.useLlm,
+      recoveryMode: target.recoveryMode,
+      recoveryRules: target.recoveryRules,
+    });
+    if (!recoverResult.success) {
+      return {
+        success: false,
+        error: recoverResult.error ?? "base repo has uncommitted changes",
+      };
+    }
+
+    const afterRecover = await getChangedFiles(target.baseRepoPath);
+    if (afterRecover.length > 0) {
       // ローカル作業用のベースは未追跡ファイルを掃除してから再判定する
       const cleanResult = await cleanUntracked(target.baseRepoPath);
       if (!cleanResult.success) {
@@ -712,6 +994,7 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
 
   while (true) {
     try {
+      const recoveryRules = resolveBaseRepoRecoveryRules(config.policy, config);
       const pendingWorktrees = await getPendingWorktrees();
 
       if (pendingWorktrees.length > 0) {
@@ -729,6 +1012,14 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
                   baseRepoPath: target.baseRepoPath,
                   baseBranch: target.baseBranch,
                   branchName: target.branchName,
+                  runId: target.runId,
+                  taskId: target.taskId,
+                  agentId: config.agentId,
+                  workdir: config.workdir,
+                  instructionsPath: config.instructionsPath,
+                  useLlm: config.useLlm,
+                  recoveryMode: config.baseRepoRecoveryMode,
+                  recoveryRules,
                 });
                 nextStatus = mergeResult.success ? "done" : "blocked";
                 if (!mergeResult.success) {
@@ -881,6 +1172,9 @@ Environment Variables:
   GITHUB_TOKEN=xxx         GitHub API token
   JUDGE_MODEL=xxx          Judge LLM model
   JUDGE_MODE=git|local|auto Judge execution mode
+  JUDGE_LOCAL_BASE_REPO_RECOVERY=llm|stash|none Recovery strategy for local base repo
+  JUDGE_LOCAL_BASE_REPO_RECOVERY_CONFIDENCE=0.7 LLM confidence threshold
+  JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT=20000 Diff size limit for DB storage
 
 Example:
   pnpm --filter @h1ve/judge start 42
@@ -906,6 +1200,9 @@ async function main(): Promise<void> {
     policy: await loadPolicyConfig(),
   };
   config.policy = applyRepoModePolicyOverrides(config.policy);
+  config.baseRepoRecoveryMode = resolveBaseRepoRecoveryMode();
+  config.baseRepoRecoveryConfidence = resolveBaseRepoRecoveryConfidence();
+  config.baseRepoRecoveryDiffLimit = resolveBaseRepoRecoveryDiffLimit();
 
   if (args.includes("--dry-run")) {
     config.dryRun = true;
