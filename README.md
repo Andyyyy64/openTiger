@@ -547,7 +547,7 @@ CREATE TABLE leases (
 ### タスク運用上の注意
 
 - 検証コマンドは自己完結にする（外部API/DBが必要なら起動・停止を含めるかテスト側でモックする）
-- 検証コマンドが生成する成果物は `allowed_paths` に含める（例: `playwright-report/**`, `test-results/**`, `coverage/**`）
+- 検証コマンドが生成する成果物は `allowed_paths` に含める（例: `apps/web/test-results/**`, `apps/web/playwright-report/**`, `coverage/**`）
 - 既存の開発サーバに依存しない（E2Eは専用ポートで起動し、衝突時はポートを明示的に変更する）
 
 ### タスク例
@@ -677,6 +677,10 @@ DATABASE_URL=postgresql://h1ve:h1ve@localhost:5432/h1ve
 # Redis
 REDIS_URL=redis://localhost:6379
 
+# Ports
+H1VE_API_PORT=4301
+H1VE_DASHBOARD_PORT=5190
+
 # GitHub
 GITHUB_TOKEN=ghp_xxxx
 GITHUB_WEBHOOK_SECRET=your-webhook-secret
@@ -707,6 +711,12 @@ JUDGE_LOCAL_BASE_REPO_RECOVERY=llm
 JUDGE_LOCAL_BASE_REPO_RECOVERY_CONFIDENCE=0.7
 JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT=20000
 ```
+
+### ポート衝突の回避
+
+- `H1VE_API_PORT` と `H1VE_DASHBOARD_PORT` は作業対象でよく使われる `3000/3001/5173` と被らない値にする
+- `pnpm restart` はh1veのAPI/ダッシュボードを常駐起動するため、E2Eの`webServer`と競合しないようにする
+- `LOCAL_WORKTREE_ROOT` をリポジトリ配下に置くと、外部ディレクトリの許可ダイアログを避けられる
 
 ### Repo mode（git / local）
 

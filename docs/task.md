@@ -98,8 +98,10 @@ testerはテストの作成・実行・結果要約・フレーク対処を担�
 ### テスト実行の運用ルール
 
 - 検証コマンドは自己完結にする（外部API/DBが必要なら起動・停止を含めるかテスト側でモックする）
-- テストが生成する成果物は `allowed_paths` に含める（例: `playwright-report/**`, `test-results/**`, `coverage/**`）
+- テストが生成する成果物は `allowed_paths` に含める（例: `apps/web/test-results/**`, `apps/web/playwright-report/**`, `coverage/**`）
 - E2Eの検証は専用ポートで起動し、既存の開発サーバに依存しない構成にする
+- `vitest` はwatchで常駐するため、自動検証では `vitest run` か `CI=1` を使う
+- Playwrightの`webServer`は固定ポートを待つため、`VITE_PORT`や`PLAYWRIGHT_BASE_URL`を揃えて起動する
 
 ### 9. repo mode（git/local切替）の導入
 

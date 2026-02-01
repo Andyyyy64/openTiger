@@ -73,8 +73,11 @@ app.get("/", (c) => {
   });
 });
 
-// サーバー起動
-const port = parseInt(process.env.API_PORT ?? "3000", 10);
+// 作業対象のAPIと衝突しないよう、ポートは環境変数で切り替える
+const port = parseInt(
+  process.env.H1VE_API_PORT ?? process.env.API_PORT ?? "4301",
+  10,
+);
 
 console.log(`h1ve API server starting on port ${port}`);
 
