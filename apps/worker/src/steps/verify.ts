@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { access, readFile, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import { join } from "node:path";
 import {
   getChangedFiles,
@@ -52,6 +53,7 @@ const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
 const ENV_EXAMPLE_PATHS = ["**/.env.example"];
 const GENERATED_EXTENSIONS = [".js", ".d.ts", ".d.ts.map"];
 const DEV_COMMAND_WARMUP_MS = 8000;
+const DEV_PORT_IN_USE_PATTERNS = [/Port\s+\d+\s+is already in use/i, /EADDRINUSE/i];
 const VERIFICATION_SCRIPT_CANDIDATES = [
   "lint",
   "build",
@@ -253,8 +255,43 @@ function isFilteredCommand(command: string): boolean {
   return /\s--filter\b/.test(command) || /\s-F\b/.test(command);
 }
 
-// dev起動は常駐するため、短時間だけ起動して落ちないことを確認する
-async function runDevCommand(
+function buildPortOverrideCommand(command: string, port: number): string | null {
+  if (/\s--port\b/.test(command)) {
+    return null;
+  }
+  if (/\b(pnpm|npm|yarn|bun)\b[^\n]*\brun\b/.test(command)) {
+    return `${command} -- --port ${port}`;
+  }
+  if (/^(?:pnpm|npm|yarn|bun)\s+dev\b/.test(command)) {
+    return `${command} -- --port ${port}`;
+  }
+  return `${command} --port ${port}`;
+}
+
+// Vite系の「ポート使用中」エラーを検知して退避起動する
+function shouldRetryDevWithPort(stderr: string): boolean {
+  return DEV_PORT_IN_USE_PATTERNS.some((pattern) => pattern.test(stderr));
+}
+
+async function findAvailablePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.unref();
+    server.on("error", reject);
+    server.listen(0, () => {
+      const address = server.address();
+      if (address && typeof address === "object") {
+        const { port } = address;
+        server.close(() => resolve(port));
+      } else {
+        server.close();
+        reject(new Error("Failed to acquire an available port"));
+      }
+    });
+  });
+}
+
+async function runDevCommandOnce(
   command: string,
   cwd: string,
   warmupMs = DEV_COMMAND_WARMUP_MS
@@ -323,6 +360,34 @@ async function runDevCommand(
       });
     });
   });
+}
+
+// dev起動は常駐するため、短時間だけ起動して落ちないことを確認する
+async function runDevCommand(
+  command: string,
+  cwd: string,
+  warmupMs = DEV_COMMAND_WARMUP_MS
+): Promise<CommandResult> {
+  const result = await runDevCommandOnce(command, cwd, warmupMs);
+  if (!result.success && shouldRetryDevWithPort(result.stderr)) {
+    try {
+      const port = await findAvailablePort();
+      const override = buildPortOverrideCommand(command, port);
+      if (override) {
+        const retryResult = await runDevCommandOnce(override, cwd, warmupMs);
+        if (retryResult.success) {
+          return {
+            ...retryResult,
+            stdout: `${retryResult.stdout}\n[dev-check] port override: ${port}`,
+          };
+        }
+        return retryResult;
+      }
+    } catch {
+      return result;
+    }
+  }
+  return result;
 }
 
 function touchesPackageManifest(files: string[]): boolean {
