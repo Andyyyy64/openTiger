@@ -38,6 +38,8 @@ export interface OpenCodeResult {
 
 // デフォルト設定
 const DEFAULT_MODEL = process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview";
+const DEFAULT_FALLBACK_MODEL =
+  process.env.OPENCODE_FALLBACK_MODEL ?? "google/gemini-2.5-flash";
 const DEFAULT_MAX_RETRIES = parseInt(process.env.OPENCODE_MAX_RETRIES ?? "3", 10);
 const DEFAULT_RETRY_DELAY_MS = parseInt(process.env.OPENCODE_RETRY_DELAY_MS ?? "5000", 10);
 
@@ -49,6 +51,8 @@ const RETRYABLE_ERRORS = [
   /overloaded/i,
   /ETIMEDOUT/,
 ];
+
+const THOUGHT_SIGNATURE_ERROR = /thought[_\s-]?signature/i;
 
 function isRetryableError(stderr: string, exitCode: number): boolean {
   if (exitCode === 1 && !stderr) return false;
@@ -164,16 +168,32 @@ export async function runOpenCode(
 ): Promise<OpenCodeResult> {
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
+  let currentModel = options.model ?? DEFAULT_MODEL;
+  let fallbackUsed = false;
 
   let lastResult: Omit<OpenCodeResult, "retryCount"> | null = null;
   let retryCount = 0;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const result = await executeOpenCodeOnce(options);
+    const result = await executeOpenCodeOnce({ ...options, model: currentModel });
     lastResult = result;
 
     if (result.success) {
       return { ...result, retryCount };
+    }
+
+    if (
+      !fallbackUsed
+      && currentModel !== DEFAULT_FALLBACK_MODEL
+      && THOUGHT_SIGNATURE_ERROR.test(result.stderr)
+    ) {
+      // Gemini 3系のthought_signature必須エラー回避のためにモデルを切り替える
+      fallbackUsed = true;
+      currentModel = DEFAULT_FALLBACK_MODEL;
+      console.warn(
+        `[OpenCode] Fallback model applied: ${currentModel} (reason: thought_signature)`
+      );
+      continue;
     }
 
     if (attempt < maxRetries && isRetryableError(result.stderr, result.exitCode)) {
