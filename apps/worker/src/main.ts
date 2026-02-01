@@ -484,6 +484,11 @@ async function validateExpectedFiles(
       continue;
     }
 
+    // .envは運用側で生成されるため期待ファイルの検証対象から外す
+    if (/(^|\/)\.env(\.|$)/.test(normalizedFile)) {
+      continue;
+    }
+
     if (hasGlobPattern(normalizedFile)) {
       continue;
     }
