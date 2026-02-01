@@ -142,6 +142,10 @@ function isDevCommand(command: string): boolean {
 
 // pnpm/npmのtestコマンドは引数の前に"--"が必要なので補正する
 function normalizeVerificationCommand(command: string): string {
+  // test:e2e のようなサブスクリプトはそのまま実行する
+  if (/\btest:/.test(command)) {
+    return command;
+  }
   const match = command.match(/\b(pnpm|npm)\b[^\n]*\btest\b/);
   if (!match || match.index === undefined) {
     return command;
