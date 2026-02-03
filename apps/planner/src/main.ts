@@ -760,10 +760,67 @@ async function resolveDependencies(
   }
 }
 
+async function recordPlannerPlanEvent(params: {
+  requirementPath: string;
+  requirement: Requirement;
+  result: TaskGenerationResult;
+  savedIds: string[];
+  agentId: string;
+}): Promise<void> {
+  const { requirementPath, requirement, result, savedIds, agentId } = params;
+  const taskSummaries = result.tasks
+    .map((task, index) => {
+      const id = savedIds[index];
+      if (!id) {
+        return undefined;
+      }
+      return {
+        id,
+        title: task.title,
+        goal: task.goal,
+        role: task.role ?? "worker",
+        riskLevel: task.riskLevel ?? "low",
+        priority: task.priority ?? 0,
+        dependencies: task.dependencies ?? [],
+      };
+    })
+    .filter(
+      (task): task is NonNullable<typeof task> => typeof task !== "undefined"
+    );
+
+  try {
+    await db.insert(events).values({
+      type: "planner.plan_created",
+      entityType: "system",
+      entityId: "00000000-0000-0000-0000-000000000000",
+      agentId,
+      payload: {
+        requirementPath,
+        requirement: {
+          goal: requirement.goal,
+          acceptanceCriteriaCount: requirement.acceptanceCriteria.length,
+          allowedPaths: requirement.allowedPaths,
+          notes: requirement.notes,
+        },
+        summary: {
+          totalTasks: result.tasks.length,
+          totalEstimatedMinutes: result.totalEstimatedMinutes,
+          warnings: result.warnings,
+        },
+        taskIds: taskSummaries.map((task) => task.id),
+        tasks: taskSummaries,
+      },
+    });
+  } catch (error) {
+    console.warn("[Planner] Failed to record plan event:", error);
+  }
+}
+
 // 要件ファイルからタスクを生成
 async function planFromRequirement(
   requirementPath: string,
-  config: PlannerConfig
+  config: PlannerConfig,
+  agentId: string
 ): Promise<void> {
   console.log("=".repeat(60));
   console.log("h1ve Planner - Task Generation");
@@ -884,6 +941,15 @@ async function planFromRequirement(
   console.log("\n[Saving tasks to database...]");
   const savedIds = await saveTasks(result.tasks);
   await resolveDependencies(savedIds, result.tasks);
+
+  // Plannerの計画内容をUI側で参照できるように記録する
+  await recordPlannerPlanEvent({
+    requirementPath,
+    requirement,
+    result,
+    savedIds,
+    agentId,
+  });
 
   console.log(`\nSaved ${savedIds.length} tasks to database`);
   console.log("Task IDs:");
@@ -1206,7 +1272,7 @@ async function main(): Promise<void> {
   try {
     const { workdir, cleanup } = await preparePlannerWorkdir(config);
     try {
-      await planFromRequirement(resolve(requirementPath), { ...config, workdir });
+      await planFromRequirement(resolve(requirementPath), { ...config, workdir }, agentId);
     } finally {
       await cleanup();
     }
