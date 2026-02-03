@@ -680,6 +680,7 @@ REDIS_URL=redis://localhost:6379
 # Ports
 H1VE_API_PORT=4301
 H1VE_DASHBOARD_PORT=5190
+H1VE_E2E_PORT=5174
 
 # GitHub
 GITHUB_TOKEN=ghp_xxxx
@@ -715,6 +716,7 @@ JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT=20000
 ### ポート衝突の回避
 
 - `H1VE_API_PORT` と `H1VE_DASHBOARD_PORT` は作業対象でよく使われる `3000/3001/5173` と被らない値にする
+- `H1VE_E2E_PORT` を指定してE2EのVite/Playwrightの待機先を固定する
 - `pnpm restart` はh1veのAPI/ダッシュボードを常駐起動するため、E2Eの`webServer`と競合しないようにする
 - `LOCAL_WORKTREE_ROOT` をリポジトリ配下に置くと、外部ディレクトリの許可ダイアログを避けられる
 

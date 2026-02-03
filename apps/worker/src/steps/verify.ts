@@ -113,7 +113,8 @@ async function runCommand(
 
 // パスがパターンにマッチするか確認
 function matchesPattern(path: string, patterns: string[]): boolean {
-  return patterns.some((pattern) => minimatch(path, pattern));
+  // Playwrightの`.last-run.json`などドットファイルも対象に含める
+  return patterns.some((pattern) => minimatch(path, pattern, { dot: true }));
 }
 
 function isGeneratedPath(path: string): boolean {
@@ -140,29 +141,69 @@ function isDevCommand(command: string): boolean {
   return /\b(pnpm|npm|yarn|bun)\b[^\n]*\b(run\s+)?dev\b/.test(command);
 }
 
+function isE2ECommand(command: string): boolean {
+  return /\b(test:e2e|playwright)\b/i.test(command);
+}
+
+function hasEnvPrefix(command: string, key: string): boolean {
+  return new RegExp(`(^|\\s)${key}=`).test(command);
+}
+
+function withEnvPrefix(command: string, key: string, value: string): string {
+  if (hasEnvPrefix(command, key)) {
+    return command;
+  }
+  return `${key}=${value} ${command}`;
+}
+
+function shouldForceCi(command: string): boolean {
+  if (/\btest:/.test(command)) {
+    return false;
+  }
+  return /\b(pnpm|npm|yarn|bun)\b[^\n]*\btest\b/.test(command);
+}
+
 // pnpm/npmのtestコマンドは引数の前に"--"が必要なので補正する
 function normalizeVerificationCommand(command: string): string {
-  // test:e2e のようなサブスクリプトはそのまま実行する
-  if (/\btest:/.test(command)) {
-    return command;
+  let normalized = command;
+
+  if (isE2ECommand(normalized)) {
+    const e2ePort = process.env.H1VE_E2E_PORT ?? "5174";
+    // PlaywrightのwebServer待機先とViteのポートを一致させる
+    normalized = withEnvPrefix(normalized, "VITE_PORT", e2ePort);
+    normalized = withEnvPrefix(
+      normalized,
+      "PLAYWRIGHT_BASE_URL",
+      `http://localhost:${e2ePort}`
+    );
   }
-  const match = command.match(/\b(pnpm|npm)\b[^\n]*\btest\b/);
+
+  if (shouldForceCi(normalized)) {
+    // vitestのwatchを抑止して検証を終了させる
+    normalized = withEnvPrefix(normalized, "CI", "1");
+  }
+
+  // test:e2e のようなサブスクリプトはそのまま実行する
+  if (/\btest:/.test(normalized)) {
+    return normalized;
+  }
+  const match = normalized.match(/\b(pnpm|npm)\b[^\n]*\btest\b/);
   if (!match || match.index === undefined) {
-    return command;
+    return normalized;
   }
   const endIndex = match.index + match[0].length;
-  const rest = command.slice(endIndex);
+  const rest = normalized.slice(endIndex);
   const trimmedRest = rest.trim();
   if (!trimmedRest) {
-    return command;
+    return normalized;
   }
   if (trimmedRest.startsWith("-- ")) {
-    return command;
+    return normalized;
   }
   if (/^(&&|\|\||;|\|)/.test(trimmedRest)) {
-    return command;
+    return normalized;
   }
-  return `${command.slice(0, endIndex)} -- ${trimmedRest}`;
+  return `${normalized.slice(0, endIndex)} -- ${trimmedRest}`;
 }
 
 async function loadRootScripts(repoPath: string): Promise<Record<string, string>> {
