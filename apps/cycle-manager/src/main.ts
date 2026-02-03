@@ -21,6 +21,7 @@ import {
   cleanupExpiredLeases,
   resetOfflineAgents,
   cancelStuckRuns,
+  requeueFailedTasksWithCooldown,
 } from "./cleaners/index.js";
 import {
   recordEvent,
@@ -129,6 +130,7 @@ let activeConfig: CycleManagerConfig = { ...DEFAULT_CONFIG };
 let replanInProgress = false;
 let lastReplanAt: number | null = null;
 let warnedMissingRequirementPath = false;
+const replanDebugEnabled = process.env.REPLAN_DEBUG === "true";
 
 interface ReplanSignature {
   signature: string;
@@ -267,6 +269,21 @@ async function getLastSuccessfulReplanSignature(): Promise<string | null> {
   }
 }
 
+async function getLastPlanCreatedAt(): Promise<Date | null> {
+  try {
+    const [row] = await db
+      .select({ createdAt: events.createdAt })
+      .from(events)
+      .where(eq(events.type, "planner.plan_created"))
+      .orderBy(desc(events.createdAt))
+      .limit(1);
+    return row?.createdAt ?? null;
+  } catch (error) {
+    console.warn("[CycleManager] Failed to load last plan event:", error);
+    return null;
+  }
+}
+
 async function shouldTriggerReplan(
   state: SystemState,
   config: CycleManagerConfig
@@ -284,6 +301,25 @@ async function shouldTriggerReplan(
   if (state.tasks.queued > 0 || state.tasks.running > 0) {
     return { shouldRun: false, reason: "tasks_in_progress" };
   }
+  const lastPlanAt = await getLastPlanCreatedAt();
+  const nowMs = Date.now();
+  const planAgeMs = lastPlanAt ? nowMs - lastPlanAt.getTime() : null;
+  // 直近のPlanがあれば同一間隔内の再計画を避ける
+  if (lastPlanAt && planAgeMs !== null && planAgeMs < config.replanIntervalMs) {
+    console.log("[CycleManager] Skip replan: recent plan exists", {
+      lastPlanAt: lastPlanAt.toISOString(),
+      planAgeMs,
+      intervalMs: config.replanIntervalMs,
+    });
+    return { shouldRun: false, reason: "recent_plan" };
+  }
+  // デバッグ: 再計画判定の状態をログ
+  console.log("[CycleManager] Replan check", {
+    lastPlanAt: lastPlanAt?.toISOString() ?? "none",
+    planAgeMs,
+    intervalMs: config.replanIntervalMs,
+    replanInProgress,
+  });
   if (lastReplanAt && Date.now() - lastReplanAt < config.replanIntervalMs) {
     return { shouldRun: false, reason: "interval" };
   }
@@ -309,6 +345,12 @@ async function triggerReplan(
   state: SystemState,
   signature?: ReplanSignature
 ): Promise<void> {
+  // 競合状態防止: 既に実行中なら何もしない
+  if (replanInProgress) {
+    console.log("[CycleManager] triggerReplan called but already in progress, skipping");
+    return;
+  }
+
   const config = activeConfig;
   if (!config.replanRequirementPath) {
     return;
@@ -449,23 +491,28 @@ async function runMonitorLoop(): Promise<void> {
     }
 
     // タスク枯渇時はPlannerを再実行する
-    const systemState = await captureSystemState();
-    const replanDecision = await shouldTriggerReplan(systemState, activeConfig);
-    if (replanDecision.shouldRun) {
-      await triggerReplan(systemState, replanDecision.signature);
-    } else if (replanDecision.reason === "no_diff") {
-      lastReplanAt = Date.now();
-      await recordEvent({
-        type: "planner.replan_skipped",
-        entityType: "system",
-        entityId: "00000000-0000-0000-0000-000000000000",
-        payload: {
-          reason: "no_diff",
-          signature: replanDecision.signature?.signature,
-          requirementHash: replanDecision.signature?.requirementHash,
-          repoHeadSha: replanDecision.signature?.repoHeadSha,
-        },
-      });
+    // replanInProgress を先にチェックして競合状態を防ぐ
+    if (replanInProgress) {
+      // Planner 実行中は何もしない
+    } else {
+      const systemState = await captureSystemState();
+      const replanDecision = await shouldTriggerReplan(systemState, activeConfig);
+      if (replanDecision.shouldRun) {
+        await triggerReplan(systemState, replanDecision.signature);
+      } else if (replanDecision.reason === "no_diff") {
+        lastReplanAt = Date.now();
+        await recordEvent({
+          type: "planner.replan_skipped",
+          entityType: "system",
+          entityId: "00000000-0000-0000-0000-000000000000",
+          payload: {
+            reason: "no_diff",
+            signature: replanDecision.signature?.signature,
+            requirementHash: replanDecision.signature?.requirementHash,
+            repoHeadSha: replanDecision.signature?.repoHeadSha,
+          },
+        });
+      }
     }
   } catch (error) {
     console.error("[CycleManager] Monitor loop error:", error);
@@ -491,6 +538,12 @@ async function runCleanupLoop(): Promise<void> {
     const stuckRuns = await cancelStuckRuns();
     if (stuckRuns > 0) {
       console.log(`[Cleanup] Cancelled ${stuckRuns} stuck runs`);
+    }
+
+    // 失敗タスクをクールダウン後に再キュー（2分経過後、最大3回まで）
+    const requeuedTasks = await requeueFailedTasksWithCooldown(2 * 60 * 1000);
+    if (requeuedTasks > 0) {
+      console.log(`[Cleanup] Requeued ${requeuedTasks} failed tasks`);
     }
   } catch (error) {
     console.error("[CycleManager] Cleanup loop error:", error);

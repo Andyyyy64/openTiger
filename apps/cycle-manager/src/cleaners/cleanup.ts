@@ -213,7 +213,7 @@ export async function performFullCleanup(
   return result;
 }
 
-// 失敗したタスクを再キューイング
+// 失敗したタスクを再キューイング（即時、全件）
 export async function requeueFailedTasks(): Promise<number> {
   const result = await db
     .update(tasks)
@@ -227,6 +227,69 @@ export async function requeueFailedTasks(): Promise<number> {
       entityType: "task",
       entityId: task.id,
     });
+  }
+
+  return result.length;
+}
+
+// 最大リトライ回数 (これを超えたタスクは再キューしない)
+const MAX_RETRY_COUNT = 3;
+
+// 失敗タスクをクールダウン後に再キュー（リトライ回数制限付き）
+export async function requeueFailedTasksWithCooldown(
+  cooldownMs: number = 2 * 60 * 1000 // デフォルト2分に短縮（自己復旧を早める）
+): Promise<number> {
+  const cutoff = new Date(Date.now() - cooldownMs);
+
+  // 失敗したタスクを取得
+  const failedTasks = await db
+    .select({ id: tasks.id, updatedAt: tasks.updatedAt, retryCount: tasks.retryCount })
+    .from(tasks)
+    .where(eq(tasks.status, "failed"));
+
+  if (failedTasks.length === 0) {
+    return 0;
+  }
+
+  // クールダウン経過済み＆リトライ上限未満のタスクをフィルタ
+  const eligibleTasks = failedTasks.filter((task) => {
+    const cooldownPassed = task.updatedAt < cutoff;
+    const retryAllowed = (task.retryCount ?? 0) < MAX_RETRY_COUNT;
+    return cooldownPassed && retryAllowed;
+  });
+
+  if (eligibleTasks.length === 0) {
+    return 0;
+  }
+
+  const eligibleIds = eligibleTasks.map((t) => t.id);
+
+  // retryCountをインクリメントしてqueuedに戻す
+  const result = await db
+    .update(tasks)
+    .set({
+      status: "queued",
+      updatedAt: new Date(),
+    })
+    .where(inArray(tasks.id, eligibleIds))
+    .returning({ id: tasks.id });
+
+  // 個別にretryCountを更新
+  for (const task of eligibleTasks) {
+    await db
+      .update(tasks)
+      .set({ retryCount: (task.retryCount ?? 0) + 1 })
+      .where(eq(tasks.id, task.id));
+  }
+
+  for (const task of result) {
+    await recordEvent({
+      type: "task.requeued",
+      entityType: "task",
+      entityId: task.id,
+      payload: { reason: "cooldown_retry" },
+    });
+    console.log(`[Cleanup] Requeued failed task: ${task.id}`);
   }
 
   return result.length;
