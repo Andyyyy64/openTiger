@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, ListTodo, Activity, Settings, ShieldCheck, Wifi, WifiOff } from 'lucide-react';
+import { LayoutDashboard, ListTodo, Activity, Settings, ShieldCheck, Wifi, WifiOff, Layers, Scale } from 'lucide-react';
 import { systemApi, runsApi } from '../lib/api';
 
 interface LayoutProps {
@@ -41,6 +41,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <NavItem to="/tasks" icon={<ListTodo size={20} />} label="Tasks" />
             <NavItem to="/runs" icon={<Activity size={20} />} label="Runs" />
             <NavItem to="/agents" icon={<ShieldCheck size={20} />} label="Agents" />
+            <NavItem to="/plans" icon={<Layers size={20} />} label="Plans" />
+            <NavItem to="/judgements" icon={<Scale size={20} />} label="Judgements" />
           </nav>
         </div>
 

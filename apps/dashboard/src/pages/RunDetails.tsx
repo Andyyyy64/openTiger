@@ -1,8 +1,8 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { runsApi } from '../lib/api';
-import { ChevronLeft, Terminal, Box, Link as LinkIcon, AlertCircle } from 'lucide-react';
+import { runsApi, judgementsApi, type JudgementEvent } from '../lib/api';
+import { ChevronLeft, Terminal, Box, Link as LinkIcon, AlertCircle, ShieldCheck } from 'lucide-react';
 import type { Artifact } from '@h1ve/core';
 
 export const RunDetailsPage: React.FC = () => {
@@ -11,6 +11,12 @@ export const RunDetailsPage: React.FC = () => {
   const { data, isLoading, error } = useQuery({
     queryKey: ['runs', id],
     queryFn: () => runsApi.get(id!),
+    enabled: !!id,
+  });
+
+  const { data: judgements } = useQuery({
+    queryKey: ['judgements', id],
+    queryFn: () => judgementsApi.list({ runId: id! }),
     enabled: !!id,
   });
 
@@ -117,6 +123,22 @@ export const RunDetailsPage: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* Judge Review */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <ShieldCheck size={16} />
+              Judge Review
+            </h2>
+            <div className="space-y-3">
+              {(judgements ?? []).length === 0 && (
+                <p className="text-xs text-slate-500 italic">No reviews recorded</p>
+              )}
+              {(judgements ?? []).map((review) => (
+                <JudgeReviewItem key={review.id} review={review} />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -129,5 +151,48 @@ const getStatusColor = (status: string) => {
     case 'failed': return 'bg-red-500/10 text-red-400 border border-red-500/20';
     case 'running': return 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
     default: return 'bg-slate-500/10 text-slate-400 border border-slate-500/20';
+  }
+};
+
+const JudgeReviewItem = ({ review }: { review: JudgementEvent }) => {
+  const payload = review.payload ?? {};
+  const verdict = payload.verdict ?? 'unknown';
+  const merged = payload.actions?.merged ?? false;
+  const ciStatus = payload.summary?.ci?.status ?? (payload.summary?.ci?.pass ? 'success' : 'unknown');
+
+  return (
+    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${getVerdictColor(verdict)}`}>
+          {verdict}
+        </span>
+        <span className="text-xs text-slate-500">
+          {new Date(review.createdAt).toLocaleString()}
+        </span>
+      </div>
+      <div className="text-xs text-slate-400 space-y-1">
+        <div>CI: {ciStatus}</div>
+        <div>Auto-merge: {payload.autoMerge ? 'enabled' : 'disabled'}</div>
+        <div>Merged: {merged ? 'yes' : 'no'}</div>
+      </div>
+      {payload.prUrl && (
+        <a href={payload.prUrl} target="_blank" rel="noreferrer" className="text-xs text-yellow-500 hover:underline">
+          PR #{payload.prNumber}
+        </a>
+      )}
+    </div>
+  );
+};
+
+const getVerdictColor = (verdict: string) => {
+  switch (verdict) {
+    case 'approve':
+      return 'bg-green-500/10 text-green-400 border border-green-500/20';
+    case 'request_changes':
+      return 'bg-red-500/10 text-red-400 border border-red-500/20';
+    case 'needs_human':
+      return 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20';
+    default:
+      return 'bg-slate-500/10 text-slate-400 border border-slate-500/20';
   }
 };

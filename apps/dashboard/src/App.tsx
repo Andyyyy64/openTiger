@@ -7,6 +7,9 @@ import { CreateTaskPage } from './pages/CreateTask'
 import { RunsPage } from './pages/Runs'
 import { RunDetailsPage } from './pages/RunDetails'
 import { AgentsPage } from './pages/Agents'
+import { PlansPage } from './pages/Plans'
+import { JudgementsPage } from './pages/Judgements'
+import { AgentDetailsPage } from './pages/AgentDetails'
 
 function App() {
   return (
@@ -20,6 +23,9 @@ function App() {
           <Route path="/runs" element={<RunsPage />} />
           <Route path="/runs/:id" element={<RunDetailsPage />} />
           <Route path="/agents" element={<AgentsPage />} />
+          <Route path="/agents/:id" element={<AgentDetailsPage />} />
+          <Route path="/plans" element={<PlansPage />} />
+          <Route path="/judgements" element={<JudgementsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { agentsApi } from '../lib/api';
+import { Link } from 'react-router-dom';
 import { Users, ShieldCheck, Clock, Zap } from 'lucide-react';
 
 export const AgentsPage: React.FC = () => {
@@ -25,7 +26,11 @@ export const AgentsPage: React.FC = () => {
           <div className="col-span-full py-12 text-center text-slate-500">No agents registered</div>
         ) : (
           agents?.map((agent) => (
-            <div key={agent.id} className="bg-slate-900 border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-all group">
+            <Link
+              key={agent.id}
+              to={`/agents/${agent.id}`}
+              className="bg-slate-900 border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-all group block"
+            >
               <div className="flex justify-between items-start mb-6">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${agent.status === 'busy' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-400'}`}>
@@ -82,7 +87,7 @@ export const AgentsPage: React.FC = () => {
                   <p className="text-[10px] text-slate-500 text-center uppercase font-bold tracking-widest">Processing Task</p>
                 </div>
               )}
-            </div>
+            </Link>
           ))
         )}
       </div>
