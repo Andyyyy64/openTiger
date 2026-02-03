@@ -1,7 +1,7 @@
 import { spawn, ChildProcess } from "node:child_process";
 import { join } from "node:path";
-import { db } from "@h1ve/db";
-import { agents } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { agents } from "@sebastian-code/db/schema";
 import { eq } from "drizzle-orm";
 
 // Worker起動モード
@@ -64,7 +64,7 @@ async function launchAsProcess(
 
   try {
     console.log(`[Dispatcher] Launching worker process for task ${config.taskId}...`);
-    const workerProcess = spawn("pnpm", ["--filter", "@h1ve/worker", "start"], {
+    const workerProcess = spawn("pnpm", ["--filter", "@sebastian-code/worker", "start"], {
       env,
       stdio: ["ignore", "pipe", "pipe"],
       detached: false,
@@ -115,8 +115,8 @@ async function launchAsProcess(
 async function launchAsDocker(
   config: WorkerLaunchConfig
 ): Promise<LaunchResult> {
-  const image = config.dockerImage ?? "h1ve-worker:latest";
-  const network = config.dockerNetwork ?? "h1ve_default";
+  const image = config.dockerImage ?? "sebastian-worker:latest";
+  const network = config.dockerNetwork ?? "sebastian_default";
 
   const envArgs: string[] = [];
   const allEnv = {
@@ -147,7 +147,7 @@ async function launchAsDocker(
     "run",
     "--rm",
     "--name",
-    `h1ve-worker-${config.agentId}`,
+    `sebastian-worker-${config.agentId}`,
     "--network",
     network,
     ...envArgs,
@@ -189,10 +189,10 @@ async function launchAsDocker(
     setTimeout(() => {
       if (dockerProcess.exitCode === null) {
         activeWorkers.set(config.taskId, {
-          containerId: `h1ve-worker-${config.agentId}`,
+          containerId: `sebastian-worker-${config.agentId}`,
           agentId: config.agentId,
         });
-        resolve({ success: true, containerId: `h1ve-worker-${config.agentId}` });
+        resolve({ success: true, containerId: `sebastian-worker-${config.agentId}` });
       } else {
         resolve({ success: false, error: "Container exited immediately" });
       }

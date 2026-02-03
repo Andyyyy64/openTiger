@@ -7,8 +7,8 @@ import {
   getChangeStats,
   getChangedFilesBetweenRefs,
   getDiffStatsBetweenRefs,
-} from "@h1ve/vcs";
-import type { Policy } from "@h1ve/core";
+} from "@sebastian-code/vcs";
+import type { Policy } from "@sebastian-code/core";
 import { minimatch } from "minimatch";
 
 export interface VerifyOptions {
@@ -168,7 +168,7 @@ function normalizeVerificationCommand(command: string): string {
   let normalized = command;
 
   if (isE2ECommand(normalized)) {
-    const e2ePort = process.env.H1VE_E2E_PORT ?? "5174";
+    const e2ePort = process.env.SEBASTIAN_E2E_PORT ?? "5174";
     // PlaywrightのwebServer待機先とViteのポートを一致させる
     normalized = withEnvPrefix(normalized, "VITE_PORT", e2ePort);
     normalized = withEnvPrefix(

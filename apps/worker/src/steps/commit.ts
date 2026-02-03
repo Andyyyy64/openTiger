@@ -1,6 +1,6 @@
-import { stageChanges, commit, push } from "@h1ve/vcs";
-import { getRepoMode } from "@h1ve/core";
-import type { Task } from "@h1ve/core";
+import { stageChanges, commit, push } from "@sebastian-code/vcs";
+import { getRepoMode } from "@sebastian-code/core";
+import type { Task } from "@sebastian-code/core";
 
 export interface CommitOptions {
   repoPath: string;
@@ -18,7 +18,7 @@ export interface CommitResult {
 // コミットメッセージを生成
 function generateCommitMessage(task: Task, changedFiles: string[]): string {
   const lines: string[] = [
-    `[h1ve] ${task.title}`,
+    `[sebastian-code] ${task.title}`,
     "",
     `Task ID: ${task.id}`,
     "",

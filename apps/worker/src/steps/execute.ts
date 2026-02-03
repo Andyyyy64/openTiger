@@ -1,7 +1,7 @@
 import { writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Task } from "@h1ve/core";
-import { runOpenCode, type OpenCodeResult } from "@h1ve/llm";
+import type { Task } from "@sebastian-code/core";
+import { runOpenCode, type OpenCodeResult } from "@sebastian-code/llm";
 
 export interface ExecuteOptions {
   repoPath: string;

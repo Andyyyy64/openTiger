@@ -25,5 +25,5 @@ export function getLocalWorktreeRoot(
   env: NodeJS.ProcessEnv = process.env
 ): string {
   const value = env.LOCAL_WORKTREE_ROOT?.trim();
-  return value && value.length > 0 ? value : "/tmp/h1ve-worktree";
+  return value && value.length > 0 ? value : "/tmp/sebastian-code-worktree";
 }

@@ -25,11 +25,11 @@ function sanitizeAgentId(agentId: string): string | null {
 }
 
 function resolveLogDir(): string {
-  if (process.env.H1VE_LOG_DIR) {
-    return process.env.H1VE_LOG_DIR;
+  if (process.env.SEBASTIAN_LOG_DIR) {
+    return process.env.SEBASTIAN_LOG_DIR;
   }
-  if (process.env.H1VE_RAW_LOG_DIR) {
-    return process.env.H1VE_RAW_LOG_DIR;
+  if (process.env.SEBASTIAN_RAW_LOG_DIR) {
+    return process.env.SEBASTIAN_RAW_LOG_DIR;
   }
   // APIの作業ディレクトリに依存せず、リポジトリ直下を基準にする
   return join(resolve(import.meta.dirname, "../../../.."), "raw-logs");

@@ -213,7 +213,7 @@ export function createOpenCodeDockerOptions(
   env?: Record<string, string>
 ): DockerExecOptions {
   return {
-    image: "h1ve/worker:latest",
+    image: "sebastian-code/worker:latest",
     workdir: "/workspace",
     mounts: [
       {

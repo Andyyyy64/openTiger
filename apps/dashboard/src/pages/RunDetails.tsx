@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { runsApi, judgementsApi, type JudgementEvent } from '../lib/api';
 import { ChevronLeft, Terminal, Box, Link as LinkIcon, AlertCircle, ShieldCheck } from 'lucide-react';
-import type { Artifact } from '@h1ve/core';
+import type { Artifact } from '@sebastian-code/core';
 
 export const RunDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();

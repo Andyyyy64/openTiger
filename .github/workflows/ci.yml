@@ -96,6 +96,6 @@ jobs:
           context: .
           file: ops/docker/worker.Dockerfile
           push: false
-          tags: h1ve/worker:latest
+          tags: sebastian-code/worker:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

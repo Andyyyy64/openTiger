@@ -1,7 +1,7 @@
-import { db } from "@h1ve/db";
-import { tasks } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { tasks } from "@sebastian-code/db/schema";
 import { eq, or } from "drizzle-orm";
-import type { CreateTaskInput } from "@h1ve/core";
+import type { CreateTaskInput } from "@sebastian-code/core";
 
 // 依存関係の推定結果
 export interface DependencyResolution {

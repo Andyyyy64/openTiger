@@ -1,3 +1,3 @@
-// @h1ve/db パッケージのエントリポイント
+// @sebastian-code/db パッケージのエントリポイント
 export * from "./client.js";
 export * from "./schema.js";

@@ -1,4 +1,4 @@
-# h1ve Worker用Dockerfile
+# sebastian-code Worker用Dockerfile
 # サンドボックス環境でOpenCodeを使用してタスクを実行
 
 # ==============================
@@ -74,7 +74,7 @@ COPY packages/policies packages/policies
 COPY packages/db/drizzle.config.ts packages/db/
 
 # ビルド
-RUN pnpm build --filter=@h1ve/worker...
+RUN pnpm build --filter=@sebastian-code/worker...
 
 # ==============================
 # 実行ステージ
@@ -82,22 +82,22 @@ RUN pnpm build --filter=@h1ve/worker...
 FROM base AS runner
 
 # セキュリティ: 非rootユーザーで実行
-RUN addgroup --system --gid 1001 h1ve && \
-    adduser --system --uid 1001 --ingroup h1ve worker
+RUN addgroup --system --gid 1001 sebastian-code && \
+    adduser --system --uid 1001 --ingroup sebastian-code worker
 
 # Workerの作業ディレクトリを作成
-RUN mkdir -p /workspace && chown worker:h1ve /workspace
+RUN mkdir -p /workspace && chown worker:sebastian-code /workspace
 
 # ビルド済みアプリケーションをコピー
-COPY --from=builder --chown=worker:h1ve /app/node_modules ./node_modules
-COPY --from=builder --chown=worker:h1ve /app/packages ./packages
-COPY --from=builder --chown=worker:h1ve /app/apps/worker ./apps/worker
-COPY --from=builder --chown=worker:h1ve /app/package.json ./
-COPY --from=builder --chown=worker:h1ve /app/pnpm-workspace.yaml ./
+COPY --from=builder --chown=worker:sebastian-code /app/node_modules ./node_modules
+COPY --from=builder --chown=worker:sebastian-code /app/packages ./packages
+COPY --from=builder --chown=worker:sebastian-code /app/apps/worker ./apps/worker
+COPY --from=builder --chown=worker:sebastian-code /app/package.json ./
+COPY --from=builder --chown=worker:sebastian-code /app/pnpm-workspace.yaml ./
 
 # Gitの設定（コミット用）
-RUN git config --system user.name "h1ve-worker" && \
-    git config --system user.email "worker@h1ve.ai"
+RUN git config --system user.name "sebastian-code-worker" && \
+    git config --system user.email "worker@sebastian-code.ai"
 
 # 非rootユーザーに切り替え
 USER worker
@@ -108,8 +108,8 @@ ENV WORKSPACE_PATH=/workspace
 ENV LOG_FORMAT=json
 
 # ネットワーク制限のためのラベル（docker-compose/k8sで使用）
-LABEL h1ve.network.policy="restricted"
-LABEL h1ve.network.allowed="api.github.com,github.com,generativelanguage.googleapis.com,opencode.ai"
+LABEL sebastian-code.network.policy="restricted"
+LABEL sebastian-code.network.allowed="api.github.com,github.com,generativelanguage.googleapis.com,opencode.ai"
 
 # ヘルスチェック
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

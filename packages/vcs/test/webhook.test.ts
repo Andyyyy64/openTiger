@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   verifyGitHubWebhookSignature,
-  isH1veRelatedEvent,
+  isSebastianCodeRelatedEvent,
   type PullRequestPayload,
   type IssuePayload,
   type WebhookPayload,
@@ -75,7 +75,7 @@ describe("verifyGitHubWebhookSignature", () => {
   });
 });
 
-describe("isH1veRelatedEvent", () => {
+describe("isSebastianCodeRelatedEvent", () => {
   describe("Pull Request events", () => {
     it("agent/で始まるブランチのPRを検出する", () => {
       const payload: PullRequestPayload = {
@@ -96,12 +96,12 @@ describe("isH1veRelatedEvent", () => {
             sha: "def456",
           },
           user: {
-            login: "h1ve-bot",
+            login: "sebastian-code-bot",
           },
         },
       };
 
-      expect(isH1veRelatedEvent(payload)).toBe(true);
+      expect(isSebastianCodeRelatedEvent(payload)).toBe(true);
     });
 
     it("通常のブランチのPRは検出しない", () => {
@@ -128,12 +128,12 @@ describe("isH1veRelatedEvent", () => {
         },
       };
 
-      expect(isH1veRelatedEvent(payload)).toBe(false);
+      expect(isSebastianCodeRelatedEvent(payload)).toBe(false);
     });
   });
 
   describe("Issue events", () => {
-    it("h1veラベル付きのIssueを検出する", () => {
+    it("sebastian-codeラベル付きのIssueを検出する", () => {
       const payload: IssuePayload = {
         action: "opened",
         issue: {
@@ -141,14 +141,14 @@ describe("isH1veRelatedEvent", () => {
           title: "Implement new feature",
           body: "Feature description",
           state: "open",
-          labels: [{ name: "h1ve" }, { name: "enhancement" }],
+          labels: [{ name: "sebastian-code" }, { name: "enhancement" }],
           user: {
             login: "developer",
           },
         },
       };
 
-      expect(isH1veRelatedEvent(payload)).toBe(true);
+      expect(isSebastianCodeRelatedEvent(payload)).toBe(true);
     });
 
     it("auto-taskラベル付きのIssueを検出する", () => {
@@ -166,7 +166,7 @@ describe("isH1veRelatedEvent", () => {
         },
       };
 
-      expect(isH1veRelatedEvent(payload)).toBe(true);
+      expect(isSebastianCodeRelatedEvent(payload)).toBe(true);
     });
 
     it("関連ラベルなしのIssueは検出しない", () => {
@@ -184,7 +184,7 @@ describe("isH1veRelatedEvent", () => {
         },
       };
 
-      expect(isH1veRelatedEvent(payload)).toBe(false);
+      expect(isSebastianCodeRelatedEvent(payload)).toBe(false);
     });
 
     it("ラベルなしのIssueは検出しない", () => {
@@ -202,7 +202,7 @@ describe("isH1veRelatedEvent", () => {
         },
       };
 
-      expect(isH1veRelatedEvent(payload)).toBe(false);
+      expect(isSebastianCodeRelatedEvent(payload)).toBe(false);
     });
   });
 
@@ -216,7 +216,7 @@ describe("isH1veRelatedEvent", () => {
         },
       };
 
-      expect(isH1veRelatedEvent(payload)).toBe(false);
+      expect(isSebastianCodeRelatedEvent(payload)).toBe(false);
     });
   });
 });

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { db } from "@h1ve/db";
-import { events, tasks } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { events, tasks } from "@sebastian-code/db/schema";
 import { desc, eq, inArray } from "drizzle-orm";
 
 export const plansRoute = new Hono();

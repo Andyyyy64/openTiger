@@ -1,5 +1,5 @@
 {
-  "name": "@h1ve/api",
+  "name": "@sebastian-code/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,8 +15,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@h1ve/core": "workspace:*",
-    "@h1ve/db": "workspace:*",
+    "@sebastian-code/core": "workspace:*",
+    "@sebastian-code/db": "workspace:*",
     "@hono/node-server": "^1.13.8",
     "@hono/zod-validator": "^0.4.2",
     "dotenv": "^17.2.3",

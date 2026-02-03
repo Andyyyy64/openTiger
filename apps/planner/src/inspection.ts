@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
-import { runOpenCode } from "@h1ve/llm";
+import { runOpenCode } from "@sebastian-code/llm";
 import type { Requirement } from "./parser.js";
 import { PLANNER_OPENCODE_CONFIG_PATH } from "./opencode-config.js";
 

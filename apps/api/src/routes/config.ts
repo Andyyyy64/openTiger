@@ -7,9 +7,9 @@ import { join } from "node:path";
 export const configRoute = new Hono();
 
 const ALLOWED_KEYS = new Set([
-  "H1VE_API_PORT",
-  "H1VE_DASHBOARD_PORT",
-  "H1VE_E2E_PORT",
+  "SEBASTIAN_API_PORT",
+  "SEBASTIAN_DASHBOARD_PORT",
+  "SEBASTIAN_E2E_PORT",
   "MAX_CONCURRENT_WORKERS",
   "DAILY_TOKEN_LIMIT",
   "HOURLY_TOKEN_LIMIT",
@@ -27,7 +27,7 @@ const ALLOWED_KEYS = new Set([
   "WORKER_MODEL",
   "PLANNER_USE_REMOTE",
   "PLANNER_REPO_URL",
-  "H1VE_LOG_DIR",
+  "SEBASTIAN_LOG_DIR",
   "AUTO_REPLAN",
   "REPLAN_REQUIREMENT_PATH",
   "REPLAN_INTERVAL_MS",
@@ -45,7 +45,7 @@ type EnvLine =
   | { type: "pair"; key: string; value: string; raw: string };
 
 function resolveEnvPath(): string {
-  return process.env.H1VE_ENV_PATH ?? join(process.cwd(), ".env");
+  return process.env.SEBASTIAN_ENV_PATH ?? join(process.cwd(), ".env");
 }
 
 function parseEnvContent(content: string): { lines: EnvLine[]; values: Record<string, string> } {

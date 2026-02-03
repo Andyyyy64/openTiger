@@ -1,20 +1,20 @@
-import { db } from "@h1ve/db";
-import { tasks, runs, artifacts, leases, agents } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { tasks, runs, artifacts, leases, agents } from "@sebastian-code/db/schema";
 import { eq, and } from "drizzle-orm";
-import type { Task, Policy } from "@h1ve/core";
+import type { Task, Policy } from "@sebastian-code/core";
 import {
   DEFAULT_POLICY,
   getRepoMode,
   getLocalRepoPath,
   getLocalWorktreeRoot,
   applyRepoModePolicyOverrides,
-} from "@h1ve/core";
+} from "@sebastian-code/core";
 import "dotenv/config";
 import {
   createTaskWorker,
   getTaskQueueName,
   type TaskJobData,
-} from "@h1ve/queue";
+} from "@sebastian-code/queue";
 import type { Job } from "bullmq";
 import { createWriteStream } from "node:fs";
 import { mkdirSync } from "node:fs";
@@ -119,7 +119,7 @@ export async function runWorker(
   }
 
   const runId = runRecord.id;
-  const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
+  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
   const taskLogPath = buildTaskLogPath(logDir, taskId, runId, agentId);
   setTaskLogPath(taskLogPath);
   await db
@@ -395,7 +395,7 @@ export async function runWorker(
   } finally {
     setTaskLogPath();
     if (repoMode === "local" && worktreeBasePath && worktreePath) {
-      const { removeWorktree } = await import("@h1ve/vcs");
+      const { removeWorktree } = await import("@sebastian-code/vcs");
       await removeWorktree({
         baseRepoPath: worktreeBasePath,
         worktreePath,
@@ -540,7 +540,7 @@ function setTaskLogPath(logPath?: string): void {
 }
 
 function setupProcessLogging(agentId: string): string | undefined {
-  const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
+  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
 
   try {
     mkdirSync(logDir, { recursive: true });
@@ -596,7 +596,7 @@ async function main() {
   const agentRole = process.env.AGENT_ROLE ?? "worker";
   const agentId = process.env.AGENT_ID
     ?? (workerIndex ? `${agentRole}-${workerIndex}` : `${agentRole}-${Date.now()}`);
-  const workspacePath = process.env.WORKSPACE_PATH ?? `/tmp/h1ve-workspace/${agentId}`;
+  const workspacePath = process.env.WORKSPACE_PATH ?? `/tmp/sebastian-code-workspace/${agentId}`;
   const repoUrl = process.env.REPO_URL ?? "";
   const baseBranch = process.env.BASE_BRANCH ?? "main";
   const repoMode = getRepoMode();

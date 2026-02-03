@@ -1,5 +1,5 @@
 {
-  "name": "@h1ve/db",
+  "name": "@sebastian-code/db",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -28,7 +28,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@h1ve/core": "workspace:*",
+    "@sebastian-code/core": "workspace:*",
     "drizzle-orm": "^0.38.4",
     "postgres": "^3.4.5"
   },

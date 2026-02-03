@@ -1,5 +1,5 @@
-import type { Policy } from "@h1ve/core";
-import { getOctokit, getRepoInfo } from "@h1ve/vcs";
+import type { Policy } from "@sebastian-code/core";
+import { getOctokit, getRepoInfo } from "@sebastian-code/vcs";
 
 // ポリシー評価結果
 export interface PolicyEvaluationResult {

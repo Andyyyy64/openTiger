@@ -3,11 +3,11 @@ import { spawn } from "node:child_process";
 import { createWriteStream, mkdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
-import { db, closeDb } from "@h1ve/db";
-import { tasks, agents, events } from "@h1ve/db/schema";
+import { db, closeDb } from "@sebastian-code/db";
+import { tasks, agents, events } from "@sebastian-code/db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import dotenv from "dotenv";
-import { getRepoMode, getLocalRepoPath } from "@h1ve/core";
+import { getRepoMode, getLocalRepoPath } from "@sebastian-code/core";
 
 // ハートビートの間隔（ミリ秒）
 const HEARTBEAT_INTERVAL = 30000; // 30秒
@@ -43,7 +43,7 @@ import {
 import { inspectCodebase, formatInspectionNotes } from "./inspection.js";
 
 function setupProcessLogging(logName: string): string | undefined {
-  const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
+  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
 
   try {
     mkdirSync(logDir, { recursive: true });
@@ -868,7 +868,7 @@ async function planFromRequirement(
   agentId: string
 ): Promise<void> {
   console.log("=".repeat(60));
-  console.log("h1ve Planner - Task Generation");
+  console.log("sebastian-code Planner - Task Generation");
   console.log("=".repeat(60));
   console.log(`Requirement file: ${requirementPath}`);
   console.log(`Use LLM: ${config.useLlm}`);
@@ -1023,7 +1023,7 @@ async function preparePlannerWorkdir(config: PlannerConfig): Promise<{
   }
 
   console.log(`[Planner] Using remote repo: ${config.repoUrl}`);
-  const tempDir = await mkdtemp(join(tmpdir(), "h1ve-planner-"));
+  const tempDir = await mkdtemp(join(tmpdir(), "sebastian-code-planner-"));
   const repoDir = join(tempDir, "repo");
   const token = process.env.GITHUB_TOKEN;
   const cloneResult = await gitCloneRepo(config.repoUrl, repoDir, token, config.baseBranch);
@@ -1222,11 +1222,11 @@ export async function planFromContent(
 // ヘルプを表示
 function showHelp(): void {
   console.log(`
-h1ve Planner - Generate tasks from requirements
+sebastian-code Planner - Generate tasks from requirements
 
 Usage:
-  pnpm --filter @h1ve/planner start <requirement.md>
-  pnpm --filter @h1ve/planner start --help
+  pnpm --filter @sebastian-code/planner start <requirement.md>
+  pnpm --filter @sebastian-code/planner start --help
 
 Options:
   --help          Show this help message
@@ -1242,7 +1242,7 @@ Environment Variables:
   PLANNER_INSPECT_TIMEOUT=180  LLM inspection timeout in seconds
 
 Example:
-  pnpm --filter @h1ve/planner start docs/requirements/feature-x.md
+  pnpm --filter @sebastian-code/planner start docs/requirements/feature-x.md
 `);
 }
 

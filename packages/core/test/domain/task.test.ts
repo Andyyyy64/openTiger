@@ -12,14 +12,14 @@ describe("TaskSchema", () => {
   const validTask = {
     id: "550e8400-e29b-41d4-a716-446655440000",
     title: "ユーザー認証機能を実装",
-    goal: "pnpm test --filter=@h1ve/auth が全て通過",
+    goal: "pnpm test --filter=@sebastian-code/auth が全て通過",
     context: {
       files: ["src/auth/login.ts", "src/auth/session.ts"],
       specs: "OAuth2.0を使用した認証",
       notes: "既存のDBスキーマを使用",
     },
     allowedPaths: ["src/auth/**", "tests/auth/**"],
-    commands: ["pnpm test --filter=@h1ve/auth", "pnpm typecheck"],
+    commands: ["pnpm test --filter=@sebastian-code/auth", "pnpm typecheck"],
     priority: 10,
     riskLevel: "medium" as const,
     role: "worker" as const,

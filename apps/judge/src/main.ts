@@ -1,8 +1,8 @@
 import { createWriteStream, mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
-import { db } from "@h1ve/db";
-import { artifacts, runs, tasks, agents, events } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { artifacts, runs, tasks, agents, events } from "@sebastian-code/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
 import {
   DEFAULT_POLICY,
@@ -11,7 +11,7 @@ import {
   getRepoMode,
   getLocalRepoPath,
   applyRepoModePolicyOverrides,
-} from "@h1ve/core";
+} from "@sebastian-code/core";
 import "dotenv/config";
 
 // ハートビートの間隔（ミリ秒）
@@ -62,7 +62,7 @@ import {
   isMergeInProgress,
   abortMerge,
   cleanUntracked,
-} from "@h1ve/vcs";
+} from "@sebastian-code/vcs";
 
 import {
   makeJudgement,
@@ -72,7 +72,7 @@ import {
 } from "./pr-reviewer.js";
 
 function setupProcessLogging(logName: string): string | undefined {
-  const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
+  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
 
   try {
     mkdirSync(logDir, { recursive: true });
@@ -658,7 +658,7 @@ async function recoverDirtyBaseRepo(options: {
     : fullDiff;
 
   // ベースの変更を退避してマージ処理を止めない
-  const stashMessage = `h1ve base repo auto stash ${new Date().toISOString()}`;
+  const stashMessage = `sebastian-code base repo auto stash ${new Date().toISOString()}`;
   const stashResult = await stashChanges(options.baseRepoPath, stashMessage);
   if (!stashResult.success) {
     return {
@@ -905,7 +905,7 @@ async function mergeLocalBranch(target: {
 // レビューループ
 async function runJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log("=".repeat(60));
-  console.log("h1ve Judge started");
+  console.log("sebastian-code Judge started");
   console.log("=".repeat(60));
   console.log(`Poll interval: ${config.pollIntervalMs}ms`);
   console.log(`Use LLM: ${config.useLlm}`);
@@ -985,7 +985,7 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
 
 async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log("=".repeat(60));
-  console.log("h1ve Judge (local mode) started");
+  console.log("sebastian-code Judge (local mode) started");
   console.log("=".repeat(60));
   console.log(`Poll interval: ${config.pollIntervalMs}ms`);
   console.log(`Use LLM: ${config.useLlm}`);
@@ -1075,7 +1075,7 @@ async function reviewSinglePR(
   config: JudgeConfig
 ): Promise<void> {
   console.log("=".repeat(60));
-  console.log(`h1ve Judge - Reviewing PR #${prNumber}`);
+  console.log(`sebastian-code Judge - Reviewing PR #${prNumber}`);
   console.log("=".repeat(60));
 
   // CI評価
@@ -1157,12 +1157,12 @@ async function reviewSinglePR(
 // ヘルプを表示
 function showHelp(): void {
   console.log(`
-h1ve Judge - Automated PR review and merge
+sebastian-code Judge - Automated PR review and merge
 
 Usage:
-  pnpm --filter @h1ve/judge start              # Start polling mode
-  pnpm --filter @h1ve/judge start <PR#>        # Review single PR
-  pnpm --filter @h1ve/judge start --help       # Show this help
+  pnpm --filter @sebastian-code/judge start              # Start polling mode
+  pnpm --filter @sebastian-code/judge start <PR#>        # Review single PR
+  pnpm --filter @sebastian-code/judge start --help       # Show this help
 
 Options:
   --help          Show this help message
@@ -1181,7 +1181,7 @@ Environment Variables:
   JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT=20000 Diff size limit for DB storage
 
 Example:
-  pnpm --filter @h1ve/judge start 42
+  pnpm --filter @sebastian-code/judge start 42
 `);
 }
 

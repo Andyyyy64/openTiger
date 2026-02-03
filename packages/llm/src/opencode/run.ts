@@ -89,7 +89,7 @@ async function executeOpenCodeOnce(
 ): Promise<Omit<OpenCodeResult, "retryCount">> {
   const startTime = Date.now();
   const args: string[] = ["run"];
-  const tempDir = await mkdtemp(join(tmpdir(), "h1ve-opencode-"));
+  const tempDir = await mkdtemp(join(tmpdir(), "sebastian-code-opencode-"));
   const promptPath = join(tempDir, "prompt.txt");
 
   // プロンプトをファイルで渡してCLIの引数制限やパース問題を避ける

@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@h1ve/db";
-import { tasks } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { tasks } from "@sebastian-code/db/schema";
 import { eq } from "drizzle-orm";
-import { CreateTaskInput } from "@h1ve/core";
+import { CreateTaskInput } from "@sebastian-code/core";
 
 export const tasksRoute = new Hono();
 

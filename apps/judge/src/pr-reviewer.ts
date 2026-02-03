@@ -1,5 +1,5 @@
-import { addPRComment, mergePR, getOctokit, getRepoInfo } from "@h1ve/vcs";
-import type { Policy } from "@h1ve/core";
+import { addPRComment, mergePR, getOctokit, getRepoInfo } from "@sebastian-code/vcs";
+import type { Policy } from "@sebastian-code/core";
 import type { CIEvaluationResult, PolicyEvaluationResult, LLMEvaluationResult, CodeIssue } from "./evaluators/index.js";
 
 // 判定結果
@@ -246,7 +246,7 @@ export function generateReviewComment(
 
   // フッター
   comment += "\n---\n";
-  comment += "_Reviewed by h1ve Judge_\n";
+  comment += "_Reviewed by sebastian-code Judge_\n";
 
   return comment;
 }

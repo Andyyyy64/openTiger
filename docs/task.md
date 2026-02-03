@@ -1,4 +1,4 @@
-# h1ve 実装タスク一覧
+# Sebastian-codeの実装タスク一覧
 
 > このファイルで実装進捗を管理する。  
 > 完了したタスクには `[x]` をつける。
@@ -61,7 +61,7 @@
 - [x] 実行禁止コマンドの実行側（Sandbox）でのハードブロック
 - [ ] `LaunchMode=process` でも同等の制約が効くようにする（もしくはデフォルトを `docker` に寄せる）
 - [ ] OpenCode/検証コマンドを「常に」サンドボックス経由で実行する（経路の一元化）
-- [ ] Worker Dockerイメージ名の統一（`h1ve/worker:latest` と `h1ve-worker:latest` の混在解消）
+- [ ] Worker Dockerイメージ名の統一（`sebastian-code/worker:latest` と `sebastian-code-worker:latest` の混在解消）
 
 ### 6. 役割別モデル構成の標準化
 
@@ -394,7 +394,7 @@ Plannerの差分点検とは別系統で、実装品質の継続的改善を担�
 - Vite
 - Tailwind CSS v4
 - TanStack Query（データフェッチ）
-- @h1ve/api からREST APIで取得
+- @sebastian-code/api からREST APIで取得
 
 #### プロジェクト初期化
 

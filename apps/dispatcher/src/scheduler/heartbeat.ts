@@ -1,5 +1,5 @@
-import { db } from "@h1ve/db";
-import { agents, leases, tasks } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { agents, leases, tasks } from "@sebastian-code/db/schema";
 import { eq, lt, and } from "drizzle-orm";
 
 // ハートビート設定

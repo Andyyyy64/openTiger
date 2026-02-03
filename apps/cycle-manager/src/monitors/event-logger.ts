@@ -1,5 +1,5 @@
-import { db } from "@h1ve/db";
-import { events, runs } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { events, runs } from "@sebastian-code/db/schema";
 import { eq, and, gte, lte, sql, count, sum } from "drizzle-orm";
 
 // イベント記録用の入力型

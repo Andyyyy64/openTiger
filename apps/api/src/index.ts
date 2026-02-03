@@ -17,7 +17,7 @@ import { configRoute } from "./routes/config.js";
 import { authMiddleware, rateLimitMiddleware } from "./middleware/index.js";
 
 function setupProcessLogging(logName: string): string | undefined {
-  const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
+  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
 
   try {
     mkdirSync(logDir, { recursive: true });
@@ -51,7 +51,7 @@ function setupProcessLogging(logName: string): string | undefined {
   return logPath;
 }
 
-setupProcessLogging(process.env.H1VE_LOG_NAME ?? "api");
+setupProcessLogging(process.env.SEBASTIAN_LOG_NAME ?? "api");
 
 const app = new Hono();
 
@@ -75,7 +75,7 @@ app.route("/config", configRoute);
 // ルートパス
 app.get("/", (c) => {
   return c.json({
-    name: "h1ve",
+    name: "sebastian-code",
     version: "0.1.0",
     description: "AI Agent Orchestration System",
   });
@@ -83,11 +83,11 @@ app.get("/", (c) => {
 
 // 作業対象のAPIと衝突しないよう、ポートは環境変数で切り替える
 const port = parseInt(
-  process.env.H1VE_API_PORT ?? process.env.API_PORT ?? "4301",
+  process.env.SEBASTIAN_API_PORT ?? process.env.API_PORT ?? "4301",
   10,
 );
 
-console.log(`h1ve API server starting on port ${port}`);
+console.log(`sebastian-code API server starting on port ${port}`);
 
 serve({
   fetch: app.fetch,

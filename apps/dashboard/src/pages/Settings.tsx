@@ -13,21 +13,21 @@ type SettingField = {
 
 const SETTINGS: SettingField[] = [
   {
-    key: 'H1VE_API_PORT',
+    key: 'SEBASTIAN_API_PORT',
     label: 'APIポート',
-    description: 'h1veのAPI待ち受けポート',
+    description: 'sebastian-codeのAPI待ち受けポート',
     group: 'Ports',
     type: 'number',
   },
   {
-    key: 'H1VE_DASHBOARD_PORT',
+    key: 'SEBASTIAN_DASHBOARD_PORT',
     label: 'Dashboardポート',
-    description: 'h1veダッシュボードの待ち受けポート',
+    description: 'sebastian-codeダッシュボードの待ち受けポート',
     group: 'Ports',
     type: 'number',
   },
   {
-    key: 'H1VE_E2E_PORT',
+    key: 'SEBASTIAN_E2E_PORT',
     label: 'E2Eポート',
     description: 'E2Eで利用するVite/Playwrightポート',
     group: 'Ports',
@@ -153,7 +153,7 @@ const SETTINGS: SettingField[] = [
     type: 'text',
   },
   {
-    key: 'H1VE_LOG_DIR',
+    key: 'SEBASTIAN_LOG_DIR',
     label: 'ログ出力先',
     description: 'raw-logsの出力ディレクトリ',
     group: 'Logs',

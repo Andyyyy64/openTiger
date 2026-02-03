@@ -1,7 +1,7 @@
-import { db } from "@h1ve/db";
-import { cycles, tasks, runs, agents } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { cycles, tasks, runs, agents } from "@sebastian-code/db/schema";
 import { eq, count, sql, and, gte, lte } from "drizzle-orm";
-import type { CycleStats, StateSnapshot } from "@h1ve/core";
+import type { CycleStats, StateSnapshot } from "@sebastian-code/core";
 
 // システム状態のスナップショット
 export interface SystemState {

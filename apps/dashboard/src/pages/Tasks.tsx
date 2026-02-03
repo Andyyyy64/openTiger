@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { tasksApi } from '../lib/api';
-import type { Task } from '@h1ve/core';
+import type { Task } from '@sebastian-code/core';
 
 export const TasksPage: React.FC = () => {
   const { data: tasks, isLoading, error } = useQuery({

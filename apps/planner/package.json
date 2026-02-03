@@ -1,5 +1,5 @@
 {
-  "name": "@h1ve/planner",
+  "name": "@sebastian-code/planner",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,9 +15,9 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@h1ve/core": "workspace:*",
-    "@h1ve/db": "workspace:*",
-    "@h1ve/llm": "workspace:*",
+    "@sebastian-code/core": "workspace:*",
+    "@sebastian-code/db": "workspace:*",
+    "@sebastian-code/llm": "workspace:*",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.38.4"
   },

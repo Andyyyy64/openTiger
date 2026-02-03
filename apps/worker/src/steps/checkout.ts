@@ -9,13 +9,13 @@ import {
   resetHard,
   cleanUntracked,
   removeWorktree,
-} from "@h1ve/vcs";
+} from "@sebastian-code/vcs";
 import {
   getRepoMode,
   getLocalRepoPath,
   getLocalWorktreeRoot,
   type RepoMode,
-} from "@h1ve/core";
+} from "@sebastian-code/core";
 
 export interface CheckoutOptions {
   repoUrl: string;

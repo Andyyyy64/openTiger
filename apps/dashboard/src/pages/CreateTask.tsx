@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { tasksApi } from '../lib/api';
 import { ChevronLeft, Save, Plus, X } from 'lucide-react';
-import type { CreateTaskInput } from '@h1ve/core';
+import type { CreateTaskInput } from '@sebastian-code/core';
 
 export const CreateTaskPage: React.FC = () => {
   const navigate = useNavigate();

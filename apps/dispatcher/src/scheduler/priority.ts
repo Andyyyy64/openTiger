@@ -1,5 +1,5 @@
-import { db } from "@h1ve/db";
-import { tasks, leases, runs } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { tasks, leases, runs } from "@sebastian-code/db/schema";
 import { eq, and, inArray, gt } from "drizzle-orm";
 
 // タスク選択結果

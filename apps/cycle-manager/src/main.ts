@@ -3,10 +3,10 @@ import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { db } from "@h1ve/db";
-import { events } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { events } from "@sebastian-code/db/schema";
 import { eq, desc } from "drizzle-orm";
-import type { CycleConfig } from "@h1ve/core";
+import type { CycleConfig } from "@sebastian-code/core";
 import {
   startNewCycle,
   endCurrentCycle,
@@ -39,7 +39,7 @@ import {
 import type { SystemState } from "./state-manager.js";
 
 function setupProcessLogging(logName: string): string | undefined {
-  const logDir = process.env.H1VE_LOG_DIR ?? "/tmp/h1ve-logs";
+  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
 
   try {
     mkdirSync(logDir, { recursive: true });
@@ -112,7 +112,7 @@ const DEFAULT_CONFIG: CycleManagerConfig = {
   replanIntervalMs: parseInt(process.env.REPLAN_INTERVAL_MS ?? "300000", 10),
   replanRequirementPath:
     process.env.REPLAN_REQUIREMENT_PATH ?? process.env.REQUIREMENT_PATH,
-  replanCommand: process.env.REPLAN_COMMAND ?? "pnpm --filter @h1ve/planner start",
+  replanCommand: process.env.REPLAN_COMMAND ?? "pnpm --filter @sebastian-code/planner start",
   replanWorkdir: process.env.REPLAN_WORKDIR ?? process.cwd(),
   replanRepoUrl: process.env.REPLAN_REPO_URL ?? process.env.REPO_URL,
   replanBaseBranch: process.env.REPLAN_BASE_BRANCH
@@ -603,9 +603,9 @@ async function handleCommand(command: string): Promise<void> {
 
 // メイン処理
 async function main(): Promise<void> {
-  setupProcessLogging(process.env.H1VE_LOG_NAME ?? "cycle-manager");
+  setupProcessLogging(process.env.SEBASTIAN_LOG_NAME ?? "cycle-manager");
   console.log("=".repeat(60));
-  console.log("h1ve Cycle Manager");
+  console.log("sebastian-code Cycle Manager");
   console.log("=".repeat(60));
 
   activeConfig = { ...DEFAULT_CONFIG };

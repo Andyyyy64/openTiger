@@ -33,18 +33,18 @@ importers:
 
   apps/api:
     dependencies:
-      '@h1ve/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@h1ve/db':
-        specifier: workspace:*
-        version: link:../../packages/db
       '@hono/node-server':
         specifier: ^1.13.8
         version: 1.19.9(hono@4.11.4)
       '@hono/zod-validator':
         specifier: ^0.4.2
         version: 0.4.3(hono@4.11.4)(zod@3.25.76)
+      '@sebastian-code/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@sebastian-code/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
@@ -73,13 +73,13 @@ importers:
 
   apps/cycle-manager:
     dependencies:
-      '@h1ve/core':
+      '@sebastian-code/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@h1ve/db':
+      '@sebastian-code/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@h1ve/queue':
+      '@sebastian-code/queue':
         specifier: workspace:*
         version: link:../../packages/queue
       dotenv:
@@ -104,7 +104,7 @@ importers:
 
   apps/dashboard:
     dependencies:
-      '@h1ve/core':
+      '@sebastian-code/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@tanstack/react-query':
@@ -168,13 +168,13 @@ importers:
 
   apps/dispatcher:
     dependencies:
-      '@h1ve/core':
+      '@sebastian-code/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@h1ve/db':
+      '@sebastian-code/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@h1ve/queue':
+      '@sebastian-code/queue':
         specifier: workspace:*
         version: link:../../packages/queue
       bullmq:
@@ -202,16 +202,16 @@ importers:
 
   apps/judge:
     dependencies:
-      '@h1ve/core':
+      '@sebastian-code/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@h1ve/db':
+      '@sebastian-code/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@h1ve/llm':
+      '@sebastian-code/llm':
         specifier: workspace:*
         version: link:../../packages/llm
-      '@h1ve/vcs':
+      '@sebastian-code/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
       dotenv:
@@ -236,13 +236,13 @@ importers:
 
   apps/planner:
     dependencies:
-      '@h1ve/core':
+      '@sebastian-code/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@h1ve/db':
+      '@sebastian-code/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@h1ve/llm':
+      '@sebastian-code/llm':
         specifier: workspace:*
         version: link:../../packages/llm
       dotenv:
@@ -267,19 +267,19 @@ importers:
 
   apps/worker:
     dependencies:
-      '@h1ve/core':
+      '@sebastian-code/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@h1ve/db':
+      '@sebastian-code/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@h1ve/llm':
+      '@sebastian-code/llm':
         specifier: workspace:*
         version: link:../../packages/llm
-      '@h1ve/queue':
+      '@sebastian-code/queue':
         specifier: workspace:*
         version: link:../../packages/queue
-      '@h1ve/vcs':
+      '@sebastian-code/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
       bullmq:
@@ -326,7 +326,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@h1ve/core':
+      '@sebastian-code/core':
         specifier: workspace:*
         version: link:../core
       drizzle-orm:

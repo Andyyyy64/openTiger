@@ -1,4 +1,4 @@
-# h1ve（ハイブ）
+# Sebastian-code（セバスチャン・コード）
 
 **AI Agent Orchestration System for Autonomous Coding**
 
@@ -9,7 +9,7 @@
 
 ## 概要
 
-h1veは、AIエージェントを「開発チーム」として機能させるためのオーケストレーション基盤。  
+sebastian-codeは、AIエージェントを「開発チーム」として機能させるためのオーケストレーション基盤。  
 人間が要件・制約・完了条件を定義すると、複数のエージェントが自律的にタスクを分割・実装・検証・PRを作成する。
 
 ### できること
@@ -33,7 +33,7 @@ h1veは、AIエージェントを「開発チーム」として機能させる�
 
 Cursorの研究で示された「役割分離パイプライン」を忠実に実装する。
 
-| Cursor Research | h1ve |
+| Cursor Research | sebastian-code |
 |-----------------|------|
 | Planner agent | `apps/planner` - タスク生成・分割 |
 | Worker agent | `apps/worker` - 実装・PR作成 |
@@ -125,7 +125,7 @@ Plannerが計画した後、複数Workerの完了を待ち、最新のコード�
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         h1ve Orchestrator                        │
+│                         sebastian-code Orchestrator                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │  ┌─────────┐    ┌────────────┐    ┌─────────┐    ┌────────┐    │
@@ -178,7 +178,7 @@ Plannerが計画した後、複数Workerの完了を待ち、最新のコード�
 ## ディレクトリ構成
 
 ```
-h1ve/
+sebastian-code/
 ├── package.json
 ├── pnpm-workspace.yaml
 ├── turbo.json
@@ -403,7 +403,7 @@ PRの採用/差し戻しを判定する。
 
 ## PR & Review Strategy
 
-h1veは「人間によるレビュー」をボトルネックにしないよう、リスクに基づいた段階的な自動化を行います。
+sebastian-codeは「人間によるレビュー」をボトルネックにしないよう、リスクに基づいた段階的な自動化を行います。
 
 | カテゴリ | リスク | 自動マージ条件 | レビュー |
 | :--- | :--- | :--- | :--- |
@@ -569,7 +569,7 @@ CREATE TABLE leases (
     "packages/core/src/validators/**"
   ],
   "commands": [
-    "pnpm test --filter=@h1ve/core -- user.test.ts"
+    "pnpm test --filter=@sebastian-code/core -- user.test.ts"
   ],
   "priority": 10,
   "risk_level": "low",
@@ -648,8 +648,8 @@ CREATE TABLE leases (
 
 ```bash
 # リポジトリクローン
-git clone https://github.com/your-org/h1ve.git
-cd h1ve
+git clone https://github.com/your-org/sebastian-code.git
+cd sebastian-code
 
 # 依存関係インストール
 pnpm install
@@ -672,15 +672,15 @@ pnpm dev
 
 ```env
 # Database
-DATABASE_URL=postgresql://h1ve:h1ve@localhost:5432/h1ve
+DATABASE_URL=postgresql://sebastian-code:sebastian-code@localhost:5432/sebastian-code
 
 # Redis
 REDIS_URL=redis://localhost:6379
 
 # Ports
-H1VE_API_PORT=4301
-H1VE_DASHBOARD_PORT=5190
-H1VE_E2E_PORT=5174
+SEBASTIAN_API_PORT=4301
+SEBASTIAN_DASHBOARD_PORT=5190
+SEBASTIAN_E2E_PORT=5174
 
 # GitHub
 GITHUB_TOKEN=ghp_xxxx
@@ -698,13 +698,13 @@ PLANNER_REPO_URL=https://github.com/your-org/your-repo
 AUTO_REPLAN=true
 REPLAN_REQUIREMENT_PATH=/path/to/requirement.md
 REPLAN_INTERVAL_MS=300000
-REPLAN_COMMAND="pnpm --filter @h1ve/planner start"
-REPLAN_WORKDIR=/path/to/h1ve
+REPLAN_COMMAND="pnpm --filter @sebastian-code/planner start"
+REPLAN_WORKDIR=/path/to/sebastian-code
 
 # Repo mode
 REPO_MODE=git
 LOCAL_REPO_PATH=/path/to/local/repo
-LOCAL_WORKTREE_ROOT=/tmp/h1ve-worktree
+LOCAL_WORKTREE_ROOT=/tmp/sebastian-code-worktree
 
 # Judge
 JUDGE_MODE=auto
@@ -715,9 +715,9 @@ JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT=20000
 
 ### ポート衝突の回避
 
-- `H1VE_API_PORT` と `H1VE_DASHBOARD_PORT` は作業対象でよく使われる `3000/3001/5173` と被らない値にする
-- `H1VE_E2E_PORT` を指定してE2EのVite/Playwrightの待機先を固定する
-- `pnpm restart` はh1veのAPI/ダッシュボードを常駐起動するため、E2Eの`webServer`と競合しないようにする
+- `SEBASTIAN_API_PORT` と `SEBASTIAN_DASHBOARD_PORT` は作業対象でよく使われる `3000/3001/5173` と被らない値にする
+- `SEBASTIAN_E2E_PORT` を指定してE2EのVite/Playwrightの待機先を固定する
+- `pnpm restart` はsebastian-codeのAPI/ダッシュボードを常駐起動するため、E2Eの`webServer`と競合しないようにする
 - `LOCAL_WORKTREE_ROOT` をリポジトリ配下に置くと、外部ディレクトリの許可ダイアログを避けられる
 
 ### Repo mode（git / local）

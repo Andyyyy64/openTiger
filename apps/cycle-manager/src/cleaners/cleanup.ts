@@ -1,5 +1,5 @@
-import { db } from "@h1ve/db";
-import { tasks, runs, agents, leases } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { tasks, runs, agents, leases } from "@sebastian-code/db/schema";
 import { eq, inArray, and, lt, not } from "drizzle-orm";
 import { recordEvent } from "../monitors/event-logger.js";
 

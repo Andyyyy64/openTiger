@@ -1,5 +1,5 @@
-import { db } from "@h1ve/db";
-import { runs, tasks } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { runs, tasks } from "@sebastian-code/db/schema";
 import { eq, and, gte, lte, sql, count, sum, avg } from "drizzle-orm";
 import { recordEvent } from "./event-logger.js";
 

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { db } from "@h1ve/db";
-import { events } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { events } from "@sebastian-code/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 export const judgementsRoute = new Hono();

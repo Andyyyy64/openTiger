@@ -33,7 +33,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center">
               <span className="text-slate-950 font-bold">h1</span>
             </div>
-            <span className="text-xl font-bold tracking-tight">h1ve</span>
+            <span className="text-xl font-bold tracking-tight">sebastian-code</span>
           </div>
 
           <nav className="space-y-1">

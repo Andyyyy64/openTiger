@@ -1,5 +1,5 @@
-import { db } from "@h1ve/db";
-import { leases, tasks, agents } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { leases, tasks, agents } from "@sebastian-code/db/schema";
 import { eq, lt, and } from "drizzle-orm";
 
 // リースのデフォルト期限（分）

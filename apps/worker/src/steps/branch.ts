@@ -1,4 +1,4 @@
-import { createBranch, getCurrentBranch } from "@h1ve/vcs";
+import { createBranch, getCurrentBranch } from "@sebastian-code/vcs";
 
 export interface BranchOptions {
   repoPath: string;

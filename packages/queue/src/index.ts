@@ -1,9 +1,9 @@
 import { Queue, Worker, Job, QueueEvents } from "bullmq";
 
 // タスク実行キュー
-export const TASK_QUEUE_NAME = "h1ve-tasks";
+export const TASK_QUEUE_NAME = "sebastian-code-tasks";
 // デッドレターキュー（最終的に失敗したジョブ用）
-export const DEAD_LETTER_QUEUE_NAME = "h1ve-dead-letter";
+export const DEAD_LETTER_QUEUE_NAME = "sebastian-code-dead-letter";
 
 // Redis接続設定（URLベース）
 const getConnectionConfig = () => {

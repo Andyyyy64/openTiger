@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { db } from "@h1ve/db";
-import { tasks, events } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { tasks, events } from "@sebastian-code/db/schema";
 import { eq } from "drizzle-orm";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
@@ -163,9 +163,9 @@ async function handleIssueEvent(
 
   console.log(`[Webhook] Issue #${issueNumber}: ${action} - "${issueTitle}"`);
 
-  // 「h1ve」または「auto-task」ラベルが付いている場合、タスクを自動作成
+  // 「sebastian-code」または「auto-task」ラベルが付いている場合、タスクを自動作成
   const shouldAutoTask = labels.some(
-    (l) => l.name === "h1ve" || l.name === "auto-task"
+    (l) => l.name === "sebastian-code" || l.name === "auto-task"
   );
 
   if (action === "opened" && shouldAutoTask) {
@@ -203,11 +203,11 @@ async function handlePullRequestEvent(
 
   console.log(`[Webhook] PR #${prNumber}: ${action} - "${prTitle}"`);
 
-  // PRがh1ve Workerによって作成されたものかチェック
-  const isH1vePR =
+  // PRがsebastian-code Workerによって作成されたものかチェック
+  const isSebastianCodePR =
     (pr.head as Record<string, unknown>)?.ref?.toString().startsWith("agent/") ?? false;
 
-  if (action === "opened" && isH1vePR) {
+  if (action === "opened" && isSebastianCodePR) {
     // Judgeにレビューを依頼
     console.log(`[Webhook] Judge review triggered for PR #${prNumber}`);
   }
@@ -229,7 +229,7 @@ async function handlePullRequestEvent(
     message: "Pull request event processed",
     eventId,
     prNumber,
-    isH1vePR,
+    isSebastianCodePR,
   });
 }
 

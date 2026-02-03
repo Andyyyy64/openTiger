@@ -1,8 +1,8 @@
-import type { Task, Run, Agent, CreateTaskInput, Artifact } from '@h1ve/core';
+import type { Task, Run, Agent, CreateTaskInput, Artifact } from '@sebastian-code/core';
 
 /**
  * Dashboard API Client
- * @h1ve/api へのリクエストをラップする
+ * @sebastian-code/api へのリクエストをラップする
  */
 
 const API_BASE_URL = '/api';

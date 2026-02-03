@@ -1,4 +1,4 @@
-import { getOctokit, getRepoInfo } from "@h1ve/vcs";
+import { getOctokit, getRepoInfo } from "@sebastian-code/vcs";
 
 // CI評価結果
 export interface CIEvaluationResult {

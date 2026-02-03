@@ -1,7 +1,7 @@
-import { db } from "@h1ve/db";
-import { runs, tasks, agents, leases } from "@h1ve/db/schema";
+import { db } from "@sebastian-code/db";
+import { runs, tasks, agents, leases } from "@sebastian-code/db/schema";
 import { eq, and, gte, lt, count, sql } from "drizzle-orm";
-import type { AnomalyAlert } from "@h1ve/core";
+import type { AnomalyAlert } from "@sebastian-code/core";
 import { recordEvent } from "./event-logger.js";
 import { getLastHourCost, getTodayCost } from "./cost-tracker.js";
 
