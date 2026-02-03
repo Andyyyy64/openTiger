@@ -1028,6 +1028,10 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
                     mergeResult.error
                   );
                 }
+                // ローカルマージの成否をログに残して判定結果の追跡を容易にする
+                console.log(
+                  `[Judge] Local merge result: ${mergeResult.success ? "success" : "failed"}`
+                );
               } else {
                 nextStatus = "blocked";
               }

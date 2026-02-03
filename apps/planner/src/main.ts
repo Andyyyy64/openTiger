@@ -5,7 +5,7 @@ import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 import { db, closeDb } from "@h1ve/db";
 import { tasks, agents, events } from "@h1ve/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import dotenv from "dotenv";
 import { getRepoMode, getLocalRepoPath } from "@h1ve/core";
 
@@ -593,6 +593,51 @@ function attachInspectionToRequirement(
   return { ...requirement, notes };
 }
 
+async function loadExistingTaskHints(limit: number = 30): Promise<string | undefined> {
+  try {
+    const rows = await db
+      .select({
+        title: tasks.title,
+        goal: tasks.goal,
+        status: tasks.status,
+        createdAt: tasks.createdAt,
+      })
+      .from(tasks)
+      .where(inArray(tasks.status, ["queued", "running", "blocked"]))
+      .orderBy(desc(tasks.createdAt))
+      .limit(limit);
+
+    if (rows.length === 0) {
+      return;
+    }
+
+    const lines = rows.map((row) => {
+      const title = clipText(row.title, 120);
+      const goal = clipText(row.goal, 120);
+      return `- ${title} (${row.status}) : ${goal}`;
+    });
+
+    return lines.join("\n");
+  } catch (error) {
+    console.warn("[Planner] Failed to load existing tasks:", error);
+    return;
+  }
+}
+
+function attachExistingTasksToRequirement(
+  requirement: Requirement,
+  hints: string | undefined
+): Requirement {
+  // 既存タスクを共有して重複した計画の生成を抑える
+  if (!hints) {
+    return requirement;
+  }
+
+  const block = `既存タスク（重複回避の参考）:\n${hints}`;
+  const notes = requirement.notes ? `${requirement.notes}\n\n${block}` : block;
+  return { ...requirement, notes };
+}
+
 function attachInspectionToTasks(
   result: TaskGenerationResult,
   inspectionNotes: string | undefined
@@ -859,6 +904,8 @@ async function planFromRequirement(
     console.log("\n[Planner] Loaded judge feedback for context.");
     requirement = attachJudgeFeedbackToRequirement(requirement, judgeFeedback);
   }
+  const existingTaskHints = await loadExistingTaskHints();
+  requirement = attachExistingTasksToRequirement(requirement, existingTaskHints);
   const checkScriptAvailable = await hasRootCheckScript(config.workdir);
   if (!checkScriptAvailable) {
     console.log("[Planner] checkスクリプトがないため検証コマンドを調整します。");
@@ -1070,6 +1117,8 @@ export async function planFromContent(
 
   const judgeFeedback = await loadJudgeFeedback();
   requirement = attachJudgeFeedbackToRequirement(requirement, judgeFeedback);
+  const existingTaskHints = await loadExistingTaskHints();
+  requirement = attachExistingTasksToRequirement(requirement, existingTaskHints);
   const checkScriptAvailable = await hasRootCheckScript(fullConfig.workdir);
   const devCommand = await resolveDevVerificationCommand(fullConfig.workdir);
   const e2eCommand = await resolveE2EVerificationCommand(fullConfig.workdir);
