@@ -1,6 +1,7 @@
 import { runOpenCode } from "@h1ve/llm";
 import type { CreateTaskInput } from "@h1ve/core";
 import type { Requirement } from "../parser.js";
+import { PLANNER_OPENCODE_CONFIG_PATH } from "../opencode-config.js";
 
 // タスク生成結果
 export interface PlannedTaskInput extends CreateTaskInput {
@@ -18,6 +19,7 @@ function buildPrompt(requirement: Requirement): string {
   return `
 あなたはソフトウェアエンジニアリングのタスク分割エキスパートです。
 以下の要件定義を読み取り、実行可能なタスクに分割してください。
+ツール呼び出しは禁止です。与えられた情報だけで判断してください。
 
 ## タスク分割の原則
 
@@ -186,6 +188,8 @@ export async function generateTasksFromRequirement(
     task: prompt,
     model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
     timeoutSeconds: options.timeoutSeconds ?? 300,
+    // Plannerはプロンプト内の情報だけで判断するためツールを使わない
+    env: { OPENCODE_CONFIG: PLANNER_OPENCODE_CONFIG_PATH },
   });
 
   if (!result.success) {

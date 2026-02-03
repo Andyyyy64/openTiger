@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { runOpenCode } from "@h1ve/llm";
 import type { Requirement } from "./parser.js";
+import { PLANNER_OPENCODE_CONFIG_PATH } from "./opencode-config.js";
 
 export interface CodebaseInspection {
   summary: string;
@@ -94,6 +95,7 @@ function buildInspectionPrompt(requirement: Requirement, snapshot: RepoSnapshot)
 あなたは要件と実装の差分を点検するエキスパートです。
 以下の要件とリポジトリ情報を読み、未実装/不足/矛盾の可能性を抽出してください。
 タスクではなく差分の列挙を目的にします。
+ツール呼び出しは禁止です。与えられた情報だけで判断してください。
 
 ## 要件
 ### Goal
@@ -179,6 +181,8 @@ export async function inspectCodebase(
     task: prompt,
     model,
     timeoutSeconds: options.timeoutSeconds ?? 180,
+    // Gemini 3系のfunction calling制約を避けるためツールを無効化する
+    env: { OPENCODE_CONFIG: PLANNER_OPENCODE_CONFIG_PATH },
   });
 
   if (!result.success) {

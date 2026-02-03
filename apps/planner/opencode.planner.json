@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "google/gemini-3-pro-preview",
+  "permission": {
+    "read": "deny",
+    "edit": "deny",
+    "write": "deny",
+    "bash": "deny",
+    "glob": "deny",
+    "grep": "deny",
+    "list": "deny"
+  }
+}
