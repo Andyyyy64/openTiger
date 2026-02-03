@@ -98,6 +98,11 @@ export interface AgentLogResponse {
   path: string;
 }
 
+export interface ConfigResponse {
+  config: Record<string, string>;
+  envPath: string;
+}
+
 // タスク関連
 export const tasksApi = {
   list: () => fetchApi<{ tasks: Task[] }>('/tasks').then(res => res.tasks),
@@ -155,4 +160,14 @@ export const logsApi = {
     const suffix = query.toString();
     return fetchApi<AgentLogResponse>(`/logs/agents/${agentId}${suffix ? `?${suffix}` : ''}`);
   },
+};
+
+// 設定関連
+export const configApi = {
+  get: () => fetchApi<ConfigResponse>('/config'),
+  update: (updates: Record<string, string>) =>
+    fetchApi<{ config: Record<string, string>; requiresRestart: boolean }>('/config', {
+      method: 'PATCH',
+      body: JSON.stringify({ updates }),
+    }),
 };

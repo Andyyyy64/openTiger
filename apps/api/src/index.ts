@@ -13,6 +13,7 @@ import { webhookRoute } from "./routes/webhook.js";
 import { plansRoute } from "./routes/plans.js";
 import { judgementsRoute } from "./routes/judgements.js";
 import { logsRoute } from "./routes/logs.js";
+import { configRoute } from "./routes/config.js";
 import { authMiddleware, rateLimitMiddleware } from "./middleware/index.js";
 
 function setupProcessLogging(logName: string): string | undefined {
@@ -69,6 +70,7 @@ app.route("/webhook", webhookRoute);
 app.route("/plans", plansRoute);
 app.route("/judgements", judgementsRoute);
 app.route("/logs", logsRoute);
+app.route("/config", configRoute);
 
 // ルートパス
 app.get("/", (c) => {
