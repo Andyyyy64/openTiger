@@ -430,6 +430,11 @@ function shouldAllowNoChanges(task: Task): boolean {
     "検証",
     "ビルド",
     "確認",
+    "verification",
+    "verify",
+    "validation",
+    "check",
+    "inspect",
     "typecheck",
     "lint",
     "test",
@@ -446,6 +451,15 @@ function shouldAllowNoChanges(task: Task): boolean {
     "導入",
     "構築",
     "開発",
+    "implement",
+    "add",
+    "create",
+    "modify",
+    "change",
+    "update",
+    "refactor",
+    "remove",
+    "fix",
   ];
 
   const allows = allowHints.some((hint) => text.includes(hint));
@@ -461,9 +475,12 @@ function isVerificationOnlyCommands(commands: string[]): boolean {
     return false;
   }
 
+  const dbCommandPattern =
+    /\bdrizzle-kit\b|\bdb:(push|generate|migrate|studio)\b|\bpnpm\b[^\n]*--filter[^\n]*\bdb\b[^\n]*\b(push|generate|migrate|studio)\b/i;
   const verificationPatterns = [
     /\b(pnpm|npm|yarn|bun)\b[^\n]*\b(install|i|build|test|lint|typecheck|check|dev)\b/i,
     /\b(vitest|jest|playwright)\b/i,
+    dbCommandPattern,
   ];
 
   // 検証系コマンドのみのタスクは変更なしでも成功扱いにする
