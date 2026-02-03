@@ -191,6 +191,26 @@ export const TaskDetailsPage: React.FC = () => {
               ))}
             </div>
           </div>
+
+          {/* Dependencies */}
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Dependencies</h2>
+            {task.dependencies?.length ? (
+              <div className="space-y-2">
+                {task.dependencies.map((dependencyId) => (
+                  <Link
+                    key={dependencyId}
+                    to={`/tasks/${dependencyId}`}
+                    className="block text-xs font-mono text-slate-300 bg-slate-950 p-2 rounded border border-slate-800 break-all hover:text-yellow-400 transition-colors"
+                  >
+                    {dependencyId}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500">No dependencies</div>
+            )}
+          </div>
         </div>
       </div>
     </div>

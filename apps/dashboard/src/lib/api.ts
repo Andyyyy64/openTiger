@@ -45,6 +45,7 @@ export interface PlanTaskSnapshot {
   role: string;
   priority: number;
   createdAt: string;
+  dependencies?: string[];
 }
 
 export interface PlanSnapshot {

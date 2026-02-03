@@ -94,6 +94,7 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
               <th className="px-4 py-3 text-xs font-semibold text-slate-400">Role</th>
               <th className="px-4 py-3 text-xs font-semibold text-slate-400">Risk</th>
               <th className="px-4 py-3 text-xs font-semibold text-slate-400">Priority</th>
+              <th className="px-4 py-3 text-xs font-semibold text-slate-400">Dependencies</th>
               <th className="px-4 py-3 text-xs font-semibold text-slate-400">Created</th>
             </tr>
           </thead>
@@ -113,6 +114,9 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
                 <td className="px-4 py-3 text-xs text-slate-400 uppercase">{task.role}</td>
                 <td className="px-4 py-3 text-xs font-semibold">{renderRisk(task.riskLevel)}</td>
                 <td className="px-4 py-3 text-sm text-slate-300">{task.priority}</td>
+                <td className="px-4 py-3 text-xs text-slate-400">
+                  {task.dependencies?.length ? task.dependencies.length : 0}
+                </td>
                 <td className="px-4 py-3 text-xs text-slate-500">
                   {new Date(task.createdAt).toLocaleString()}
                 </td>
@@ -120,7 +124,7 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
             ))}
             {plan.tasks.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
                   No tasks recorded for this plan
                 </td>
               </tr>

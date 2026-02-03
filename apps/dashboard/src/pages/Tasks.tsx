@@ -27,21 +27,22 @@ export const TasksPage: React.FC = () => {
               <th className="px-6 py-4 text-sm font-semibold text-slate-300">Status</th>
               <th className="px-6 py-4 text-sm font-semibold text-slate-300">Priority</th>
               <th className="px-6 py-4 text-sm font-semibold text-slate-300">Risk</th>
+              <th className="px-6 py-4 text-sm font-semibold text-slate-300">Dependencies</th>
               <th className="px-6 py-4 text-sm font-semibold text-slate-300">Created</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800">
             {isLoading ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">Loading tasks...</td>
+                <td colSpan={6} className="px-6 py-12 text-center text-slate-500">Loading tasks...</td>
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-red-400">Error loading tasks</td>
+                <td colSpan={6} className="px-6 py-12 text-center text-red-400">Error loading tasks</td>
               </tr>
             ) : tasks?.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">No tasks found</td>
+                <td colSpan={6} className="px-6 py-12 text-center text-slate-500">No tasks found</td>
               </tr>
             ) : (
               tasks?.map((task: Task) => (
@@ -60,6 +61,9 @@ export const TasksPage: React.FC = () => {
                     <span className={`text-xs ${getRiskColor(task.riskLevel)}`}>
                       {task.riskLevel}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 text-slate-300">
+                    {task.dependencies?.length ?? 0}
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-500">
                     {new Date(task.createdAt).toLocaleDateString()}

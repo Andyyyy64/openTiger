@@ -43,6 +43,7 @@ plansRoute.get("/", async (c) => {
         role: string;
         priority: number;
         createdAt: Date;
+        dependencies: string[];
       }> = [];
 
       if (taskIds.length > 0) {
@@ -55,6 +56,7 @@ plansRoute.get("/", async (c) => {
             role: tasks.role,
             priority: tasks.priority,
             createdAt: tasks.createdAt,
+            dependencies: tasks.dependencies,
           })
           .from(tasks)
           .where(inArray(tasks.id, taskIds));
