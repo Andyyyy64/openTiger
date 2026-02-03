@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { copyFile, mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import {
   addWorktree,
@@ -98,6 +98,13 @@ export async function checkoutRepository(
           repoPath: worktreePath,
           error: `Worktree add failed: ${addResult.stderr}`,
         };
+      }
+
+      // ローカルリポジトリの.envをworktreeに引き継ぐ
+      const sourceEnvPath = join(localRepoPath, ".env");
+      const targetEnvPath = join(worktreePath, ".env");
+      if (existsSync(sourceEnvPath)) {
+        await copyFile(sourceEnvPath, targetEnvPath);
       }
 
       return {

@@ -2,7 +2,7 @@ import { writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Task } from "@sebastian-code/core";
 import { runOpenCode, type OpenCodeResult } from "@sebastian-code/llm";
-import { buildTaskEnv } from "../env.js";
+import { buildOpenCodeEnv } from "../env.js";
 
 export interface ExecuteOptions {
   repoPath: string;
@@ -75,7 +75,7 @@ export async function executeTask(
   console.log("Task:", task.title);
 
   // OpenCodeを実行
-  const taskEnv = await buildTaskEnv(repoPath);
+  const taskEnv = await buildOpenCodeEnv(repoPath);
   const openCodeResult = await runOpenCode({
     workdir: repoPath,
     instructionsPath,

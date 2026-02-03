@@ -53,6 +53,16 @@ const PROTECTED_ENV_KEYS = new Set([
   "TERM",
 ]);
 
+const OPEN_CODE_ENV_KEYS = new Set([
+  "GEMINI_API_KEY",
+  "ANTHROPIC_API_KEY",
+  "OPENAI_API_KEY",
+  "OPENCODE_MODEL",
+  "OPENCODE_FALLBACK_MODEL",
+  "OPENCODE_MAX_RETRIES",
+  "OPENCODE_RETRY_DELAY_MS",
+]);
+
 function shouldStripEnvKey(key: string): boolean {
   if (STRIP_ENV_KEYS.has(key)) {
     return true;
@@ -91,4 +101,19 @@ export async function buildTaskEnv(
   }
 
   return baseEnv;
+}
+
+export async function buildOpenCodeEnv(
+  cwd: string
+): Promise<Record<string, string>> {
+  // 実行対象の.envは引き継ぎ、LLM用のキーだけ許可する
+  const env = await buildTaskEnv(cwd);
+  for (const key of OPEN_CODE_ENV_KEYS) {
+    const value = process.env[key];
+    if (!value) {
+      continue;
+    }
+    env[key] = value;
+  }
+  return env;
 }
