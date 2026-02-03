@@ -41,8 +41,11 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     .where(eq(tasks.status, "queued"));
 
   if (queuedTasks.length === 0) {
+    console.log("[Priority] No queued tasks found");
     return [];
   }
+
+  console.log(`[Priority] Found ${queuedTasks.length} queued tasks`);
 
   const cooldownBlockedIds = new Set<string>();
   const retryDelayMs = getRetryDelayMs();
@@ -90,25 +93,34 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
   const available = queuedTasks.filter((task) => {
     // 直近失敗の再配布はクールダウンする
     if (cooldownBlockedIds.has(task.id)) {
+      console.log(`[Priority] Task ${task.id} blocked by cooldown`);
       return false;
     }
 
     // リース済みは除外
     if (leasedIds.has(task.id)) {
+      console.log(`[Priority] Task ${task.id} blocked by lease`);
       return false;
     }
 
     // targetArea が衝突している場合は除外
     if (task.targetArea && activeTargetAreas.has(task.targetArea)) {
+      console.log(`[Priority] Task ${task.id} blocked by targetArea conflict`);
       return false;
     }
 
     // 依存関係のチェック
     const deps = task.dependencies ?? [];
-    const allDepsResolved = deps.every((depId) => doneIds.has(depId));
+    const unresolvedDeps = deps.filter((depId) => !doneIds.has(depId));
+    if (unresolvedDeps.length > 0) {
+      console.log(`[Priority] Task ${task.id} blocked by unresolved deps: ${unresolvedDeps.join(", ")}`);
+      return false;
+    }
 
-    return allDepsResolved;
+    return true;
   });
+
+  console.log(`[Priority] ${available.length} tasks passed filters`);
 
   // 優先度スコアを計算してソート
   const scored = available.map((task) => ({

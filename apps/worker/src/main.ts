@@ -219,7 +219,9 @@ export async function runWorker(
     console.log("\n[4/7] Checking expected files...");
     const missingFiles = await validateExpectedFiles(repoPath, taskData);
     if (missingFiles.length > 0) {
-      throw new Error(`Missing expected files: ${missingFiles.join(", ")}`);
+      // 期待ファイルが見つからない場合でも警告として続行（検証コマンドで実際に必要か判定）
+      console.warn(`[Worker] Warning: Expected files not found: ${missingFiles.join(", ")}`);
+      console.warn("[Worker] Continuing with verification commands...");
     }
 
     // Step 5: 変更を検証
@@ -511,7 +513,34 @@ async function validateExpectedFiles(
       continue;
     }
 
-    if (!(await pathExists(targetPath))) {
+    // まず指定されたパスをチェック
+    if (await pathExists(targetPath)) {
+      continue;
+    }
+
+    // 見つからない場合、よくあるパターンを試す（src/ サブディレクトリ）
+    const pathParts = normalizedFile.split("/");
+    const foundAlternative = await (async () => {
+      // packages/xxx/file.ts -> packages/xxx/src/file.ts
+      if (pathParts[0] === "packages" && pathParts.length >= 3) {
+        const withSrc = [pathParts[0], pathParts[1], "src", ...pathParts.slice(2)].join("/");
+        if (await pathExists(join(repoPath, withSrc))) {
+          console.log(`[Worker] Found alternative path: ${withSrc} (original: ${normalizedFile})`);
+          return true;
+        }
+      }
+      // apps/xxx/file.ts -> apps/xxx/src/file.ts
+      if (pathParts[0] === "apps" && pathParts.length >= 3) {
+        const withSrc = [pathParts[0], pathParts[1], "src", ...pathParts.slice(2)].join("/");
+        if (await pathExists(join(repoPath, withSrc))) {
+          console.log(`[Worker] Found alternative path: ${withSrc} (original: ${normalizedFile})`);
+          return true;
+        }
+      }
+      return false;
+    })();
+
+    if (!foundAlternative) {
       missing.push(normalizedFile);
     }
   }

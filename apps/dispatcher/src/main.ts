@@ -279,7 +279,7 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
             const selectedAgent = availableAgentsList[0];
 
             if (!selectedAgent) {
-              console.log(`[Dispatch] No idle ${requiredRole} agents available in pool.`);
+              console.log(`[Dispatch] No idle ${requiredRole} agent for task ${task.id}. Skipping.`);
               continue;
             }
 
