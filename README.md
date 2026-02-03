@@ -31,8 +31,8 @@
 
 ```bash
 # リポジトリクローン
-git clone https://github.com/your-org/sebastian-code.git
-cd sebastian-code
+git clone git@github.com:Andyyyy64/SebastianCode.git
+cd SebastianCode
 
 # 依存関係インストール
 pnpm install
@@ -41,12 +41,11 @@ pnpm install
 cp .env.example .env
 # .env を編集
 
-# データベース起動
-docker compose up -d postgres redis
-
-# マイグレーション実行
-pnpm db:migrate
+# 起動（初回もこれでOK）
+pnpm restart
 ```
+
+`pnpm restart` はコンテナ再起動とDB初期化を含むため、既存データを保持したい場合は注意する。テスト用だからそのうち起動もダッシュボードに以降なりしたい todo
 
 ---
 
@@ -74,6 +73,7 @@ pnpm --filter @sebastian-code/planner start docs/requirement.md
 
 - 全体索引: `docs/README.md`
 - 動作フロー: `docs/flow.md`
+- 運用モード: `docs/mode.md`
 - 非人間運用の思想: `docs/nonhumanoriented.md`
 - エージェント: `docs/agent/planner.md`
 - エージェント: `docs/agent/worker.md`
