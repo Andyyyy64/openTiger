@@ -579,7 +579,7 @@ async function judgeSingleWorktree(
     allowedPaths: string[];
   },
   config: JudgeConfig
-): Promise<{ result: JudgeResult; summary: EvaluationSummary }> {
+): Promise<{ result: JudgeResult; summary: EvaluationSummary; diffFiles: string[] }> {
   console.log(`\n[Evaluating Worktree ${target.worktreePath}]`);
   const evaluationPolicy = adjustPolicyForAutoMerge(config.policy);
 
@@ -590,6 +590,7 @@ async function judgeSingleWorktree(
     target.baseBranch,
     target.branchName
   );
+  const diffFiles = diffStats.files.map((file) => file.filename);
 
   const policyResult = await evaluateLocalPolicy(
     target.worktreePath,
@@ -629,7 +630,7 @@ async function judgeSingleWorktree(
       : target.taskRiskLevel;
 
   const result = makeJudgement(summary, config.policy, effectiveRisk);
-  return { result, summary };
+  return { result, summary, diffFiles };
 }
 
 async function recoverDirtyBaseRepo(options: {
@@ -1015,7 +1016,10 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
 
         for (const target of pendingWorktrees) {
           try {
-            const { result, summary } = await judgeSingleWorktree(target, config);
+            const { result, summary, diffFiles } = await judgeSingleWorktree(
+              target,
+              config
+            );
             let mergeResult: { success: boolean; error?: string } | undefined;
 
             if (!config.dryRun) {
@@ -1057,9 +1061,12 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
                     runId: target.runId,
                     agentId: config.agentId,
                     workdir: config.workdir,
+                    diffFiles,
                   });
                   if (docserResult.created) {
                     console.log(`  Docser task created: ${docserResult.docserTaskId}`);
+                  } else if (docserResult.reason) {
+                    console.log(`  Docser task skipped: ${docserResult.reason}`);
                   }
                 }
               } else {

@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { db } from "@sebastian-code/db";
 import { events, tasks } from "@sebastian-code/db/schema";
@@ -48,6 +48,44 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+type DocGapInfo = {
+  docsMissing: boolean;
+  docsEmpty: boolean;
+  readmeMissing: boolean;
+  docsReadmeMissing: boolean;
+  hasGap: boolean;
+};
+
+async function detectDocGap(workdir?: string): Promise<DocGapInfo> {
+  if (!workdir) {
+    return {
+      docsMissing: false,
+      docsEmpty: false,
+      readmeMissing: false,
+      docsReadmeMissing: false,
+      hasGap: false,
+    };
+  }
+
+  const docsPath = join(workdir, "docs");
+  const docsMissing = !(await pathExists(docsPath));
+  const readmeMissing = !(await pathExists(join(workdir, "README.md")));
+  const docsReadmeMissing = !(await pathExists(join(workdir, "docs", "README.md")));
+
+  let docsEmpty = false;
+  if (!docsMissing) {
+    try {
+      const entries = await readdir(docsPath);
+      docsEmpty = entries.filter((entry) => !entry.startsWith(".")).length === 0;
+    } catch {
+      docsEmpty = false;
+    }
+  }
+
+  const hasGap = docsMissing || docsEmpty || readmeMissing || docsReadmeMissing;
+  return { docsMissing, docsEmpty, readmeMissing, docsReadmeMissing, hasGap };
 }
 
 async function hasDocserTaskEvent(taskId: string): Promise<boolean> {
@@ -153,14 +191,11 @@ async function createDocserTask(params: {
 
   const docFiles = params.diffFiles.filter((file) => isDocPath(file));
   const nonDocFiles = params.diffFiles.filter((file) => !isDocPath(file));
+  const docGap = await detectDocGap(params.repoPathForScripts ?? params.source.workdir);
 
-  if (nonDocFiles.length === 0) {
+  // 差分がドキュメントのみの場合でも、ドキュメント不足があれば補完対象として起動する
+  if (nonDocFiles.length === 0 && !docGap.hasGap) {
     return { created: false, reason: "docs_only_change" };
-  }
-
-  // 既にドキュメントが更新されている場合はdocserを起こさない
-  if (docFiles.length > 0) {
-    return { created: false, reason: "docs_already_updated" };
   }
 
   const fallbackCommands =
@@ -182,6 +217,9 @@ async function createDocserTask(params: {
     "",
     "changedFiles:",
     summarizeFiles(params.diffFiles),
+    "",
+    "docGap:",
+    JSON.stringify(docGap),
   ].join("\n");
 
   const [docserTask] = await db
@@ -245,14 +283,15 @@ export async function createDocserTaskForPR(
 }
 
 export async function createDocserTaskForLocal(
-  params: DocserSourceLocal
+  params: DocserSourceLocal & { diffFiles?: string[] }
 ): Promise<DocserCreationResult> {
-  const diffStats = await getLocalDiffStats(
-    params.worktreePath,
-    params.baseBranch,
-    params.branchName
-  );
-  const diffFiles = diffStats.files.map((file) => file.filename);
+  const diffFiles =
+    params.diffFiles
+    ?? (await getLocalDiffStats(
+      params.worktreePath,
+      params.baseBranch,
+      params.branchName
+    )).files.map((file) => file.filename);
 
   return createDocserTask({
     source: params,
