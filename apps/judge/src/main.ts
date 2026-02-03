@@ -70,6 +70,7 @@ import {
   type EvaluationSummary,
   type JudgeResult,
 } from "./pr-reviewer.js";
+import { createDocserTaskForLocal, createDocserTaskForPR } from "./docser.js";
 
 function setupProcessLogging(logName: string): string | undefined {
   const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
@@ -951,6 +952,18 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                     })
                     .where(eq(tasks.id, pr.taskId));
                   console.log(`  Task ${pr.taskId} marked as done`);
+
+                  const docserResult = await createDocserTaskForPR({
+                    mode: "git",
+                    prNumber: pr.prNumber,
+                    taskId: pr.taskId,
+                    runId: pr.runId,
+                    agentId: config.agentId,
+                    workdir: config.workdir,
+                  });
+                  if (docserResult.created) {
+                    console.log(`  Docser task created: ${docserResult.docserTaskId}`);
+                  }
                 }
               }
             } catch (error) {
@@ -1032,6 +1045,23 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
                 console.log(
                   `[Judge] Local merge result: ${mergeResult.success ? "success" : "failed"}`
                 );
+
+                if (mergeResult.success) {
+                  const docserResult = await createDocserTaskForLocal({
+                    mode: "local",
+                    worktreePath: target.worktreePath,
+                    baseBranch: target.baseBranch,
+                    branchName: target.branchName,
+                    baseRepoPath: target.baseRepoPath,
+                    taskId: target.taskId,
+                    runId: target.runId,
+                    agentId: config.agentId,
+                    workdir: config.workdir,
+                  });
+                  if (docserResult.created) {
+                    console.log(`  Docser task created: ${docserResult.docserTaskId}`);
+                  }
+                }
               } else {
                 nextStatus = "blocked";
               }

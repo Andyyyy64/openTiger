@@ -96,7 +96,11 @@ export async function runWorker(
   const effectivePolicy = applyRepoModePolicyOverrides(policy);
 
   const taskId = taskData.id;
-  const agentLabel = role === "tester" ? "Tester" : "Worker";
+  const agentLabel = role === "tester"
+    ? "Tester"
+    : role === "docser"
+      ? "Docser"
+      : "Worker";
 
   console.log("=".repeat(60));
   console.log(`${agentLabel} ${agentId} starting task: ${taskData.title}`);
@@ -603,16 +607,25 @@ async function main() {
   const agentModel =
     agentRole === "tester"
       ? process.env.TESTER_MODEL ?? process.env.OPENCODE_MODEL
-      : process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL;
+      : agentRole === "docser"
+        ? process.env.DOCSER_MODEL ?? process.env.OPENCODE_MODEL
+        : process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL;
   const effectiveModel = agentModel ?? "google/gemini-3-flash-preview";
   // 指示ファイルは環境変数があれば優先する
   const instructionsPath =
     agentRole === "tester"
       ? process.env.TESTER_INSTRUCTIONS_PATH
         ?? resolve(import.meta.dirname, "../instructions/tester.md")
-      : process.env.WORKER_INSTRUCTIONS_PATH
-        ?? resolve(import.meta.dirname, "../instructions/base.md");
-  const agentLabel = agentRole === "tester" ? "Tester" : "Worker";
+      : agentRole === "docser"
+        ? process.env.DOCSER_INSTRUCTIONS_PATH
+          ?? resolve(import.meta.dirname, "../instructions/docser.md")
+        : process.env.WORKER_INSTRUCTIONS_PATH
+          ?? resolve(import.meta.dirname, "../instructions/base.md");
+  const agentLabel = agentRole === "tester"
+    ? "Tester"
+    : agentRole === "docser"
+      ? "Docser"
+      : "Worker";
 
   if (repoMode === "git" && !repoUrl) {
     console.error("REPO_URL environment variable is required for git mode");

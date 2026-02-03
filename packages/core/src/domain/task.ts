@@ -5,7 +5,7 @@ export const RiskLevel = z.enum(["low", "medium", "high"]);
 export type RiskLevel = z.infer<typeof RiskLevel>;
 
 // タスクの担当ロール
-export const TaskRole = z.enum(["worker", "tester"]);
+export const TaskRole = z.enum(["worker", "tester", "docser"]);
 export type TaskRole = z.infer<typeof TaskRole>;
 
 // タスクのステータス

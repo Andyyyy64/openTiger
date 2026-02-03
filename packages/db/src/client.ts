@@ -4,7 +4,7 @@ import * as schema from "./schema.js";
 
 // 環境変数からDB接続URLを取得
 const connectionString =
-  process.env.DATABASE_URL ?? "postgresql://sebastian-code:sebastian-code@localhost:5432/sebastian-code";
+  process.env.DATABASE_URL ?? "postgresql://sebastian:sebastian@localhost:5432/sebastian";
 
 // PostgreSQLクライアント
 const client = postgres(connectionString);

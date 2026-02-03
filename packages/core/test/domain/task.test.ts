@@ -4,6 +4,7 @@ import {
   CreateTaskInput,
   UpdateTaskInput,
   RiskLevel,
+  TaskRole,
   TaskStatus,
   TaskContext,
 } from "../../src/domain/task.js";
@@ -95,6 +96,20 @@ describe("RiskLevel", () => {
   it("無効なリスクレベルを拒否する", () => {
     expect(RiskLevel.safeParse("critical").success).toBe(false);
     expect(RiskLevel.safeParse("").success).toBe(false);
+  });
+});
+
+describe("TaskRole", () => {
+  it("すべての有効なロールを受け入れる", () => {
+    const roles = ["worker", "tester", "docser"];
+    for (const role of roles) {
+      expect(TaskRole.safeParse(role).success).toBe(true);
+    }
+  });
+
+  it("無効なロールを拒否する", () => {
+    expect(TaskRole.safeParse("planner").success).toBe(false);
+    expect(TaskRole.safeParse("judge").success).toBe(false);
   });
 });
 

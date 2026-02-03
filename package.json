@@ -24,7 +24,7 @@
     "db:migrate": "pnpm --filter @sebastian-code/db migrate",
     "db:push": "pnpm --filter @sebastian-code/db push",
     "db:studio": "pnpm --filter @sebastian-code/db studio",
-    "restart": "pnpm build && docker compose down -v && docker compose up -d postgres redis && sleep 3 && pnpm db:push && sleep 3 && pnpm dev & pnpm --filter @sebastian-code/worker dev:tester & pnpm --filter @sebastian-code/worker dev:tester:2"
+    "restart": "pnpm build && docker compose down -v && docker compose up -d postgres redis && sleep 3 && pnpm db:push && sleep 3 && pnpm dev & pnpm --filter @sebastian-code/worker dev:tester & pnpm --filter @sebastian-code/worker dev:tester:2 & pnpm --filter @sebastian-code/worker dev:docser"
   },
   "devDependencies": {
     "@types/node": "^20.17.14",
