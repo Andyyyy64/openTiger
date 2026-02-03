@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { open, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 export const logsRoute = new Hono();
 
@@ -22,6 +22,17 @@ function sanitizeAgentId(agentId: string): string | null {
     return null;
   }
   return trimmed;
+}
+
+function resolveLogDir(): string {
+  if (process.env.H1VE_LOG_DIR) {
+    return process.env.H1VE_LOG_DIR;
+  }
+  if (process.env.H1VE_RAW_LOG_DIR) {
+    return process.env.H1VE_RAW_LOG_DIR;
+  }
+  // APIの作業ディレクトリに依存せず、リポジトリ直下を基準にする
+  return join(resolve(import.meta.dirname, "../../../.."), "raw-logs");
 }
 
 async function readTailLines(
@@ -64,8 +75,7 @@ logsRoute.get("/agents/:id", async (c) => {
   }
 
   const lines = parseLines(c.req.query("lines"));
-  const logDir =
-    process.env.H1VE_RAW_LOG_DIR ?? join(process.cwd(), "raw-logs");
+  const logDir = resolveLogDir();
   const logPath = join(logDir, `${agentId}.log`);
 
   try {
