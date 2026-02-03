@@ -16,7 +16,7 @@
 | Phase 5 | Judge（PR自動判定） | 100% | 40% | 🚀 Active |
 | Phase 6 | Cycle Manager（長時間運用） | 100% | 20% | 🚀 Active |
 | Phase 7 | 品質保証・Orchestration検証 | 50% | 5% | 🚧 In Progress |
-| Phase 8 | 運用・可視化（Dashboard） | 15% | 0% | 🚀 Active |
+| Phase 8 | 運用・可視化（Dashboard） | 51% | 0% | 🚀 Active |
 
 `*Proven: 異常系（Rate limit/故障/再起動）、並列負荷、冪等性などが実地検証されている度合い`
 
@@ -47,12 +47,12 @@
 ### 3. コンフリクト制御 (Target Area)
 
 - [x] `packages/core/domain/task.ts` に `target_area` と `touches` フィールドを追加
-- [x] Dispatcherによる `target_area` ごとの並列度制限の実装（設定可能に）
+- [x] Dispatcherによる `target_area` の同時実行排他を実装（単純ブロック）
 
 ### 4. Computed Risk による自動判定
 
-- [x] Judgeに `computed_risk` 算出ロジックを実装（diffサイズ、パス、テスト有無ベース）
-- [x] `risk_level` (自己申告) を `computed_risk` で上書きする仕組み
+- [x] Judgeに `computed_risk` 算出ロジックを実装（diffサイズ、パスベース）
+- [x] `risk_level` (自己申告) と `computed_risk` の高い方で判定する仕組み
 - [ ] 自動マージ可能な条件の厳格化と実装
 
 ### 5. セキュリティ・実行隔離の徹底
@@ -73,7 +73,7 @@
 ドキュメント更新をタスクとして扱い、変更検知と自動更新の経路を用意する。
 
 - [x] ドキュメント更新専用のエージェント（docser）を用意し、`docs/**` と `ops/runbooks/**` を主な許可範囲にする
-- [x] 変更差分からドキュメント更新が必要かを判定するルール（docs/README未更新の差分を検知）
+- [x] 変更差分とドキュメント不足から更新要否を判定するルール（docs/README欠落やdocs空判定）
 - [x] ドキュメント更新タスクの自動生成（Judge承認直後に同期生成）
 - [ ] `docs/task.md` の進捗サマリー（完了/全体, Implemented/Proven）を自動更新できる仕組み（機械集計 + 書き戻し）
 - [ ] `docs/architecture.md` / `docs/security.md` / `docs/instructions-guide.md` の自動更新方針を定義（何を自動、何を手動で残すか）
@@ -108,14 +108,14 @@ testerはテストの作成・実行・結果要約・フレーク対処を担�
 git運用を維持しつつ、ローカルリポジトリでも同じ品質ゲートを回せるようにする。  
 local modeでも差分/テスト/判定の流れを維持し、PRの有無だけを切替える。
 
-- [ ] `REPO_MODE=git|local` の切替を導入（未指定はgit）
-- [ ] local mode用に `LOCAL_REPO_PATH` / `LOCAL_WORKTREE_ROOT` を追加
-- [ ] local modeは `git worktree` で作業領域を分離（並列安全）
+- [x] `REPO_MODE=git|local` の切替を導入（未指定はgit）
+- [x] local mode用に `LOCAL_REPO_PATH` / `LOCAL_WORKTREE_ROOT` を追加
+- [x] local modeは `git worktree` で作業領域を分離（並列安全）
 - [x] local modeのベースリポジトリをstash/LLM判定で自動復旧する
-- [ ] Workerのcheckout/commit/pr処理をmodeで分岐（localはpush/PRなし）
-- [ ] Judgeにlocalモード判定（PRなしでdiffとテスト結果を評価）
-- [ ] worktreeの自動クリーンアップ（成功/失敗/サイクル終了時）
-- [x] READMEにlocal modeの前提と運用手順を追記
+- [x] Workerのcheckout/commit/pr処理をmodeで分岐（localはpush/PRなし）
+- [x] Judgeにlocalモード判定（PRなしでdiffとテスト結果を評価）
+- [x] worktreeの自動クリーンアップ（成功/失敗/サイクル終了時）
+- [ ] READMEにlocal modeの前提と運用手順を追記
 
 ### 10. checker（コードベース点検エージェント）の導入
 
@@ -400,35 +400,35 @@ Plannerの差分点検とは別系統で、実装品質の継続的改善を担�
 
 - [x] Vite + React + TypeScript セットアップ
 - [x] Tailwind CSS 設定
-- [ ] API クライアント設定（fetch wrapper）
-- [ ] TanStack Query 設定
-- [ ] ルーティング設定（React Router）
+- [x] API クライアント設定（fetch wrapper）
+- [x] TanStack Query 設定
+- [x] ルーティング設定（React Router）
 
 #### レイアウト・共通コンポーネント
 
 - [x] サイドバー（ナビゲーション）
 - [x] ヘッダー（ステータス表示）
-- [ ] ローディング・エラー表示
+- [x] ローディング・エラー表示（各画面で表示）
 
 #### タスク管理画面
 
-- [ ] タスク一覧（フィルタ: status, priority, risk_level）
-- [ ] タスク詳細表示
-- [ ] タスク作成フォーム
+- [x] タスク一覧（一覧表示のみ、フィルタは未実装）
+- [x] タスク詳細表示
+- [x] タスク作成フォーム
 - [ ] タスクステータス更新
 
 #### 実行履歴画面
 
-- [ ] Run一覧（フィルタ: status, agent）
-- [ ] Run詳細（ログ表示）
-- [ ] 成果物（Artifacts）一覧
-- [ ] PRリンク表示
+- [x] Run一覧（一覧表示のみ、フィルタは未実装）
+- [x] Run詳細（ログパス/エラー/成果物/判定の表示）
+- [x] 成果物（Artifacts）一覧
+- [x] PRリンク表示
 
 #### エージェント管理画面
 
-- [ ] エージェント一覧（ステータス表示）
-- [ ] エージェント詳細
-- [ ] ハートビート監視表示
+- [x] エージェント一覧（ステータス表示）
+- [x] エージェント詳細
+- [x] ハートビート監視表示
 
 #### 統計・モニタリング画面
 
@@ -474,8 +474,8 @@ Plannerの差分点検とは別系統で、実装品質の継続的改善を担�
 | Phase 5: Judge | 10/10 | 100% | 40% |
 | Phase 6: Cycle Manager | 8/8 | 100% | 20% |
 | Phase 7: テスト・CI/CD | 5/10 | 50% | 5% |
-| Phase 8: 運用 | 0/34 | 5% | 0% |
-| **合計** | **91/130** | **70%** | **40%** |
+| Phase 8: 運用 | 18/35 | 51% | 0% |
+| **合計** | **109/131** | **83%** | **40%** |
 
 ---
 
