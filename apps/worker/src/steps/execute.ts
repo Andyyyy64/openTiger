@@ -2,6 +2,7 @@ import { writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Task } from "@sebastian-code/core";
 import { runOpenCode, type OpenCodeResult } from "@sebastian-code/llm";
+import { buildTaskEnv } from "../env.js";
 
 export interface ExecuteOptions {
   repoPath: string;
@@ -74,12 +75,15 @@ export async function executeTask(
   console.log("Task:", task.title);
 
   // OpenCodeを実行
+  const taskEnv = await buildTaskEnv(repoPath);
   const openCodeResult = await runOpenCode({
     workdir: repoPath,
     instructionsPath,
     task: prompt,
     model: workerModel, // Workerは速度重視のモデルで実装を進める
     timeoutSeconds: task.timeboxMinutes * 60,
+    env: taskEnv,
+    inheritEnv: false,
   });
 
   if (!openCodeResult.success) {

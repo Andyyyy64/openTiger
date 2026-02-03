@@ -17,6 +17,8 @@ export const OpenCodeOptions = z.object({
   timeoutSeconds: z.number().int().positive().default(3600),
   // 環境変数
   env: z.record(z.string()).optional(),
+  // 既存の環境変数を引き継ぐか
+  inheritEnv: z.boolean().optional(),
   // 使用モデル（例: google/gemini-2.0-flash-exp）
   model: z.string().optional(),
   // リトライ設定
@@ -105,10 +107,11 @@ async function executeOpenCodeOnce(
   args.push("--");
   args.push("添付したプロンプトを読んで指示に従ってください。");
 
+  const baseEnv = options.inheritEnv === false ? {} : globalThis.process.env;
   const childProcess = spawn("opencode", args, {
     cwd: options.workdir,
     env: {
-      ...globalThis.process.env,
+      ...baseEnv,
       ...options.env,
     },
     timeout: options.timeoutSeconds * 1000,

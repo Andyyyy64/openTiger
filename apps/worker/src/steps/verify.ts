@@ -10,6 +10,7 @@ import {
 } from "@sebastian-code/vcs";
 import type { Policy } from "@sebastian-code/core";
 import { minimatch } from "minimatch";
+import { buildTaskEnv } from "../env.js";
 
 export interface VerifyOptions {
   repoPath: string;
@@ -70,12 +71,14 @@ async function runCommand(
   timeoutMs = 300000
 ): Promise<CommandResult> {
   const startTime = Date.now();
+  const env = await buildTaskEnv(cwd);
 
   return new Promise((resolve) => {
     // シェル経由で実行
     const process = spawn("sh", ["-c", command], {
       cwd,
       timeout: timeoutMs,
+      env,
     });
 
     let stdout = "";
@@ -345,11 +348,13 @@ async function runDevCommandOnce(
   let stdout = "";
   let stderr = "";
   let timedOut = false;
+  const env = await buildTaskEnv(cwd);
 
   return new Promise((resolve) => {
     const child = spawn("sh", ["-c", command], {
       cwd,
       detached: true,
+      env,
     });
     const killProcessGroup = (signal: NodeJS.Signals): void => {
       if (child.pid) {
