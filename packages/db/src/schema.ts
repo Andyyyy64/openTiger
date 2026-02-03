@@ -23,6 +23,7 @@ export const tasks = pgTable("tasks", {
   touches: text("touches").array().default([]).notNull(), // 変更対象のファイル/ディレクトリ
   dependencies: uuid("dependencies").array().default([]).notNull(), // 先行タスクID
   timeboxMinutes: integer("timebox_minutes").default(60).notNull(),
+  retryCount: integer("retry_count").default(0).notNull(), // リトライ回数
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

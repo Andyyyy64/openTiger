@@ -15,6 +15,13 @@
       "when": 1769790000000,
       "tag": "0001_add_task_role",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1769880000000,
+      "tag": "0002_add_task_retry_count",
+      "breakpoints": true
     }
   ]
 }
