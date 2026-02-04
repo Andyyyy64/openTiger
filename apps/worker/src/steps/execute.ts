@@ -2,7 +2,7 @@ import { writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Task } from "@sebastian-code/core";
 import { runOpenCode, type OpenCodeResult } from "@sebastian-code/llm";
-import { buildOpenCodeEnv } from "../env.js";
+import { buildOpenCodeEnv, getProjectEnvSummary } from "../env.js";
 
 export interface ExecuteOptions {
   repoPath: string;
@@ -75,7 +75,12 @@ export async function executeTask(
   console.log("Task:", task.title);
 
   // OpenCodeを実行
+  const envSummary = await getProjectEnvSummary(repoPath);
   const taskEnv = await buildOpenCodeEnv(repoPath);
+  const relevantProjectKeys = new Set(["DATABASE_URL", "REDIS_URL", "API_PORT", "PORT"]);
+  const presentProjectKeys = envSummary.keys.filter((key) =>
+    relevantProjectKeys.has(key)
+  );
   const openCodeResult = await runOpenCode({
     workdir: repoPath,
     instructionsPath,

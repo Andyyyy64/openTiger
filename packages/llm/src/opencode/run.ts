@@ -117,6 +117,13 @@ async function executeOpenCodeOnce(
     timeout: options.timeoutSeconds * 1000,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  const timeoutMs = options.timeoutSeconds * 1000;
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    childProcess.kill("SIGTERM");
+    setTimeout(() => childProcess.kill("SIGKILL"), 2000);
+  }, timeoutMs);
 
   let stdout = "";
   let stderr = "";
@@ -137,22 +144,25 @@ async function executeOpenCodeOnce(
 
   return new Promise((resolve) => {
     childProcess.on("close", (code) => {
+      clearTimeout(timeout);
       const durationMs = Date.now() - startTime;
       const tokenUsage = extractOpenCodeTokenUsage(stdout);
+      const timeoutMessage = timedOut ? "\n[OpenCode] Timeout exceeded" : "";
 
       rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
 
       resolve({
-        success: code === 0,
-        exitCode: code ?? -1,
+        success: !timedOut && code === 0,
+        exitCode: timedOut ? -1 : code ?? -1,
         stdout,
-        stderr,
+        stderr: stderr + timeoutMessage,
         durationMs,
         tokenUsage,
       });
     });
 
     childProcess.on("error", (error) => {
+      clearTimeout(timeout);
       const durationMs = Date.now() - startTime;
       rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
       resolve({

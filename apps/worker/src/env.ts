@@ -79,6 +79,18 @@ async function loadProjectEnv(cwd: string): Promise<Record<string, string>> {
   }
 }
 
+export async function getProjectEnvSummary(
+  cwd: string
+): Promise<{ hasEnvFile: boolean; keys: string[] }> {
+  try {
+    const content = await readFile(join(cwd, ".env"), "utf-8");
+    const parsed = parse(content);
+    return { hasEnvFile: true, keys: Object.keys(parsed) };
+  } catch {
+    return { hasEnvFile: false, keys: [] };
+  }
+}
+
 export async function buildTaskEnv(
   cwd: string
 ): Promise<Record<string, string>> {
