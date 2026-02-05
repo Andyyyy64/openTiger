@@ -694,6 +694,43 @@ systemRoute.post("/processes/:name/stop", (c) => {
   return c.json({ process: info });
 });
 
+systemRoute.post("/processes/stop-all", (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  const stopped: string[] = [];
+  const skipped: string[] = [];
+
+  for (const definition of processDefinitions) {
+    // uiとserver以外のプロセスのみ停止対象とする
+    // uiとserverはpnpm run upで起動されるプロセスで、system.tsでは管理されていない
+    if (definition.name === "ui" || definition.name === "server" || definition.name === "dashboard" || definition.name === "api") {
+      continue;
+    }
+
+    if (!definition.supportsStop) {
+      skipped.push(definition.name);
+      continue;
+    }
+
+    const runtime = managedProcesses.get(definition.name);
+    if (runtime?.status === "running" && runtime.process) {
+      stopManagedProcess(definition);
+      stopped.push(definition.name);
+    } else {
+      skipped.push(definition.name);
+    }
+  }
+
+  return c.json({
+    stopped,
+    skipped,
+    message: `Stopped ${stopped.length} process(es)`,
+  });
+});
+
 systemRoute.post("/cleanup", async (c) => {
   const auth = getAuthInfo(c);
   if (!canControlSystem(auth.method)) {

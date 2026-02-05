@@ -184,6 +184,7 @@ export const systemApi = {
       `/system/requirements${path ? `?path=${encodeURIComponent(path)}` : ''}`
     ),
   cleanup: () => fetchApi<{ cleaned: boolean }>('/system/cleanup', { method: 'POST' }),
+  stopAllProcesses: () => fetchApi<{ stopped: string[]; skipped: string[]; message: string }>('/system/processes/stop-all', { method: 'POST' }),
 };
 
 // エージェント関連

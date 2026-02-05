@@ -254,6 +254,28 @@ const SETTINGS: SettingField[] = [
     group: 'Planner',
     type: 'text',
   },
+  // GitHub
+  {
+    key: 'GITHUB_TOKEN',
+    label: 'GitHub_Token',
+    description: 'API token for GitHub',
+    group: 'GitHub',
+    type: 'text',
+  },
+  {
+    key: 'GITHUB_OWNER',
+    label: 'GitHub_Owner',
+    description: 'Owner for GitHub repository',
+    group: 'GitHub',
+    type: 'text',
+  },
+  {
+    key: 'GITHUB_REPO',
+    label: 'GitHub_Repo',
+    description: 'Repository name for GitHub',
+    group: 'GitHub',
+    type: 'text',
+  },
   // API Keys
   {
     key: 'ANTHROPIC_API_KEY',
@@ -332,6 +354,12 @@ export const SettingsPage: React.FC = () => {
   const isCleanupSuccess = cleanupMutation.isSuccess;
   const resetCleanup = cleanupMutation.reset;
 
+  const stopAllProcessesMutation = useMutation({
+    mutationFn: () => systemApi.stopAllProcesses(),
+  });
+  const isStopAllSuccess = stopAllProcessesMutation.isSuccess;
+  const resetStopAll = stopAllProcessesMutation.reset;
+
   const grouped = useMemo(() => {
     const entries = new Map<string, SettingField[]>();
     for (const field of SETTINGS) {
@@ -362,6 +390,14 @@ export const SettingsPage: React.FC = () => {
     }, 4000);
     return () => window.clearTimeout(timer);
   }, [isCleanupSuccess, resetCleanup]);
+
+  useEffect(() => {
+    if (!isStopAllSuccess) return;
+    const timer = window.setTimeout(() => {
+      resetStopAll();
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [isStopAllSuccess, resetStopAll]);
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6 text-[var(--color-term-fg)]">
@@ -438,6 +474,33 @@ export const SettingsPage: React.FC = () => {
 
             {cleanupMutation.isSuccess && (
               <div className="text-[var(--color-term-green)] text-xs mt-2">&gt; SUCCESS: Database purged.</div>
+            )}
+          </div>
+        </section>
+
+        <section className="border border-[var(--color-term-border)] p-0">
+          <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wider">Process_Control</h2>
+            <span className="text-xs text-zinc-500">killall -9</span>
+          </div>
+          <div className="p-4 space-y-3 font-mono text-sm">
+            <div className="text-zinc-500 text-xs mb-2">
+                // Stops all managed processes except UI and server.
+              <br />// Planner, Dispatcher, Judge, Workers, etc. will be stopped.
+            </div>
+
+            <button
+              onClick={() => stopAllProcessesMutation.mutate()}
+              disabled={stopAllProcessesMutation.isPending}
+              className="w-full border border-orange-900 text-orange-500 hover:bg-orange-900 hover:text-white py-2 text-xs uppercase transition-colors disabled:opacity-50"
+            >
+              {stopAllProcessesMutation.isPending ? '> STOPPING...' : '> DELETE ALL PROCESSES'}
+            </button>
+
+            {stopAllProcessesMutation.isSuccess && (
+              <div className="text-[var(--color-term-green)] text-xs mt-2">
+                &gt; SUCCESS: {stopAllProcessesMutation.data?.message || 'Processes stopped.'}
+              </div>
             )}
           </div>
         </section>
