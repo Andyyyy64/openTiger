@@ -251,6 +251,9 @@ importers:
       '@sebastian-code/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@sebastian-code/vcs':
+        specifier: workspace:*
+        version: link:../../packages/vcs
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3

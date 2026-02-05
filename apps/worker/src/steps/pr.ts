@@ -22,6 +22,7 @@ export interface CreatePRResult {
 // PR本文を生成
 function generatePRBody(options: CreatePROptions): string {
   const { task, changedFiles, stats, verificationResults } = options;
+  const issue = task.context?.issue;
 
   const lines: string[] = [
     "## Summary",
@@ -29,6 +30,10 @@ function generatePRBody(options: CreatePROptions): string {
     task.goal,
     "",
   ];
+
+  if (issue?.number) {
+    lines.push(`Closes #${issue.number}`, "");
+  }
 
   // タスク情報
   lines.push(
@@ -39,6 +44,12 @@ function generatePRBody(options: CreatePROptions): string {
     `- **Timebox**: ${task.timeboxMinutes} minutes`,
     ""
   );
+  if (issue?.number) {
+    const issueLine = issue.url
+      ? `- **Issue**: #${issue.number} (${issue.url})`
+      : `- **Issue**: #${issue.number}`;
+    lines.splice(lines.length - 1, 0, issueLine);
+  }
 
   // 変更統計
   lines.push(

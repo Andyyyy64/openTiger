@@ -9,6 +9,7 @@ import { tasks, agents, events } from "@sebastian-code/db/schema";
 import { eq, desc, inArray, and } from "drizzle-orm";
 import dotenv from "dotenv";
 import { getRepoMode, getLocalRepoPath } from "@sebastian-code/core";
+import { createIssue } from "@sebastian-code/vcs";
 
 // ハートビートの間隔（ミリ秒）
 const HEARTBEAT_INTERVAL = 30000; // 30秒
@@ -1044,6 +1045,133 @@ async function recordPlannerPlanEvent(params: {
   }
 }
 
+function buildIssueTitle(task: PlannedTaskInput): string {
+  return `[Task] ${task.title}`;
+}
+
+function buildIssueBody(params: {
+  taskId: string;
+  task: PlannedTaskInput;
+  requirement: Requirement;
+}): string {
+  const { taskId, task, requirement } = params;
+  const role = task.role ?? "worker";
+  const riskLevel = task.riskLevel ?? "low";
+  const timebox = task.timeboxMinutes ?? 60;
+  const notes = task.context?.notes?.trim();
+  const specs = task.context?.specs?.trim();
+  const files = task.context?.files ?? [];
+  const allowedPaths = task.allowedPaths ?? [];
+  const commands = task.commands ?? [];
+
+  const lines: string[] = [
+    "## Task",
+    "",
+    `- Task ID: \`${taskId}\``,
+    `- Role: ${role}`,
+    `- Risk Level: ${riskLevel}`,
+    `- Timebox: ${timebox} minutes`,
+    "",
+    "## Goal",
+    "",
+    task.goal,
+    "",
+    "## Requirement",
+    "",
+    requirement.goal,
+    "",
+    "## Allowed Paths",
+    "",
+  ];
+
+  if (allowedPaths.length === 0) {
+    lines.push("- (none)");
+  } else {
+    for (const path of allowedPaths) {
+      lines.push(`- ${path}`);
+    }
+  }
+
+  lines.push("", "## Commands", "");
+
+  if (commands.length === 0) {
+    lines.push("- (none)");
+  } else {
+    for (const command of commands) {
+      lines.push(`- \`${command}\``);
+    }
+  }
+
+  if (files.length > 0) {
+    lines.push("", "## Related Files", "");
+    for (const file of files) {
+      lines.push(`- ${file}`);
+    }
+  }
+
+  if (specs) {
+    lines.push("", "## Specs", "", specs);
+  }
+
+  if (notes) {
+    lines.push("", "## Notes", "", notes);
+  }
+
+  lines.push("", "---", "", "このIssueはPlannerが自動生成しました。");
+
+  return lines.join("\n");
+}
+
+async function createIssuesForTasks(params: {
+  requirement: Requirement;
+  tasks: PlannedTaskInput[];
+  savedIds: string[];
+}): Promise<void> {
+  if (getRepoMode() !== "git") {
+    return;
+  }
+  if (!process.env.GITHUB_TOKEN || !process.env.GITHUB_OWNER || !process.env.GITHUB_REPO) {
+    console.warn("[Planner] GitHub設定がないためIssue作成をスキップします。");
+    return;
+  }
+
+  const { requirement, tasks: taskInputs, savedIds } = params;
+
+  // Plannerで生成したタスクをIssue化して追跡しやすくする
+  for (let index = 0; index < taskInputs.length; index += 1) {
+    const task = taskInputs[index];
+    const taskId = savedIds[index];
+    if (!task || !taskId) continue;
+    if (task.context?.issue?.number) {
+      continue;
+    }
+
+    try {
+      const issue = await createIssue({
+        title: buildIssueTitle(task),
+        body: buildIssueBody({ taskId, task, requirement }),
+      });
+
+      const updatedContext = {
+        ...(task.context ?? {}),
+        issue: {
+          number: issue.number,
+          url: issue.url,
+          title: issue.title,
+        },
+      };
+
+      await db
+        .update(tasks)
+        .set({ context: updatedContext, updatedAt: new Date() })
+        .where(eq(tasks.id, taskId));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`[Planner] Failed to create issue for task ${taskId}: ${message}`);
+    }
+  }
+}
+
 // 要件ファイルからタスクを生成
 async function planFromRequirement(
   requirementPath: string,
@@ -1214,6 +1342,12 @@ async function planFromRequirement(
     savedIds,
     agentId,
     signature: planSignature,
+  });
+
+  await createIssuesForTasks({
+    requirement,
+    tasks: result.tasks,
+    savedIds,
   });
 
   console.log(`\nSaved ${savedIds.length} tasks to database`);

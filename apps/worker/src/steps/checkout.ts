@@ -4,6 +4,9 @@ import { join } from "node:path";
 import {
   addWorktree,
   isGitRepo,
+  initRepo,
+  ensureInitialCommit,
+  ensureBranchExists,
   cloneRepo,
   fetchLatest,
   resetHard,
@@ -66,11 +69,33 @@ export async function checkoutRepository(
           error: "LOCAL_REPO_PATH is required for local mode",
         };
       }
-      if (!(await isGitRepo(localRepoPath))) {
+      const repoIsGit = await isGitRepo(localRepoPath);
+      if (!repoIsGit) {
+        // 初期状態のローカルディレクトリでも作業できるようにGitを初期化する
+        const initResult = await initRepo(localRepoPath, baseBranch);
+        if (!initResult.success) {
+          return {
+            success: false,
+            repoPath,
+            error: `Git init failed: ${initResult.stderr}`,
+          };
+        }
+      }
+      // worktreeを作るために最低1コミットを用意しておく
+      const commitResult = await ensureInitialCommit(localRepoPath);
+      if (!commitResult.success) {
         return {
           success: false,
           repoPath,
-          error: `LOCAL_REPO_PATH is not a git repository: ${localRepoPath}`,
+          error: `Initial commit failed: ${commitResult.stderr}`,
+        };
+      }
+      const branchResult = await ensureBranchExists(localRepoPath, baseBranch);
+      if (!branchResult.success) {
+        return {
+          success: false,
+          repoPath,
+          error: `Base branch setup failed: ${branchResult.stderr}`,
         };
       }
 

@@ -24,6 +24,13 @@ export const TaskContext = z.object({
   files: z.array(z.string()).optional(), // 関連ファイル
   specs: z.string().optional(), // 仕様・要件
   notes: z.string().optional(), // 補足情報
+  issue: z
+    .object({
+      number: z.number().int(),
+      url: z.string().url().optional(),
+      title: z.string().optional(),
+    })
+    .optional(), // Issueの紐づけ情報
 });
 export type TaskContext = z.infer<typeof TaskContext>;
 

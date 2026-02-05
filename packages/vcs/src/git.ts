@@ -67,6 +67,61 @@ export async function isGitRepo(cwd: string): Promise<boolean> {
   return result.success && result.stdout === "true";
 }
 
+export async function initRepo(
+  cwd: string,
+  baseBranch?: string
+): Promise<GitResult> {
+  const initResult = await execGit(["init"], cwd);
+  if (!initResult.success) {
+    return initResult;
+  }
+  if (baseBranch) {
+    const checkoutResult = await execGit(["checkout", "-b", baseBranch], cwd);
+    if (!checkoutResult.success) {
+      return checkoutResult;
+    }
+  }
+  return initResult;
+}
+
+export async function ensureInitialCommit(
+  cwd: string,
+  message = "chore: initialize repository"
+): Promise<GitResult> {
+  const headResult = await execGit(["rev-parse", "--verify", "HEAD"], cwd);
+  if (headResult.success) {
+    return headResult;
+  }
+  const addResult = await execGit(["add", "-A"], cwd);
+  if (!addResult.success) {
+    return addResult;
+  }
+  return execGit(
+    [
+      "-c",
+      "user.name=sebastian-code",
+      "-c",
+      "user.email=worker@sebastian-code.ai",
+      "commit",
+      "-m",
+      message,
+      "--allow-empty",
+    ],
+    cwd
+  );
+}
+
+export async function ensureBranchExists(
+  cwd: string,
+  branchName: string
+): Promise<GitResult> {
+  const verifyResult = await execGit(["rev-parse", "--verify", branchName], cwd);
+  if (verifyResult.success) {
+    return verifyResult;
+  }
+  return execGit(["branch", branchName], cwd);
+}
+
 export async function addWorktree(options: {
   baseRepoPath: string;
   worktreePath: string;

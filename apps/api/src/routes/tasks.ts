@@ -44,6 +44,13 @@ const createTaskSchema = z.object({
       files: z.array(z.string()).optional(),
       specs: z.string().optional(),
       notes: z.string().optional(),
+      issue: z
+        .object({
+          number: z.number().int(),
+          url: z.string().url().optional(),
+          title: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
   allowedPaths: z.array(z.string()),
@@ -87,6 +94,13 @@ const updateTaskSchema = z.object({
       files: z.array(z.string()).optional(),
       specs: z.string().optional(),
       notes: z.string().optional(),
+      issue: z
+        .object({
+          number: z.number().int(),
+          url: z.string().url().optional(),
+          title: z.string().optional(),
+        })
+        .optional(),
     })
     .optional(),
   allowedPaths: z.array(z.string()).optional(),
