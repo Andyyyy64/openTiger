@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { db } from "@sebastian-code/db";
-import { events } from "@sebastian-code/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { events, agents } from "@sebastian-code/db/schema";
+import { eq, desc, and } from "drizzle-orm";
 import type { CycleConfig } from "@sebastian-code/core";
 import {
   startNewCycle,
@@ -290,6 +290,15 @@ async function shouldTriggerReplan(
 ): Promise<{ shouldRun: boolean; signature?: ReplanSignature; reason?: string }> {
   if (!config.autoReplan || replanInProgress) {
     return { shouldRun: false, reason: "disabled_or_running" };
+  }
+  // Plannerが実行中なら再計画を避けて二重生成を防ぐ
+  const [plannerBusy] = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(and(eq(agents.role, "planner"), eq(agents.status, "busy")))
+    .limit(1);
+  if (plannerBusy) {
+    return { shouldRun: false, reason: "planner_busy" };
   }
   if (!config.replanRequirementPath) {
     if (!warnedMissingRequirementPath) {
