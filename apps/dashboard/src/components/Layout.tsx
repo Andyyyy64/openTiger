@@ -60,7 +60,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             <div className="px-2 space-y-px">
               <NavItem to="/" label="overview" />
               <NavItem to="/start" label="start" />
-              <NavItem to="/system" label="system" />
               <NavItem to="/tasks" label="tasks" />
               <NavItem to="/runs" label="runs" />
               <NavItem to="/agents" label="agents" />
@@ -69,7 +68,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
           </nav>
 
-          <div className="px-4 mt-auto">
+          <div className="px-2 mb-2">
+            <div className="h-px bg-[var(--color-term-border)] mx-3 my-2 opacity-50" />
+            <NavItem to="/system" label="system_config" />
+          </div>
+
+          <div className="px-4">
             <div className="border-t border-[var(--color-term-border)] pt-4 text-[10px] text-zinc-600">
               <p>SEBASTIAN_OS v1.0</p>
               <p className="mt-1">Use arrow keys to nav (todo)</p>
