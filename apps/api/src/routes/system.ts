@@ -664,8 +664,22 @@ systemRoute.post("/github/repo", async (c) => {
 
     return c.json({ repo: info });
   } catch (error) {
+    const status = typeof error === "object" && error && "status" in error
+      ? Number((error as { status?: number }).status)
+      : undefined;
     const message = error instanceof Error ? error.message : "Failed to create repo";
-    return c.json({ error: message }, 500);
+    // 権限不足はUIに理由を返して設定を促す
+    if (status === 403 && message.includes("Resource not accessible")) {
+      return c.json(
+        {
+          error:
+            "GitHub token lacks permission to create repositories. " +
+            "Ensure the token has repo permissions and org access if needed.",
+        },
+        403
+      );
+    }
+    return c.json({ error: message }, status === 403 ? 403 : 500);
   }
 });
 
