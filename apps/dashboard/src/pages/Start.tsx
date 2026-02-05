@@ -56,6 +56,9 @@ export const StartPage: React.FC = () => {
   const [content, setContent] = useState('');
   const [loadMessage, setLoadMessage] = useState('');
   const [startResult, setStartResult] = useState<StartResult | null>(null);
+  const [repoOwner, setRepoOwner] = useState('');
+  const [repoName, setRepoName] = useState('');
+  const [repoMessage, setRepoMessage] = useState('');
 
   const { data: config } = useQuery({
     queryKey: ['config'],
@@ -85,7 +88,13 @@ export const StartPage: React.FC = () => {
     if (config.config.REPLAN_REQUIREMENT_PATH && requirementPath === 'requirement.md') {
       setRequirementPath(config.config.REPLAN_REQUIREMENT_PATH);
     }
-  }, [config?.config, requirementPath]);
+    if (!repoOwner && config.config.GITHUB_OWNER) {
+      setRepoOwner(config.config.GITHUB_OWNER);
+    }
+    if (!repoName && config.config.GITHUB_REPO) {
+      setRepoName(config.config.GITHUB_REPO);
+    }
+  }, [config?.config, requirementPath, repoName, repoOwner]);
 
   const loadMutation = useMutation({
     mutationFn: (path: string) => systemApi.requirement(path),
@@ -102,6 +111,10 @@ export const StartPage: React.FC = () => {
     mutationFn: async () => {
       const settings = config?.config;
       if (!settings) throw new Error('Config not loaded');
+      const repoMode = (settings.REPO_MODE ?? 'git').toLowerCase();
+      if (repoMode === 'git' && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
+        throw new Error('GitHub repo is not configured');
+      }
       if (content.trim().length === 0) throw new Error('Requirements empty');
 
       const dispatcherEnabled = parseBoolean(settings.DISPATCHER_ENABLED, true);
@@ -154,7 +167,31 @@ export const StartPage: React.FC = () => {
     },
   });
 
+  const createRepoMutation = useMutation({
+    mutationFn: async () => {
+      if (!repoOwner.trim() || !repoName.trim()) {
+        throw new Error('Owner and repo are required');
+      }
+      return systemApi.createGithubRepo({
+        owner: repoOwner.trim(),
+        repo: repoName.trim(),
+        private: true,
+      });
+    },
+    onSuccess: (repo) => {
+      setRepoMessage(`> REPO_READY: ${repo.owner}/${repo.name}`);
+      queryClient.invalidateQueries({ queryKey: ['config'] });
+    },
+    onError: (error) => {
+      setRepoMessage(error instanceof Error ? `> REPO_ERR: ${error.message}` : '> REPO_FAIL');
+    },
+  });
+
   const configValues = config?.config ?? {};
+  const repoMode = (configValues.REPO_MODE ?? 'git').toLowerCase();
+  const isGitMode = repoMode === 'git';
+  const hasGithubToken = Boolean(configValues.GITHUB_TOKEN?.trim());
+  const isRepoMissing = isGitMode && (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO);
   const workerCount = parseCount(configValues.WORKER_COUNT, 1, MAX_WORKERS, 'Worker').count;
   const testerCount = parseCount(configValues.TESTER_COUNT, 1, MAX_TESTERS, 'Tester').count;
 
@@ -173,6 +210,7 @@ export const StartPage: React.FC = () => {
   const cycleStatus = processes?.find((process) => process.name === 'cycle-manager')?.status ?? 'idle';
 
   const isContentEmpty = content.trim().length === 0;
+  const isStartBlocked = isRepoMissing;
   const isHealthy = health?.status === 'ok' && !isHealthError;
 
   return (
@@ -238,6 +276,38 @@ export const StartPage: React.FC = () => {
           </div>
 
           <div className="p-4 flex-1 flex flex-col gap-4">
+            {isRepoMissing && (
+              <div className="border border-[var(--color-term-border)] p-3 text-xs font-mono space-y-2">
+                <div className="text-zinc-400">GitHub Repo Setup (git mode)</div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    className="flex-1 bg-black border border-[var(--color-term-border)] px-3 py-1 text-xs text-[var(--color-term-fg)] focus:border-[var(--color-term-green)] focus:outline-none placeholder-zinc-700"
+                    value={repoOwner}
+                    onChange={(event) => setRepoOwner(event.target.value)}
+                    placeholder="GitHub owner"
+                  />
+                  <input
+                    type="text"
+                    className="flex-1 bg-black border border-[var(--color-term-border)] px-3 py-1 text-xs text-[var(--color-term-fg)] focus:border-[var(--color-term-green)] focus:outline-none placeholder-zinc-700"
+                    value={repoName}
+                    onChange={(event) => setRepoName(event.target.value)}
+                    placeholder="Repository name"
+                  />
+                  <button
+                    onClick={() => createRepoMutation.mutate()}
+                    disabled={!hasGithubToken || createRepoMutation.isPending}
+                    className="border border-[var(--color-term-border)] hover:bg-[var(--color-term-fg)] hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
+                  >
+                    [ CREATE ]
+                  </button>
+                </div>
+                {!hasGithubToken && (
+                  <div className="text-yellow-500">GitHub token is missing in System config</div>
+                )}
+                {repoMessage && <div className="text-[10px] text-zinc-500 font-mono">{repoMessage}</div>}
+              </div>
+            )}
             <div className="flex flex-col gap-1">
               <label className="text-xs text-zinc-500 uppercase">Input Source</label>
               <div className="flex gap-2">
@@ -272,7 +342,7 @@ export const StartPage: React.FC = () => {
               </span>
               <button
                 onClick={() => startMutation.mutate()}
-                disabled={startMutation.isPending || isContentEmpty}
+                disabled={startMutation.isPending || isContentEmpty || isStartBlocked}
                 className="bg-[var(--color-term-green)] text-black px-6 py-2 text-sm font-bold uppercase hover:opacity-90 disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500"
               >
                 {startMutation.isPending ? '> INITIATING...' : '> EXECUTE RUN'}
@@ -280,9 +350,10 @@ export const StartPage: React.FC = () => {
             </div>
 
             {/* Result Console */}
-            {(startResult || isContentEmpty) && (
+            {(startResult || isContentEmpty || isStartBlocked) && (
               <div className="border-t border-[var(--color-term-border)] mt-2 pt-2 gap-1 flex flex-col text-xs font-mono">
                 {isContentEmpty && <div className="text-yellow-500">&gt; WARN: Content empty</div>}
+                {isStartBlocked && <div className="text-yellow-500">&gt; WARN: GitHub repo is missing</div>}
                 {startResult?.warnings.map(w => <div key={w} className="text-yellow-500">&gt; WARN: {w}</div>)}
                 {startResult?.errors.map(e => <div key={e} className="text-red-500">&gt; ERR: {e}</div>)}
                 {startResult?.started.length && <div className="text-[var(--color-term-green)]">&gt; BOOT SEQ INITIATED</div>}

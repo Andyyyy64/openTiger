@@ -3,11 +3,12 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { createWriteStream, mkdirSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, relative, isAbsolute } from "node:path";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@sebastian-code/db";
 import { config as configTable } from "@sebastian-code/db/schema";
 import { configToEnv, DEFAULT_CONFIG, buildConfigRecord } from "../system-config.js";
 import { getAuthInfo } from "../middleware/index.js";
+import { createRepo } from "@sebastian-code/vcs";
 
 type RestartStatus = {
   status: "idle" | "running" | "completed" | "failed";
@@ -612,6 +613,59 @@ systemRoute.get("/requirements", async (c) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load requirement";
     return c.json({ error: message }, 400);
+  }
+});
+
+systemRoute.post("/github/repo", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  const rawBody = await c.req.json().catch(() => ({}));
+  const ownerInput = typeof rawBody?.owner === "string" ? rawBody.owner.trim() : "";
+  const repoInput = typeof rawBody?.repo === "string" ? rawBody.repo.trim() : "";
+  const description =
+    typeof rawBody?.description === "string" ? rawBody.description.trim() : "";
+  const isPrivate = typeof rawBody?.private === "boolean" ? rawBody.private : true;
+
+  const configRow = await ensureConfigRow();
+  const owner = ownerInput || configRow.githubOwner;
+  const repo = repoInput || configRow.githubRepo;
+  const token = configRow.githubToken?.trim();
+
+  if (!token) {
+    return c.json({ error: "GitHub token is not configured" }, 400);
+  }
+  if (!owner) {
+    return c.json({ error: "GitHub owner is required" }, 400);
+  }
+  if (!repo) {
+    return c.json({ error: "GitHub repo is required" }, 400);
+  }
+
+  try {
+    const info = await createRepo({
+      token,
+      owner,
+      name: repo,
+      description,
+      private: isPrivate,
+    });
+    // 作成後の設定はDBに保存してUIの状態を合わせる
+    await db
+      .update(configTable)
+      .set({
+        githubOwner: owner,
+        githubRepo: repo,
+        updatedAt: new Date(),
+      })
+      .where(eq(configTable.id, configRow.id));
+
+    return c.json({ repo: info });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to create repo";
+    return c.json({ error: message }, 500);
   }
 });
 

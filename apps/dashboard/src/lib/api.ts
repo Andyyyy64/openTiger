@@ -146,6 +146,14 @@ export interface RequirementResponse {
   content: string;
 }
 
+export interface GitHubRepoInfo {
+  owner: string;
+  name: string;
+  url: string;
+  defaultBranch: string;
+  created: boolean;
+}
+
 // タスク関連
 export const tasksApi = {
   list: () => fetchApi<{ tasks: Task[] }>('/tasks').then(res => res.tasks),
@@ -185,6 +193,11 @@ export const systemApi = {
     ),
   cleanup: () => fetchApi<{ cleaned: boolean }>('/system/cleanup', { method: 'POST' }),
   stopAllProcesses: () => fetchApi<{ stopped: string[]; skipped: string[]; message: string }>('/system/processes/stop-all', { method: 'POST' }),
+  createGithubRepo: (payload: { owner?: string; repo?: string; description?: string; private?: boolean }) =>
+    fetchApi<{ repo: GitHubRepoInfo }>('/system/github/repo', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }).then(res => res.repo),
 };
 
 // エージェント関連
