@@ -18,7 +18,11 @@ export async function fetchApi<T>(endpoint: string, options?: RequestInit): Prom
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'Unknown error' }));
-    throw new Error(error.message || `API error: ${response.status}`);
+    const message =
+      (typeof error?.message === 'string' && error.message)
+      || (typeof error?.error === 'string' && error.error)
+      || `API error: ${response.status}`;
+    throw new Error(message);
   }
 
   return response.json();
@@ -92,6 +96,12 @@ export interface JudgementEvent {
   payload: JudgementPayload | null;
 }
 
+export interface JudgementDiffResponse {
+  diff: string;
+  truncated: boolean;
+  source: string;
+}
+
 export interface AgentLogResponse {
   log: string;
   sizeBytes: number;
@@ -101,7 +111,39 @@ export interface AgentLogResponse {
 
 export interface ConfigResponse {
   config: Record<string, string>;
-  envPath: string;
+}
+
+export interface RestartStatusResponse {
+  status: 'idle' | 'running' | 'completed' | 'failed';
+  startedAt?: string;
+  finishedAt?: string;
+  exitCode?: number | null;
+  signal?: string | null;
+  logPath?: string;
+  message?: string;
+}
+
+export interface SystemProcess {
+  name: string;
+  label: string;
+  description: string;
+  group: string;
+  kind: 'service' | 'worker' | 'planner' | 'database' | 'command';
+  supportsStop: boolean;
+  status: 'idle' | 'running' | 'completed' | 'failed' | 'stopped';
+  startedAt?: string;
+  finishedAt?: string;
+  pid?: number;
+  exitCode?: number | null;
+  signal?: string | null;
+  logPath?: string;
+  message?: string;
+  lastCommand?: string;
+}
+
+export interface RequirementResponse {
+  path: string;
+  content: string;
 }
 
 // タスク関連
@@ -125,6 +167,23 @@ export const runsApi = {
 // システム状態
 export const systemApi = {
   health: () => fetchApi<{ status: string, timestamp: string }>('/health'),
+  restart: () => fetchApi<RestartStatusResponse>('/system/restart', { method: 'POST' }),
+  restartStatus: () => fetchApi<RestartStatusResponse>('/system/restart'),
+  processes: () => fetchApi<{ processes: SystemProcess[] }>('/system/processes').then(res => res.processes),
+  startProcess: (name: string, payload?: { requirementPath?: string; content?: string }) =>
+    fetchApi<{ process: SystemProcess }>(`/system/processes/${name}/start`, {
+      method: 'POST',
+      body: JSON.stringify(payload ?? {}),
+    }).then(res => res.process),
+  stopProcess: (name: string) =>
+    fetchApi<{ process: SystemProcess }>(`/system/processes/${name}/stop`, {
+      method: 'POST',
+    }).then(res => res.process),
+  requirement: (path?: string) =>
+    fetchApi<RequirementResponse>(
+      `/system/requirements${path ? `?path=${encodeURIComponent(path)}` : ''}`
+    ),
+  cleanup: () => fetchApi<{ cleaned: boolean }>('/system/cleanup', { method: 'POST' }),
 };
 
 // エージェント関連
@@ -150,6 +209,12 @@ export const judgementsApi = {
     const suffix = query.toString();
     return fetchApi<{ judgements: JudgementEvent[] }>(`/judgements${suffix ? `?${suffix}` : ''}`)
       .then(res => res.judgements);
+  },
+  diff: (id: string, limit?: number) => {
+    const query = new URLSearchParams();
+    if (limit) query.set('limit', String(limit));
+    const suffix = query.toString();
+    return fetchApi<JudgementDiffResponse>(`/judgements/${id}/diff${suffix ? `?${suffix}` : ''}`);
   },
 };
 
