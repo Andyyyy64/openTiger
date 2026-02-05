@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { db } from "@sebastian-code/db";
 import { events, agents } from "@sebastian-code/db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
 import type { CycleConfig } from "@sebastian-code/core";
 import {
   startNewCycle,
@@ -279,27 +279,43 @@ async function computeReplanSignature(
   };
 }
 
-async function getLastSuccessfulReplanSignature(): Promise<string | null> {
+function readPayloadField(
+  payload: unknown,
+  key: string
+): unknown | undefined {
+  if (!payload || typeof payload !== "object") {
+    return;
+  }
+  if (!(key in payload)) {
+    return;
+  }
+  return (payload as Record<string, unknown>)[key];
+}
+
+async function getLastPlanSignature(): Promise<string | null> {
   try {
-    const [row] = await db
-      .select({ payload: events.payload })
+    const rows = await db
+      .select({ payload: events.payload, type: events.type })
       .from(events)
-      .where(eq(events.type, "planner.replan_finished"))
+      .where(inArray(events.type, ["planner.replan_finished", "planner.plan_created"]))
       .orderBy(desc(events.createdAt))
-      .limit(1);
+      .limit(10);
 
-    if (!row?.payload || typeof row.payload !== "object") {
-      return null;
+    for (const row of rows) {
+      const payload = row.payload;
+      if (row.type === "planner.replan_finished") {
+        const exitCode = readPayloadField(payload, "exitCode");
+        if (typeof exitCode === "number" && exitCode !== 0) {
+          continue;
+        }
+      }
+      const signature = readPayloadField(payload, "signature");
+      if (typeof signature === "string") {
+        return signature;
+      }
     }
 
-    const payload = row.payload as Record<string, unknown>;
-    const exitCode = payload.exitCode;
-    if (exitCode !== 0) {
-      return null;
-    }
-
-    const signature = payload.signature;
-    return typeof signature === "string" ? signature : null;
+    return null;
   } catch (error) {
     console.warn("[CycleManager] Failed to load replan signature:", error);
     return null;
@@ -373,7 +389,7 @@ async function shouldTriggerReplan(
   const signature = await computeReplanSignature(config);
   if (signature) {
     // 直近の成功時と同じ署名なら差異がないので再計画しない
-    const lastSignature = await getLastSuccessfulReplanSignature();
+    const lastSignature = await getLastPlanSignature();
     if (lastSignature && lastSignature === signature.signature) {
       return { shouldRun: false, signature, reason: "no_diff" };
     }

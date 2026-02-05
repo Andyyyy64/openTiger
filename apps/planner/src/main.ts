@@ -1,5 +1,6 @@
 import { stat, mkdtemp, rm, readFile, readdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createWriteStream, mkdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -343,6 +344,90 @@ async function resolveCheckVerificationCommand(
     return "npm run check";
   }
   return "npm run check";
+}
+
+async function computeRequirementHash(
+  requirementPath: string
+): Promise<string | undefined> {
+  try {
+    const content = await readFile(requirementPath, "utf-8");
+    return createHash("sha256").update(content).digest("hex");
+  } catch (error) {
+    console.warn("[Planner] Failed to read requirement file:", error);
+    return;
+  }
+}
+
+async function resolveRepoHeadSha(workdir: string): Promise<string | undefined> {
+  return new Promise((resolveResult) => {
+    const child = spawn("git", ["rev-parse", "HEAD"], {
+      cwd: workdir,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: "0",
+      },
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    child.on("close", (code) => {
+      if (code !== 0) {
+        console.warn("[Planner] git rev-parse failed:", stderr.trim());
+        resolveResult(undefined);
+        return;
+      }
+
+      const sha = stdout.trim().split(/\s+/)[0];
+      resolveResult(sha || undefined);
+    });
+
+    child.on("error", (error) => {
+      console.warn("[Planner] git rev-parse error:", error);
+      resolveResult(undefined);
+    });
+  });
+}
+
+async function computePlanSignature(params: {
+  requirementPath: string;
+  workdir: string;
+  repoUrl?: string;
+  baseBranch: string;
+}): Promise<{ signature: string; requirementHash: string; repoHeadSha: string } | undefined> {
+  const requirementHash = await computeRequirementHash(params.requirementPath);
+  if (!requirementHash) {
+    return;
+  }
+
+  const repoHeadSha = await resolveRepoHeadSha(params.workdir);
+  if (!repoHeadSha) {
+    console.warn("[Planner] Failed to resolve repo HEAD for signature.");
+    return;
+  }
+
+  const repoIdentity = params.repoUrl
+    ? params.repoUrl
+    : `local:${resolve(params.workdir)}`;
+  const signaturePayload = {
+    requirementHash,
+    repoHeadSha,
+    repoUrl: repoIdentity,
+    baseBranch: params.baseBranch,
+  };
+  const signature = createHash("sha256")
+    .update(JSON.stringify(signaturePayload))
+    .digest("hex");
+
+  return { signature, requirementHash, repoHeadSha };
 }
 
 type DocGapInfo = {
@@ -845,6 +930,9 @@ async function saveTasks(taskInputs: PlannedTaskInput[]): Promise<string[]> {
         commands: input.commands,
         priority: input.priority ?? 0,
         riskLevel: input.riskLevel ?? "low",
+        role: input.role ?? "worker",
+        targetArea: input.targetArea,
+        touches: input.touches ?? [],
         dependencies: input.dependencies ?? [],
         timeboxMinutes: input.timeboxMinutes ?? 60,
       })
@@ -902,8 +990,9 @@ async function recordPlannerPlanEvent(params: {
   result: TaskGenerationResult;
   savedIds: string[];
   agentId: string;
+  signature?: { signature: string; requirementHash: string; repoHeadSha: string };
 }): Promise<void> {
-  const { requirementPath, requirement, result, savedIds, agentId } = params;
+  const { requirementPath, requirement, result, savedIds, agentId, signature } = params;
   const taskSummaries = result.tasks
     .map((task, index) => {
       const id = savedIds[index];
@@ -938,6 +1027,9 @@ async function recordPlannerPlanEvent(params: {
           allowedPaths: requirement.allowedPaths,
           notes: requirement.notes,
         },
+        signature: signature?.signature,
+        requirementHash: signature?.requirementHash,
+        repoHeadSha: signature?.repoHeadSha,
         summary: {
           totalTasks: result.tasks.length,
           totalEstimatedMinutes: result.totalEstimatedMinutes,
@@ -1109,12 +1201,19 @@ async function planFromRequirement(
   await resolveDependencies(savedIds, result.tasks);
 
   // Plannerの計画内容をUI側で参照できるように記録する
+  const planSignature = await computePlanSignature({
+    requirementPath,
+    workdir: config.workdir,
+    repoUrl: config.repoUrl,
+    baseBranch: config.baseBranch,
+  });
   await recordPlannerPlanEvent({
     requirementPath,
     requirement,
     result,
     savedIds,
     agentId,
+    signature: planSignature,
   });
 
   console.log(`\nSaved ${savedIds.length} tasks to database`);
