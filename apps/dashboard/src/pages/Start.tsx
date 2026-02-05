@@ -112,7 +112,8 @@ export const StartPage: React.FC = () => {
       const settings = config?.config;
       if (!settings) throw new Error('Config not loaded');
       const repoMode = (settings.REPO_MODE ?? 'git').toLowerCase();
-      if (repoMode === 'git' && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
+      const hasRepoUrl = Boolean(settings.REPO_URL?.trim());
+      if (repoMode === 'git' && !hasRepoUrl && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
         throw new Error('GitHub repo is not configured');
       }
       if (content.trim().length === 0) throw new Error('Requirements empty');
@@ -191,7 +192,9 @@ export const StartPage: React.FC = () => {
   const repoMode = (configValues.REPO_MODE ?? 'git').toLowerCase();
   const isGitMode = repoMode === 'git';
   const hasGithubToken = Boolean(configValues.GITHUB_TOKEN?.trim());
-  const isRepoMissing = isGitMode && (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO);
+  const repoUrl = configValues.REPO_URL?.trim();
+  const isRepoMissing =
+    isGitMode && (!repoUrl && (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO));
   const workerCount = parseCount(configValues.WORKER_COUNT, 1, MAX_WORKERS, 'Worker').count;
   const testerCount = parseCount(configValues.TESTER_COUNT, 1, MAX_TESTERS, 'Tester').count;
 

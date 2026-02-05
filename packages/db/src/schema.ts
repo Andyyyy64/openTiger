@@ -138,6 +138,7 @@ export const config = pgTable("config", {
   testerCount: text("tester_count").default("1").notNull(),
   docserCount: text("docser_count").default("1").notNull(),
   repoMode: text("repo_mode").default("git").notNull(),
+  repoUrl: text("repo_url").default("").notNull(),
   localRepoPath: text("local_repo_path").default("").notNull(),
   localWorktreeRoot: text("local_worktree_root").default("").notNull(),
   judgeMode: text("judge_mode").default("auto").notNull(),

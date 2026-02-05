@@ -23,6 +23,7 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "TESTER_COUNT", column: "testerCount", defaultValue: "1" },
   { key: "DOCSER_COUNT", column: "docserCount", defaultValue: "1" },
   { key: "REPO_MODE", column: "repoMode", defaultValue: "git" },
+  { key: "REPO_URL", column: "repoUrl", defaultValue: "" },
   { key: "LOCAL_REPO_PATH", column: "localRepoPath", defaultValue: "" },
   { key: "LOCAL_WORKTREE_ROOT", column: "localWorktreeRoot", defaultValue: "" },
   { key: "JUDGE_MODE", column: "judgeMode", defaultValue: "auto" },

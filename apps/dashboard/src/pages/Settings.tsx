@@ -124,6 +124,13 @@ const SETTINGS: SettingField[] = [
     options: REPO_MODE_OPTIONS,
   },
   {
+    key: 'REPO_URL',
+    label: 'Repo_URL',
+    description: 'Remote repository URL for git mode',
+    group: 'Repo',
+    type: 'text',
+  },
+  {
     key: 'LOCAL_REPO_PATH',
     label: 'Local_Repo_Path',
     description: 'Path for local mode',

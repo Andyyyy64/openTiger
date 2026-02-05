@@ -658,6 +658,7 @@ systemRoute.post("/github/repo", async (c) => {
       .set({
         githubOwner: owner,
         githubRepo: repo,
+        repoUrl: info.url,
         updatedAt: new Date(),
       })
       .where(eq(configTable.id, configRow.id));
