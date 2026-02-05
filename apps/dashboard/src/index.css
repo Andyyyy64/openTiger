@@ -1,10 +1,8 @@
 @import "tailwindcss";
 
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap');
-
 @theme {
   --font-mono: 'Fira Code', monospace;
-  
+
   --color-term-bg: #050505;
   --color-term-fg: #e5e5e5;
   --color-term-green: #22c55e;
@@ -64,8 +62,15 @@ body {
 }
 
 @keyframes cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
 }
 
 .cursor-blink::after {

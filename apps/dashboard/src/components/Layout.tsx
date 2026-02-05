@@ -83,7 +83,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-auto bg-[var(--color-term-bg)] relative">
-          <div className="p-6 min-h-full">
+          <div className="min-h-full">
             {children}
           </div>
         </main>
