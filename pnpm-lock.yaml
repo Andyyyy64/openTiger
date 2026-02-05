@@ -48,6 +48,9 @@ importers:
       '@sebastian-code/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@sebastian-code/vcs':
+        specifier: workspace:*
+        version: link:../../packages/vcs
       dotenv:
         specifier: ^17.2.3
         version: 17.2.3
