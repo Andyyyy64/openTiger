@@ -29,6 +29,13 @@
       "when": 1770282493711,
       "tag": "0003_unknown_terrax",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1770289828326,
+      "tag": "0004_slow_mad_thinker",
+      "breakpoints": true
     }
   ]
 }

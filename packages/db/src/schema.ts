@@ -156,6 +156,12 @@ export const config = pgTable("config", {
   replanCommand: text("replan_command").default("pnpm --filter @sebastian-code/planner start").notNull(),
   replanWorkdir: text("replan_workdir").default("").notNull(),
   replanRepoUrl: text("replan_repo_url").default("").notNull(),
+  // API Keys for LLM providers
+  anthropicApiKey: text("anthropic_api_key").default("").notNull(),
+  geminiApiKey: text("gemini_api_key").default("").notNull(),
+  openaiApiKey: text("openai_api_key").default("").notNull(),
+  xaiApiKey: text("xai_api_key").default("").notNull(),
+  deepseekApiKey: text("deepseek_api_key").default("").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),

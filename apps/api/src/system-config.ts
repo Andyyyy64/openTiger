@@ -41,6 +41,12 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "REPLAN_COMMAND", column: "replanCommand", defaultValue: "pnpm --filter @sebastian-code/planner start" },
   { key: "REPLAN_WORKDIR", column: "replanWorkdir", defaultValue: "" },
   { key: "REPLAN_REPO_URL", column: "replanRepoUrl", defaultValue: "" },
+  // API Keys for LLM providers
+  { key: "ANTHROPIC_API_KEY", column: "anthropicApiKey", defaultValue: "" },
+  { key: "GEMINI_API_KEY", column: "geminiApiKey", defaultValue: "" },
+  { key: "OPENAI_API_KEY", column: "openaiApiKey", defaultValue: "" },
+  { key: "XAI_API_KEY", column: "xaiApiKey", defaultValue: "" },
+  { key: "DEEPSEEK_API_KEY", column: "deepseekApiKey", defaultValue: "" },
 ];
 
 export const CONFIG_KEYS = CONFIG_FIELDS.map((field) => field.key);

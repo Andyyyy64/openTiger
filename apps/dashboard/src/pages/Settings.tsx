@@ -254,6 +254,42 @@ const SETTINGS: SettingField[] = [
     group: 'Planner',
     type: 'text',
   },
+  // API Keys
+  {
+    key: 'ANTHROPIC_API_KEY',
+    label: 'Anthropic_Key',
+    description: 'API key for Claude models',
+    group: 'API_Keys',
+    type: 'text',
+  },
+  {
+    key: 'GEMINI_API_KEY',
+    label: 'Gemini_Key',
+    description: 'API key for Google Gemini',
+    group: 'API_Keys',
+    type: 'text',
+  },
+  {
+    key: 'OPENAI_API_KEY',
+    label: 'OpenAI_Key',
+    description: 'API key for GPT models',
+    group: 'API_Keys',
+    type: 'text',
+  },
+  {
+    key: 'XAI_API_KEY',
+    label: 'xAI_Key',
+    description: 'API key for Grok models',
+    group: 'API_Keys',
+    type: 'text',
+  },
+  {
+    key: 'DEEPSEEK_API_KEY',
+    label: 'DeepSeek_Key',
+    description: 'API key for DeepSeek models',
+    group: 'API_Keys',
+    type: 'text',
+  },
 ];
 
 
