@@ -1,6 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { agentsApi } from '../lib/api';
+import { agentsApi, tasksApi } from '../lib/api';
 import { Link } from 'react-router-dom';
 
 export const AgentsPage: React.FC = () => {
@@ -8,6 +8,23 @@ export const AgentsPage: React.FC = () => {
     queryKey: ['agents'],
     queryFn: () => agentsApi.list(),
   });
+  const { data: tasks } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: () => tasksApi.list(),
+  });
+
+  // 依存関係が未完了のためディスパッチできない状態を検出する
+  const queuedTasks = tasks?.filter(t => t.status === 'queued') ?? [];
+  const doneTaskIds = new Set((tasks ?? []).filter(t => t.status === 'done').map(t => t.id));
+  const queuedBlockedByDeps = queuedTasks.filter(task => {
+    const deps = task.dependencies ?? [];
+    return deps.length > 0 && deps.some(depId => !doneTaskIds.has(depId));
+  });
+  const idleWorkers = agents?.filter(a => a.role === 'worker' && a.status === 'idle') ?? [];
+  const blockedByDepsWithIdleWorkers =
+    queuedTasks.length > 0 &&
+    queuedBlockedByDeps.length === queuedTasks.length &&
+    idleWorkers.length > 0;
 
   return (
     <div className="p-6 text-[var(--color-term-fg)]">
@@ -17,6 +34,14 @@ export const AgentsPage: React.FC = () => {
         </h1>
         <span className="text-xs text-zinc-500">{agents?.length ?? 0} NODES ONLINE</span>
       </div>
+
+      {blockedByDepsWithIdleWorkers && (
+        <div className="mb-8 border border-yellow-600 p-4 text-sm text-yellow-500 font-bold bg-yellow-900/10">
+          [WARNING] 依存関係が未完了のため、待機中タスクがディスパッチできません。
+          <br />
+          &gt; QUEUED: {queuedTasks.length} | BLOCKED: {queuedBlockedByDeps.length} | IDLE_WORKERS: {idleWorkers.length}
+        </div>
+      )}
 
       <div className="border border-[var(--color-term-border)]">
         <div className="grid grid-cols-12 gap-4 px-4 py-2 border-b border-[var(--color-term-border)] bg-[var(--color-term-border)]/10 text-xs font-bold text-zinc-500 uppercase">

@@ -7,19 +7,6 @@ export const OverviewPage: React.FC = () => {
   const { data: runs } = useQuery({ queryKey: ['runs'], queryFn: () => runsApi.list() });
   const { data: agents } = useQuery({ queryKey: ['agents'], queryFn: () => agentsApi.list() });
 
-  // 依存関係が未解決のためディスパッチできない状態を検出する
-  const queuedTasks = tasks?.filter(t => t.status === 'queued') ?? [];
-  const doneTaskIds = new Set((tasks ?? []).filter(t => t.status === 'done').map(t => t.id));
-  const queuedBlockedByDeps = queuedTasks.filter(task =>
-    (task.dependencies?.length ?? 0) > 0 &&
-    task.dependencies!.some(depId => !doneTaskIds.has(depId))
-  );
-  const idleWorkers = agents?.filter(a => a.role === 'worker' && a.status === 'idle') ?? [];
-  const blockedByDepsWithIdleWorkers =
-    queuedTasks.length > 0 &&
-    queuedBlockedByDeps.length === queuedTasks.length &&
-    idleWorkers.length > 0;
-
   const stats = {
     activeWorkers: agents?.filter(a => a.status === 'busy').length ?? 0,
     pendingTasks: tasks?.filter(t => t.status === 'queued').length ?? 0,
@@ -32,14 +19,6 @@ export const OverviewPage: React.FC = () => {
       <h1 className="text-xl font-bold mb-8 uppercase tracking-widest text-[var(--color-term-green)]">
         &gt; System_Overview_
       </h1>
-
-      {blockedByDepsWithIdleWorkers && (
-        <div className="mb-8 border border-yellow-600 p-4 text-sm text-yellow-500 font-bold bg-yellow-900/10">
-          [WARNING] 依存関係が未完了のため、待機中タスクがディスパッチできません。
-          <br />
-          &gt; QUEUED: {queuedTasks.length} | BLOCKED: {queuedBlockedByDeps.length} | IDLE_WORKERS: {idleWorkers.length}
-        </div>
-      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
         <StatCard

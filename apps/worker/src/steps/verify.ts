@@ -7,6 +7,9 @@ import {
   getChangeStats,
   getChangedFilesBetweenRefs,
   getDiffStatsBetweenRefs,
+  refExists,
+  getChangedFilesFromRoot,
+  getDiffStatsFromRoot,
 } from "@sebastian-code/vcs";
 import type { Policy } from "@sebastian-code/core";
 import { minimatch } from "minimatch";
@@ -569,6 +572,21 @@ export async function verifyChanges(
         deletions: diffStats.deletions,
       };
       usesCommittedDiff = true;
+    } else {
+      const baseExists = await refExists(repoPath, baseBranch);
+      if (!baseExists) {
+        // ベースブランチが存在しない初回コミットはroot差分で評価する
+        const rootFiles = await getChangedFilesFromRoot(repoPath);
+        if (rootFiles.length > 0) {
+          changedFiles = rootFiles;
+          const rootStats = await getDiffStatsFromRoot(repoPath);
+          stats = {
+            additions: rootStats.additions,
+            deletions: rootStats.deletions,
+          };
+          usesCommittedDiff = true;
+        }
+      }
     }
   }
   const effectiveAllowedPaths =

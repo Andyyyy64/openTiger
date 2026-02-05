@@ -365,6 +365,62 @@ export async function getDiffStatsBetweenRefs(
   };
 }
 
+export async function refExists(cwd: string, ref: string): Promise<boolean> {
+  const result = await execGit(["rev-parse", "--verify", ref], cwd);
+  return result.success;
+}
+
+export async function getChangedFilesFromRoot(cwd: string): Promise<string[]> {
+  const result = await execGit(["diff", "--name-only", "--root", "HEAD"], cwd);
+  if (!result.success) {
+    return [];
+  }
+  return result.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+export async function getDiffStatsFromRoot(cwd: string): Promise<DiffStats> {
+  const result = await execGit(["diff", "--numstat", "--root", "HEAD"], cwd);
+  if (!result.success) {
+    return {
+      additions: 0,
+      deletions: 0,
+      changedFiles: 0,
+      files: [],
+    };
+  }
+
+  let additions = 0;
+  let deletions = 0;
+  const files: DiffStats["files"] = [];
+
+  for (const line of result.stdout.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const [addRaw, delRaw, filename] = trimmed.split("\t");
+    if (!filename) continue;
+    const fileAdditions = Number.isNaN(Number(addRaw)) ? 0 : Number(addRaw);
+    const fileDeletions = Number.isNaN(Number(delRaw)) ? 0 : Number(delRaw);
+    additions += fileAdditions;
+    deletions += fileDeletions;
+    files.push({
+      filename,
+      additions: fileAdditions,
+      deletions: fileDeletions,
+      status: "modified",
+    });
+  }
+
+  return {
+    additions,
+    deletions,
+    changedFiles: files.length,
+    files,
+  };
+}
+
 // 変更されたファイル一覧を取得
 export async function getChangedFiles(cwd: string): Promise<string[]> {
   const result = await execGit(["status", "--porcelain"], cwd);
