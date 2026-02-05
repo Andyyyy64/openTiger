@@ -49,6 +49,15 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
   const violations = payload.summary?.policy?.violations ?? [];
   const prNumber = payload.prNumber;
   const prUrl = payload.prUrl;
+  const [showDiff, setShowDiff] = React.useState(false);
+  const diffId = `judgement-diff-${event.id}`;
+
+  // Judgeの差分は必要になったタイミングで取得する
+  const { data: diffData, isLoading: isDiffLoading, error: diffError } = useQuery({
+    queryKey: ['judgements', event.id, 'diff'],
+    queryFn: () => judgementsApi.diff(event.id),
+    enabled: showDiff,
+  });
 
   return (
     <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-5">
@@ -72,7 +81,15 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-            <span>Judge: {event.agentId ?? 'judge'}</span>
+            <button
+              type="button"
+              onClick={() => setShowDiff((prev) => !prev)}
+              className="text-xs text-slate-400 hover:text-yellow-400 transition-colors"
+              aria-expanded={showDiff}
+              aria-controls={diffId}
+            >
+              Judge: {event.agentId ?? 'judge'}
+            </button>
             {payload.riskLevel && <span>Risk: {payload.riskLevel}</span>}
             {typeof payload.confidence === 'number' && (
               <span>Confidence: {Math.round(payload.confidence * 100)}%</span>
@@ -171,6 +188,26 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
           </div>
         </div>
       </div>
+
+      {showDiff && (
+        <div id={diffId} className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3">
+          <div className="flex items-center justify-between text-xs text-slate-500">
+            <span>Diff {diffData?.source ? `(${diffData.source})` : ''}</span>
+            {diffData?.truncated && <span>表示上限により省略</span>}
+          </div>
+          {isDiffLoading && (
+            <div className="text-sm text-slate-500">Diffを取得中...</div>
+          )}
+          {diffError && (
+            <div className="text-sm text-red-400">Diffの取得に失敗しました</div>
+          )}
+          {diffData && (
+            <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono bg-slate-950 border border-slate-800 rounded-md p-3">
+              {diffData.diff || 'Diffが空です'}
+            </pre>
+          )}
+        </div>
+      )}
     </section>
   );
 };
