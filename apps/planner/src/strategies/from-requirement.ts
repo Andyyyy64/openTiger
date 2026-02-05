@@ -1,6 +1,7 @@
 import { runOpenCode } from "@sebastian-code/llm";
 import type { CreateTaskInput } from "@sebastian-code/core";
 import type { Requirement } from "../parser.js";
+import type { CodebaseInspection } from "../inspection.js";
 import { PLANNER_OPENCODE_CONFIG_PATH } from "../opencode-config.js";
 
 // タスク生成結果
@@ -15,11 +16,28 @@ export interface TaskGenerationResult {
 }
 
 // LLMに渡すプロンプトを構築
-function buildPrompt(requirement: Requirement): string {
+function buildPrompt(requirement: Requirement, inspection?: CodebaseInspection): string {
+  const inspectionBlock = inspection
+    ? `
+## 差分点検結果（必ず参照）
+概要: ${inspection.summary}
+既に満たしている点:
+${inspection.satisfied.length > 0 ? inspection.satisfied.map((item) => `- ${item}`).join("\n") : "(なし)"}
+ギャップ:
+${inspection.gaps.length > 0 ? inspection.gaps.map((item) => `- ${item}`).join("\n") : "(なし)"}
+根拠:
+${inspection.evidence.length > 0 ? inspection.evidence.map((item) => `- ${item}`).join("\n") : "(なし)"}
+補足:
+${inspection.notes.length > 0 ? inspection.notes.map((item) => `- ${item}`).join("\n") : "(なし)"}
+`.trim()
+    : "## 差分点検結果（必ず参照）\n(差分点検が未実施のためタスク生成は不可)";
+
   return `
 あなたはソフトウェアエンジニアリングのタスク分割エキスパートです。
-以下の要件定義を読み取り、実行可能なタスクに分割してください。
+以下の要件定義と差分点検結果を読み取り、実行可能なタスクに分割してください。
 ツール呼び出しは禁止です。与えられた情報だけで判断してください。
+差分点検の gaps に含まれる項目のみをタスク化し、satisfied に該当するものはタスク化しないでください。
+gaps が空の場合は tasks を空配列にし、warnings に「差分なし」などの説明を入れてください。
 
 ## タスク分割の原則
 
@@ -76,6 +94,8 @@ ${requirement.riskAssessment.length > 0
 ### Notes
 ${requirement.notes || "(なし)"}
 
+${inspectionBlock}
+
 ## 出力形式
 
 以下のJSON形式で出力してください。他のテキストは出力しないでください。
@@ -108,7 +128,7 @@ ${requirement.notes || "(なし)"}
 
 - タスクは実行順序を考慮し、dependsOnで依存関係を明示（インデックスで参照）
 - 各タスクのcommandは必ず成功/失敗を返すもの
-- 検証コマンドは必ず成功/失敗を返し、dev起動の確認も含める
+- 検証コマンドは必ず成功/失敗を返し、ホットリロード前提の dev 起動は求めない
 - フロントが絡むタスクはE2Eを必須とし、クリティカルパスを最低限カバーする
 - riskLevelは "low" / "medium" / "high" のいずれか
 - timeboxMinutesは30〜90の範囲で
@@ -177,9 +197,10 @@ export async function generateTasksFromRequirement(
     workdir: string;
     instructionsPath?: string;
     timeoutSeconds?: number;
+    inspection?: CodebaseInspection;
   }
 ): Promise<TaskGenerationResult> {
-  const prompt = buildPrompt(requirement);
+  const prompt = buildPrompt(requirement, options.inspection);
   const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
 
   // OpenCodeを実行

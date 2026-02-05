@@ -41,6 +41,7 @@ import {
   type TaskGenerationResult,
 } from "./strategies/index.js";
 import { inspectCodebase, formatInspectionNotes } from "./inspection.js";
+import type { CodebaseInspection } from "./inspection.js";
 
 function setupProcessLogging(logName: string): string | undefined {
   const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
@@ -260,13 +261,10 @@ function isDevCommand(command: string): boolean {
 }
 
 function ensureDevCommand(commands: string[], devCommand?: string): string[] {
-  if (!devCommand) {
+  if (!devCommand || commands.length > 0) {
     return commands;
   }
-  if (commands.some((command) => isDevCommand(command))) {
-    return commands;
-  }
-  return [...commands, devCommand];
+  return [devCommand];
 }
 
 function applyDevCommandPolicy(
@@ -914,16 +912,29 @@ async function planFromRequirement(
   const e2eCommand = await resolveE2EVerificationCommand(config.workdir);
   const repoUninitialized = await isRepoUninitialized(config.workdir);
   let inspectionNotes: string | undefined;
-  if (config.useLlm && config.inspectCodebase && !repoUninitialized) {
+  let inspectionResult: CodebaseInspection | undefined;
+
+  if (!repoUninitialized && !config.useLlm) {
+    console.error("[Planner] 差分点検が必須のため、LLMを無効化できません。");
+    process.exit(1);
+  }
+
+  if (!repoUninitialized) {
+    if (!config.inspectCodebase) {
+      console.log("[Planner] 差分点検は必須のため有効化します。");
+    }
     console.log("\n[Planner] Inspecting codebase with LLM...");
     const inspection = await inspectCodebase(requirement, {
       workdir: config.workdir,
       timeoutSeconds: config.inspectionTimeoutSeconds,
     });
-    if (inspection) {
-      inspectionNotes = formatInspectionNotes(inspection);
-      requirement = attachInspectionToRequirement(requirement, inspectionNotes);
+    if (!inspection) {
+      console.error("[Planner] 差分点検に失敗したためタスク生成を中断します。");
+      process.exit(1);
     }
+    inspectionResult = inspection;
+    inspectionNotes = formatInspectionNotes(inspection);
+    requirement = attachInspectionToRequirement(requirement, inspectionNotes);
   }
 
   // タスクを生成
@@ -934,17 +945,12 @@ async function planFromRequirement(
     result = generateInitializationTasks(requirement);
   } else if (config.useLlm) {
     console.log("\n[Generating tasks with LLM...]");
-    try {
-      result = await generateTasksFromRequirement(requirement, {
-        workdir: config.workdir,
-        instructionsPath: config.instructionsPath,
-        timeoutSeconds: config.timeoutSeconds,
-      });
-    } catch (error) {
-      console.warn(`LLM generation failed: ${error}`);
-      console.log("Falling back to simple generation...");
-      result = generateSimpleTasks(requirement);
-    }
+    result = await generateTasksFromRequirement(requirement, {
+      workdir: config.workdir,
+      instructionsPath: config.instructionsPath,
+      timeoutSeconds: config.timeoutSeconds,
+      inspection: inspectionResult,
+    });
   } else {
     console.log("\n[Generating tasks without LLM...]");
     result = generateSimpleTasks(requirement);
@@ -1124,15 +1130,26 @@ export async function planFromContent(
   const e2eCommand = await resolveE2EVerificationCommand(fullConfig.workdir);
   const repoUninitialized = await isRepoUninitialized(fullConfig.workdir);
   let inspectionNotes: string | undefined;
-  if (fullConfig.useLlm && fullConfig.inspectCodebase && !repoUninitialized) {
+  let inspectionResult: CodebaseInspection | undefined;
+
+  if (!repoUninitialized && !fullConfig.useLlm) {
+    throw new Error("差分点検が必須のため、LLMを無効化できません。");
+  }
+
+  if (!repoUninitialized) {
+    if (!fullConfig.inspectCodebase) {
+      console.log("[Planner] 差分点検は必須のため有効化します。");
+    }
     const inspection = await inspectCodebase(requirement, {
       workdir: fullConfig.workdir,
       timeoutSeconds: fullConfig.inspectionTimeoutSeconds,
     });
-    if (inspection) {
-      inspectionNotes = formatInspectionNotes(inspection);
-      requirement = attachInspectionToRequirement(requirement, inspectionNotes);
+    if (!inspection) {
+      throw new Error("差分点検に失敗したためタスク生成を中断します。");
     }
+    inspectionResult = inspection;
+    inspectionNotes = formatInspectionNotes(inspection);
+    requirement = attachInspectionToRequirement(requirement, inspectionNotes);
   }
 
   if (repoUninitialized) {
@@ -1157,48 +1174,28 @@ export async function planFromContent(
   }
 
   if (fullConfig.useLlm) {
-    try {
-      const result = await generateTasksFromRequirement(requirement, {
-        workdir: fullConfig.workdir,
-        instructionsPath: fullConfig.instructionsPath,
-        timeoutSeconds: fullConfig.timeoutSeconds,
-      });
-      return attachInspectionToTasks(
-        attachJudgeFeedbackToTasks(
-          applyDevCommandPolicy(
-            applyTesterCommandPolicy(
-              applyVerificationCommandPolicy(
-                applyTaskRolePolicy(normalizeGeneratedTasks(result)),
-                checkScriptAvailable
-              ),
-              e2eCommand
+    const result = await generateTasksFromRequirement(requirement, {
+      workdir: fullConfig.workdir,
+      instructionsPath: fullConfig.instructionsPath,
+      timeoutSeconds: fullConfig.timeoutSeconds,
+      inspection: inspectionResult,
+    });
+    return attachInspectionToTasks(
+      attachJudgeFeedbackToTasks(
+        applyDevCommandPolicy(
+          applyTesterCommandPolicy(
+            applyVerificationCommandPolicy(
+              applyTaskRolePolicy(normalizeGeneratedTasks(result)),
+              checkScriptAvailable
             ),
-            devCommand
+            e2eCommand
           ),
-          judgeFeedback
+          devCommand
         ),
-        inspectionNotes
-      );
-    } catch {
-      return attachInspectionToTasks(
-        attachJudgeFeedbackToTasks(
-          applyDevCommandPolicy(
-            applyTesterCommandPolicy(
-              applyVerificationCommandPolicy(
-                applyTaskRolePolicy(
-                  normalizeGeneratedTasks(generateSimpleTasks(requirement))
-                ),
-                checkScriptAvailable
-              ),
-              e2eCommand
-            ),
-            devCommand
-          ),
-          judgeFeedback
-        ),
-        inspectionNotes
-      );
-    }
+        judgeFeedback
+      ),
+      inspectionNotes
+    );
   }
 
   return attachInspectionToTasks(
@@ -1231,14 +1228,14 @@ Usage:
 Options:
   --help          Show this help message
   --dry-run       Generate tasks but don't save to database
-  --no-llm        Skip LLM and use simple generation
+  --no-llm        差分点検が必須のため初期化以外では利用不可
 
 Environment Variables:
   USE_LLM=false         Disable LLM generation
   DRY_RUN=true          Enable dry run mode
   PLANNER_TIMEOUT=300   LLM timeout in seconds
   PLANNER_MODEL=xxx     Planner LLM model
-  PLANNER_INSPECT=false Skip codebase inspection
+  PLANNER_INSPECT=false 差分点検は必須のため無視される
   PLANNER_INSPECT_TIMEOUT=180  LLM inspection timeout in seconds
 
 Example:

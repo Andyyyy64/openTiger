@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "dev": "tsx --env-file=../../.env src/main.ts",
     "build": "tsc",
     "start": "node dist/main.js",
     "test": "vitest run --passWithNoTests",
