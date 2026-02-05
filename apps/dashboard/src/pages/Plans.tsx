@@ -2,7 +2,6 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { plansApi, type PlanSnapshot } from '../lib/api';
-import { Calendar, Layers, ListTodo } from 'lucide-react';
 
 export const PlansPage: React.FC = () => {
   const { data: plans, isLoading, error } = useQuery({
@@ -11,22 +10,26 @@ export const PlansPage: React.FC = () => {
   });
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-8 flex items-center gap-3">
-        <Layers className="text-yellow-500" />
-        Planner Plans
-      </h1>
+    <div className="p-6 text-[var(--color-term-fg)]">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+          &gt; Active_Plans
+        </h1>
+        <span className="text-xs text-zinc-500">
+          {isLoading ? 'Scanning...' : `${plans?.length ?? 0} PLANS LOADED`}
+        </span>
+      </div>
 
       {isLoading && (
-        <div className="text-center text-slate-500 py-12">Loading plans...</div>
+        <div className="text-center text-zinc-500 py-12 font-mono animate-pulse">&gt; Retrieving plans...</div>
       )}
       {error && (
-        <div className="text-center text-red-400 py-12">Error loading plans</div>
+        <div className="text-center text-red-500 py-12 font-mono">&gt; ERROR: Failed to load plans</div>
       )}
 
       <div className="space-y-8">
         {(plans ?? []).length === 0 && !isLoading && !error && (
-          <div className="text-center text-slate-500 py-12">No plans found</div>
+          <div className="text-center text-zinc-500 py-12 font-mono">&gt; No plans found in registry</div>
         )}
 
         {(plans ?? []).map((plan) => (
@@ -41,91 +44,93 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
   const warnings = plan.summary?.warnings ?? [];
 
   return (
-    <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-slate-400 text-sm">
-            <Calendar size={16} />
-            {new Date(plan.createdAt).toLocaleString()}
+    <section className="border border-[var(--color-term-border)] p-0">
+      {/* Header */}
+      <div className="bg-[var(--color-term-border)]/10 px-4 py-3 border-b border-[var(--color-term-border)] flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-zinc-500 text-xs font-mono">
+            <span>TIMESTAMP: {new Date(plan.createdAt).toLocaleString()}</span>
+            <span>|</span>
+            <span>ID: {plan.id.slice(0, 8)}</span>
           </div>
-          <h2 className="text-xl font-semibold">Plan</h2>
+          <h2 className="text-lg font-bold text-[var(--color-term-fg)] uppercase tracking-wide">
+            plan@{plan.agentId ?? 'planner'}
+          </h2>
           {plan.requirement?.goal && (
-            <p className="text-slate-300">{plan.requirement.goal}</p>
+            <div className="text-zinc-400 text-sm font-mono border-l-2 border-[var(--color-term-green)] pl-2 mt-2">
+              "{plan.requirement.goal}"
+            </div>
           )}
         </div>
 
-        <div className="flex flex-wrap gap-6 text-sm">
-          <div className="text-slate-400">
-            <div className="text-xs uppercase tracking-wider">Tasks</div>
-            <div className="text-white font-semibold">{plan.summary?.totalTasks ?? plan.taskIds.length}</div>
+        <div className="flex flex-wrap gap-6 text-xs font-mono">
+          <div>
+            <div className="text-zinc-500 mb-1">TASKS</div>
+            <div className="text-[var(--color-term-green)]">
+              {plan.summary?.totalTasks ?? plan.taskIds.length} OK
+            </div>
           </div>
-          <div className="text-slate-400">
-            <div className="text-xs uppercase tracking-wider">Estimate</div>
-            <div className="text-white font-semibold">{plan.summary?.totalEstimatedMinutes ?? 0} min</div>
-          </div>
-          <div className="text-slate-400">
-            <div className="text-xs uppercase tracking-wider">Planner</div>
-            <div className="text-white font-semibold">{plan.agentId ?? 'planner'}</div>
+          <div>
+            <div className="text-zinc-500 mb-1">ESTIAMTE</div>
+            <div>{plan.summary?.totalEstimatedMinutes ?? 0}m</div>
           </div>
         </div>
       </div>
 
+      {/* Warnings Block */}
       {warnings.length > 0 && (
-        <div className="bg-slate-950 border border-slate-800 rounded-lg p-4">
-          <div className="text-xs uppercase tracking-wider text-slate-500 mb-2">Warnings</div>
-          <ul className="text-sm text-slate-300 space-y-1">
+        <div className="p-4 border-b border-[var(--color-term-border)] bg-yellow-900/10">
+          <div className="text-xs font-bold text-yellow-500 mb-2 uppercase">&gt; Warnings_Detected:</div>
+          <ul className="text-xs text-yellow-200/80 font-mono space-y-1">
             {warnings.map((warning, index) => (
-              <li key={index}>{warning}</li>
+              <li key={index}>* {warning}</li>
             ))}
           </ul>
         </div>
       )}
 
-      <div className="bg-slate-950 border border-slate-800 rounded-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-800 flex items-center gap-2 text-slate-400 text-xs uppercase tracking-wider">
-          <ListTodo size={14} />
-          Planned Tasks
-        </div>
-        <table className="w-full text-left">
-          <thead className="bg-slate-900/60 border-b border-slate-800">
+      {/* Task Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left font-mono text-xs">
+          <thead className="text-zinc-500 uppercase bg-[var(--color-term-bg)] border-b border-[var(--color-term-border)]">
             <tr>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-400">Status</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-400">Title</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-400">Role</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-400">Risk</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-400">Priority</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-400">Dependencies</th>
-              <th className="px-4 py-3 text-xs font-semibold text-slate-400">Created</th>
+              <th className="px-4 py-2 font-normal">Status</th>
+              <th className="px-4 py-2 font-normal">Title</th>
+              <th className="px-4 py-2 font-normal">Role</th>
+              <th className="px-4 py-2 font-normal">Risk</th>
+              <th className="px-4 py-2 font-normal">Priority</th>
+              <th className="px-4 py-2 font-normal">Deps</th>
+              <th className="px-4 py-2 font-normal">Created</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-800">
+          <tbody className="divide-y divide-[var(--color-term-border)]">
             {plan.tasks.map((task) => (
-              <tr key={task.id} className="hover:bg-slate-900/40 transition-colors">
-                <td className="px-4 py-3">
-                  <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${getStatusColor(task.status)}`}>
-                    {task.status}
+              <tr key={task.id} className="hover:bg-[var(--color-term-fg)]/5 transition-colors group">
+                <td className="px-4 py-2 align-top">
+                  <span className={`${getStatusColor(task.status)}`}>
+                    [{task.status.toUpperCase()}]
                   </span>
                 </td>
-                <td className="px-4 py-3 text-sm text-slate-200">
-                  <Link to={`/tasks/${task.id}`} className="hover:underline">
+                <td className="px-4 py-2 align-top w-1/3">
+                  <Link to={`/tasks/${task.id}`} className="text-[var(--color-term-fg)] group-hover:underline">
                     {task.title}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-xs text-slate-400 uppercase">{task.role}</td>
-                <td className="px-4 py-3 text-xs font-semibold">{renderRisk(task.riskLevel)}</td>
-                <td className="px-4 py-3 text-sm text-slate-300">{task.priority}</td>
-                <td className="px-4 py-3 text-xs text-slate-400">
-                  {task.dependencies?.length ? task.dependencies.length : 0}
+                <td className="px-4 py-2 align-top text-zinc-400">{task.role}</td>
+                <td className="px-4 py-2 align-top">{renderRisk(task.riskLevel)}</td>
+                <td className="px-4 py-2 align-top text-zinc-300">{task.priority}</td>
+                <td className="px-4 py-2 align-top text-zinc-500">
+                  {task.dependencies?.length ? `[${task.dependencies.length}]` : '-'}
                 </td>
-                <td className="px-4 py-3 text-xs text-slate-500">
-                  {new Date(task.createdAt).toLocaleString()}
+                <td className="px-4 py-2 align-top text-zinc-600">
+                  {new Date(task.createdAt).toLocaleTimeString()}
                 </td>
               </tr>
             ))}
             {plan.tasks.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
-                  No tasks recorded for this plan
+                <td colSpan={7} className="px-4 py-6 text-center text-zinc-500 italic">
+                  &gt; No tasks initialized.
                 </td>
               </tr>
             )}
@@ -139,15 +144,15 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'done':
-      return 'bg-green-500/10 text-green-400 border border-green-500/20';
+      return 'text-[var(--color-term-green)]';
     case 'running':
-      return 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
+      return 'text-blue-400 animate-pulse';
     case 'failed':
-      return 'bg-red-500/10 text-red-400 border border-red-500/20';
+      return 'text-red-500';
     case 'blocked':
-      return 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20';
+      return 'text-yellow-500';
     default:
-      return 'bg-slate-500/10 text-slate-400 border border-slate-500/20';
+      return 'text-zinc-500';
   }
 };
 
@@ -155,10 +160,11 @@ const renderRisk = (risk: string) => {
   const label = risk.toUpperCase();
   switch (risk) {
     case 'high':
-      return <span className="text-red-400">{label}</span>;
+      return <span className="text-red-500 font-bold">! {label} !</span>;
     case 'medium':
-      return <span className="text-yellow-400">{label}</span>;
+      return <span className="text-yellow-500">{label}</span>;
     default:
-      return <span className="text-green-400">{label}</span>;
+      return <span className="text-zinc-500">{label}</span>;
   }
 };
+

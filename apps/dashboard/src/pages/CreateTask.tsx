@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { tasksApi } from '../lib/api';
-import { ChevronLeft, Save, Plus, X } from 'lucide-react';
 import type { CreateTaskInput } from '@sebastian-code/core';
 
 export const CreateTaskPage: React.FC = () => {
@@ -34,8 +33,7 @@ export const CreateTaskPage: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // クリーンアップ: 空の文字列を除去
+
     const cleanedData: CreateTaskInput = {
       title: formData.title,
       goal: formData.goal,
@@ -45,7 +43,7 @@ export const CreateTaskPage: React.FC = () => {
       timeboxMinutes: formData.timeboxMinutes,
       allowedPaths: formData.allowedPaths.filter(p => p.trim() !== ''),
       commands: formData.commands.filter(c => c.trim() !== ''),
-      touches: [], // 初期値は空配列
+      touches: [],
       context: {
         specs: formData.context.specs || undefined,
         files: formData.context.files.filter(f => f.trim() !== ''),
@@ -73,9 +71,9 @@ export const CreateTaskPage: React.FC = () => {
 
   const addArrayItem = (field: 'allowedPaths' | 'commands' | 'files') => {
     if (field === 'files') {
-      setFormData({ 
-        ...formData, 
-        context: { ...formData.context, files: [...formData.context.files, ''] } 
+      setFormData({
+        ...formData,
+        context: { ...formData.context, files: [...formData.context.files, ''] }
       });
     } else {
       setFormData({ ...formData, [field]: [...formData[field], ''] });
@@ -93,164 +91,168 @@ export const CreateTaskPage: React.FC = () => {
   };
 
   return (
-    <div className="p-8 max-w-3xl mx-auto">
-      <Link to="/tasks" className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors">
-        <ChevronLeft size={20} />
-        Back to Tasks
+    <div className="p-6 max-w-4xl mx-auto text-[var(--color-term-fg)]">
+      <Link to="/tasks" className="inline-block text-xs font-mono text-zinc-500 hover:text-[var(--color-term-green)] mb-6 group">
+        &lt; cd ..
       </Link>
 
-      <h1 className="text-3xl font-bold mb-8">Create New Task</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+          &gt; Task_Initialization_Wizard
+        </h1>
+        <div className="text-xs text-zinc-500 font-mono">
+          [MODE: CREATE]
+        </div>
+      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-6">
-          {/* Basic Info */}
-          <div className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <section className="border border-[var(--color-term-border)] p-0">
+          <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+            <h2 className="text-sm font-bold uppercase tracking-wider">01_Primary_Directive</h2>
+          </div>
+          <div className="p-6 space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Task Title</label>
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1">Task_Identifier (Title)</label>
               <input
                 type="text"
                 required
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all"
-                placeholder="e.g. Add validation to user service"
+                className="w-full bg-black border border-[var(--color-term-border)] px-3 py-2 text-sm text-[var(--color-term-fg)] font-mono focus:border-[var(--color-term-green)] focus:outline-none"
+                placeholder="e.g. Implement user authentication logic"
                 value={formData.title}
                 onChange={e => setFormData({ ...formData, title: e.target.value })}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Goal & Acceptance Criteria</label>
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wide mb-1">Execution_Goal & Acceptance_Criteria</label>
               <textarea
                 required
-                rows={4}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all"
-                placeholder="Describe what needs to be achieved and how to verify it..."
+                rows={6}
+                className="w-full bg-black border border-[var(--color-term-border)] px-3 py-2 text-sm text-[var(--color-term-fg)] font-mono focus:border-[var(--color-term-green)] focus:outline-none"
+                placeholder="Define the objective and success conditions..."
                 value={formData.goal}
                 onChange={e => setFormData({ ...formData, goal: e.target.value })}
               />
             </div>
           </div>
+        </section>
 
-          {/* Configuration */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Priority</label>
+        <section className="border border-[var(--color-term-border)] p-0">
+          <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+            <h2 className="text-sm font-bold uppercase tracking-wider">02_Configuration_Parameters</h2>
+          </div>
+          <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-zinc-500 uppercase">Priority_Level</label>
               <input
                 type="number"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all"
+                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-green)] focus:outline-none"
                 value={formData.priority}
                 onChange={e => setFormData({ ...formData, priority: parseInt(e.target.value) })}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Risk Level</label>
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-zinc-500 uppercase">Risk_Assessment</label>
               <select
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all"
+                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-green)] focus:outline-none"
                 value={formData.riskLevel}
                 onChange={e => setFormData({ ...formData, riskLevel: e.target.value as 'low' | 'medium' | 'high' })}
               >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
+                <option value="low">LOW</option>
+                <option value="medium">MEDIUM</option>
+                <option value="high">HIGH</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Role</label>
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-zinc-500 uppercase">Assigned_Role</label>
               <select
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all"
+                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-green)] focus:outline-none"
                 value={formData.role}
                 onChange={e => setFormData({ ...formData, role: e.target.value as 'worker' | 'tester' })}
               >
-                <option value="worker">Worker</option>
-                <option value="tester">Tester</option>
+                <option value="worker">WORKER</option>
+                <option value="tester">TESTER</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-400 mb-1">Timebox (min)</label>
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-zinc-500 uppercase">Timebox (Min)</label>
               <input
                 type="number"
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-yellow-500/50 transition-all"
+                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-green)] focus:outline-none"
                 value={formData.timeboxMinutes}
                 onChange={e => setFormData({ ...formData, timeboxMinutes: parseInt(e.target.value) })}
               />
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Allowed Paths & Commands */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <div className="flex justify-between items-center mb-4">
-              <label className="text-sm font-bold text-slate-500 uppercase tracking-wider">Allowed Paths</label>
-              <button type="button" onClick={() => addArrayItem('allowedPaths')} className="text-yellow-500 hover:text-yellow-400">
-                <Plus size={18} />
-              </button>
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="border border-[var(--color-term-border)]">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between items-center">
+              <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider">Scope: Allowed_Paths</label>
+              <button type="button" onClick={() => addArrayItem('allowedPaths')} className="text-[var(--color-term-green)] text-xs hover:underline">[ ADD ]</button>
             </div>
-            <div className="space-y-2">
+            <div className="p-4 space-y-2">
               {formData.allowedPaths.map((path, i) => (
                 <div key={i} className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-300"
+                    className="flex-1 bg-black border border-[var(--color-term-border)] px-2 py-1 text-xs font-mono text-zinc-300 focus:border-[var(--color-term-green)] focus:outline-none"
                     placeholder="src/**/*.ts"
                     value={path}
                     onChange={e => handleArrayChange('allowedPaths', i, e.target.value)}
                   />
                   {formData.allowedPaths.length > 1 && (
-                    <button type="button" onClick={() => removeArrayItem('allowedPaths', i)} className="text-slate-600 hover:text-red-400">
-                      <X size={16} />
-                    </button>
+                    <button type="button" onClick={() => removeArrayItem('allowedPaths', i)} className="text-red-500 text-xs px-2 hover:bg-red-900/20">X</button>
                   )}
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <div className="flex justify-between items-center mb-4">
-              <label className="text-sm font-bold text-slate-500 uppercase tracking-wider">Verification Commands</label>
-              <button type="button" onClick={() => addArrayItem('commands')} className="text-yellow-500 hover:text-yellow-400">
-                <Plus size={18} />
-              </button>
+          <div className="border border-[var(--color-term-border)]">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between items-center">
+              <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider">Verification: Commands</label>
+              <button type="button" onClick={() => addArrayItem('commands')} className="text-[var(--color-term-green)] text-xs hover:underline">[ ADD ]</button>
             </div>
-            <div className="space-y-2">
+            <div className="p-4 space-y-2">
               {formData.commands.map((cmd, i) => (
                 <div key={i} className="flex gap-2">
+                  <div className="flex items-center text-zinc-600 select-none">$</div>
                   <input
                     type="text"
-                    className="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-yellow-500"
-                    placeholder="pnpm test"
+                    className="flex-1 bg-black border border-[var(--color-term-border)] px-2 py-1 text-xs font-mono text-yellow-500 focus:border-[var(--color-term-green)] focus:outline-none"
+                    placeholder="npm test"
                     value={cmd}
                     onChange={e => handleArrayChange('commands', i, e.target.value)}
                   />
                   {formData.commands.length > 1 && (
-                    <button type="button" onClick={() => removeArrayItem('commands', i)} className="text-slate-600 hover:text-red-400">
-                      <X size={16} />
-                    </button>
+                    <button type="button" onClick={() => removeArrayItem('commands', i)} className="text-red-500 text-xs px-2 hover:bg-red-900/20">X</button>
                   )}
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </section>
 
-        <div className="flex justify-end gap-4">
+        <div className="flex justify-end gap-6 pt-6 border-t border-[var(--color-term-border)]">
           <button
             type="button"
             onClick={() => navigate('/tasks')}
-            className="px-6 py-2 rounded-lg font-medium text-slate-400 hover:text-white transition-colors"
+            className="text-zinc-500 hover:text-red-500 text-sm font-mono uppercase transition-colors"
           >
-            Cancel
+            [ CANCEL ]
           </button>
           <button
             type="submit"
             disabled={mutation.isPending}
-            className="bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 px-8 py-2 rounded-lg font-bold flex items-center gap-2 transition-all"
+            className="text-[var(--color-term-green)] border border-[var(--color-term-green)] hover:bg-[var(--color-term-green)] hover:text-black px-6 py-2 text-sm font-bold font-mono uppercase transition-all disabled:opacity-50"
           >
-            <Save size={20} />
-            {mutation.isPending ? 'Creating...' : 'Create Task'}
+            {mutation.isPending ? '> INITIATING...' : '> EXECUTE_CREATE'}
           </button>
         </div>
       </form>
     </div>
   );
 };
+

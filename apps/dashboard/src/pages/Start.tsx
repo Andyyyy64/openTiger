@@ -1,26 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { configApi, systemApi, type SystemProcess } from '../lib/api';
-import { Play, Download, FileText, Activity } from 'lucide-react';
 
 const MAX_WORKERS = 4;
 const MAX_TESTERS = 2;
 const MAX_DOCSERS = 1;
 
 const STATUS_LABELS: Record<SystemProcess['status'], string> = {
-  idle: '待機中',
-  running: '実行中',
-  completed: '完了',
-  failed: '失敗',
-  stopped: '停止',
+  idle: 'IDLE',
+  running: 'RUNNING',
+  completed: 'DONE',
+  failed: 'FAILED',
+  stopped: 'STOPPED',
 };
 
 const STATUS_COLORS: Record<SystemProcess['status'], string> = {
-  idle: 'text-slate-500',
-  running: 'text-emerald-400',
-  completed: 'text-slate-300',
-  failed: 'text-red-400',
-  stopped: 'text-amber-400',
+  idle: 'text-zinc-500',
+  running: 'text-[var(--color-term-green)] animate-pulse',
+  completed: 'text-zinc-300',
+  failed: 'text-red-500',
+  stopped: 'text-yellow-500',
 };
 
 type StartResult = {
@@ -44,12 +43,12 @@ function parseCount(
   const normalized = Number.isFinite(parsed) ? parsed : fallback;
   const clamped = Math.max(0, Math.min(normalized, max));
   if (normalized > max) {
-    return { count: clamped, warning: `${label}は最大${max}台までです。` };
+    return { count: clamped, warning: `${label} max limit ${max}` };
   }
   return { count: clamped };
 }
 
-const formatTimestamp = (value?: string) => (value ? new Date(value).toLocaleString() : '');
+const formatTimestamp = (value?: string) => (value ? new Date(value).toLocaleTimeString() : '--:--:--');
 
 export const StartPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -82,7 +81,6 @@ export const StartPage: React.FC = () => {
   );
 
   useEffect(() => {
-    // 設定済みの要件パスを初期値として採用する
     if (!config?.config) return;
     if (config.config.REPLAN_REQUIREMENT_PATH && requirementPath === 'requirement.md') {
       setRequirementPath(config.config.REPLAN_REQUIREMENT_PATH);
@@ -93,22 +91,18 @@ export const StartPage: React.FC = () => {
     mutationFn: (path: string) => systemApi.requirement(path),
     onSuccess: (data) => {
       setContent(data.content);
-      setLoadMessage(`読み込み完了: ${data.path}`);
+      setLoadMessage(`> READ_OK: ${data.path}`);
     },
     onError: (error) => {
-      setLoadMessage(error instanceof Error ? error.message : '読み込みに失敗しました。');
+      setLoadMessage(error instanceof Error ? `> READ_ERR: ${error.message}` : '> READ_FAIL');
     },
   });
 
   const startMutation = useMutation({
     mutationFn: async () => {
       const settings = config?.config;
-      if (!settings) {
-        throw new Error('設定を読み込んでから実行してください。');
-      }
-      if (content.trim().length === 0) {
-        throw new Error('requirementsの内容が空です。');
-      }
+      if (!settings) throw new Error('Config not loaded');
+      if (content.trim().length === 0) throw new Error('Requirements empty');
 
       const dispatcherEnabled = parseBoolean(settings.DISPATCHER_ENABLED, true);
       const judgeEnabled = parseBoolean(settings.JUDGE_ENABLED, true);
@@ -130,32 +124,20 @@ export const StartPage: React.FC = () => {
           await systemApi.startProcess(name, payload);
           started.push(name);
         } catch (error) {
-          const message = error instanceof Error ? error.message : '起動に失敗しました。';
+          const message = error instanceof Error ? error.message : 'Unknown error';
           errors.push(`${name}: ${message}`);
         }
       };
 
       await startProcess('planner', { requirementPath, content });
 
-      if (dispatcherEnabled) {
-        await startProcess('dispatcher');
-      }
-      if (judgeEnabled) {
-        await startProcess('judge');
-      }
-      if (cycleEnabled) {
-        await startProcess('cycle-manager');
-      }
+      if (dispatcherEnabled) await startProcess('dispatcher');
+      if (judgeEnabled) await startProcess('judge');
+      if (cycleEnabled) await startProcess('cycle-manager');
 
-      for (let i = 1; i <= workerCount.count; i += 1) {
-        await startProcess(`worker-${i}`);
-      }
-      for (let i = 1; i <= testerCount.count; i += 1) {
-        await startProcess(`tester-${i}`);
-      }
-      if (docserCount.count > 0) {
-        await startProcess('docser-1');
-      }
+      for (let i = 1; i <= workerCount.count; i += 1) await startProcess(`worker-${i}`);
+      for (let i = 1; i <= testerCount.count; i += 1) await startProcess(`tester-${i}`);
+      if (docserCount.count > 0) await startProcess('docser-1');
 
       return { started, errors, warnings };
     },
@@ -166,7 +148,7 @@ export const StartPage: React.FC = () => {
     onError: (error) => {
       setStartResult({
         started: [],
-        errors: [error instanceof Error ? error.message : '起動に失敗しました。'],
+        errors: [error instanceof Error ? error.message : 'Launch failed'],
         warnings: [],
       });
     },
@@ -175,7 +157,6 @@ export const StartPage: React.FC = () => {
   const configValues = config?.config ?? {};
   const workerCount = parseCount(configValues.WORKER_COUNT, 1, MAX_WORKERS, 'Worker').count;
   const testerCount = parseCount(configValues.TESTER_COUNT, 1, MAX_TESTERS, 'Tester').count;
-  const docserCount = parseCount(configValues.DOCSER_COUNT, 1, MAX_DOCSERS, 'Docser').count;
 
   const runningWorkers = processes?.filter(
     (process) => process.name.startsWith('worker-') && process.status === 'running'
@@ -195,129 +176,151 @@ export const StartPage: React.FC = () => {
   const isHealthy = health?.status === 'ok' && !isHealthError;
 
   return (
-    <div className="p-8 max-w-6xl mx-auto space-y-8">
+    <div className="p-6 max-w-6xl mx-auto space-y-6 text-[var(--color-term-fg)]">
       <div>
-        <h1 className="text-3xl font-bold">Start</h1>
-        <p className="text-sm text-slate-400 mt-2">
-          requirements.md を起点にPlannerを実行し、設定済みの構成で起動します。
+        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+          &gt; System_Bootstrap
+        </h1>
+        <p className="text-xs text-zinc-500 mt-1 font-mono">
+          // Initialize planner from requirements.md and spawn subprocesses.
         </p>
       </div>
 
-      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-        <div className="flex items-center gap-2 text-sm text-slate-300">
-          <Activity size={16} />
-          システム状態
-        </div>
-        <div className="text-sm text-slate-400">
-          API: {isHealthy ? 'Healthy' : 'Disconnected'}
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-400">
-          <div>
-            Dispatcher: <span className={STATUS_COLORS[dispatcherStatus]}>{STATUS_LABELS[dispatcherStatus]}</span>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* System Status Panel */}
+        <section className="border border-[var(--color-term-border)] p-0 h-full">
+          <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between items-center">
+            <h2 className="text-sm font-bold uppercase tracking-wider">Status_Monitor</h2>
+            <span className="text-xs text-zinc-500">{isHealthy ? '[API: ONLINE]' : '[API: OFFLINE]'}</span>
           </div>
-          <div>
-            Judge: <span className={STATUS_COLORS[judgeStatus]}>{STATUS_LABELS[judgeStatus]}</span>
-          </div>
-          <div>
-            Cycle Manager: <span className={STATUS_COLORS[cycleStatus]}>{STATUS_LABELS[cycleStatus]}</span>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-400">
-          <div>Worker: {runningWorkers} / 設定 {workerCount}</div>
-          <div>Tester: {runningTesters} / 設定 {testerCount}</div>
-          <div>Docser: {runningDocser ? 1 : 0} / 設定 {docserCount}</div>
-        </div>
-      </section>
 
-      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-        <div className="flex flex-col gap-2">
-          <label className="text-sm text-slate-300">requirementsパス</label>
-          <div className="flex flex-col md:flex-row gap-3">
-            <input
-              type="text"
-              className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200"
-              value={requirementPath}
-              onChange={(event) => setRequirementPath(event.target.value)}
-              placeholder="requirement.md"
+          <div className="p-4 space-y-4 font-mono text-sm">
+            <div className="grid grid-cols-2 gap-y-2">
+              <div className="text-zinc-500">Dispatcher</div>
+              <div className={STATUS_COLORS[dispatcherStatus]}>{STATUS_LABELS[dispatcherStatus]}</div>
+
+              <div className="text-zinc-500">Judge</div>
+              <div className={STATUS_COLORS[judgeStatus]}>{STATUS_LABELS[judgeStatus]}</div>
+
+              <div className="text-zinc-500">CycleManager</div>
+              <div className={STATUS_COLORS[cycleStatus]}>{STATUS_LABELS[cycleStatus]}</div>
+            </div>
+
+            <div className="border-t border-[var(--color-term-border)] pt-4 mt-2">
+              <div className="flex justify-between mb-1">
+                <span className="text-zinc-500">Active Workers</span>
+                <span>{runningWorkers} / {workerCount}</span>
+              </div>
+              <div className="w-full bg-zinc-900 h-1 mb-3">
+                <div className="h-full bg-[var(--color-term-green)]" style={{ width: `${(runningWorkers / workerCount) * 100}%` }}></div>
+              </div>
+
+              <div className="flex justify-between mb-1">
+                <span className="text-zinc-500">Active Testers</span>
+                <span>{runningTesters} / {testerCount}</span>
+              </div>
+              <div className="w-full bg-zinc-900 h-1 mb-3">
+                <div className="h-full bg-[var(--color-term-green)]" style={{ width: `${(runningTesters / testerCount) * 100}%` }}></div>
+              </div>
+
+              <div className="flex justify-between mb-1">
+                <span className="text-zinc-500">Docs</span>
+                <span>{runningDocser ? 'ONLINE' : 'OFFLINE'}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Start Control Panel */}
+        <section className="border border-[var(--color-term-border)] p-0 h-full flex flex-col">
+          <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+            <h2 className="text-sm font-bold uppercase tracking-wider">Boot_Sequence</h2>
+          </div>
+
+          <div className="p-4 flex-1 flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-500 uppercase">Input Source</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="flex-1 bg-black border border-[var(--color-term-border)] px-3 py-1 text-sm text-[var(--color-term-fg)] focus:border-[var(--color-term-green)] focus:outline-none placeholder-zinc-700"
+                  value={requirementPath}
+                  onChange={(event) => setRequirementPath(event.target.value)}
+                  placeholder="path/to/requirement.md"
+                />
+                <button
+                  onClick={() => loadMutation.mutate(requirementPath)}
+                  disabled={loadMutation.isPending}
+                  className="border border-[var(--color-term-border)] hover:bg-[var(--color-term-fg)] hover:text-black px-3 py-1 text-sm uppercase transition-colors disabled:opacity-50"
+                >
+                  [ LOAD ]
+                </button>
+              </div>
+              {loadMessage && <div className="text-[10px] text-zinc-500 font-mono mt-1">{loadMessage}</div>}
+            </div>
+
+            <textarea
+              className="flex-1 bg-black border border-[var(--color-term-border)] p-3 text-xs font-mono text-zinc-300 focus:border-[var(--color-term-green)] focus:outline-none resize-none min-h-[150px]"
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              placeholder="> Waiting for content..."
             />
-            <button
-              onClick={() => loadMutation.mutate(requirementPath)}
-              disabled={loadMutation.isPending}
-              className="bg-slate-700 hover:bg-slate-600 disabled:opacity-60 text-slate-100 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
-            >
-              <Download size={16} />
-              読み込み
-            </button>
-          </div>
-          {loadMessage && <div className="text-xs text-slate-500">{loadMessage}</div>}
-        </div>
 
-        <div className="flex items-center justify-between">
-          <label className="text-sm text-slate-300 flex items-center gap-2">
-            <FileText size={16} />
-            requirement内容
-          </label>
-          <button
-            onClick={() => startMutation.mutate()}
-            disabled={startMutation.isPending || isContentEmpty}
-            className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-60 text-slate-950 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
-          >
-            <Play size={16} />
-            起動
-          </button>
-        </div>
-        <textarea
-          className="w-full min-h-[360px] bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200"
-          value={content}
-          onChange={(event) => setContent(event.target.value)}
-          placeholder="要件を入力してください"
-        />
-        {isContentEmpty && (
-          <div className="text-xs text-amber-400">内容が空のため実行できません。</div>
-        )}
-        {startResult && (
-          <div className="space-y-2 text-xs">
-            {startResult.warnings.length > 0 && (
-              <div className="text-amber-400">
-                {startResult.warnings.map((warning) => (
-                  <div key={warning}>{warning}</div>
-                ))}
+            <div className="flex justify-between items-center pt-2">
+              <span className="text-xs text-zinc-600">
+                {content.length} bytes loaded
+              </span>
+              <button
+                onClick={() => startMutation.mutate()}
+                disabled={startMutation.isPending || isContentEmpty}
+                className="bg-[var(--color-term-green)] text-black px-6 py-2 text-sm font-bold uppercase hover:opacity-90 disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500"
+              >
+                {startMutation.isPending ? '> INITIATING...' : '> EXECUTE RUN'}
+              </button>
+            </div>
+
+            {/* Result Console */}
+            {(startResult || isContentEmpty) && (
+              <div className="border-t border-[var(--color-term-border)] mt-2 pt-2 gap-1 flex flex-col text-xs font-mono">
+                {isContentEmpty && <div className="text-yellow-500">&gt; WARN: Content empty</div>}
+                {startResult?.warnings.map(w => <div key={w} className="text-yellow-500">&gt; WARN: {w}</div>)}
+                {startResult?.errors.map(e => <div key={e} className="text-red-500">&gt; ERR: {e}</div>)}
+                {startResult?.started.length && <div className="text-[var(--color-term-green)]">&gt; BOOT SEQ INITIATED</div>}
               </div>
             )}
-            {startResult.errors.length > 0 && (
-              <div className="text-red-400">
-                {startResult.errors.map((error) => (
-                  <div key={error}>{error}</div>
-                ))}
-              </div>
-            )}
-            {startResult.errors.length === 0 && startResult.started.length > 0 && (
-              <div className="text-emerald-400">起動リクエストを送信しました。</div>
-            )}
           </div>
-        )}
-      </section>
+        </section>
+      </div>
 
-      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-3">
-        <h2 className="text-lg font-semibold">Planner状態</h2>
-        <div className="text-sm text-slate-400">
-          ステータス:{' '}
-          <span className={STATUS_COLORS[planner?.status ?? 'idle']}>
-            {STATUS_LABELS[planner?.status ?? 'idle']}
+      {/* Legacy Planner Logs */}
+      <section className="border border-[var(--color-term-border)] p-0">
+        <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between">
+          <h2 className="text-sm font-bold uppercase tracking-wider">Planner_Output</h2>
+          <span className={`text-xs uppercase ${STATUS_COLORS[planner?.status ?? 'idle']}`}>
+            [{STATUS_LABELS[planner?.status ?? 'idle']}]
           </span>
         </div>
-        {(planner?.startedAt || planner?.finishedAt) && (
-          <div className="text-xs text-slate-500">
-            開始: {formatTimestamp(planner?.startedAt)} / 完了: {formatTimestamp(planner?.finishedAt)}
+        <div className="p-4 font-mono text-xs space-y-1">
+          <div className="flex gap-4">
+            <span className="text-zinc-500 w-24">STARTED</span>
+            <span>{formatTimestamp(planner?.startedAt)}</span>
           </div>
-        )}
-        {planner?.logPath && (
-          <div className="text-xs text-slate-500">ログ: {planner.logPath}</div>
-        )}
-        {planner?.message && planner.status === 'failed' && (
-          <div className="text-xs text-red-400">エラー: {planner.message}</div>
-        )}
+          <div className="flex gap-4">
+            <span className="text-zinc-500 w-24">FINISHED</span>
+            <span>{formatTimestamp(planner?.finishedAt)}</span>
+          </div>
+          <div className="flex gap-4">
+            <span className="text-zinc-500 w-24">LOG_PATH</span>
+            <span className="text-zinc-400">{planner?.logPath || '--'}</span>
+          </div>
+          {planner?.message && planner.status === 'failed' && (
+            <div className="text-red-500 mt-2 border-l-2 border-red-500 pl-2">
+              &gt; CRITICAL_ERR: {planner.message}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
 };
+

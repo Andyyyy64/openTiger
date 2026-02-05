@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { configApi, systemApi } from '../lib/api';
-import { RotateCw, Save, Trash2 } from 'lucide-react';
 
 type SettingField = {
   key: string;
@@ -14,204 +13,204 @@ type SettingField = {
 const SETTINGS: SettingField[] = [
   {
     key: 'MAX_CONCURRENT_WORKERS',
-    label: '並列Worker数',
-    description: '最大同時実行数',
+    label: 'Parallel_Workers',
+    description: 'Max concurrent worker processes',
     group: 'Limits',
     type: 'number',
   },
   {
     key: 'DAILY_TOKEN_LIMIT',
-    label: '日次トークン上限',
-    description: '1日あたりのトークン上限',
+    label: 'Daily_Token_Max',
+    description: 'Max tokens per day',
     group: 'Limits',
     type: 'number',
   },
   {
     key: 'HOURLY_TOKEN_LIMIT',
-    label: '時間トークン上限',
-    description: '1時間あたりのトークン上限',
+    label: 'Hourly_Token_Max',
+    description: 'Max tokens per hour',
     group: 'Limits',
     type: 'number',
   },
   {
     key: 'TASK_TOKEN_LIMIT',
-    label: 'タスクトークン上限',
-    description: 'タスク単位のトークン上限',
+    label: 'Task_Token_Max',
+    description: 'Max tokens per single task',
     group: 'Limits',
     type: 'number',
   },
   {
     key: 'DISPATCHER_ENABLED',
-    label: 'Dispatcher有効',
-    description: '起動対象に含める',
+    label: 'Enable_Dispatcher',
+    description: 'Include dispatcher in boot sequence',
     group: 'Runtime',
     type: 'boolean',
   },
   {
     key: 'JUDGE_ENABLED',
-    label: 'Judge有効',
-    description: '起動対象に含める',
+    label: 'Enable_Judge',
+    description: 'Include judge in boot sequence',
     group: 'Runtime',
     type: 'boolean',
   },
   {
     key: 'CYCLE_MANAGER_ENABLED',
-    label: 'Cycle Manager有効',
-    description: '起動対象に含める',
+    label: 'Enable_CycleMgr',
+    description: 'Include cycle manager',
     group: 'Runtime',
     type: 'boolean',
   },
   {
     key: 'WORKER_COUNT',
-    label: 'Worker台数',
-    description: '起動するWorkerの台数',
+    label: 'Worker_Count',
+    description: 'Number of worker nodes',
     group: 'Workers',
     type: 'number',
   },
   {
     key: 'TESTER_COUNT',
-    label: 'Tester台数',
-    description: '起動するTesterの台数',
+    label: 'Tester_Count',
+    description: 'Number of tester nodes',
     group: 'Workers',
     type: 'number',
   },
   {
     key: 'DOCSER_COUNT',
-    label: 'Docser台数',
-    description: '起動するDocserの台数',
+    label: 'Docser_Count',
+    description: 'Number of docser nodes',
     group: 'Workers',
     type: 'number',
   },
   {
     key: 'REPO_MODE',
-    label: 'Repoモード',
-    description: 'git/localの切り替え',
+    label: 'Repo_Mode',
+    description: 'git or local mode',
     group: 'Repo',
     type: 'text',
   },
   {
     key: 'LOCAL_REPO_PATH',
-    label: 'Local Repo Path',
-    description: 'localモードのベースリポジトリ',
+    label: 'Local_Repo_Path',
+    description: 'Path for local mode',
     group: 'Repo',
     type: 'text',
   },
   {
     key: 'LOCAL_WORKTREE_ROOT',
-    label: 'Worktree Root',
-    description: 'worktreeの作成先',
+    label: 'Worktree_Root',
+    description: 'Destination for worktrees',
     group: 'Repo',
     type: 'text',
   },
   {
     key: 'JUDGE_MODE',
-    label: 'Judgeモード',
-    description: 'git/local/autoの切り替え',
+    label: 'Judge_Mode',
+    description: 'git/local/auto switch',
     group: 'Judge',
     type: 'text',
   },
   {
     key: 'LOCAL_POLICY_MAX_LINES',
-    label: 'ローカル行数上限',
-    description: 'local判定の最大変更行数',
+    label: 'Local_Policy_MaxLines',
+    description: 'Max lines for local check',
     group: 'Judge',
     type: 'number',
   },
   {
     key: 'LOCAL_POLICY_MAX_FILES',
-    label: 'ローカルファイル上限',
-    description: 'local判定の最大変更ファイル数',
+    label: 'Local_Policy_MaxFiles',
+    description: 'Max files for local check',
     group: 'Judge',
     type: 'number',
   },
   {
     key: 'BASE_BRANCH',
-    label: 'ベースブランチ',
-    description: '判定/再計画で利用する基準ブランチ',
+    label: 'Base_Branch',
+    description: 'Target branch (main/master)',
     group: 'Repo',
     type: 'text',
   },
   {
     key: 'OPENCODE_MODEL',
-    label: 'OpenCodeモデル',
-    description: '共通のOpenCode実行モデル',
+    label: 'OpenCode_Model',
+    description: 'Default LLM model',
     group: 'Models',
     type: 'text',
   },
   {
     key: 'PLANNER_MODEL',
-    label: 'Plannerモデル',
-    description: 'Plannerが利用するモデル',
+    label: 'Planner_Model',
+    description: 'Model for planner',
     group: 'Models',
     type: 'text',
   },
   {
     key: 'JUDGE_MODEL',
-    label: 'Judgeモデル',
-    description: 'Judgeが利用するモデル',
+    label: 'Judge_Model',
+    description: 'Model for judge',
     group: 'Models',
     type: 'text',
   },
   {
     key: 'WORKER_MODEL',
-    label: 'Workerモデル',
-    description: 'Workerが利用するモデル',
+    label: 'Worker_Model',
+    description: 'Model for workers',
     group: 'Models',
     type: 'text',
   },
   {
     key: 'PLANNER_USE_REMOTE',
-    label: 'Plannerリモート利用',
-    description: 'Plannerがリモートリポジトリを使うか',
+    label: 'Planner_Use_Remote',
+    description: 'Planner uses remote repo',
     group: 'Planner',
     type: 'boolean',
   },
   {
     key: 'PLANNER_REPO_URL',
-    label: 'Planner Repo URL',
-    description: 'Plannerが参照するリポジトリURL',
+    label: 'Planner_Repo_URL',
+    description: 'Remote repo URL for planner',
     group: 'Planner',
     type: 'text',
   },
   {
     key: 'AUTO_REPLAN',
-    label: '自動再計画',
-    description: 'タスク枯渇時の再計画を有効化',
+    label: 'Auto_Replan',
+    description: 'Enable automatic replanning',
     group: 'Planner',
     type: 'boolean',
   },
   {
     key: 'REPLAN_REQUIREMENT_PATH',
-    label: '要件パス',
-    description: '再計画に使うrequirement.md',
+    label: 'Replan_Req_Path',
+    description: 'Path for replan requirements',
     group: 'Planner',
     type: 'text',
   },
   {
     key: 'REPLAN_INTERVAL_MS',
-    label: '再計画間隔(ms)',
-    description: '再計画の最小間隔',
+    label: 'Replan_Interval',
+    description: 'MS between replans',
     group: 'Planner',
     type: 'number',
   },
   {
     key: 'REPLAN_COMMAND',
-    label: '再計画コマンド',
-    description: 'Planner実行コマンド',
+    label: 'Replan_Command',
+    description: 'Command to exec planner',
     group: 'Planner',
     type: 'text',
   },
   {
     key: 'REPLAN_WORKDIR',
-    label: '再計画作業ディレクトリ',
-    description: 'Planner実行ディレクトリ',
+    label: 'Replan_Workdir',
+    description: 'Workdir for replan cmd',
     group: 'Planner',
     type: 'text',
   },
   {
     key: 'REPLAN_REPO_URL',
-    label: '再計画Repo URL',
-    description: '差分判定に使うリポジトリURL',
+    label: 'Replan_Repo_URL',
+    description: 'Diff comparison repo',
     group: 'Planner',
     type: 'text',
   },
@@ -232,7 +231,6 @@ export const SettingsPage: React.FC = () => {
   const [values, setValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    // APIの取得結果をフォームへ同期する
     if (data?.config) {
       setValues(data.config);
     }
@@ -277,19 +275,10 @@ export const SettingsPage: React.FC = () => {
   };
 
   const restartStatus = restartQuery.data?.status ?? 'idle';
-  const restartStatusLabel =
-    restartStatus === 'running'
-      ? '実行中'
-      : restartStatus === 'completed'
-        ? '完了'
-        : restartStatus === 'failed'
-          ? '失敗'
-          : '未実行';
-  const restartButtonLabel =
-    restartMutation.isPending || restartStatus === 'running' ? '再起動中...' : '再起動する';
-  const formatTimestamp = (value?: string) => (value ? new Date(value).toLocaleString() : '');
+  const restartStatusLabel = restartStatus.toUpperCase();
+
+  const formatTimestamp = (value?: string) => (value ? new Date(value).toLocaleTimeString() : '--:--:--');
   useEffect(() => {
-    // 初期化の成功表示は一定時間で消す
     if (!isCleanupSuccess) return;
     const timer = window.setTimeout(() => {
       resetCleanup();
@@ -298,123 +287,121 @@ export const SettingsPage: React.FC = () => {
   }, [isCleanupSuccess, resetCleanup]);
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8">
+    <div className="p-6 max-w-5xl mx-auto space-y-6 text-[var(--color-term-fg)]">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">System</h1>
-          <p className="text-sm text-slate-400 mt-2">
-            設定はDBに保存されます。起動済みのプロセスには次回のStartから反映されます。
+          <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+            &gt; System_Configuration
+          </h1>
+          <p className="text-xs text-zinc-500 mt-1 font-mono">
+             // Changes saved to DB. Restart required for active processes.
           </p>
         </div>
         <button
           onClick={handleSave}
           disabled={mutation.isPending}
-          className="bg-yellow-500 hover:bg-yellow-600 disabled:opacity-60 text-slate-950 px-4 py-2 rounded-lg font-bold flex items-center gap-2"
+          className="border border-[var(--color-term-green)] text-[var(--color-term-green)] hover:bg-[var(--color-term-green)] hover:text-black px-4 py-2 text-sm font-bold uppercase transition-colors disabled:opacity-50"
         >
-          <Save size={18} />
-          {mutation.isPending ? '保存中...' : '保存'}
+          {mutation.isPending ? '[ SAVING... ]' : '[ SAVE_CONFIG ]'}
         </button>
       </div>
 
-      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">System</h2>
-            <p className="text-xs text-slate-500">
-              現在の設定を反映するために、バックエンドの再起動を実行します。
-            </p>
+      {/* System Control Panel */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <section className="border border-[var(--color-term-border)] p-0">
+          <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wider">System_Restart</h2>
+            <span className="text-xs text-zinc-500">sudo reboot</span>
           </div>
-          <button
-            onClick={() => restartMutation.mutate()}
-            disabled={restartMutation.isPending || restartStatus === 'running'}
-            className="bg-slate-700 hover:bg-slate-600 disabled:opacity-60 text-slate-100 px-4 py-2 rounded-lg font-semibold flex items-center gap-2"
-          >
-            <RotateCw
-              size={18}
-              className={restartMutation.isPending || restartStatus === 'running' ? 'animate-spin' : ''}
-            />
-            {restartButtonLabel}
-          </button>
-        </div>
-        <div className="text-sm text-slate-400">
-          ステータス: {restartStatusLabel}
-        </div>
-        {(restartQuery.data?.startedAt || restartQuery.data?.finishedAt) && (
-          <div className="text-xs text-slate-500">
-            開始: {formatTimestamp(restartQuery.data?.startedAt)} / 完了: {formatTimestamp(restartQuery.data?.finishedAt)}
-          </div>
-        )}
-        {restartQuery.data?.logPath && (
-          <div className="text-xs text-slate-500">ログ: {restartQuery.data.logPath}</div>
-        )}
-        {restartQuery.data?.message && restartStatus === 'failed' && (
-          <div className="text-xs text-red-400">エラー: {restartQuery.data.message}</div>
-        )}
-        {restartQuery.isError && (
-          <div className="text-xs text-red-400">
-            再起動ステータスの取得に失敗しました。
-          </div>
-        )}
-      </section>
+          <div className="p-4 space-y-3 font-mono text-sm">
+            <div className="flex justify-between items-center">
+              <span className="text-zinc-500">CURRENT_STATUS</span>
+              <span className={restartStatus === 'running' ? 'text-[var(--color-term-green)] animate-pulse' : 'text-zinc-300'}>
+                [{restartStatusLabel}]
+              </span>
+            </div>
 
-      <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">DB Cleanup</h2>
-            <p className="text-xs text-slate-500">
-              plan/task/run/eventなどの状態を初期化します。
-            </p>
-          </div>
-          <button
-            onClick={() => cleanupMutation.mutate()}
-            disabled={cleanupMutation.isPending}
-            className="bg-red-500 hover:bg-red-600 disabled:opacity-60 text-slate-950 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
-          >
-            <Trash2 size={16} />
-            初期化
-          </button>
-        </div>
-        {cleanupMutation.isError && (
-          <div className="text-xs text-red-400">
-            {cleanupMutation.error instanceof Error
-              ? cleanupMutation.error.message
-              : 'クリーンアップに失敗しました。'}
-          </div>
-        )}
-        {cleanupMutation.isSuccess && (
-          <div className="text-xs text-emerald-400">DBを初期化しました。</div>
-        )}
-      </section>
+            <div className="text-xs text-zinc-600 border-l border-zinc-800 pl-2">
+              <div>STARTED: {formatTimestamp(restartQuery.data?.startedAt)}</div>
+              <div>FINISHED: {formatTimestamp(restartQuery.data?.finishedAt)}</div>
+            </div>
 
-      {isLoading && <div className="text-center text-slate-500">Loading settings...</div>}
-      {error && <div className="text-center text-red-400">Error loading settings</div>}
+            <button
+              onClick={() => restartMutation.mutate()}
+              disabled={restartMutation.isPending || restartStatus === 'running'}
+              className="w-full border border-[var(--color-term-border)] hover:bg-[var(--color-term-fg)] hover:text-black py-2 mt-2 text-xs uppercase transition-colors disabled:opacity-50"
+            >
+              {restartMutation.isPending || restartStatus === 'running' ? '> REBOOTING...' : '> EXECUTE REBOOT'}
+            </button>
 
-      <div className="space-y-8">
+            {restartQuery.data?.message && restartStatus === 'failed' && (
+              <div className="text-red-500 text-xs mt-2">&gt; ERR: {restartQuery.data.message}</div>
+            )}
+          </div>
+        </section>
+
+        <section className="border border-[var(--color-term-border)] p-0">
+          <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wider">DB_Maintenance</h2>
+            <span className="text-xs text-zinc-500">rm -rf /var/db/*</span>
+          </div>
+          <div className="p-4 space-y-3 font-mono text-sm">
+            <div className="text-zinc-500 text-xs mb-2">
+                // Purges all runtime data (plans, tasks, runs, events).
+              <br />// Use with caution.
+            </div>
+
+            <button
+              onClick={() => cleanupMutation.mutate()}
+              disabled={cleanupMutation.isPending}
+              className="w-full border border-red-900 text-red-500 hover:bg-red-900 hover:text-white py-2 text-xs uppercase transition-colors disabled:opacity-50"
+            >
+              {cleanupMutation.isPending ? '> PURGING...' : '> PURGE DATABASE'}
+            </button>
+
+            {cleanupMutation.isSuccess && (
+              <div className="text-[var(--color-term-green)] text-xs mt-2">&gt; SUCCESS: Database purged.</div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {isLoading && <div className="text-center text-zinc-500 monitor-scan">&gt; Scanning configuration...</div>}
+      {error && <div className="text-center text-red-500">&gt; CONFIG LOAD ERROR</div>}
+
+      <div className="space-y-6">
         {grouped.map(([group, fields]) => (
-          <section key={group} className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
-            <h2 className="text-lg font-semibold">{group}</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <section key={group} className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <h2 className="text-sm font-bold uppercase tracking-wider">Config_Section: [{group}]</h2>
+            </div>
+
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
               {fields.map((field) => (
-                <div key={field.key} className="space-y-2">
-                  <div className="text-sm text-slate-300">{field.label}</div>
-                  <div className="text-xs text-slate-500">{field.description}</div>
+                <div key={field.key} className="space-y-1">
+                  <div className="flex justify-between items-baseline mb-1">
+                    <label className="text-xs text-[var(--color-term-green)] font-mono">{field.label}</label>
+                    <span className="text-[10px] text-zinc-600 uppercase">{field.type}</span>
+                  </div>
+
                   {field.type === 'boolean' ? (
                     <select
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200"
+                      className="w-full bg-black border border-[var(--color-term-border)] text-sm text-[var(--color-term-fg)] px-2 py-1 font-mono focus:border-[var(--color-term-green)] focus:outline-none"
                       value={(values[field.key] ?? '').toLowerCase() === 'true' ? 'true' : 'false'}
                       onChange={(e) => updateValue(field.key, e.target.value)}
                     >
-                      <option value="true">true</option>
-                      <option value="false">false</option>
+                      <option value="true">TRUE</option>
+                      <option value="false">FALSE</option>
                     </select>
                   ) : (
                     <input
                       type={field.type}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200"
+                      className="w-full bg-black border border-[var(--color-term-border)] text-sm text-[var(--color-term-fg)] px-2 py-1 font-mono focus:border-[var(--color-term-green)] focus:outline-none"
                       value={values[field.key] ?? ''}
                       onChange={(e) => updateValue(field.key, e.target.value)}
                     />
                   )}
+                  <div className="text-[10px] text-zinc-600 truncate">{field.description}</div>
                 </div>
               ))}
             </div>
@@ -424,3 +411,4 @@ export const SettingsPage: React.FC = () => {
     </div>
   );
 };
+

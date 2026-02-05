@@ -2,7 +2,6 @@ import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { runsApi, judgementsApi, type JudgementEvent } from '../lib/api';
-import { ChevronLeft, Terminal, Box, Link as LinkIcon, AlertCircle, ShieldCheck } from 'lucide-react';
 import type { Artifact } from '@sebastian-code/core';
 
 export const RunDetailsPage: React.FC = () => {
@@ -20,59 +19,58 @@ export const RunDetailsPage: React.FC = () => {
     enabled: !!id,
   });
 
-  if (isLoading) return <div className="p-8 text-center text-slate-500">Loading run details...</div>;
-  if (error || !data) return <div className="p-8 text-center text-red-400">Error loading run details</div>;
+  if (isLoading) return <div className="p-8 text-center text-zinc-500 font-mono animate-pulse">&gt; Loading run sequence...</div>;
+  if (error || !data) return <div className="p-8 text-center text-red-500 font-mono">&gt; ERR: Run data inaccessible</div>;
 
   const { run, artifacts } = data;
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <Link to="/runs" className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors">
-        <ChevronLeft size={20} />
-        Back to Runs
+    <div className="p-6 max-w-5xl mx-auto text-[var(--color-term-fg)] font-mono">
+      <Link to="/runs" className="inline-block text-xs text-zinc-500 hover:text-[var(--color-term-green)] mb-6 group">
+        &lt; cd ..
       </Link>
 
-      <div className="flex justify-between items-start mb-8">
+      <div className="flex flex-wrap justify-between items-start mb-8 gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${getStatusColor(run.status)}`}>
-              {run.status}
+          <div className="flex items-center gap-3 mb-1">
+            <span className={`text-xs font-bold ${getStatusColor(run.status)}`}>
+              [{run.status.toUpperCase()}]
             </span>
-            <span className="text-slate-500 text-sm">Run ID: {run.id}</span>
+            <span className="text-zinc-500 text-xs">ID: {run.id}</span>
           </div>
-          <h1 className="text-4xl font-bold">Execution by {run.agentId}</h1>
-          <p className="text-slate-400 mt-2">
-            Task: <Link to={`/tasks/${run.taskId}`} className="text-yellow-500 hover:underline">{run.taskId}</Link>
+          <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+            &gt; Exec_Trace@{run.agentId}
+          </h1>
+          <p className="text-zinc-500 text-xs mt-1">
+            TARGET_TASK: <Link to={`/tasks/${run.taskId}`} className="hover:text-[var(--color-term-fg)] underline">{run.taskId}</Link>
           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
           {/* Error Message if failed */}
           {run.errorMessage && (
-            <section className="bg-red-500/10 border border-red-500/20 rounded-xl p-6">
-              <h2 className="text-red-400 font-semibold mb-2 flex items-center gap-2">
-                <AlertCircle size={20} />
-                Error Message
+            <section className="border border-red-500/50 bg-red-900/10 p-4">
+              <h2 className="text-red-500 font-bold text-sm uppercase mb-2">
+                ! CRITICAL_FAILURE !
               </h2>
-              <p className="text-red-300 font-mono text-sm whitespace-pre-wrap">
+              <p className="text-red-400 text-xs whitespace-pre-wrap">
                 {run.errorMessage}
               </p>
             </section>
           )}
 
-          {/* Logs / Output (Placeholder) */}
-          <section className="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden">
-            <div className="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center gap-2">
-              <Terminal size={16} className="text-slate-400" />
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Console Output</span>
+          {/* Logs / Output */}
+          <section className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">System_Log_Output</span>
             </div>
-            <div className="p-6 font-mono text-sm text-slate-300 min-h-[300px]">
+            <div className="p-4 bg-black text-xs text-zinc-300 min-h-[300px] overflow-x-auto whitespace-pre-wrap">
               {run.logPath ? (
-                <div className="text-slate-500 italic">Logs are stored at: {run.logPath}</div>
+                <div className="text-zinc-500 italic">// Log file archived at: {run.logPath}</div>
               ) : (
-                <div className="text-slate-500 italic">No logs available for this run.</div>
+                <div className="text-zinc-600 italic">// Buffer empty. No output recorded.</div>
               )}
             </div>
           </section>
@@ -80,42 +78,45 @@ export const RunDetailsPage: React.FC = () => {
 
         <div className="space-y-6">
           {/* Run Stats */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Run Stats</h2>
-            <div className="space-y-4">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Tokens Used</span>
-                <span className="text-white font-medium">{run.costTokens ?? 0}</span>
+          <div className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <h2 className="text-sm font-bold uppercase tracking-widest">Metrics</h2>
+            </div>
+            <div className="p-4 space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-zinc-500">TOKEN_USAGE</span>
+                <span className="text-[var(--color-term-fg)]">{run.costTokens ?? 0}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-400">Started</span>
-                <span className="text-white font-medium">{new Date(run.startedAt).toLocaleTimeString()}</span>
+              <div className="flex justify-between">
+                <span className="text-zinc-500">INIT_TIME</span>
+                <span className="text-[var(--color-term-fg)]">{new Date(run.startedAt).toLocaleTimeString()}</span>
               </div>
               {run.finishedAt && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Finished</span>
-                  <span className="text-white font-medium">{new Date(run.finishedAt).toLocaleTimeString()}</span>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">EXIT_TIME</span>
+                  <span className="text-[var(--color-term-fg)]">{new Date(run.finishedAt).toLocaleTimeString()}</span>
                 </div>
               )}
             </div>
           </div>
 
           {/* Artifacts */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Artifacts</h2>
-            <div className="space-y-3">
+          <div className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <h2 className="text-sm font-bold uppercase tracking-widest">Generated_Artifacts</h2>
+            </div>
+            <div className="p-4 space-y-2">
               {artifacts?.length === 0 ? (
-                <p className="text-xs text-slate-500 italic">No artifacts generated</p>
+                <p className="text-xs text-zinc-600 italic">// No artifacts found</p>
               ) : (
                 artifacts?.map((artifact: Artifact) => (
-                  <div key={artifact.id} className="flex items-center justify-between p-2 bg-slate-950 rounded border border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <Box size={14} className="text-blue-400" />
-                      <span className="text-xs font-medium text-slate-300">{artifact.type.toUpperCase()}</span>
-                    </div>
+                  <div key={artifact.id} className="flex items-center justify-between group">
+                    <span className="text-xs text-[var(--color-term-fg)]">
+                      - {artifact.type.toUpperCase()}
+                    </span>
                     {artifact.url && (
-                      <a href={artifact.url} target="_blank" rel="noreferrer" className="text-slate-500 hover:text-yellow-500">
-                        <LinkIcon size={14} />
+                      <a href={artifact.url} target="_blank" rel="noreferrer" className="text-xs text-[var(--color-term-green)] hover:underline">
+                        [OPEN]
                       </a>
                     )}
                   </div>
@@ -125,14 +126,13 @@ export const RunDetailsPage: React.FC = () => {
           </div>
 
           {/* Judge Review */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <ShieldCheck size={16} />
-              Judge Review
-            </h2>
-            <div className="space-y-3">
+          <div className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <h2 className="text-sm font-bold uppercase tracking-widest">Audit_Log (Judgements)</h2>
+            </div>
+            <div className="divide-y divide-[var(--color-term-border)]">
               {(judgements ?? []).length === 0 && (
-                <p className="text-xs text-slate-500 italic">No reviews recorded</p>
+                <div className="p-4 text-xs text-zinc-600 italic">// No audit records</div>
               )}
               {(judgements ?? []).map((review) => (
                 <JudgeReviewItem key={review.id} review={review} />
@@ -147,10 +147,10 @@ export const RunDetailsPage: React.FC = () => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'success': return 'bg-green-500/10 text-green-400 border border-green-500/20';
-    case 'failed': return 'bg-red-500/10 text-red-400 border border-red-500/20';
-    case 'running': return 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
-    default: return 'bg-slate-500/10 text-slate-400 border border-slate-500/20';
+    case 'success': return 'text-[var(--color-term-green)]';
+    case 'failed': return 'text-red-500';
+    case 'running': return 'text-blue-400 animate-pulse';
+    default: return 'text-zinc-500';
   }
 };
 
@@ -161,23 +161,23 @@ const JudgeReviewItem = ({ review }: { review: JudgementEvent }) => {
   const ciStatus = payload.summary?.ci?.status ?? (payload.summary?.ci?.pass ? 'success' : 'unknown');
 
   return (
-    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-2">
+    <div className="p-3 space-y-1 hover:bg-[var(--color-term-fg)]/5 transition-colors">
       <div className="flex items-center justify-between">
-        <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${getVerdictColor(verdict)}`}>
-          {verdict}
+        <span className={`text-xs font-bold ${getVerdictColor(verdict)}`}>
+          [{verdict.toUpperCase()}]
         </span>
-        <span className="text-xs text-slate-500">
-          {new Date(review.createdAt).toLocaleString()}
+        <span className="text-[10px] text-zinc-600">
+          {new Date(review.createdAt).toLocaleTimeString()}
         </span>
       </div>
-      <div className="text-xs text-slate-400 space-y-1">
-        <div>CI: {ciStatus}</div>
-        <div>Auto-merge: {payload.autoMerge ? 'enabled' : 'disabled'}</div>
-        <div>Merged: {merged ? 'yes' : 'no'}</div>
+      <div className="text-[10px] text-zinc-400 grid grid-cols-2 gap-x-2">
+        <span>CI: {ciStatus.toUpperCase()}</span>
+        <span>AUTO_MERGE: {payload.autoMerge ? 'ON' : 'OFF'}</span>
+        <span>MERGED: {merged ? 'YES' : 'NO'}</span>
       </div>
       {payload.prUrl && (
-        <a href={payload.prUrl} target="_blank" rel="noreferrer" className="text-xs text-yellow-500 hover:underline">
-          PR #{payload.prNumber}
+        <a href={payload.prUrl} target="_blank" rel="noreferrer" className="block text-[10px] text-blue-400 hover:underline mt-1">
+          &gt; VIEW PR #{payload.prNumber}
         </a>
       )}
     </div>
@@ -187,12 +187,13 @@ const JudgeReviewItem = ({ review }: { review: JudgementEvent }) => {
 const getVerdictColor = (verdict: string) => {
   switch (verdict) {
     case 'approve':
-      return 'bg-green-500/10 text-green-400 border border-green-500/20';
+      return 'text-[var(--color-term-green)]';
     case 'request_changes':
-      return 'bg-red-500/10 text-red-400 border border-red-500/20';
+      return 'text-red-500';
     case 'needs_human':
-      return 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20';
+      return 'text-yellow-500';
     default:
-      return 'bg-slate-500/10 text-slate-400 border border-slate-500/20';
+      return 'text-zinc-500';
   }
 };
+

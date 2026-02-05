@@ -1,7 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { tasksApi, runsApi, agentsApi } from '../lib/api';
-import { Activity, ListTodo, Users, CheckCircle2 } from 'lucide-react';
 
 export const OverviewPage: React.FC = () => {
   const { data: tasks } = useQuery({ queryKey: ['tasks'], queryFn: () => tasksApi.list() });
@@ -29,83 +28,89 @@ export const OverviewPage: React.FC = () => {
   };
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-8">System Overview</h1>
+    <div className="p-6 text-[var(--color-term-fg)]">
+      <h1 className="text-xl font-bold mb-8 uppercase tracking-widest text-[var(--color-term-green)]">
+        &gt; System_Overview_
+      </h1>
 
       {blockedByDepsWithIdleWorkers && (
-        <div className="mb-8 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-sm text-yellow-200">
-          依存関係が未完了のため、待機中タスクがディスパッチできません。
-          （待機中: {queuedTasks.length} / 依存待ち: {queuedBlockedByDeps.length} / 空きワーカー: {idleWorkers.length}）
+        <div className="mb-8 border border-yellow-600 p-4 text-sm text-yellow-500 font-bold bg-yellow-900/10">
+          [WARNING] 依存関係が未完了のため、待機中タスクがディスパッチできません。
+          <br />
+          &gt; QUEUED: {queuedTasks.length} | BLOCKED: {queuedBlockedByDeps.length} | IDLE_WORKERS: {idleWorkers.length}
         </div>
       )}
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-        <StatCard 
-          title="Active Workers" 
-          value={stats.activeWorkers.toString()} 
-          icon={<Users className="text-blue-500" />}
-          subValue={`Total ${agents?.length ?? 0} agents`} 
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+        <StatCard
+          title="ACTIVE WORKERS"
+          value={stats.activeWorkers.toString()}
+          subValue={`/ ${agents?.length ?? 0} TOTAL`}
         />
-        <StatCard 
-          title="Pending Tasks" 
-          value={stats.pendingTasks.toString()} 
-          icon={<ListTodo className="text-yellow-500" />}
-          subValue="Waiting in queue" 
+        <StatCard
+          title="PENDING TASKS"
+          value={stats.pendingTasks.toString()}
+          subValue="IN QUEUE"
         />
-        <StatCard 
-          title="Completed Tasks" 
-          value={stats.completedTasks.toString()} 
-          icon={<CheckCircle2 className="text-green-500" />}
-          subValue="Successfully finished" 
+        <StatCard
+          title="COMPLETED"
+          value={stats.completedTasks.toString()}
+          subValue="FINISHED"
         />
-        <StatCard 
-          title="Success Rate" 
-          value={`${stats.successRate}%`} 
-          icon={<Activity className="text-purple-500" />}
-          subValue="Based on all runs" 
-          color="text-purple-400"
+        <StatCard
+          title="SUCCESS RATE"
+          value={`${stats.successRate}%`}
+          subValue="LIFETIME"
         />
       </div>
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-            <Activity size={20} className="text-blue-500" />
-            Recent Runs
-          </h2>
-          <div className="space-y-4">
+        <div className="border border-[var(--color-term-border)] p-0">
+          <div className="border-b border-[var(--color-term-border)] bg-[var(--color-term-border)]/10 px-4 py-2 flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wider">Recent Activity Log</h2>
+            <span className="text-xs text-zinc-500">tail -f runs.log</span>
+          </div>
+          <div className="p-4 space-y-2 font-mono text-sm max-h-[300px] overflow-y-auto">
             {runs?.slice(0, 5).map(run => (
-              <div key={run.id} className="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800">
-                <div>
-                  <div className="text-sm font-medium">{run.agentId}</div>
-                  <div className="text-xs text-slate-500">{new Date(run.startedAt).toLocaleTimeString()}</div>
-                </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${run.status === 'success' ? 'text-green-400 bg-green-400/10' : 'text-red-400 bg-red-400/10'}`}>
-                  {run.status}
+              <div key={run.id} className="flex items-start gap-3 pb-2 border-b border-zinc-800 last:border-0 last:pb-0">
+                <span className="text-zinc-500 text-xs whitespace-nowrap">
+                  [{new Date(run.startedAt).toLocaleTimeString()}]
                 </span>
+                <div className="flex-1">
+                  <div className="flex justify-between">
+                    <span>Agent <span className="text-[var(--color-term-green)]">{run.agentId}</span> started run</span>
+                    <span className={`text-xs uppercase ${run.status === 'success' ? 'text-[var(--color-term-green)]' : 'text-red-500'}`}>
+                      [{run.status}]
+                    </span>
+                  </div>
+                  <div className="text-xs text-zinc-600 mt-1">ID: {run.id}</div>
+                </div>
               </div>
             ))}
-            {(!runs || runs.length === 0) && <div className="text-slate-500 text-center py-8">No recent activity</div>}
+            {(!runs || runs.length === 0) && <div className="text-zinc-500 py-4">&gt; No recent activity found</div>}
           </div>
         </div>
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-          <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-            <ListTodo size={20} className="text-yellow-500" />
-            Active Tasks
-          </h2>
-          <div className="space-y-4">
+        <div className="border border-[var(--color-term-border)] p-0">
+          <div className="border-b border-[var(--color-term-border)] bg-[var(--color-term-border)]/10 px-4 py-2 flex items-center justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wider">Process List (Tasks)</h2>
+            <span className="text-xs text-zinc-500">top</span>
+          </div>
+          <div className="p-4 space-y-1 font-mono text-sm">
+            <div className="flex text-xs text-zinc-500 mb-2 border-b border-zinc-800 pb-1">
+              <span className="w-20">PID</span>
+              <span className="flex-1">COMMAND/TITLE</span>
+              <span className="w-20 text-right">STATE</span>
+            </div>
             {tasks?.filter(t => t.status === 'running').slice(0, 5).map(task => (
-              <div key={task.id} className="p-3 bg-slate-950 rounded-lg border border-slate-800">
-                <div className="text-sm font-medium truncate">{task.title}</div>
-                <div className="flex justify-between items-center mt-2">
-                  <span className="text-[10px] text-slate-500 font-mono">{task.id.slice(0, 8)}</span>
-                  <span className="text-[10px] text-blue-400 font-bold uppercase">Running</span>
-                </div>
+              <div key={task.id} className="flex items-center text-xs">
+                <span className="w-20 text-blue-400">{task.id.slice(0, 8)}</span>
+                <span className="flex-1 truncate pr-4 text-zinc-300">{task.title}</span>
+                <span className="w-20 text-right text-[var(--color-term-green)] animate-pulse">RUNNING</span>
               </div>
             ))}
             {tasks?.filter(t => t.status === 'running').length === 0 && (
-              <div className="text-slate-500 text-center py-8">No tasks currently running</div>
+              <div className="text-zinc-500 py-4">&gt; No active processes</div>
             )}
           </div>
         </div>
@@ -114,13 +119,12 @@ export const OverviewPage: React.FC = () => {
   );
 };
 
-const StatCard = ({ title, value, subValue, icon, color = "text-white" }: { title: string, value: string, subValue: string, icon: React.ReactNode, color?: string }) => (
-  <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-sm">
-    <div className="flex justify-between items-start mb-4">
-      <h3 className="text-slate-400 text-sm font-medium">{title}</h3>
-      {icon}
+const StatCard = ({ title, value, subValue }: { title: string, value: string, subValue: string }) => (
+  <div className="border border-[var(--color-term-border)] p-4 hover:bg-[var(--color-term-border)]/10 transition-colors cursor-default">
+    <div className="flex justify-between items-start mb-2">
+      <h3 className="text-zinc-500 text-xs font-bold uppercase">{title}</h3>
     </div>
-    <p className={`text-4xl font-bold mb-2 ${color}`}>{value}</p>
-    <p className="text-slate-500 text-xs">{subValue}</p>
+    <p className="text-3xl font-mono text-[var(--color-term-green)] mb-1">{value}</p>
+    <p className="text-zinc-600 text-xs font-mono">{subValue}</p>
   </div>
 );

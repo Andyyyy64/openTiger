@@ -1,12 +1,25 @@
 @import "tailwindcss";
 
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap');
+
+@theme {
+  --font-mono: 'Fira Code', monospace;
+  
+  --color-term-bg: #050505;
+  --color-term-fg: #e5e5e5;
+  --color-term-green: #22c55e;
+  --color-term-border: #262626;
+  --color-term-accent: #22c55e;
+}
+
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: var(--font-mono);
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: dark;
-  background-color: #0f172a;
+  background-color: var(--color-term-bg);
+  color: var(--color-term-fg);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -18,4 +31,46 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background-color: var(--color-term-bg);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  background: var(--color-term-bg);
+  border-left: 1px solid var(--color-term-border);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border: 1px solid var(--color-term-bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-term-green);
+}
+
+/* Terminal Utilities */
+.term-border {
+  border: 1px solid var(--color-term-border);
+}
+
+.term-text-green {
+  color: var(--color-term-green);
+}
+
+.term-glow {
+  text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor-blink::after {
+  content: '▋';
+  margin-left: 2px;
+  animation: cursor-blink 1s step-end infinite;
+  color: var(--color-term-green);
 }

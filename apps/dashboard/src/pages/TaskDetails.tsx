@@ -2,7 +2,6 @@ import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { tasksApi, runsApi } from '../lib/api';
-import { ChevronLeft, Clock, Shield, AlertTriangle, CheckCircle2, PlayCircle } from 'lucide-react';
 
 export const TaskDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,67 +18,73 @@ export const TaskDetailsPage: React.FC = () => {
     enabled: !!id,
   });
 
-  if (isTaskLoading) return <div className="p-8 text-center text-slate-500">Loading task details...</div>;
-  if (!task) return <div className="p-8 text-center text-red-400">Task not found</div>;
+  if (isTaskLoading) return <div className="p-8 text-center text-zinc-500 font-mono animate-pulse">&gt; Loading task data...</div>;
+  if (!task) return <div className="p-8 text-center text-red-500 font-mono">&gt; ERR: Task not found in registry</div>;
 
   return (
-    <div className="p-8 max-w-5xl mx-auto">
-      <Link to="/tasks" className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors">
-        <ChevronLeft size={20} />
-        Back to Tasks
+    <div className="p-6 max-w-5xl mx-auto text-[var(--color-term-fg)] font-mono">
+      <Link to="/tasks" className="inline-block text-xs text-zinc-500 hover:text-[var(--color-term-green)] mb-6 group">
+        &lt; cd ..
       </Link>
 
-      <div className="flex justify-between items-start mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${getStatusColor(task.status)}`}>
-              {task.status}
+          <div className="flex items-center gap-3 mb-1">
+            <span className={`text-xs font-bold ${getStatusColor(task.status)}`}>
+              [{task.status.toUpperCase()}]
             </span>
-            <span className="text-slate-500 text-sm">ID: {task.id}</span>
+            <span className="text-zinc-500 text-xs">ID: {task.id}</span>
           </div>
-          <h1 className="text-4xl font-bold">{task.title}</h1>
+          <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+            &gt; Task: {task.title}
+          </h1>
         </div>
-        <div className="flex gap-3">
-          <button className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-medium transition-colors border border-slate-700">
-            Edit Task
+        <div className="flex gap-4">
+          <button className="text-zinc-400 hover:text-[var(--color-term-fg)] border border-zinc-700 hover:border-[var(--color-term-fg)] px-4 py-1 text-xs font-bold uppercase transition-all">
+            [ EDIT_CONFIG ]
           </button>
-          <button className="bg-yellow-500 hover:bg-yellow-600 text-slate-950 px-4 py-2 rounded-lg font-bold transition-colors">
-            Run Now
+          <button className="text-[var(--color-term-green)] border border-[var(--color-term-green)] hover:bg-[var(--color-term-green)] hover:text-black px-4 py-1 text-xs font-bold uppercase transition-all">
+            [ EXECUTE_RUN ]
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
           {/* Goal Section */}
-          <section className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <CheckCircle2 size={20} className="text-yellow-500" />
-              Goal & Acceptance Criteria
-            </h2>
-            <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">
-              {task.goal}
-            </p>
+          <section className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <h2 className="text-sm font-bold uppercase tracking-wider">01_Objective_&_Criteria</h2>
+            </div>
+            <div className="p-4">
+              <p className="text-zinc-300 text-sm whitespace-pre-wrap leading-relaxed">
+                {task.goal}
+              </p>
+            </div>
           </section>
 
           {/* Context Section */}
-          <section className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold mb-4">Context</h2>
-            <div className="space-y-4">
+          <section className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <h2 className="text-sm font-bold uppercase tracking-wider">02_Context_Data</h2>
+            </div>
+            <div className="p-4 space-y-4">
               {task.context?.specs && (
                 <div>
-                  <h3 className="text-sm font-medium text-slate-500 mb-1 uppercase tracking-wider">Specifications</h3>
-                  <p className="text-slate-300 text-sm">{task.context.specs}</p>
+                  <h3 className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wide">Specifications</h3>
+                  <div className="border-l-2 border-zinc-700 pl-2 text-zinc-400 text-xs">
+                    {task.context.specs}
+                  </div>
                 </div>
               )}
               {task.context?.files && task.context.files.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-medium text-slate-500 mb-1 uppercase tracking-wider">Related Files</h3>
+                  <h3 className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wide">Related Files</h3>
                   <div className="flex flex-wrap gap-2">
                     {task.context.files.map((file, i) => (
-                      <code key={i} className="bg-slate-800 px-2 py-1 rounded text-xs text-slate-300 border border-slate-700">
+                      <span key={i} className="text-xs text-zinc-300 bg-zinc-900 px-2 py-0.5 border border-zinc-800">
                         {file}
-                      </code>
+                      </span>
                     ))}
                   </div>
                 </div>
@@ -88,39 +93,38 @@ export const TaskDetailsPage: React.FC = () => {
           </section>
 
           {/* Execution History */}
-          <section>
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <Clock size={22} className="text-slate-400" />
-              Execution History
-            </h2>
-            <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+          <section className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <h2 className="text-sm font-bold uppercase tracking-wider">Execution_Log</h2>
+            </div>
+            <div className="overflow-x-auto">
               {isRunsLoading ? (
-                <div className="p-8 text-center text-slate-500">Loading runs...</div>
+                <div className="p-8 text-center text-zinc-500 animate-pulse">&gt; Fetching history...</div>
               ) : runs?.length === 0 ? (
-                <div className="p-8 text-center text-slate-500">No execution history yet</div>
+                <div className="p-8 text-center text-zinc-500 italic">// No execution history found.</div>
               ) : (
-                <table className="w-full text-left">
-                  <thead className="bg-slate-800/50 border-b border-slate-800">
+                <table className="w-full text-left text-xs">
+                  <thead className="text-zinc-500 border-b border-[var(--color-term-border)]">
                     <tr>
-                      <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase">Agent</th>
-                      <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase">Status</th>
-                      <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase">Duration</th>
-                      <th className="px-6 py-3 text-xs font-semibold text-slate-400 uppercase">Started</th>
+                      <th className="px-4 py-2 font-normal uppercase">Agent_ID</th>
+                      <th className="px-4 py-2 font-normal uppercase">Status</th>
+                      <th className="px-4 py-2 font-normal uppercase">Duration</th>
+                      <th className="px-4 py-2 font-normal uppercase">Started_At</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800">
+                  <tbody className="divide-y divide-[var(--color-term-border)]">
                     {runs?.map((run) => (
-                      <tr key={run.id} className="hover:bg-slate-800/30 transition-colors cursor-pointer">
-                        <td className="px-6 py-4 text-sm font-medium">{run.agentId}</td>
-                        <td className="px-6 py-4">
-                          <span className={`text-xs font-bold ${run.status === 'success' ? 'text-green-400' : run.status === 'failed' ? 'text-red-400' : 'text-blue-400'}`}>
-                            {run.status.toUpperCase()}
+                      <tr key={run.id} className="hover:bg-[var(--color-term-fg)]/5 transition-colors cursor-pointer group">
+                        <td className="px-4 py-2 text-[var(--color-term-fg)] group-hover:text-[var(--color-term-green)]">{run.agentId}</td>
+                        <td className="px-4 py-2">
+                          <span className={`font-bold ${run.status === 'success' ? 'text-[var(--color-term-green)]' : run.status === 'failed' ? 'text-red-500' : 'text-blue-400'}`}>
+                            [{run.status.toUpperCase()}]
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-400">
+                        <td className="px-4 py-2 text-zinc-400">
                           {run.finishedAt ? `${Math.round((new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)}s` : '-'}
                         </td>
-                        <td className="px-6 py-4 text-sm text-slate-500">
+                        <td className="px-4 py-2 text-zinc-500">
                           {new Date(run.startedAt).toLocaleString()}
                         </td>
                       </tr>
@@ -134,83 +138,83 @@ export const TaskDetailsPage: React.FC = () => {
 
         <div className="space-y-6">
           {/* Configuration Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Configuration</h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-slate-400 text-sm">
-                  <Shield size={16} />
-                  Risk Level
-                </div>
-                <span className={`text-sm font-bold ${getRiskColor(task.riskLevel)}`}>{task.riskLevel.toUpperCase()}</span>
+          <section className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <h2 className="text-sm font-bold uppercase tracking-wider">Params</h2>
+            </div>
+            <div className="p-4 space-y-3 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-500 uppercase">RISK_LEVEL</span>
+                <span className={`font-bold ${getRiskColor(task.riskLevel)}`}>{task.riskLevel.toUpperCase()}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-slate-400 text-sm">
-                  <AlertTriangle size={16} />
-                  Priority
-                </div>
-                <span className="text-sm font-bold text-white">{task.priority}</span>
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-500 uppercase">PRIORITY</span>
+                <span className="text-[var(--color-term-fg)]">{task.priority}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-slate-400 text-sm">
-                  <PlayCircle size={16} />
-                  Role
-                </div>
-                <span className="text-sm font-bold text-white">{task.role ?? 'worker'}</span>
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-500 uppercase">ROLE</span>
+                <span className="text-[var(--color-term-fg)]">{task.role?.toUpperCase() ?? 'WORKER'}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-slate-400 text-sm">
-                  <PlayCircle size={16} />
-                  Timebox
-                </div>
-                <span className="text-sm font-bold text-white">{task.timeboxMinutes} min</span>
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-500 uppercase">TIMEBOX</span>
+                <span className="text-[var(--color-term-fg)]">{task.timeboxMinutes}m</span>
               </div>
             </div>
-          </div>
+          </section>
 
           {/* Allowed Paths */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Allowed Paths</h2>
-            <div className="space-y-2">
+          <section className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <h2 className="text-sm font-bold uppercase tracking-wider">Scope: Allowed_Paths</h2>
+            </div>
+            <div className="p-4 space-y-1">
               {task.allowedPaths.map((path, i) => (
-                <div key={i} className="text-xs font-mono text-slate-400 bg-slate-950 p-2 rounded border border-slate-800 break-all">
-                  {path}
+                <div key={i} className="text-xs font-mono text-zinc-400 break-all">
+                  - {path}
                 </div>
               ))}
+              {task.allowedPaths.length === 0 && <div className="text-xs text-zinc-600 italic">// No paths defined</div>}
             </div>
-          </div>
+          </section>
 
           {/* Commands */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Verification</h2>
-            <div className="space-y-2">
+          <section className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <h2 className="text-sm font-bold uppercase tracking-wider">Verification_Cmds</h2>
+            </div>
+            <div className="p-4 space-y-1">
               {task.commands.map((cmd, i) => (
-                <div key={i} className="text-xs font-mono text-yellow-500 bg-slate-950 p-2 rounded border border-slate-800 break-all">
+                <div key={i} className="text-xs font-mono text-yellow-500 break-all">
                   $ {cmd}
                 </div>
               ))}
+              {task.commands.length === 0 && <div className="text-xs text-zinc-600 italic">// No commands defined</div>}
             </div>
-          </div>
+          </section>
 
           {/* Dependencies */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-            <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4">Dependencies</h2>
-            {task.dependencies?.length ? (
-              <div className="space-y-2">
-                {task.dependencies.map((dependencyId) => (
-                  <Link
-                    key={dependencyId}
-                    to={`/tasks/${dependencyId}`}
-                    className="block text-xs font-mono text-slate-300 bg-slate-950 p-2 rounded border border-slate-800 break-all hover:text-yellow-400 transition-colors"
-                  >
-                    {dependencyId}
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <div className="text-xs text-slate-500">No dependencies</div>
-            )}
-          </div>
+          <section className="border border-[var(--color-term-border)] p-0">
+            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+              <h2 className="text-sm font-bold uppercase tracking-wider">Dependencies</h2>
+            </div>
+            <div className="p-4">
+              {task.dependencies?.length ? (
+                <div className="space-y-1">
+                  {task.dependencies.map((dependencyId) => (
+                    <Link
+                      key={dependencyId}
+                      to={`/tasks/${dependencyId}`}
+                      className="block text-xs font-mono text-[var(--color-term-fg)] hover:text-[var(--color-term-green)] hover:underline break-all"
+                    >
+                      &gt; {dependencyId}
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-zinc-600 italic">// No dependencies</div>
+              )}
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -219,18 +223,19 @@ export const TaskDetailsPage: React.FC = () => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'done': return 'bg-green-500/10 text-green-400 border border-green-500/20';
-    case 'running': return 'bg-blue-500/10 text-blue-400 border border-blue-500/20';
-    case 'failed': return 'bg-red-500/10 text-red-400 border border-red-500/20';
-    case 'blocked': return 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20';
-    default: return 'bg-slate-500/10 text-slate-400 border border-slate-500/20';
+    case 'done': return 'text-[var(--color-term-green)]';
+    case 'running': return 'text-blue-400 animate-pulse';
+    case 'failed': return 'text-red-500';
+    case 'blocked': return 'text-yellow-500';
+    default: return 'text-zinc-500';
   }
 };
 
 const getRiskColor = (risk: string) => {
   switch (risk) {
-    case 'high': return 'text-red-400';
-    case 'medium': return 'text-yellow-400';
-    default: return 'text-green-400';
+    case 'high': return 'text-red-500 font-bold';
+    case 'medium': return 'text-yellow-500';
+    default: return 'text-[var(--color-term-green)]';
   }
 };
+

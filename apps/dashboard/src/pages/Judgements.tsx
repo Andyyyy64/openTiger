@@ -2,7 +2,6 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { judgementsApi, type JudgementEvent } from '../lib/api';
-import { ShieldCheck, GitPullRequest, CheckCircle2, Bot } from 'lucide-react';
 
 export const JudgementsPage: React.FC = () => {
   const { data: judgements, isLoading, error } = useQuery({
@@ -11,22 +10,26 @@ export const JudgementsPage: React.FC = () => {
   });
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-8 flex items-center gap-3">
-        <ShieldCheck className="text-green-400" />
-        Judge Reviews
-      </h1>
+    <div className="p-6 text-[var(--color-term-fg)]">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+          &gt; Judge_Audit_Log
+        </h1>
+        <span className="text-xs text-zinc-500">
+          {isLoading ? 'Scanning...' : `${judgements?.length ?? 0} EVENTS LOGGED`}
+        </span>
+      </div>
 
       {isLoading && (
-        <div className="text-center text-slate-500 py-12">Loading reviews...</div>
+        <div className="text-center text-zinc-500 py-12 font-mono animate-pulse">&gt; Retrieving audit logs...</div>
       )}
       {error && (
-        <div className="text-center text-red-400 py-12">Error loading reviews</div>
+        <div className="text-center text-red-500 py-12 font-mono">&gt; ERROR: Failed to load logs</div>
       )}
 
       <div className="space-y-6">
         {(judgements ?? []).length === 0 && !isLoading && !error && (
-          <div className="text-center text-slate-500 py-12">No reviews found</div>
+          <div className="text-center text-zinc-500 py-12 font-mono">&gt; No judgement events recorded</div>
         )}
 
         {(judgements ?? []).map((event) => (
@@ -50,9 +53,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
   const prNumber = payload.prNumber;
   const prUrl = payload.prUrl;
   const [showDiff, setShowDiff] = React.useState(false);
-  const diffId = `judgement-diff-${event.id}`;
 
-  // Judgeの差分は必要になったタイミングで取得する
   const { data: diffData, isLoading: isDiffLoading, error: diffError } = useQuery({
     queryKey: ['judgements', event.id, 'diff'],
     queryFn: () => judgementsApi.diff(event.id),
@@ -60,150 +61,138 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
   });
 
   return (
-    <section className="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-2">
-          <div className="text-xs text-slate-500">
-            {new Date(event.createdAt).toLocaleString()}
+    <section className="border border-[var(--color-term-border)] p-0 font-mono">
+      {/* Event Header */}
+      <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-zinc-500">{new Date(event.createdAt).toLocaleString()}</span>
+          <div className={`font-bold ${getVerdictColor(verdict)}`}>
+            [{verdict.toUpperCase()}]
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${getVerdictColor(verdict)}`}>
-              {verdict}
-            </span>
-            <span className="text-xs text-slate-400">Task:</span>
-            <Link to={`/tasks/${event.taskId}`} className="text-xs text-yellow-500 hover:underline">
-              {event.taskId.slice(0, 8)}...
+
+          <div className="flex items-center gap-2 text-zinc-400">
+            <span>TASK:</span>
+            <Link to={`/tasks/${event.taskId}`} className="text-[var(--color-term-green)] hover:underline">
+              {event.taskId.slice(0, 8)}
             </Link>
-            {payload.runId && (
-              <Link to={`/runs/${payload.runId}`} className="text-xs text-slate-400 hover:underline">
-                Run {payload.runId.slice(0, 8)}...
+          </div>
+
+          {payload.runId && (
+            <div className="flex items-center gap-2 text-zinc-500">
+              <span>RUN:</span>
+              <Link to={`/runs/${payload.runId}`} className="hover:text-zinc-300 hover:underline">
+                {payload.runId.slice(0, 8)}
               </Link>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-            <button
-              type="button"
-              onClick={() => setShowDiff((prev) => !prev)}
-              className="text-xs text-slate-400 hover:text-yellow-400 transition-colors"
-              aria-expanded={showDiff}
-              aria-controls={diffId}
-            >
-              Judge: {event.agentId ?? 'judge'}
-            </button>
-            {payload.riskLevel && <span>Risk: {payload.riskLevel}</span>}
-            {typeof payload.confidence === 'number' && (
-              <span>Confidence: {Math.round(payload.confidence * 100)}%</span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${getStatusChip(ciStatus)}`}>
-            CI {ciStatus}
-          </span>
-          <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${policyPass ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-            Policy {policyPass ? 'pass' : 'fail'}
-          </span>
-          <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded ${llmPass ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'}`}>
-            LLM {llmPass ? 'pass' : 'review'}
-          </span>
+        <div className="flex gap-4 text-xs">
+          <div className={`${getStatusColor(ciStatus)}`}>
+            CI:{ciStatus.toUpperCase()}
+          </div>
+          <div className={policyPass ? 'text-[var(--color-term-green)]' : 'text-red-500'}>
+            POLICY:{policyPass ? 'PASS' : 'FAIL'}
+          </div>
+          <div className={llmPass ? 'text-[var(--color-term-green)]' : 'text-yellow-500'}>
+            LLM:{llmPass ? 'PASS' : 'REV'}
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3">
-          <div className="flex items-center gap-2 text-slate-400 text-xs uppercase tracking-wider">
-            <GitPullRequest size={14} />
-            Merge
-          </div>
-          <div className="text-sm text-slate-300 space-y-1">
-            <div>Auto-merge: {payload.autoMerge ? 'enabled' : 'disabled'}</div>
-            <div>Commented: {actions.commented ? 'yes' : 'no'}</div>
-            <div>Approved: {actions.approved ? 'yes' : 'no'}</div>
-            <div>Merged: {actions.merged ? 'yes' : 'no'}</div>
+      {/* Info Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-[var(--color-term-border)] text-xs">
+        {/* Merge Info */}
+        <div className="p-4 space-y-2">
+          <div className="text-zinc-500 uppercase font-bold tracking-wider mb-2">Merge_Status</div>
+          <div className="grid grid-cols-[100px_1fr] gap-1">
+            <span className="text-zinc-500">AUTO_MERGE</span>
+            <span>{payload.autoMerge ? 'TRUE' : 'FALSE'}</span>
+
+            <span className="text-zinc-500">PR_LINK</span>
+            <span>
+              {prNumber ? (
+                prUrl ? <a href={prUrl} className="text-blue-400 hover:underline" target="_blank" rel="noreferrer">#{prNumber}</a> : <span>#{prNumber}</span>
+              ) : <span className="text-zinc-600">N/A</span>}
+            </span>
+
+            <span className="text-zinc-500">ACTIONS</span>
+            <span>
+              {[
+                actions.commented && 'COMMENTED',
+                actions.approved && 'APPROVED',
+                actions.merged && 'MERGED'
+              ].filter(Boolean).join(', ') || 'NONE'}
+            </span>
+
             {payload.mergeResult && (
-              <div className={payload.mergeResult.success ? 'text-green-400' : 'text-red-400'}>
-                Local merge: {payload.mergeResult.success ? 'success' : payload.mergeResult.error ?? 'failed'}
-              </div>
-            )}
-            {prNumber && (
-              <div className="flex items-center gap-2">
-                <span>PR:</span>
-                {prUrl ? (
-                  <a href={prUrl} target="_blank" rel="noreferrer" className="text-yellow-500 hover:underline">
-                    #{prNumber}
-                  </a>
-                ) : (
-                  <span>#{prNumber}</span>
-                )}
-              </div>
+              <>
+                <span className="text-zinc-500">LOCAL_MERGE</span>
+                <span className={payload.mergeResult.success ? 'text-[var(--color-term-green)]' : 'text-red-500'}>
+                  {payload.mergeResult.success ? 'SUCCESS' : 'FAILED'}
+                </span>
+              </>
             )}
           </div>
         </div>
 
-        <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3">
-          <div className="flex items-center gap-2 text-slate-400 text-xs uppercase tracking-wider">
-            <CheckCircle2 size={14} />
-            Evaluation
-          </div>
-          <div className="text-sm text-slate-300 space-y-1">
-            <div>CI status: {ciStatus}</div>
-            <div>Policy violations: {violations.length}</div>
-            <div>LLM issues: {codeIssueCount}</div>
-            {typeof llmConfidence === 'number' && (
-              <div>LLM confidence: {Math.round(llmConfidence * 100)}%</div>
-            )}
+        {/* Evaluation Metrics */}
+        <div className="p-4 space-y-2">
+          <div className="text-zinc-500 uppercase font-bold tracking-wider mb-2">Metrics</div>
+          <div className="grid grid-cols-[120px_1fr] gap-1">
+            <span className="text-zinc-500">CONFIDENCE</span>
+            <span>{typeof llmConfidence === 'number' ? `${Math.round(llmConfidence * 100)}%` : 'N/A'}</span>
+
+            <span className="text-zinc-500">ISSUES</span>
+            <span>{codeIssueCount} detected</span>
+
+            <span className="text-zinc-500">VIOLATIONS</span>
+            <span className={violations.length > 0 ? 'text-red-500' : 'text-zinc-400'}>{violations.length}</span>
           </div>
         </div>
 
-        <div className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3">
-          <div className="flex items-center gap-2 text-slate-400 text-xs uppercase tracking-wider">
-            <Bot size={14} />
-            Notes
-          </div>
-          <div className="text-sm text-slate-300 space-y-2">
-            {payload.reasons && payload.reasons.length > 0 && (
-              <div>
-                <div className="text-xs uppercase text-slate-500">Reasons</div>
-                <ul className="text-sm text-slate-300 space-y-1">
-                  {payload.reasons.map((reason, index) => (
-                    <li key={index}>{reason}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {payload.suggestions && payload.suggestions.length > 0 && (
-              <div>
-                <div className="text-xs uppercase text-slate-500">Suggestions</div>
-                <ul className="text-sm text-slate-300 space-y-1">
-                  {payload.suggestions.map((suggestion, index) => (
-                    <li key={index}>{suggestion}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {!payload.reasons?.length && !payload.suggestions?.length && (
-              <div className="text-slate-500">No notes recorded</div>
-            )}
-          </div>
+        {/* Notes/Summary */}
+        <div className="p-4 space-y-2">
+          <div className="text-zinc-500 uppercase font-bold tracking-wider mb-2">Notes</div>
+          {(payload.reasons?.length || payload.suggestions?.length) ? (
+            <ul className="list-disc list-inside text-zinc-400 space-y-1">
+              {payload.reasons?.map((r, i) => <li key={`r-${i}`}>{r}</li>)}
+              {payload.suggestions?.map((s, i) => <li key={`s-${i}`} className="text-yellow-500/80">{s}</li>)}
+            </ul>
+          ) : (
+            <div className="text-zinc-600 italic">// No notes recorded</div>
+          )}
         </div>
       </div>
 
+      {/* Diff Toggle Bar */}
+      <div className="border-t border-[var(--color-term-border)] bg-[var(--color-term-border)]/5 px-4 py-2">
+        <button
+          onClick={() => setShowDiff(!showDiff)}
+          className="text-xs text-zinc-400 hover:text-[var(--color-term-fg)] flex items-center gap-2 hover:underline"
+        >
+          {showDiff ? '[-] HIDE_DIFF' : '[+] SHOW_DIFF'}
+          <span className="text-zinc-600 ml-2">
+            (Judge: {event.agentId ?? 'system'})
+          </span>
+        </button>
+      </div>
+
+      {/* Diff Viewer */}
       {showDiff && (
-        <div id={diffId} className="bg-slate-950 border border-slate-800 rounded-lg p-4 space-y-3">
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>Diff {diffData?.source ? `(${diffData.source})` : ''}</span>
-            {diffData?.truncated && <span>表示上限により省略</span>}
+        <div className="border-t border-[var(--color-term-border)] p-4 bg-black">
+          <div className="mb-2 text-xs text-zinc-500 flex justify-between">
+            <span>SOURCE: {diffData?.source || 'unknown'}</span>
+            {diffData?.truncated && <span className="text-yellow-500">[ TRUNCATED ]</span>}
           </div>
-          {isDiffLoading && (
-            <div className="text-sm text-slate-500">Diffを取得中...</div>
-          )}
-          {diffError && (
-            <div className="text-sm text-red-400">Diffの取得に失敗しました</div>
-          )}
-          {diffData && (
-            <pre className="text-xs text-slate-300 whitespace-pre-wrap font-mono bg-slate-950 border border-slate-800 rounded-md p-3">
-              {diffData.diff || 'Diffが空です'}
+
+          {isDiffLoading ? (
+            <div className="text-zinc-500 text-xs animate-pulse">&gt; Fetching diff...</div>
+          ) : diffError ? (
+            <div className="text-red-500 text-xs">&gt; ERR: Could not retrieve diff data.</div>
+          ) : (
+            <pre className="text-xs text-zinc-300 whitespace-pre-wrap overflow-x-auto">
+              {diffData?.diff || '// No diff available'}
             </pre>
           )}
         </div>
@@ -215,27 +204,27 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
 const getVerdictColor = (verdict: string) => {
   switch (verdict) {
     case 'approve':
-      return 'bg-green-500/10 text-green-400 border border-green-500/20';
+      return 'text-[var(--color-term-green)]';
     case 'request_changes':
-      return 'bg-red-500/10 text-red-400 border border-red-500/20';
+      return 'text-red-500';
     case 'needs_human':
-      return 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20';
+      return 'text-yellow-500';
     default:
-      return 'bg-slate-500/10 text-slate-400 border border-slate-500/20';
+      return 'text-zinc-500';
   }
 };
 
-const getStatusChip = (status: string) => {
+const getStatusColor = (status: string) => {
   switch (status) {
     case 'success':
-      return 'bg-green-500/10 text-green-400 border border-green-500/20';
+      return 'text-[var(--color-term-green)]';
     case 'failure':
-      return 'bg-red-500/10 text-red-400 border border-red-500/20';
-    case 'pending':
-      return 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20';
     case 'error':
-      return 'bg-red-500/10 text-red-400 border border-red-500/20';
+      return 'text-red-500';
+    case 'pending':
+      return 'text-yellow-500';
     default:
-      return 'bg-slate-500/10 text-slate-400 border border-slate-500/20';
+      return 'text-zinc-500';
   }
 };
+

@@ -2,7 +2,6 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { agentsApi } from '../lib/api';
 import { Link } from 'react-router-dom';
-import { Users, ShieldCheck, Clock, Zap } from 'lucide-react';
 
 export const AgentsPage: React.FC = () => {
   const { data: agents, isLoading, error } = useQuery({
@@ -11,84 +10,79 @@ export const AgentsPage: React.FC = () => {
   });
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-8 flex items-center gap-3">
-        <Users className="text-blue-500" />
-        Agents
-      </h1>
+    <div className="p-6 text-[var(--color-term-fg)]">
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+          &gt; Connected_Nodes (Agents)
+        </h1>
+        <span className="text-xs text-zinc-500">{agents?.length ?? 0} NODES ONLINE</span>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="border border-[var(--color-term-border)]">
+        <div className="grid grid-cols-12 gap-4 px-4 py-2 border-b border-[var(--color-term-border)] bg-[var(--color-term-border)]/10 text-xs font-bold text-zinc-500 uppercase">
+          <div className="col-span-3">Node ID / Type</div>
+          <div className="col-span-2">Status</div>
+          <div className="col-span-2">Provider</div>
+          <div className="col-span-3">Current Process</div>
+          <div className="col-span-2 text-right">Last Heartbeat</div>
+        </div>
+
         {isLoading ? (
-          <div className="col-span-full py-12 text-center text-slate-500">Loading agents...</div>
+          <div className="py-12 text-center text-zinc-500 font-mono animate-pulse">&gt; Scanning network...</div>
         ) : error ? (
-          <div className="col-span-full py-12 text-center text-red-400">Error loading agents</div>
+          <div className="py-12 text-center text-red-500 font-mono">&gt; CONNECTION ERROR</div>
         ) : agents?.length === 0 ? (
-          <div className="col-span-full py-12 text-center text-slate-500">No agents registered</div>
+          <div className="py-12 text-center text-zinc-500 font-mono">&gt; No nodes detected</div>
         ) : (
-          agents?.map((agent) => (
-            <Link
-              key={agent.id}
-              to={`/agents/${agent.id}`}
-              className="bg-slate-900 border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-all group block"
-            >
-              <div className="flex justify-between items-start mb-6">
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${agent.status === 'busy' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-800 text-slate-400'}`}>
-                    <ShieldCheck size={24} />
+          <div className="divide-y divide-[var(--color-term-border)] font-mono text-sm">
+            {agents?.map((agent) => (
+              <Link
+                key={agent.id}
+                to={`/agents/${agent.id}`}
+                className="grid grid-cols-12 gap-4 px-4 py-3 hover:bg-[var(--color-term-green)]/5 transition-colors group items-center"
+              >
+                <div className="col-span-3 overflow-hidden">
+                  <div className="font-bold text-[var(--color-term-fg)] group-hover:text-[var(--color-term-green)] truncate">
+                    {agent.id}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-slate-100 group-hover:text-yellow-500 transition-colors">{agent.id}</h3>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">{agent.role}</p>
-                      {agent.metadata?.provider && (
-                        <span className="text-[10px] bg-blue-500/10 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">
-                          {agent.metadata.provider}
-                        </span>
-                      )}
-                      {agent.metadata?.model && (
-                        <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700">
-                          {agent.metadata.model}
-                        </span>
-                      )}
+                  <div className="text-xs text-zinc-500 uppercase flex gap-2 mt-1">
+                    <span>[{agent.role}]</span>
+                  </div>
+                </div>
+
+                <div className="col-span-2">
+                  <span className={`text-xs uppercase px-1 ${agent.status === 'busy' ? 'bg-[var(--color-term-green)] text-black font-bold animate-pulse' : 'text-zinc-500'}`}>
+                    {agent.status === 'busy' ? 'PROCESSING' : 'IDLE'}
+                  </span>
+                </div>
+
+                <div className="col-span-2 text-xs text-zinc-400">
+                  {agent.metadata?.provider && <span>{agent.metadata.provider}</span>}
+                  {agent.metadata?.model && <span className="text-zinc-600 block">{agent.metadata.model}</span>}
+                </div>
+
+                <div className="col-span-3 text-xs">
+                  {agent.status === 'busy' ? (
+                    <div className="w-full">
+                      <div className="flex justify-between mb-1">
+                        <span className="text-[var(--color-term-green)]">EXEC_TASK</span>
+                        <span className="text-zinc-500">{agent.currentTaskId?.slice(0, 8)}</span>
+                      </div>
+                      <div className="w-full bg-zinc-800 h-2">
+                        <div className="h-full bg-[var(--color-term-green)] w-[60%] repeating-linear-gradient-animation"></div>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <span className="text-zinc-600">--</span>
+                  )}
                 </div>
-                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${agent.status === 'busy' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>
-                  {agent.status}
-                </span>
-              </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 text-slate-500">
-                    <Clock size={14} />
-                    Last Heartbeat
-                  </div>
-                  <span className="text-slate-300">
-                    {agent.lastHeartbeat ? new Date(agent.lastHeartbeat).toLocaleTimeString() : 'Never'}
-                  </span>
+                <div className="col-span-2 text-right text-xs text-zinc-600">
+                  {agent.lastHeartbeat ? new Date(agent.lastHeartbeat).toLocaleTimeString() : '--:--:--'}
                 </div>
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2 text-slate-500">
-                    <Zap size={14} />
-                    Current Task
-                  </div>
-                  <span className="text-slate-300 font-mono">
-                    {agent.currentTaskId ? agent.currentTaskId.slice(0, 8) : 'None'}
-                  </span>
-                </div>
-              </div>
-
-              {agent.status === 'busy' && (
-                <div className="mt-6 pt-6 border-t border-slate-800">
-                  <div className="w-full bg-slate-800 rounded-full h-1.5 mb-2">
-                    <div className="bg-blue-500 h-1.5 rounded-full animate-pulse" style={{ width: '65%' }}></div>
-                  </div>
-                  <p className="text-[10px] text-slate-500 text-center uppercase font-bold tracking-widest">Processing Task</p>
-                </div>
-              )}
-            </Link>
-          ))
+              </Link>
+            ))}
+          </div>
         )}
       </div>
     </div>

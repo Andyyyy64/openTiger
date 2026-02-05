@@ -1,11 +1,11 @@
-import { stat, mkdtemp, rm, readFile } from "node:fs/promises";
+import { stat, mkdtemp, rm, readFile, readdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createWriteStream, mkdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 import { db, closeDb } from "@sebastian-code/db";
 import { tasks, agents, events } from "@sebastian-code/db/schema";
-import { eq, desc, inArray } from "drizzle-orm";
+import { eq, desc, inArray, and } from "drizzle-orm";
 import dotenv from "dotenv";
 import { getRepoMode, getLocalRepoPath } from "@sebastian-code/core";
 
@@ -138,6 +138,7 @@ const INIT_ROOT_FILES = [
   ".gitignore",
 ];
 const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
+const DOCSER_ALLOWED_PATHS = ["docs/**", "ops/runbooks/**", "README.md"];
 
 function mergeAllowedPaths(current: string[], extra: string[]): string[] {
   const seen = new Set(current);
@@ -326,6 +327,98 @@ async function hasRootCheckScript(workdir: string): Promise<boolean> {
   }
 }
 
+async function resolveCheckVerificationCommand(
+  workdir: string
+): Promise<string | undefined> {
+  if (!(await hasRootCheckScript(workdir))) {
+    return undefined;
+  }
+  if (await pathIsFile(join(workdir, "pnpm-lock.yaml"))) {
+    return "pnpm run check";
+  }
+  if (await pathIsFile(join(workdir, "yarn.lock"))) {
+    return "yarn check";
+  }
+  if (await pathIsFile(join(workdir, "package-lock.json"))) {
+    return "npm run check";
+  }
+  return "npm run check";
+}
+
+type DocGapInfo = {
+  docsMissing: boolean;
+  docsEmpty: boolean;
+  readmeMissing: boolean;
+  docsReadmeMissing: boolean;
+  hasGap: boolean;
+};
+
+async function detectDocGap(workdir: string): Promise<DocGapInfo> {
+  const docsPath = join(workdir, "docs");
+  const docsMissing = !(await pathIsDirectory(docsPath));
+  const readmeMissing = !(await pathIsFile(join(workdir, "README.md")));
+  const docsReadmeMissing = !(await pathIsFile(join(workdir, "docs", "README.md")));
+
+  let docsEmpty = false;
+  if (!docsMissing) {
+    try {
+      const entries = await readdir(docsPath);
+      docsEmpty = entries.filter((entry) => !entry.startsWith(".")).length === 0;
+    } catch {
+      docsEmpty = false;
+    }
+  }
+
+  const hasGap = docsMissing || docsEmpty || readmeMissing || docsReadmeMissing;
+  return { docsMissing, docsEmpty, readmeMissing, docsReadmeMissing, hasGap };
+}
+
+async function hasPendingDocserTask(): Promise<boolean> {
+  try {
+    const [row] = await db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.role, "docser"), inArray(tasks.status, ["queued", "running", "blocked"])))
+      .limit(1);
+    return Boolean(row);
+  } catch (error) {
+    console.warn("[Planner] Failed to check pending docser tasks:", error);
+    return false;
+  }
+}
+
+function buildDocserTaskForGap(params: {
+  requirement: Requirement;
+  docGap: DocGapInfo;
+  checkCommand?: string;
+  dependsOnIndexes: number[];
+}): PlannedTaskInput {
+  const notes = [
+    `要件: ${params.requirement.goal}`,
+    "ドキュメント未整備を検知したためdocserで整備する。",
+    `docGap: ${JSON.stringify(params.docGap)}`,
+    "docs/README.md が存在しない場合は最小構成で作成する。",
+  ].join("\n");
+  const commands = params.checkCommand ? [params.checkCommand] : ["npm run check"];
+  return {
+    title: "ドキュメント整備",
+    goal: "docs/README.md を含むドキュメントが実装と整合し、検証コマンドが成功する",
+    role: "docser",
+    context: {
+      files: ["docs/README.md", "README.md", "docs/**"],
+      notes,
+    },
+    allowedPaths: DOCSER_ALLOWED_PATHS,
+    commands,
+    priority: 5,
+    riskLevel: "low",
+    dependencies: [],
+    dependsOnIndexes: params.dependsOnIndexes,
+    timeboxMinutes: 45,
+    targetArea: undefined,
+    touches: [],
+  };
+}
 function taskTouchesFrontend(task: PlannedTaskInput): boolean {
   const text = [
     task.title,
@@ -909,6 +1002,7 @@ async function planFromRequirement(
     console.log("[Planner] checkスクリプトがないため検証コマンドを調整します。");
   }
   const devCommand = await resolveDevVerificationCommand(config.workdir);
+  const checkCommand = await resolveCheckVerificationCommand(config.workdir);
   const e2eCommand = await resolveE2EVerificationCommand(config.workdir);
   const repoUninitialized = await isRepoUninitialized(config.workdir);
   let inspectionNotes: string | undefined;
@@ -954,6 +1048,25 @@ async function planFromRequirement(
   } else {
     console.log("\n[Generating tasks without LLM...]");
     result = generateSimpleTasks(requirement);
+  }
+
+  const docGap = !repoUninitialized ? await detectDocGap(config.workdir) : undefined;
+  if (docGap?.hasGap && !(await hasPendingDocserTask())) {
+    const dependsOnIndexes = result.tasks.map((_, index) => index);
+    const docserTask = buildDocserTaskForGap({
+      requirement,
+      docGap,
+      checkCommand,
+      dependsOnIndexes,
+    });
+    result = {
+      ...result,
+      tasks: [...result.tasks, docserTask],
+      warnings: [
+        ...result.warnings,
+        "ドキュメントが未整備のためdocserタスクを追加しました。",
+      ],
+    };
   }
 
   result = normalizeGeneratedTasks(result);
@@ -1127,6 +1240,7 @@ export async function planFromContent(
   requirement = attachExistingTasksToRequirement(requirement, existingTaskHints);
   const checkScriptAvailable = await hasRootCheckScript(fullConfig.workdir);
   const devCommand = await resolveDevVerificationCommand(fullConfig.workdir);
+  const checkCommand = await resolveCheckVerificationCommand(fullConfig.workdir);
   const e2eCommand = await resolveE2EVerificationCommand(fullConfig.workdir);
   const repoUninitialized = await isRepoUninitialized(fullConfig.workdir);
   let inspectionNotes: string | undefined;
@@ -1174,12 +1288,30 @@ export async function planFromContent(
   }
 
   if (fullConfig.useLlm) {
-    const result = await generateTasksFromRequirement(requirement, {
+    let result = await generateTasksFromRequirement(requirement, {
       workdir: fullConfig.workdir,
       instructionsPath: fullConfig.instructionsPath,
       timeoutSeconds: fullConfig.timeoutSeconds,
       inspection: inspectionResult,
     });
+    const docGap = !repoUninitialized ? await detectDocGap(fullConfig.workdir) : undefined;
+    if (docGap?.hasGap && !(await hasPendingDocserTask())) {
+      const dependsOnIndexes = result.tasks.map((_, index) => index);
+      const docserTask = buildDocserTaskForGap({
+        requirement,
+        docGap,
+        checkCommand,
+        dependsOnIndexes,
+      });
+      result = {
+        ...result,
+        tasks: [...result.tasks, docserTask],
+        warnings: [
+          ...result.warnings,
+          "ドキュメントが未整備のためdocserタスクを追加しました。",
+        ],
+      };
+    }
     return attachInspectionToTasks(
       attachJudgeFeedbackToTasks(
         applyDevCommandPolicy(

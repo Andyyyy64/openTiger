@@ -2,7 +2,6 @@ import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { agentsApi, logsApi } from '../lib/api';
-import { ChevronLeft, Terminal, ShieldCheck, Clock } from 'lucide-react';
 
 const LOG_LINES = 200;
 
@@ -27,64 +26,63 @@ export const AgentDetailsPage: React.FC = () => {
   });
 
   if (isAgentLoading) {
-    return <div className="p-8 text-center text-slate-500">Loading agent...</div>;
+    return <div className="p-8 text-center text-zinc-500 font-mono animate-pulse">&gt; Establishing connection...</div>;
   }
 
   if (!agent) {
-    return <div className="p-8 text-center text-red-400">Agent not found</div>;
+    return <div className="p-8 text-center text-red-500 font-mono">&gt; ERR: AGENT_NOT_FOUND</div>;
   }
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8">
-      <Link to="/agents" className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
-        <ChevronLeft size={20} />
-        Back to Agents
+    <div className="p-6 max-w-5xl mx-auto space-y-6 text-[var(--color-term-fg)]">
+      <Link to="/agents" className="inline-block text-xs font-mono text-zinc-500 hover:text-[var(--color-term-green)] mb-2 group">
+        &lt; cd ..
       </Link>
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <ShieldCheck size={22} className="text-blue-400" />
-            <span className="text-xs text-slate-500 uppercase tracking-wider">{agent.role}</span>
-          </div>
-          <h1 className="text-3xl font-bold">{agent.id}</h1>
-          <p className="text-sm text-slate-400 mt-2">Status: {agent.status}</p>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-300 space-y-1">
-          <div className="flex items-center gap-2 text-slate-400">
-            <Clock size={14} />
-            Last Heartbeat
-          </div>
+      <section className="border border-[var(--color-term-border)] p-0">
+        <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex flex-wrap items-center justify-between gap-4">
           <div>
-            {agent.lastHeartbeat ? new Date(agent.lastHeartbeat).toLocaleString() : 'Never'}
+            <h1 className="text-xl font-bold uppercase text-[var(--color-term-fg)] tracking-wide">
+              Node@{agent.id}
+            </h1>
+            <div className="flex gap-4 mt-1 text-xs font-mono text-zinc-500">
+              <span>ROLE: {agent.role.toUpperCase()}</span>
+              <span>STATUS: <span className={agent.status === 'idle' ? 'text-zinc-500' : 'text-[var(--color-term-green)]'}>{agent.status.toUpperCase()}</span></span>
+            </div>
           </div>
-        </div>
-      </div>
 
-      <section className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
-        <div className="bg-slate-900 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Terminal size={16} className="text-slate-400" />
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-              Agent Log (last {LOG_LINES} lines)
-            </span>
-          </div>
-          <div className="text-xs text-slate-500">
-            {logData?.updatedAt ? `Updated: ${new Date(logData.updatedAt).toLocaleTimeString()}` : ''}
+          <div className="text-right text-xs font-mono text-zinc-500">
+            <div>LAST_HEARTBEAT</div>
+            <div className="text-[var(--color-term-fg)]">
+              {agent.lastHeartbeat ? new Date(agent.lastHeartbeat).toLocaleString() : 'NEVER'}
+            </div>
           </div>
         </div>
-        <div className="p-4 font-mono text-xs text-slate-300 min-h-[320px] whitespace-pre-wrap">
-          {isLogLoading && <div className="text-slate-500">Loading logs...</div>}
+      </section>
+
+      <section className="border border-[var(--color-term-border)] p-0 flex flex-col h-[600px]">
+        <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex items-center justify-between">
+          <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+            Console_Output (tail -n {LOG_LINES})
+          </span>
+          <span className="text-[10px] text-zinc-600 font-mono">
+            {logData?.updatedAt ? `UPDATED: ${new Date(logData.updatedAt).toLocaleTimeString()}` : ''}
+          </span>
+        </div>
+
+        <div className="flex-1 bg-black p-4 font-mono text-xs text-zinc-300 overflow-y-auto whitespace-pre-wrap">
+          {isLogLoading && <div className="text-zinc-500 animate-pulse">&gt; Fetching logs...</div>}
           {!isLogLoading && logError && (
-            <div className="text-red-400">ログが見つかりませんでした</div>
+            <div className="text-red-500">&gt; ERR: Log stream unavailable.</div>
           )}
           {!isLogLoading && !logError && logData?.log && logData.log}
           {!isLogLoading && !logError && !logData?.log && (
-            <div className="text-slate-500">ログが空です</div>
+            <div className="text-zinc-600 italic">// Console output is empty.</div>
           )}
+          <div className="mt-2 w-2 h-4 bg-[var(--color-term-green)] animate-[pulse_1s_infinite]"></div>
         </div>
       </section>
     </div>
   );
 };
+
