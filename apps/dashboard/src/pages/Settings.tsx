@@ -2,12 +2,46 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { configApi, systemApi } from '../lib/api';
 
+// ========================================
+// Option Constants for Select Fields
+// ========================================
+
+const REPO_MODE_OPTIONS = ['git', 'local'] as const;
+const JUDGE_MODE_OPTIONS = ['git', 'local', 'auto'] as const;
+
+// Supported OpenCode models (provider/model format)
+// Reference: https://opencode.ai/docs/providers
+const MODEL_OPTIONS = [
+  // Anthropic
+  'anthropic/claude-sonnet-4-20250514',
+  'anthropic/claude-opus-4-20250514',
+  'anthropic/claude-3.5-sonnet',
+  // Google
+  'google/gemini-3-pro-preview',
+  'google/gemini-3-flash-preview',
+  'google/gemini-2.5-pro-preview-05-06',
+  'google/gemini-2.5-flash-preview-04-17',
+  // OpenAI
+  'openai/gpt-5.1',
+  'openai/gpt-4.1',
+  'openai/gpt-4o',
+  'openai/o3',
+  'openai/o4-mini',
+  // xAI
+  'xai/grok-3',
+  'xai/grok-3-mini',
+  // DeepSeek
+  'deepseek/deepseek-chat',
+  'deepseek/deepseek-reasoner',
+] as const;
+
 type SettingField = {
   key: string;
   label: string;
   description: string;
   group: string;
-  type: 'text' | 'number' | 'boolean';
+  type: 'text' | 'number' | 'boolean' | 'select';
+  options?: readonly string[];
 };
 
 const SETTINGS: SettingField[] = [
@@ -86,7 +120,8 @@ const SETTINGS: SettingField[] = [
     label: 'Repo_Mode',
     description: 'git or local mode',
     group: 'Repo',
-    type: 'text',
+    type: 'select',
+    options: REPO_MODE_OPTIONS,
   },
   {
     key: 'LOCAL_REPO_PATH',
@@ -107,7 +142,8 @@ const SETTINGS: SettingField[] = [
     label: 'Judge_Mode',
     description: 'git/local/auto switch',
     group: 'Judge',
-    type: 'text',
+    type: 'select',
+    options: JUDGE_MODE_OPTIONS,
   },
   {
     key: 'LOCAL_POLICY_MAX_LINES',
@@ -135,28 +171,32 @@ const SETTINGS: SettingField[] = [
     label: 'OpenCode_Model',
     description: 'Default LLM model',
     group: 'Models',
-    type: 'text',
+    type: 'select',
+    options: MODEL_OPTIONS,
   },
   {
     key: 'PLANNER_MODEL',
     label: 'Planner_Model',
     description: 'Model for planner',
     group: 'Models',
-    type: 'text',
+    type: 'select',
+    options: MODEL_OPTIONS,
   },
   {
     key: 'JUDGE_MODEL',
     label: 'Judge_Model',
     description: 'Model for judge',
     group: 'Models',
-    type: 'text',
+    type: 'select',
+    options: MODEL_OPTIONS,
   },
   {
     key: 'WORKER_MODEL',
     label: 'Worker_Model',
     description: 'Model for workers',
     group: 'Models',
-    type: 'text',
+    type: 'select',
+    options: MODEL_OPTIONS,
   },
   {
     key: 'PLANNER_USE_REMOTE',
@@ -215,6 +255,7 @@ const SETTINGS: SettingField[] = [
     type: 'text',
   },
 ];
+
 
 export const SettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -393,9 +434,20 @@ export const SettingsPage: React.FC = () => {
                       <option value="true">TRUE</option>
                       <option value="false">FALSE</option>
                     </select>
+                  ) : field.type === 'select' && field.options ? (
+                    <select
+                      className="w-full bg-black border border-[var(--color-term-border)] text-sm text-[var(--color-term-fg)] px-2 py-1 font-mono focus:border-[var(--color-term-green)] focus:outline-none"
+                      value={values[field.key] ?? ''}
+                      onChange={(e) => updateValue(field.key, e.target.value)}
+                    >
+                      <option value="" disabled>-- SELECT --</option>
+                      {field.options.map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
                   ) : (
                     <input
-                      type={field.type}
+                      type={field.type === 'number' ? 'number' : 'text'}
                       className="w-full bg-black border border-[var(--color-term-border)] text-sm text-[var(--color-term-fg)] px-2 py-1 font-mono focus:border-[var(--color-term-green)] focus:outline-none"
                       value={values[field.key] ?? ''}
                       onChange={(e) => updateValue(field.key, e.target.value)}
