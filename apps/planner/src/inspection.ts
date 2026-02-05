@@ -33,8 +33,11 @@ const MAX_FILES = 2000;
 const MAX_README_CHARS = 3000;
 const MAX_ARCH_CHARS = 3000;
 const MAX_EXCERPT_FILES = 40;
-const MAX_EXCERPT_CHARS = 1500;
-const MAX_TOTAL_EXCERPT_CHARS = 30000;
+const MAX_EXCERPT_CHARS = 4000;
+const MAX_TOTAL_EXCERPT_CHARS = 45000;
+const MAX_EXCERPT_LINES = 240;
+const HEAD_EXCERPT_LINES = 120;
+const TAIL_EXCERPT_LINES = 120;
 
 const EXCERPT_EXTENSIONS = new Set([
   ".ts",
@@ -150,6 +153,29 @@ function filterFilesByAllowedPaths(
   return { matchedFiles, unmatchedAllowedPaths };
 }
 
+function formatExcerptLines(lines: string[], startLine: number): string {
+  return lines
+    .map((line, index) => `${startLine + index + 1}|${line}`)
+    .join("\n");
+}
+
+function buildExcerpt(content: string): { excerpt: string; truncated: boolean } {
+  const lines = content.split("\n");
+  if (lines.length <= MAX_EXCERPT_LINES) {
+    return { excerpt: formatExcerptLines(lines, 0), truncated: false };
+  }
+
+  const head = lines.slice(0, HEAD_EXCERPT_LINES);
+  const tail = lines.slice(-TAIL_EXCERPT_LINES);
+  const excerpt = [
+    formatExcerptLines(head, 0),
+    "...",
+    formatExcerptLines(tail, lines.length - tail.length),
+  ].join("\n");
+
+  return { excerpt, truncated: true };
+}
+
 async function buildFileExcerpts(
   workdir: string,
   files: string[]
@@ -171,13 +197,21 @@ async function buildFileExcerpts(
       if (content.includes("\u0000")) {
         continue;
       }
-      const slice = content.slice(0, Math.min(MAX_EXCERPT_CHARS, remaining));
-      const truncated = content.length > slice.length;
-      if (!slice) {
+      const { excerpt, truncated } = buildExcerpt(content);
+      const limitedExcerpt =
+        excerpt.length > Math.min(MAX_EXCERPT_CHARS, remaining)
+          ? `${excerpt.slice(0, Math.min(MAX_EXCERPT_CHARS, remaining))}\n...`
+          : excerpt;
+      const finalTruncated = truncated || limitedExcerpt.length < excerpt.length;
+      if (!limitedExcerpt) {
         continue;
       }
-      excerpts.push({ path: file, excerpt: slice, truncated });
-      totalChars += slice.length;
+      excerpts.push({
+        path: file,
+        excerpt: limitedExcerpt,
+        truncated: finalTruncated,
+      });
+      totalChars += limitedExcerpt.length;
     } catch {
       continue;
     }
@@ -248,6 +282,8 @@ function buildInspectionPrompt(requirement: Requirement, snapshot: RepoSnapshot)
 タスクではなく差分の列挙を目的にします。
 ツール呼び出しは禁止です。与えられた情報だけで判断してください。
 必ずコード抜粋を根拠に差分を判定し、差分がない場合は gaps を空にしてください。
+抜粋には行番号が付いているため、根拠は「path: 行番号|内容」を引用してください。
+抜粋に含まれない内容は未確認として扱い、gapには含めないでください。
 
 ## 要件
 ### Goal
@@ -362,16 +398,29 @@ export async function inspectCodebase(
     notes?: string[];
   };
 
+  let gaps = Array.isArray(parsed.gaps)
+    ? parsed.gaps.filter((g) => typeof g === "string")
+    : [];
+  const evidence = Array.isArray(parsed.evidence)
+    ? parsed.evidence.filter((item) => typeof item === "string")
+    : [];
+  const notes = Array.isArray(parsed.notes)
+    ? parsed.notes.filter((n) => typeof n === "string")
+    : [];
+
+  if (gaps.length > 0 && evidence.length === 0) {
+    gaps = [];
+    notes.push("根拠が不足しているため差分を確定できませんでした。");
+  }
+
   return {
     summary: typeof parsed.summary === "string" ? parsed.summary : "差分点検の要約がありません",
     satisfied: Array.isArray(parsed.satisfied)
       ? parsed.satisfied.filter((item) => typeof item === "string")
       : [],
-    gaps: Array.isArray(parsed.gaps) ? parsed.gaps.filter((g) => typeof g === "string") : [],
-    evidence: Array.isArray(parsed.evidence)
-      ? parsed.evidence.filter((item) => typeof item === "string")
-      : [],
-    notes: Array.isArray(parsed.notes) ? parsed.notes.filter((n) => typeof n === "string") : [],
+    gaps,
+    evidence,
+    notes,
   };
 }
 

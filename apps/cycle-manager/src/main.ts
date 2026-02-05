@@ -200,6 +200,44 @@ async function fetchRepoHeadSha(
   });
 }
 
+async function fetchLocalHeadSha(workdir: string): Promise<string | undefined> {
+  return new Promise((resolveResult) => {
+    const child = spawn("git", ["rev-parse", "HEAD"], {
+      cwd: workdir,
+      env: {
+        ...process.env,
+        GIT_TERMINAL_PROMPT: "0",
+      },
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (data: Buffer) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on("data", (data: Buffer) => {
+      stderr += data.toString();
+    });
+
+    child.on("close", (code) => {
+      if (code !== 0) {
+        console.warn("[CycleManager] git rev-parse failed:", stderr.trim());
+        resolveResult(undefined);
+        return;
+      }
+      const sha = stdout.trim().split(/\s+/)[0];
+      resolveResult(sha || undefined);
+    });
+
+    child.on("error", (error) => {
+      console.warn("[CycleManager] git rev-parse error:", error);
+      resolveResult(undefined);
+    });
+  });
+}
+
 async function computeReplanSignature(
   config: CycleManagerConfig
 ): Promise<ReplanSignature | undefined> {
@@ -213,22 +251,21 @@ async function computeReplanSignature(
     return;
   }
 
-  if (!config.replanRepoUrl) {
-    return;
-  }
-
-  const repoHeadSha = await fetchRepoHeadSha(
-    config.replanRepoUrl,
-    config.replanBaseBranch
-  );
+  const repoHeadSha = config.replanRepoUrl
+    ? await fetchRepoHeadSha(config.replanRepoUrl, config.replanBaseBranch)
+    : await fetchLocalHeadSha(config.replanWorkdir);
   if (!repoHeadSha) {
+    console.warn("[CycleManager] Failed to resolve repo HEAD for replan signature.");
     return;
   }
 
+  const repoIdentity = config.replanRepoUrl
+    ? config.replanRepoUrl
+    : `local:${resolve(config.replanWorkdir)}`;
   const signaturePayload = {
     requirementHash,
     repoHeadSha,
-    repoUrl: config.replanRepoUrl,
+    repoUrl: repoIdentity,
     baseBranch: config.replanBaseBranch,
   };
   const signature = createHash("sha256")
