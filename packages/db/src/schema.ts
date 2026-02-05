@@ -124,6 +124,46 @@ export const cycles = pgTable("cycles", {
   metadata: jsonb("metadata"),
 });
 
+// 設定テーブル: システム設定をDBに保存する
+export const config = pgTable("config", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  maxConcurrentWorkers: text("max_concurrent_workers").default("10").notNull(),
+  dailyTokenLimit: text("daily_token_limit").default("50000000").notNull(),
+  hourlyTokenLimit: text("hourly_token_limit").default("5000000").notNull(),
+  taskTokenLimit: text("task_token_limit").default("1000000").notNull(),
+  dispatcherEnabled: text("dispatcher_enabled").default("true").notNull(),
+  judgeEnabled: text("judge_enabled").default("true").notNull(),
+  cycleManagerEnabled: text("cycle_manager_enabled").default("true").notNull(),
+  workerCount: text("worker_count").default("1").notNull(),
+  testerCount: text("tester_count").default("1").notNull(),
+  docserCount: text("docser_count").default("1").notNull(),
+  repoMode: text("repo_mode").default("git").notNull(),
+  localRepoPath: text("local_repo_path").default("").notNull(),
+  localWorktreeRoot: text("local_worktree_root").default("").notNull(),
+  judgeMode: text("judge_mode").default("auto").notNull(),
+  localPolicyMaxLines: text("local_policy_max_lines").default("5000").notNull(),
+  localPolicyMaxFiles: text("local_policy_max_files").default("100").notNull(),
+  baseBranch: text("base_branch").default("main").notNull(),
+  opencodeModel: text("opencode_model").default("google/gemini-3-flash-preview").notNull(),
+  plannerModel: text("planner_model").default("google/gemini-3-pro-preview").notNull(),
+  judgeModel: text("judge_model").default("google/gemini-3-pro-preview").notNull(),
+  workerModel: text("worker_model").default("google/gemini-3-flash-preview").notNull(),
+  plannerUseRemote: text("planner_use_remote").default("false").notNull(),
+  plannerRepoUrl: text("planner_repo_url").default("").notNull(),
+  autoReplan: text("auto_replan").default("true").notNull(),
+  replanRequirementPath: text("replan_requirement_path").default("requirement.md").notNull(),
+  replanIntervalMs: text("replan_interval_ms").default("60000").notNull(),
+  replanCommand: text("replan_command").default("pnpm --filter @sebastian-code/planner start").notNull(),
+  replanWorkdir: text("replan_workdir").default("").notNull(),
+  replanRepoUrl: text("replan_repo_url").default("").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
 // 型エクスポート
 export type TaskRecord = typeof tasks.$inferSelect;
 export type NewTaskRecord = typeof tasks.$inferInsert;
@@ -145,3 +185,6 @@ export type NewAgentRecord = typeof agents.$inferInsert;
 
 export type CycleRecord = typeof cycles.$inferSelect;
 export type NewCycleRecord = typeof cycles.$inferInsert;
+
+export type ConfigRecord = typeof config.$inferSelect;
+export type NewConfigRecord = typeof config.$inferInsert;
