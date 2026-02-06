@@ -1,8 +1,8 @@
 import { createWriteStream, mkdirSync } from "node:fs";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { db } from "@sebastian-code/db";
-import { tasks, agents } from "@sebastian-code/db/schema";
-import { eq } from "drizzle-orm";
+import { tasks, agents, runs } from "@sebastian-code/db/schema";
+import { and, eq } from "drizzle-orm";
 import { getRepoMode, getLocalRepoPath, getLocalWorktreeRoot } from "@sebastian-code/core";
 import {
   createTaskQueue,
@@ -16,12 +16,13 @@ import type { Job } from "bullmq";
 
 import {
   cleanupExpiredLeases,
+  recoverOrphanedRunningTasks,
   acquireLease,
   releaseLease,
   getAvailableTasks,
   launchWorker,
   stopAllWorkers,
-  getActiveWorkerCount,
+  getBusyAgentCount,
   reclaimDeadAgentLeases,
   getAgentStats,
   registerAgent,
@@ -164,6 +165,17 @@ async function dispatchTask(
   agentRole: string,
   config: DispatcherConfig
 ): Promise<boolean> {
+  // 同一タスクの重複実行を避ける: 実行中Runが残っている場合は再配布しない
+  const runningRuns = await db
+    .select({ id: runs.id })
+    .from(runs)
+    .where(and(eq(runs.taskId, task.id), eq(runs.status, "running")))
+    .limit(1);
+  if (runningRuns.length > 0) {
+    console.log(`[Dispatch] Task ${task.id} already has a running run. Skipping.`);
+    return false;
+  }
+
   // リースを取得
   const leaseResult = await acquireLease(task.id, agentId);
 
@@ -173,10 +185,16 @@ async function dispatchTask(
   }
 
   // タスクをrunning状態に更新
-  await db
+  const taskUpdate = await db
     .update(tasks)
     .set({ status: "running", updatedAt: new Date() })
-    .where(eq(tasks.id, task.id));
+    .where(and(eq(tasks.id, task.id), eq(tasks.status, "queued")))
+    .returning({ id: tasks.id });
+  if (taskUpdate.length === 0) {
+    await releaseLease(task.id);
+    console.log(`[Dispatch] Task ${task.id} is no longer queued. Skipping dispatch.`);
+    return false;
+  }
 
   // BullMQキューにジョブを追加
   const agentQueue = getTaskQueueForAgent(agentId);
@@ -209,7 +227,7 @@ async function dispatchTask(
     await releaseLease(task.id);
     await db
       .update(tasks)
-      .set({ status: "queued", updatedAt: new Date() })
+      .set({ status: "queued", blockReason: null, updatedAt: new Date() })
       .where(eq(tasks.id, task.id));
     return false;
   }
@@ -247,9 +265,15 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
         console.log(`[Cleanup] Reclaimed ${reclaimedCount} leases from dead agents`);
       }
 
-      // 現在のWorker数をチェック
-      const activeWorkerCount = getActiveWorkerCount();
-      const availableSlots = config.maxConcurrentWorkers - activeWorkerCount;
+      // running だが実行中Runが無いタスクを復旧
+      const recoveredCount = await recoverOrphanedRunningTasks();
+      if (recoveredCount > 0) {
+        console.log(`[Cleanup] Recovered ${recoveredCount} orphaned running tasks`);
+      }
+
+      // busyエージェント数を基準に同時実行上限を適用（queue/process両対応）
+      const busyAgentCount = await getBusyAgentCount();
+      const availableSlots = Math.max(0, config.maxConcurrentWorkers - busyAgentCount);
 
       if (availableSlots > 0) {
         // 利用可能なタスクを取得

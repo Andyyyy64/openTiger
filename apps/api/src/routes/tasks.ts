@@ -57,7 +57,7 @@ const createTaskSchema = z.object({
   commands: z.array(z.string()),
   priority: z.number().int().optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
-  role: z.enum(["worker", "tester"]).optional(),
+  role: z.enum(["worker", "tester", "docser"]).optional(),
   dependencies: z.array(z.string().uuid()).optional(),
   timeboxMinutes: z.number().int().positive().optional(),
 });
@@ -107,10 +107,11 @@ const updateTaskSchema = z.object({
   commands: z.array(z.string()).optional(),
   priority: z.number().int().optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
-  role: z.enum(["worker", "tester"]).optional(),
+  role: z.enum(["worker", "tester", "docser"]).optional(),
   status: z
     .enum(["queued", "running", "done", "failed", "blocked", "cancelled"])
     .optional(),
+  blockReason: z.string().optional(),
   dependencies: z.array(z.string().uuid()).optional(),
   timeboxMinutes: z.number().int().positive().optional(),
 });

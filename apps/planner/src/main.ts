@@ -1,5 +1,5 @@
 import { stat, mkdtemp, rm, readFile, readdir } from "node:fs/promises";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createWriteStream, mkdirSync } from "node:fs";
 import { resolve, join } from "node:path";
@@ -97,6 +97,20 @@ const envPath = process.env.DOTENV_CONFIG_PATH
   ?? resolve(import.meta.dirname, "../../../.env");
 dotenv.config({ path: envPath });
 
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "y", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no", "n", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+}
+
 function resolvePlannerWorkdir(): string {
   const repoMode = getRepoMode();
   const localRepoPath = getLocalRepoPath();
@@ -104,7 +118,25 @@ function resolvePlannerWorkdir(): string {
   if (repoMode === "local" && localRepoPath) {
     return localRepoPath;
   }
-  return process.cwd();
+  // 起動ディレクトリがapps配下でもリポジトリルートを参照する
+  const gitRoot = resolveGitRoot(process.cwd());
+  return gitRoot ?? process.cwd();
+}
+
+function resolveGitRoot(cwd: string): string | undefined {
+  const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+    cwd,
+    env: {
+      ...process.env,
+      GIT_TERMINAL_PROMPT: "0",
+    },
+    encoding: "utf-8",
+  });
+  if (result.status !== 0 || typeof result.stdout !== "string") {
+    return undefined;
+  }
+  const root = result.stdout.trim();
+  return root.length > 0 ? root : undefined;
 }
 
 // デフォルト設定
@@ -114,21 +146,38 @@ const DEFAULT_CONFIG: PlannerConfig = {
     import.meta.dirname,
     "../instructions/planning.md"
   ),
-  useLlm: process.env.USE_LLM !== "false",
-  dryRun: process.env.DRY_RUN === "true",
+  useLlm: parseBoolean(process.env.USE_LLM, true),
+  dryRun: parseBoolean(process.env.DRY_RUN, false),
   timeoutSeconds: parseInt(process.env.PLANNER_TIMEOUT ?? "300", 10),
-  inspectCodebase: process.env.PLANNER_INSPECT !== "false",
+  inspectCodebase: parseBoolean(process.env.PLANNER_INSPECT, true),
   inspectionTimeoutSeconds: parseInt(process.env.PLANNER_INSPECT_TIMEOUT ?? "180", 10),
-  repoUrl: process.env.PLANNER_REPO_URL
-    ?? (process.env.PLANNER_USE_REMOTE === "true" ? process.env.REPO_URL : undefined),
+  repoUrl: (() => {
+    const plannerRepoUrl = process.env.PLANNER_REPO_URL?.trim();
+    if (plannerRepoUrl) {
+      return plannerRepoUrl;
+    }
+    const useRemote = parseBoolean(process.env.PLANNER_USE_REMOTE, false);
+    return useRemote ? process.env.REPO_URL : undefined;
+  })(),
   baseBranch: process.env.BASE_BRANCH ?? "main",
 };
 
+// 初期化タスクで変更を許可するルート設定ファイル
 const INIT_ALLOWED_PATHS = [
   "package.json",
   "pnpm-workspace.yaml",
   "pnpm-lock.yaml",
   ".gitignore",
+  "tsconfig.json",
+  "tsconfig.*.json",
+  ".eslintrc.*",
+  ".prettierrc*",
+  "biome.json",
+  "turbo.json",
+  "docker-compose.yml",
+  "Dockerfile",
+  ".env.example",
+  "README.md",
   "apps/**",
   "packages/**",
 ];
@@ -138,6 +187,7 @@ const INIT_ROOT_FILES = [
   "pnpm-workspace.yaml",
   "pnpm-lock.yaml",
   ".gitignore",
+  "tsconfig.json",
 ];
 const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
 // docser はドキュメント整備が主務だが、package.json の scripts 補完や
@@ -165,19 +215,29 @@ function mergeAllowedPaths(current: string[], extra: string[]): string[] {
 }
 
 function isInitializationTask(task: PlannedTaskInput): boolean {
-  const title = task.title.toLowerCase();
-  const hintMatches =
-    ["init", "initialize", "bootstrap", "setup", "scaffold", "monorepo", "workspace"]
-      .some((hint) => title.includes(hint))
-    || ["初期化", "セットアップ", "構成", "モノレポ", "ワークスペース", "基盤"]
-      .some((hint) => task.title.includes(hint));
-
-  if (hintMatches) {
+  const files = task.context?.files ?? [];
+  if (files.some((file) => INIT_ROOT_FILES.includes(file))) {
     return true;
   }
 
-  const files = task.context?.files ?? [];
-  return files.some((file) => INIT_ROOT_FILES.includes(file));
+  const allowed = task.allowedPaths ?? [];
+  const rootEvidence = [...allowed, ...files].some((path) =>
+    INIT_ROOT_FILES.includes(path)
+    || path === "apps/"
+    || path === "packages/"
+    || path === "apps/**"
+    || path === "packages/**"
+  );
+
+  if (!rootEvidence) {
+    return false;
+  }
+
+  const title = task.title.toLowerCase();
+  return ["init", "initialize", "bootstrap", "setup", "scaffold", "monorepo", "workspace"]
+    .some((hint) => title.includes(hint))
+    || ["初期化", "セットアップ", "モノレポ", "ワークスペース"]
+      .some((hint) => task.title.includes(hint));
 }
 
 function normalizeVerificationCommands(commands: string[]): string[] {
@@ -600,22 +660,34 @@ function applyTesterCommandPolicy(
   return { ...result, tasks };
 }
 
-async function hasRootDevScript(workdir: string): Promise<boolean> {
-  // ルートのpackage.jsonにdevスクリプトがあるか確認する
+async function getRootDevScript(workdir: string): Promise<string | undefined> {
+  // ルートのpackage.jsonからdevスクリプトを取得する
   try {
     const raw = await readFile(join(workdir, "package.json"), "utf-8");
     const parsed = JSON.parse(raw);
-    return typeof parsed?.scripts?.dev === "string";
+    return typeof parsed?.scripts?.dev === "string"
+      ? parsed.scripts.dev
+      : undefined;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
 async function resolveDevVerificationCommand(
   workdir: string
 ): Promise<string | undefined> {
-  if (!(await hasRootDevScript(workdir))) {
+  const devScript = await getRootDevScript(workdir);
+  if (!devScript) {
     return undefined;
+  }
+  // turbo設定が無いのに `turbo ...` を検証で実行すると高確率で失敗するため除外
+  if (/\bturbo\b/.test(devScript)) {
+    const hasTurboConfig =
+      await pathIsFile(join(workdir, "turbo.json"))
+      || await pathIsFile(join(workdir, "turbo.jsonc"));
+    if (!hasTurboConfig) {
+      return undefined;
+    }
   }
   if (await pathIsFile(join(workdir, "pnpm-lock.yaml"))) {
     return "pnpm run dev";
@@ -961,6 +1033,120 @@ function generateInitializationTasks(requirement: Requirement): TaskGenerationRe
   };
 }
 
+function sanitizeTaskDependencyIndexes(result: TaskGenerationResult): TaskGenerationResult {
+  let correctedTaskCount = 0;
+
+  const tasks = result.tasks.map((task, index) => {
+    const raw = task.dependsOnIndexes ?? [];
+    const normalized = Array.from(
+      new Set(
+        raw.filter((dep) =>
+          Number.isInteger(dep)
+          && dep >= 0
+          && dep < result.tasks.length
+          && dep !== index
+          && dep < index
+        )
+      )
+    );
+
+    if (normalized.length === raw.length) {
+      return task;
+    }
+
+    correctedTaskCount++;
+    return {
+      ...task,
+      dependsOnIndexes: normalized,
+    };
+  });
+
+  if (correctedTaskCount === 0) {
+    return result;
+  }
+
+  return {
+    ...result,
+    tasks,
+    warnings: [
+      ...result.warnings,
+      `依存関係に循環/未来参照の可能性があったため ${correctedTaskCount} 件を補正しました。`,
+    ],
+  };
+}
+
+function ensureInitializationTaskForUninitializedRepo(
+  result: TaskGenerationResult,
+  requirement: Requirement,
+  repoUninitialized: boolean
+): TaskGenerationResult {
+  if (!repoUninitialized) {
+    return result;
+  }
+
+  let tasks = [...result.tasks];
+  let initTaskIndex = tasks.findIndex((task) => isInitializationTask(task));
+  let injected = false;
+
+  if (initTaskIndex === -1) {
+    const bootstrapTask = generateInitializationTasks(requirement).tasks[0];
+    if (bootstrapTask) {
+      // 先頭に差し込み、既存依存インデックスを1つ後ろへずらす
+      const shiftedTasks = tasks.map((task) => ({
+        ...task,
+        dependsOnIndexes: (task.dependsOnIndexes ?? []).map((dep) => dep + 1),
+      }));
+      tasks = [bootstrapTask, ...shiftedTasks];
+      initTaskIndex = 0;
+      injected = true;
+    }
+  }
+
+  if (initTaskIndex === -1) {
+    return result;
+  }
+
+  const patchedTasks = tasks.map((task, index) => {
+    if (index === initTaskIndex || isInitializationTask(task)) {
+      return task;
+    }
+
+    const currentDepends = task.dependsOnIndexes ?? [];
+    if (currentDepends.includes(initTaskIndex)) {
+      return task;
+    }
+
+    const nextDepends = [...currentDepends, initTaskIndex]
+      .filter((dep) => dep < index);
+
+    return {
+      ...task,
+      dependsOnIndexes: Array.from(new Set(nextDepends)),
+    };
+  });
+
+  const filteredWarnings = result.warnings.filter((warning) => {
+    // 初期化タスクを補った後は「初期化未タスク化」警告を残さない
+    return !(
+      warning.includes("allowedPaths")
+      && warning.includes("タスク化していません")
+    );
+  });
+
+  const warnings = injected
+    ? [
+      ...filteredWarnings,
+      "リポジトリ初期化タスクを自動追加し、他タスクはその完了に依存するよう補正しました。",
+    ]
+    : filteredWarnings;
+
+  return {
+    ...result,
+    tasks: patchedTasks,
+    warnings,
+  };
+}
+
 // タスクをDBに保存
 async function saveTasks(taskInputs: PlannedTaskInput[]): Promise<string[]> {
   const savedIds: string[] = [];
@@ -1278,15 +1464,43 @@ async function planFromRequirement(
     throw new Error("LLM cannot be disabled when inspection is required");
   }
 
-  if (!repoUninitialized) {
+  if (repoUninitialized) {
+    // 空リポジトリでも要件に基づいてLLMにタスクを分割させる
+    console.log("\n[Planner] Repository is not initialized. Using LLM to plan from scratch.");
+    // 差分点検は不要だが「すべてが未実装」と明示する
+    const emptyInspection: CodebaseInspection = {
+      summary: "リポジトリが空のため、要件のすべてが未実装です。",
+      satisfied: [],
+      gaps: requirement.acceptanceCriteria.map((c) => `未実装: ${c}`),
+      evidence: [],
+      notes: ["リポジトリにはファイルが存在しないため、すべてを新規作成する必要があります。"],
+    };
+    inspectionResult = emptyInspection;
+    inspectionNotes = formatInspectionNotes(emptyInspection);
+    requirement = attachInspectionToRequirement(requirement, inspectionNotes);
+  } else {
     if (!config.inspectCodebase) {
       console.log("[Planner] 差分点検は必須のため有効化します。");
     }
-    console.log("\n[Planner] Inspecting codebase with LLM...");
-    const inspection = await inspectCodebase(requirement, {
-      workdir: config.workdir,
-      timeoutSeconds: config.inspectionTimeoutSeconds,
-    });
+    const inspectionTimeout = config.inspectionTimeoutSeconds;
+    console.log(`\n[Planner] Inspecting codebase with LLM... (timeout: ${inspectionTimeout}s)`);
+    // LLM応答待ちで無応答に見えるのを避けるため、経過時間を定期的にログに出す
+    const inspectionStart = Date.now();
+    const inspectionHeartbeat = setInterval(() => {
+      const elapsed = Math.round((Date.now() - inspectionStart) / 1000);
+      console.log(`[Planner] Inspection in progress... (${elapsed}s elapsed)`);
+    }, 30000);
+    let inspection: CodebaseInspection | undefined;
+    try {
+      inspection = await inspectCodebase(requirement, {
+        workdir: config.workdir,
+        timeoutSeconds: inspectionTimeout,
+      });
+    } finally {
+      clearInterval(inspectionHeartbeat);
+      const elapsed = Math.round((Date.now() - inspectionStart) / 1000);
+      console.log(`[Planner] Inspection finished in ${elapsed}s`);
+    }
     if (!inspection) {
       console.error("[Planner] 差分点検に失敗したためタスク生成を中断します。");
       throw new Error("Inspection failed");
@@ -1299,21 +1513,35 @@ async function planFromRequirement(
   // タスクを生成
   let result: TaskGenerationResult;
 
-  if (repoUninitialized) {
-    console.log("\n[Planner] Repository is not initialized. Generating init task only.");
-    result = generateInitializationTasks(requirement);
-  } else if (config.useLlm) {
-    console.log("\n[Generating tasks with LLM...]");
-    result = await generateTasksFromRequirement(requirement, {
-      workdir: config.workdir,
-      instructionsPath: config.instructionsPath,
-      timeoutSeconds: config.timeoutSeconds,
-      inspection: inspectionResult,
-    });
+  if (config.useLlm) {
+    console.log(`\n[Generating tasks with LLM...] (timeout: ${config.timeoutSeconds}s)`);
+    const genStart = Date.now();
+    const genHeartbeat = setInterval(() => {
+      const elapsed = Math.round((Date.now() - genStart) / 1000);
+      console.log(`[Planner] Task generation in progress... (${elapsed}s elapsed)`);
+    }, 30000);
+    try {
+      result = await generateTasksFromRequirement(requirement, {
+        workdir: config.workdir,
+        instructionsPath: config.instructionsPath,
+        timeoutSeconds: config.timeoutSeconds,
+        inspection: inspectionResult,
+      });
+    } finally {
+      clearInterval(genHeartbeat);
+      const elapsed = Math.round((Date.now() - genStart) / 1000);
+      console.log(`[Planner] Task generation finished in ${elapsed}s`);
+    }
   } else {
     console.log("\n[Generating tasks without LLM...]");
     result = generateSimpleTasks(requirement);
   }
+
+  result = ensureInitializationTaskForUninitializedRepo(
+    result,
+    requirement,
+    repoUninitialized
+  );
 
   const docGap = !repoUninitialized ? await detectDocGap(config.workdir) : undefined;
   if (docGap?.hasGap && !(await hasPendingDocserTask())) {
@@ -1334,6 +1562,7 @@ async function planFromRequirement(
     };
   }
 
+  result = sanitizeTaskDependencyIndexes(result);
   result = normalizeGeneratedTasks(result);
   result = applyTaskRolePolicy(result);
   result = applyVerificationCommandPolicy(result, checkScriptAvailable);
@@ -1601,7 +1830,9 @@ export async function planFromContent(
           applyTesterCommandPolicy(
             applyVerificationCommandPolicy(
               applyTaskRolePolicy(
-                normalizeGeneratedTasks(generateInitializationTasks(requirement))
+                normalizeGeneratedTasks(
+                  sanitizeTaskDependencyIndexes(generateInitializationTasks(requirement))
+                )
               ),
               checkScriptAvailable
             ),
@@ -1640,6 +1871,7 @@ export async function planFromContent(
         ],
       };
     }
+    result = sanitizeTaskDependencyIndexes(result);
     return attachInspectionToTasks(
       attachJudgeFeedbackToTasks(
         applyDevCommandPolicy(
@@ -1663,7 +1895,11 @@ export async function planFromContent(
       applyDevCommandPolicy(
         applyTesterCommandPolicy(
           applyVerificationCommandPolicy(
-            applyTaskRolePolicy(normalizeGeneratedTasks(generateSimpleTasks(requirement))),
+            applyTaskRolePolicy(
+              normalizeGeneratedTasks(
+                sanitizeTaskDependencyIndexes(generateSimpleTasks(requirement))
+              )
+            ),
             checkScriptAvailable
           ),
           e2eCommand

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { db } from "@sebastian-code/db";
 import { artifacts, runs, tasks, agents, events } from "@sebastian-code/db/schema";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   DEFAULT_POLICY,
   PolicySchema,
@@ -115,6 +115,8 @@ interface JudgeConfig {
   instructionsPath: string;
   useLlm: boolean;
   dryRun: boolean;
+  mergeOnApprove: boolean;
+  requeueOnNonApprove: boolean;
   policy: Policy;
   mode: "git" | "local";
   baseRepoRecoveryMode: "none" | "stash" | "llm";
@@ -130,6 +132,8 @@ const DEFAULT_CONFIG: JudgeConfig = {
   instructionsPath: resolve(import.meta.dirname, "../instructions/review.md"),
   useLlm: process.env.USE_LLM !== "false",
   dryRun: process.env.DRY_RUN === "true",
+  mergeOnApprove: process.env.JUDGE_MERGE_ON_APPROVE !== "false",
+  requeueOnNonApprove: process.env.JUDGE_REQUEUE_ON_NON_APPROVE !== "false",
   policy: DEFAULT_POLICY,
   mode: "git",
   baseRepoRecoveryMode: "llm",
@@ -348,6 +352,7 @@ async function getPendingPRs(): Promise<
     prUrl: string;
     taskId: string;
     runId: string;
+    startedAt: Date;
     taskGoal: string;
     taskRiskLevel: "low" | "medium" | "high";
     allowedPaths: string[];
@@ -360,6 +365,7 @@ async function getPendingPRs(): Promise<
       prUrl: artifacts.url,
       taskId: runs.taskId,
       runId: runs.id,
+      startedAt: runs.startedAt,
     })
     .from(artifacts)
     .innerJoin(runs, eq(artifacts.runId, runs.id))
@@ -367,9 +373,11 @@ async function getPendingPRs(): Promise<
       and(
         eq(artifacts.type, "pr"),
         eq(runs.status, "success"),
+        isNull(runs.judgedAt),
         isNotNull(artifacts.ref)
       )
-    );
+    )
+    .orderBy(desc(runs.startedAt));
 
   // タスク情報を取得
   const pendingPRs: Array<{
@@ -377,13 +385,16 @@ async function getPendingPRs(): Promise<
     prUrl: string;
     taskId: string;
     runId: string;
+    startedAt: Date;
     taskGoal: string;
     taskRiskLevel: "low" | "medium" | "high";
     allowedPaths: string[];
   }> = [];
+  const seenTaskIds = new Set<string>();
 
   for (const row of result) {
     if (!row.prNumber) continue;
+    if (seenTaskIds.has(row.taskId)) continue;
 
     const prNumber = parseInt(row.prNumber, 10);
     if (isNaN(prNumber)) continue;
@@ -397,18 +408,20 @@ async function getPendingPRs(): Promise<
     const task = taskResult[0];
     if (!task) continue;
 
-    // すでに完了しているタスクはスキップ
-    if (task.status === "done") continue;
+    // Judge待ち（blocked）以外はレビュー対象にしない
+    if (task.status !== "blocked") continue;
 
     pendingPRs.push({
       prNumber,
       prUrl: row.prUrl ?? "",
       taskId: row.taskId,
       runId: row.runId,
+      startedAt: row.startedAt,
       taskGoal: task.goal,
       taskRiskLevel: (task.riskLevel as "low" | "medium" | "high") ?? "low",
       allowedPaths: task.allowedPaths ?? [],
     });
+    seenTaskIds.add(row.taskId);
   }
 
   return pendingPRs;
@@ -422,6 +435,7 @@ async function getPendingWorktrees(): Promise<
     baseRepoPath?: string;
     taskId: string;
     runId: string;
+    startedAt: Date;
     taskGoal: string;
     taskRiskLevel: "low" | "medium" | "high";
     allowedPaths: string[];
@@ -433,6 +447,7 @@ async function getPendingWorktrees(): Promise<
       metadata: artifacts.metadata,
       taskId: runs.taskId,
       runId: runs.id,
+      startedAt: runs.startedAt,
     })
     .from(artifacts)
     .innerJoin(runs, eq(artifacts.runId, runs.id))
@@ -440,9 +455,11 @@ async function getPendingWorktrees(): Promise<
       and(
         eq(artifacts.type, "worktree"),
         eq(runs.status, "success"),
+        isNull(runs.judgedAt),
         isNotNull(artifacts.ref)
       )
-    );
+    )
+    .orderBy(desc(runs.startedAt));
 
   const pendingWorktrees: Array<{
     worktreePath: string;
@@ -451,13 +468,16 @@ async function getPendingWorktrees(): Promise<
     baseRepoPath?: string;
     taskId: string;
     runId: string;
+    startedAt: Date;
     taskGoal: string;
     taskRiskLevel: "low" | "medium" | "high";
     allowedPaths: string[];
   }> = [];
+  const seenTaskIds = new Set<string>();
 
   for (const row of result) {
     if (!row.worktreePath) continue;
+    if (seenTaskIds.has(row.taskId)) continue;
     const metadata = row.metadata;
     const baseBranch =
       typeof metadata === "object" && metadata && "baseBranch" in metadata
@@ -475,7 +495,8 @@ async function getPendingWorktrees(): Promise<
 
     const task = taskResult[0];
     if (!task) continue;
-    if (task.status === "done") continue;
+    // Judge待ち（blocked）以外はレビュー対象にしない
+    if (task.status !== "blocked") continue;
 
     pendingWorktrees.push({
       worktreePath: row.worktreePath,
@@ -487,10 +508,12 @@ async function getPendingWorktrees(): Promise<
           : getLocalRepoPath(),
       taskId: row.taskId,
       runId: row.runId,
+      startedAt: row.startedAt,
       taskGoal: task.goal,
       taskRiskLevel: (task.riskLevel as "low" | "medium" | "high") ?? "low",
       allowedPaths: task.allowedPaths ?? [],
     });
+    seenTaskIds.add(row.taskId);
   }
 
   return pendingWorktrees;
@@ -631,6 +654,86 @@ async function judgeSingleWorktree(
 
   const result = makeJudgement(summary, config.policy, effectiveRisk);
   return { result, summary, diffFiles };
+}
+
+function buildJudgeFailureMessage(
+  result: JudgeResult,
+  actionError?: unknown
+): string {
+  const parts = [`Judge verdict: ${result.verdict}`];
+  if (result.reasons.length > 0) {
+    parts.push(`Reasons: ${result.reasons.slice(0, 3).join(" / ")}`);
+  }
+  if (actionError) {
+    const message = actionError instanceof Error ? actionError.message : String(actionError);
+    parts.push(`Action error: ${message}`);
+  }
+  return parts.join(" | ").slice(0, 1000);
+}
+
+async function requeueTaskAfterJudge(params: {
+  taskId: string;
+  runId: string;
+  agentId: string;
+  reason: string;
+}): Promise<void> {
+  const { taskId, runId, agentId, reason } = params;
+
+  await db
+    .update(runs)
+    .set({
+      status: "failed",
+      errorMessage: reason,
+    })
+    .where(eq(runs.id, runId));
+
+  const [task] = await db
+    .select({ retryCount: tasks.retryCount })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  const nextRetryCount = (task?.retryCount ?? 0) + 1;
+
+  await db
+    .update(tasks)
+    .set({
+      status: "queued",
+      blockReason: null,
+      retryCount: nextRetryCount,
+      updatedAt: new Date(),
+    })
+    .where(eq(tasks.id, taskId));
+
+  await db.insert(events).values({
+    type: "judge.task_requeued",
+    entityType: "task",
+    entityId: taskId,
+    agentId,
+    payload: {
+      runId,
+      reason,
+      retryCount: nextRetryCount,
+    },
+  });
+}
+
+async function claimRunForJudgement(runId: string): Promise<boolean> {
+  const result = await db
+    .update(runs)
+    .set({
+      judgedAt: new Date(),
+      judgementVersion: sql`${runs.judgementVersion} + 1`,
+    })
+    .where(
+      and(
+        eq(runs.id, runId),
+        eq(runs.status, "success"),
+        isNull(runs.judgedAt)
+      )
+    )
+    .returning({ id: runs.id });
+
+  return result.length > 0;
 }
 
 async function recoverDirtyBaseRepo(options: {
@@ -912,6 +1015,8 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log(`Poll interval: ${config.pollIntervalMs}ms`);
   console.log(`Use LLM: ${config.useLlm}`);
   console.log(`Dry run: ${config.dryRun}`);
+  console.log(`Merge on approve: ${config.mergeOnApprove}`);
+  console.log(`Requeue on non-approve: ${config.requeueOnNonApprove}`);
   console.log("=".repeat(60));
 
   while (true) {
@@ -924,7 +1029,19 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
 
         for (const pr of pendingPRs) {
           try {
+            if (!config.dryRun) {
+              const claimed = await claimRunForJudgement(pr.runId);
+              if (!claimed) {
+                console.log(`  Skip PR #${pr.prNumber}: run already judged`);
+                continue;
+              }
+            }
+
             const { result, summary } = await judgeSinglePR(pr, config);
+            const effectiveResult =
+              result.verdict === "approve" && config.mergeOnApprove
+                ? { ...result, autoMerge: true }
+                : result;
             let actionResult = {
               commented: false,
               approved: false,
@@ -932,23 +1049,25 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
             };
 
             let actionError: unknown;
+            let requeueReason: string | undefined;
 
             try {
               if (config.dryRun) {
                 console.log("  [Dry run - no action taken]");
               } else {
                 // レビューとアクションを実行
-                actionResult = await reviewAndAct(pr.prNumber, result, summary);
+                actionResult = await reviewAndAct(pr.prNumber, effectiveResult, summary);
                 console.log(
                   `  Actions: commented=${actionResult.commented}, approved=${actionResult.approved}, merged=${actionResult.merged}`
                 );
 
-                // 自動マージされた場合、タスクを完了に更新
+                // マージ済みならタスク完了
                 if (actionResult.merged) {
                   await db
                     .update(tasks)
                     .set({
                       status: "done",
+                      blockReason: null,
                       updatedAt: new Date(),
                     })
                     .where(eq(tasks.id, pr.taskId));
@@ -965,15 +1084,57 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                   if (docserResult.created) {
                     console.log(`  Docser task created: ${docserResult.docserTaskId}`);
                   }
+                } else if (effectiveResult.verdict !== "approve" && config.requeueOnNonApprove) {
+                  // request_changes / needs_human は再実行キューへ戻す
+                  requeueReason = buildJudgeFailureMessage(effectiveResult);
+                  await requeueTaskAfterJudge({
+                    taskId: pr.taskId,
+                    runId: pr.runId,
+                    agentId: config.agentId,
+                    reason: requeueReason,
+                  });
+                  console.log(`  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`);
+                } else if (effectiveResult.verdict === "approve") {
+                  // approveだが未マージ（APIエラー等）は停滞させず再実行へ戻す
+                  requeueReason = "Judge approved but merge was not completed";
+                  await requeueTaskAfterJudge({
+                    taskId: pr.taskId,
+                    runId: pr.runId,
+                    agentId: config.agentId,
+                    reason: requeueReason,
+                  });
+                  console.warn(`  Task ${pr.taskId} requeued because merge did not complete`);
+                } else {
+                  await db
+                    .update(tasks)
+                    .set({
+                      status: "blocked",
+                      blockReason:
+                        effectiveResult.verdict === "needs_human"
+                          ? "needs_human"
+                          : "needs_rework",
+                      updatedAt: new Date(),
+                    })
+                    .where(eq(tasks.id, pr.taskId));
                 }
               }
             } catch (error) {
               actionError = error;
+              if (!config.dryRun) {
+                requeueReason = buildJudgeFailureMessage(effectiveResult, error);
+                await requeueTaskAfterJudge({
+                  taskId: pr.taskId,
+                  runId: pr.runId,
+                  agentId: config.agentId,
+                  reason: requeueReason,
+                });
+                console.warn(`  Task ${pr.taskId} requeued due to judge action error`);
+              }
             }
 
             await recordJudgeReview(
               pr,
-              result,
+              effectiveResult,
               summary,
               actionResult,
               config.agentId,
@@ -1004,6 +1165,7 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log(`Poll interval: ${config.pollIntervalMs}ms`);
   console.log(`Use LLM: ${config.useLlm}`);
   console.log(`Dry run: ${config.dryRun}`);
+  console.log(`Requeue on non-approve: ${config.requeueOnNonApprove}`);
   console.log("=".repeat(60));
 
   while (true) {
@@ -1016,6 +1178,14 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
 
         for (const target of pendingWorktrees) {
           try {
+            if (!config.dryRun) {
+              const claimed = await claimRunForJudgement(target.runId);
+              if (!claimed) {
+                console.log(`  Skip worktree ${target.worktreePath}: run already judged`);
+                continue;
+              }
+            }
+
             const { result, summary, diffFiles } = await judgeSingleWorktree(
               target,
               config
@@ -1023,7 +1193,9 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
             let mergeResult: { success: boolean; error?: string } | undefined;
 
             if (!config.dryRun) {
-              let nextStatus: "done" | "blocked";
+              let nextStatus: "done" | "queued" | "blocked";
+              let requeueReason: string | undefined;
+              let nextBlockReason: "needs_rework" | "needs_human" | null = null;
               if (result.verdict === "approve") {
                 mergeResult = await mergeLocalBranch({
                   baseRepoPath: target.baseRepoPath,
@@ -1038,12 +1210,13 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
                   recoveryMode: config.baseRepoRecoveryMode,
                   recoveryRules,
                 });
-                nextStatus = mergeResult.success ? "done" : "blocked";
+                nextStatus = mergeResult.success ? "done" : "queued";
                 if (!mergeResult.success) {
                   console.error(
                     "[Judge] Failed to merge local branch:",
                     mergeResult.error
                   );
+                  requeueReason = buildJudgeFailureMessage(result, mergeResult.error);
                 }
                 // ローカルマージの成否をログに残して判定結果の追跡を容易にする
                 console.log(
@@ -1070,12 +1243,34 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
                   }
                 }
               } else {
-                nextStatus = "blocked";
+                nextStatus = config.requeueOnNonApprove ? "queued" : "blocked";
+                if (config.requeueOnNonApprove) {
+                  requeueReason = buildJudgeFailureMessage(result);
+                } else {
+                  nextBlockReason =
+                    result.verdict === "needs_human"
+                      ? "needs_human"
+                      : "needs_rework";
+                }
               }
               await db
                 .update(tasks)
-                .set({ status: nextStatus, updatedAt: new Date() })
+                .set({
+                  status: nextStatus,
+                  blockReason: nextStatus === "blocked" ? nextBlockReason : null,
+                  updatedAt: new Date(),
+                })
                 .where(eq(tasks.id, target.taskId));
+
+              if (requeueReason) {
+                await requeueTaskAfterJudge({
+                  taskId: target.taskId,
+                  runId: target.runId,
+                  agentId: config.agentId,
+                  reason: requeueReason,
+                });
+                console.log(`  Task ${target.taskId} requeued in local judge loop`);
+              }
             }
 
             await recordLocalReview(

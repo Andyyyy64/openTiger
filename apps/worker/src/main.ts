@@ -1,6 +1,6 @@
 import { db } from "@sebastian-code/db";
 import { tasks, runs, artifacts, leases, agents } from "@sebastian-code/db/schema";
-import { eq, and } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { Task, Policy } from "@sebastian-code/core";
 import {
   DEFAULT_POLICY,
@@ -18,7 +18,8 @@ import {
 import type { Job } from "bullmq";
 import { createWriteStream } from "node:fs";
 import { mkdirSync } from "node:fs";
-import { access, stat } from "node:fs/promises";
+import { access, mkdir, open, readFile, rm, stat } from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
 import {
@@ -28,6 +29,7 @@ import {
   verifyChanges,
   commitAndPush,
   createTaskPR,
+  ensureRemoteBaseBranch,
 } from "./steps/index.js";
 import { generateBranchName } from "./steps/branch.js";
 
@@ -36,6 +38,77 @@ const HEARTBEAT_INTERVAL = 30000; // 30秒
 
 const logStreams = new Set<ReturnType<typeof createWriteStream>>();
 let taskLogStream: ReturnType<typeof createWriteStream> | null = null;
+const activeTaskIds = new Set<string>();
+
+interface TaskRuntimeLock {
+  path: string;
+  handle: FileHandle;
+}
+
+function resolveTaskLockDir(): string {
+  return process.env.SEBASTIAN_TASK_LOCK_DIR ?? "/tmp/sebastian-code-task-locks";
+}
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EPERM") {
+      return true;
+    }
+    return false;
+  }
+}
+
+async function acquireTaskRuntimeLock(taskId: string): Promise<TaskRuntimeLock | null> {
+  const lockDir = resolveTaskLockDir();
+  await mkdir(lockDir, { recursive: true });
+  const lockPath = join(lockDir, `${taskId}.lock`);
+
+  try {
+    const handle = await open(lockPath, "wx");
+    await handle.writeFile(
+      JSON.stringify(
+        {
+          taskId,
+          pid: process.pid,
+          acquiredAt: new Date().toISOString(),
+        },
+        null,
+        2
+      ),
+      "utf-8"
+    );
+    return { path: lockPath, handle };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      try {
+        const raw = await readFile(lockPath, "utf-8");
+        const parsed = JSON.parse(raw) as { pid?: number };
+        if (typeof parsed.pid === "number" && !isPidAlive(parsed.pid)) {
+          await rm(lockPath, { force: true });
+          return acquireTaskRuntimeLock(taskId);
+        }
+      } catch {
+        // 不正なロック情報はそのまま扱い、上位で重複実行としてスキップする
+      }
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function releaseTaskRuntimeLock(lock: TaskRuntimeLock | null): Promise<void> {
+  if (!lock) {
+    return;
+  }
+  try {
+    await lock.handle.close();
+  } finally {
+    await rm(lock.path, { force: true }).catch(() => undefined);
+  }
+}
 
 // ハートビートを送信する関数
 async function startHeartbeat(agentId: string) {
@@ -204,11 +277,40 @@ export async function runWorker(
 
     // Step 3: OpenCodeでタスクを実行
     console.log("\n[3/7] Executing task with OpenCode...");
+    const previousFailures = await db
+      .select({
+        status: runs.status,
+        errorMessage: runs.errorMessage,
+        agentId: runs.agentId,
+      })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.taskId, taskId),
+          ne(runs.id, runId),
+          inArray(runs.status, ["failed", "cancelled"]),
+          isNotNull(runs.finishedAt)
+        )
+      )
+      .orderBy(desc(runs.startedAt))
+      .limit(3);
+    const retryHints = previousFailures
+      .map((row) => {
+        const status = row.status === "cancelled" ? "cancelled" : "failed";
+        const reason = (row.errorMessage ?? "No detailed error message")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 240);
+        return `${status} on ${row.agentId}: ${reason}`;
+      });
+
     const executeResult = await executeTask({
       repoPath,
       task: taskData,
       instructionsPath,
       model,
+      retryHints,
+      policy: effectivePolicy,
     });
 
     if (!executeResult.success) {
@@ -278,6 +380,13 @@ export async function runWorker(
 
     // Step 7: PRを作成
     console.log("\n[7/7] Creating PR...");
+    // 空リポジトリ対策: agentブランチのpush完了後にベースブランチを確保する
+    if (repoMode === "git") {
+      const baseResult = await ensureRemoteBaseBranch(repoPath, baseBranch, branchName);
+      if (!baseResult.success) {
+        throw new Error(baseResult.error ?? "Failed to ensure base branch on remote");
+      }
+    }
     const prResult = await createTaskPR({
       repoPath,
       branchName,
@@ -325,7 +434,7 @@ export async function runWorker(
       .set({
         status: "success",
         finishedAt: new Date(),
-        costTokens: executeResult.openCodeResult.durationMs, // TODO: 実際のトークン数
+        costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
       })
       .where(eq(runs.id, runId));
 
@@ -336,6 +445,7 @@ export async function runWorker(
       .update(tasks)
       .set({
         status: nextStatus,
+        blockReason: needsReview ? "awaiting_judge" : null,
         updatedAt: new Date(),
       })
       .where(eq(tasks.id, taskId));
@@ -386,6 +496,7 @@ export async function runWorker(
       .update(tasks)
       .set({
         status: "failed",
+        blockReason: null,
         updatedAt: new Date(),
       })
       .where(eq(tasks.id, taskId));
@@ -738,6 +849,12 @@ async function main() {
       process.exit(1);
     }
 
+    const runtimeLock = await acquireTaskRuntimeLock(taskId);
+    if (!runtimeLock) {
+      console.warn(`[Worker] Task ${taskId} is already running elsewhere. Skipping.`);
+      process.exit(0);
+    }
+
     const result = await runWorker(
       taskData as unknown as Task,
       {
@@ -750,7 +867,9 @@ async function main() {
         model: effectiveModel,
         logPath,
       }
-    );
+    ).finally(async () => {
+      await releaseTaskRuntimeLock(runtimeLock);
+    });
 
     process.exit(result.success ? 0 : 1);
   }
@@ -766,6 +885,13 @@ async function main() {
     }
 
     console.log(`[Queue] Received task ${job.data.taskId} for ${agentId}`);
+
+    if (activeTaskIds.has(job.data.taskId)) {
+      console.warn(
+        `[Queue] Task ${job.data.taskId} is already running on ${agentId}. Skipping duplicate job.`
+      );
+      return;
+    }
     
     const [taskData] = await db
       .select()
@@ -778,19 +904,52 @@ async function main() {
       return;
     }
 
-    await runWorker(
-      taskData as unknown as Task,
-      {
-        agentId,
-        role: agentRole,
-        workspacePath,
-        repoUrl,
-        baseBranch,
-        instructionsPath,
-        model: effectiveModel,
-        logPath,
+    const runtimeLock = await acquireTaskRuntimeLock(job.data.taskId);
+    if (!runtimeLock) {
+      const activeRuns = await db
+        .select({ id: runs.id })
+        .from(runs)
+        .where(and(eq(runs.taskId, job.data.taskId), eq(runs.status, "running")))
+        .limit(1);
+
+      if (activeRuns.length === 0) {
+        // 実行中Runが無いのにロック取得できない場合は状態不整合として復旧する
+        await db.delete(leases).where(eq(leases.taskId, job.data.taskId));
+        await db
+          .update(tasks)
+          .set({ status: "queued", blockReason: null, updatedAt: new Date() })
+          .where(eq(tasks.id, job.data.taskId));
+        console.warn(
+          `[Queue] Task ${job.data.taskId} lock conflict without running run. Reset to queued for retry.`
+        );
+        return;
       }
-    );
+
+      console.warn(
+        `[Queue] Task ${job.data.taskId} is already running on another agent/process. Skipping duplicate dispatch.`
+      );
+      return;
+    }
+
+    activeTaskIds.add(job.data.taskId);
+    try {
+      await runWorker(
+        taskData as unknown as Task,
+        {
+          agentId,
+          role: agentRole,
+          workspacePath,
+          repoUrl,
+          baseBranch,
+          instructionsPath,
+          model: effectiveModel,
+          logPath,
+        }
+      );
+    } finally {
+      activeTaskIds.delete(job.data.taskId);
+      await releaseTaskRuntimeLock(runtimeLock);
+    }
   }, getTaskQueueName(agentId));
 
   worker.on("failed", (job: Job<TaskJobData> | undefined, err: Error) => {

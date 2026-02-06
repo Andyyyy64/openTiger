@@ -1,5 +1,5 @@
 import { db } from "@sebastian-code/db";
-import { leases, tasks, agents } from "@sebastian-code/db/schema";
+import { leases, tasks, agents, runs } from "@sebastian-code/db/schema";
 import { eq, lt, and } from "drizzle-orm";
 
 // リースのデフォルト期限（分）
@@ -114,6 +114,7 @@ export async function cleanupExpiredLeases(): Promise<number> {
       .update(tasks)
       .set({
         status: "queued",
+        blockReason: null,
         updatedAt: new Date(),
       })
       .where(eq(tasks.id, lease.taskId));
@@ -123,6 +124,48 @@ export async function cleanupExpiredLeases(): Promise<number> {
   await db.delete(leases).where(lt(leases.expiresAt, now));
 
   return expiredLeases.length;
+}
+
+// running のまま固着したタスクを回復する
+// 例: run は failed/cancelled なのに task.status=running, lease だけ残っているケース
+export async function recoverOrphanedRunningTasks(
+  graceMs: number = 120000
+): Promise<number> {
+  const threshold = new Date(Date.now() - graceMs);
+
+  const candidates = await db
+    .select({ id: tasks.id, updatedAt: tasks.updatedAt })
+    .from(tasks)
+    .where(and(eq(tasks.status, "running"), lt(tasks.updatedAt, threshold)));
+
+  if (candidates.length === 0) {
+    return 0;
+  }
+
+  let recovered = 0;
+  for (const task of candidates) {
+    const activeRun = await db
+      .select({ id: runs.id })
+      .from(runs)
+      .where(and(eq(runs.taskId, task.id), eq(runs.status, "running")))
+      .limit(1);
+    if (activeRun.length > 0) {
+      continue;
+    }
+
+    await db.delete(leases).where(eq(leases.taskId, task.id));
+    await db
+      .update(tasks)
+      .set({
+        status: "queued",
+        blockReason: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(tasks.id, task.id));
+    recovered++;
+  }
+
+  return recovered;
 }
 
 // 特定エージェントのリースを取得

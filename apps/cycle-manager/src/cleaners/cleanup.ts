@@ -1,6 +1,6 @@
 import { db } from "@sebastian-code/db";
 import { tasks, runs, agents, leases } from "@sebastian-code/db/schema";
-import { eq, inArray, and, lt, not } from "drizzle-orm";
+import { eq, inArray, and, lt, not, isNull, desc } from "drizzle-orm";
 import { recordEvent } from "../monitors/event-logger.js";
 
 // クリーンアップ結果
@@ -33,7 +33,7 @@ export async function cleanupExpiredLeases(): Promise<number> {
   const taskIds = expired.map((l) => l.taskId);
   await db
     .update(tasks)
-    .set({ status: "queued", updatedAt: new Date() })
+    .set({ status: "queued", blockReason: null, updatedAt: new Date() })
     .where(
       and(inArray(tasks.id, taskIds), eq(tasks.status, "running"))
     );
@@ -116,7 +116,7 @@ export async function cancelStuckRuns(
   const taskIds = stuckRuns.map((r) => r.taskId);
   await db
     .update(tasks)
-    .set({ status: "failed", updatedAt: new Date() })
+    .set({ status: "failed", blockReason: null, updatedAt: new Date() })
     .where(inArray(tasks.id, taskIds));
 
   for (const run of stuckRuns) {
@@ -162,7 +162,7 @@ export async function performFullCleanup(
     // 全タスクをqueuedに戻す
     const result = await db
       .update(tasks)
-      .set({ status: "queued", updatedAt: new Date() })
+      .set({ status: "queued", blockReason: null, updatedAt: new Date() })
       .where(eq(tasks.status, "running"))
       .returning({ id: tasks.id });
     tasksReset = result.length;
@@ -170,7 +170,7 @@ export async function performFullCleanup(
     // runningタスクのみqueuedに
     const result = await db
       .update(tasks)
-      .set({ status: "queued", updatedAt: new Date() })
+      .set({ status: "queued", blockReason: null, updatedAt: new Date() })
       .where(eq(tasks.status, "running"))
       .returning({ id: tasks.id });
     tasksReset = result.length;
@@ -217,7 +217,7 @@ export async function performFullCleanup(
 export async function requeueFailedTasks(): Promise<number> {
   const result = await db
     .update(tasks)
-    .set({ status: "queued", updatedAt: new Date() })
+    .set({ status: "queued", blockReason: null, updatedAt: new Date() })
     .where(eq(tasks.status, "failed"))
     .returning({ id: tasks.id });
 
@@ -233,7 +233,132 @@ export async function requeueFailedTasks(): Promise<number> {
 }
 
 // 最大リトライ回数 (これを超えたタスクは再キューしない)
-const MAX_RETRY_COUNT = 3;
+// 運用で調整できるよう環境変数化（既定値: 3）
+const MAX_RETRY_COUNT = (() => {
+  const parsed = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "3", 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 3;
+})();
+
+type FailureCategory = "env" | "setup" | "policy" | "test" | "flaky" | "model";
+
+type FailureClassification = {
+  category: FailureCategory;
+  retryable: boolean;
+  reason: string;
+};
+
+const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
+  env: 0,
+  setup: 1,
+  policy: 0,
+  test: 2,
+  flaky: 5,
+  model: 2,
+};
+
+function classifyFailure(errorMessage: string | null): FailureClassification {
+  const message = (errorMessage ?? "").toLowerCase();
+
+  if (
+    /policy violation|denied command|outside allowed paths|change to denied path/.test(message)
+  ) {
+    return {
+      category: "policy",
+      retryable: false,
+      reason: "policy_violation",
+    };
+  }
+
+  if (
+    /package\.json|pnpm-workspace\.yaml|cannot find module|enoent|command not found|repository not found|authentication failed|permission denied/.test(
+      message
+    )
+  ) {
+    return {
+      category: "setup",
+      retryable: false,
+      reason: "setup_or_bootstrap_issue",
+    };
+  }
+
+  if (/database_url|redis_url|connection refused|dns|env/.test(message)) {
+    return {
+      category: "env",
+      retryable: false,
+      reason: "environment_issue",
+    };
+  }
+
+  if (/vitest|playwright|assert|expected|test failed|verification commands failed/.test(message)) {
+    return {
+      category: "test",
+      retryable: true,
+      reason: "test_failure",
+    };
+  }
+
+  if (
+    /rate limit|429|503|502|timeout|timed out|econnreset|eai_again|temporarily unavailable/.test(
+      message
+    )
+  ) {
+    return {
+      category: "flaky",
+      retryable: true,
+      reason: "transient_or_flaky_failure",
+    };
+  }
+
+  return {
+    category: "model",
+    retryable: true,
+    reason: "model_or_unknown_failure",
+  };
+}
+
+type BlockReason = "awaiting_judge" | "needs_rework" | "needs_human";
+
+function normalizeBlockReason(reason: string | null): BlockReason | null {
+  if (reason === "awaiting_judge" || reason === "needs_rework" || reason === "needs_human") {
+    return reason;
+  }
+  return null;
+}
+
+function normalizeContext(
+  context: unknown
+): {
+  files?: string[];
+  specs?: string;
+  notes?: string;
+  issue?: { number: number; url?: string; title?: string };
+} {
+  if (!context || typeof context !== "object" || Array.isArray(context)) {
+    return {};
+  }
+  return context as {
+    files?: string[];
+    specs?: string;
+    notes?: string;
+    issue?: { number: number; url?: string; title?: string };
+  };
+}
+
+async function hasPendingJudgeRun(taskId: string): Promise<boolean> {
+  const pending = await db
+    .select({ id: runs.id })
+    .from(runs)
+    .where(
+      and(
+        eq(runs.taskId, taskId),
+        eq(runs.status, "success"),
+        isNull(runs.judgedAt)
+      )
+    )
+    .limit(1);
+
+  return pending.length > 0;
+}
 
 // 失敗タスクをクールダウン後に再キュー（リトライ回数制限付き）
 export async function requeueFailedTasksWithCooldown(
@@ -262,35 +387,230 @@ export async function requeueFailedTasksWithCooldown(
     return 0;
   }
 
-  const eligibleIds = eligibleTasks.map((t) => t.id);
+  let requeued = 0;
 
-  // retryCountをインクリメントしてqueuedに戻す
-  const result = await db
-    .update(tasks)
-    .set({
-      status: "queued",
-      updatedAt: new Date(),
-    })
-    .where(inArray(tasks.id, eligibleIds))
-    .returning({ id: tasks.id });
-
-  // 個別にretryCountを更新
   for (const task of eligibleTasks) {
+    const [latestRun] = await db
+      .select({
+        errorMessage: runs.errorMessage,
+      })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.taskId, task.id),
+          inArray(runs.status, ["failed", "cancelled"])
+        )
+      )
+      .orderBy(desc(runs.startedAt))
+      .limit(1);
+
+    const failure = classifyFailure(latestRun?.errorMessage ?? null);
+    const categoryRetryLimit = Math.min(CATEGORY_RETRY_LIMIT[failure.category], MAX_RETRY_COUNT);
+    const currentRetry = task.retryCount ?? 0;
+    const nextRetryCount = currentRetry + 1;
+
+    if (!failure.retryable || currentRetry >= categoryRetryLimit) {
+      await db
+        .update(tasks)
+        .set({
+          status: "blocked",
+          blockReason: failure.category === "policy" || failure.category === "env"
+            ? "needs_human"
+            : "needs_rework",
+          updatedAt: new Date(),
+        })
+        .where(eq(tasks.id, task.id));
+
+      await recordEvent({
+        type: "task.retry_exhausted",
+        entityType: "task",
+        entityId: task.id,
+        payload: {
+          category: failure.category,
+          retryable: failure.retryable,
+          retryCount: currentRetry,
+          retryLimit: categoryRetryLimit,
+          reason: failure.reason,
+        },
+      });
+      console.log(
+        `[Cleanup] Blocked failed task ${task.id} (${failure.category}, retry=${currentRetry}/${categoryRetryLimit})`
+      );
+      continue;
+    }
+
     await db
       .update(tasks)
-      .set({ retryCount: (task.retryCount ?? 0) + 1 })
+      .set({
+        status: "queued",
+        blockReason: null,
+        retryCount: nextRetryCount,
+        updatedAt: new Date(),
+      })
       .where(eq(tasks.id, task.id));
-  }
-
-  for (const task of result) {
     await recordEvent({
       type: "task.requeued",
       entityType: "task",
       entityId: task.id,
-      payload: { reason: "cooldown_retry" },
+      payload: {
+        reason: "cooldown_retry",
+        category: failure.category,
+        retryCount: nextRetryCount,
+      },
     });
-    console.log(`[Cleanup] Requeued failed task: ${task.id}`);
+    console.log(
+      `[Cleanup] Requeued failed task: ${task.id} (${failure.category}, retry=${nextRetryCount}/${categoryRetryLimit})`
+    );
+    requeued++;
   }
 
-  return result.length;
+  return requeued;
+}
+
+// blockedタスクをクールダウン後に再キュー（リトライ回数制限付き）
+export async function requeueBlockedTasksWithCooldown(
+  cooldownMs: number = 5 * 60 * 1000
+): Promise<number> {
+  const cutoff = new Date(Date.now() - cooldownMs);
+
+  const blockedTasks = await db
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      goal: tasks.goal,
+      context: tasks.context,
+      allowedPaths: tasks.allowedPaths,
+      commands: tasks.commands,
+      priority: tasks.priority,
+      riskLevel: tasks.riskLevel,
+      role: tasks.role,
+      dependencies: tasks.dependencies,
+      timeboxMinutes: tasks.timeboxMinutes,
+      blockReason: tasks.blockReason,
+      updatedAt: tasks.updatedAt,
+      retryCount: tasks.retryCount,
+    })
+    .from(tasks)
+    .where(eq(tasks.status, "blocked"));
+
+  if (blockedTasks.length === 0) {
+    return 0;
+  }
+
+  let handled = 0;
+
+  for (const task of blockedTasks) {
+    const cooldownPassed = task.updatedAt < cutoff;
+    const retryAllowed = (task.retryCount ?? 0) < MAX_RETRY_COUNT;
+    if (!cooldownPassed || !retryAllowed) {
+      continue;
+    }
+
+    const reason = normalizeBlockReason(task.blockReason);
+    const nextRetryCount = (task.retryCount ?? 0) + 1;
+
+    if (reason === "needs_human") {
+      // needs_human は自動再実行せず隔離扱い（blocked維持）
+      await recordEvent({
+        type: "task.isolated",
+        entityType: "task",
+        entityId: task.id,
+        payload: {
+          reason: "needs_human",
+          queue: "human_review",
+        },
+      });
+      continue;
+    }
+
+    if (reason === "needs_rework") {
+      // needs_rework は親タスクをfailed化し、分割した再作業タスクを自動生成する
+      const context = normalizeContext(task.context);
+      const notes = context.notes
+        ? `${context.notes}\n[auto-rework] parentTask=${task.id}`
+        : `[auto-rework] parentTask=${task.id}`;
+
+      const [reworkTask] = await db
+        .insert(tasks)
+        .values({
+          title: task.title.startsWith("[Rework]")
+            ? task.title
+            : `[Rework] ${task.title}`,
+          goal: task.goal,
+          context: {
+            ...context,
+            notes,
+          },
+          allowedPaths: task.allowedPaths ?? [],
+          commands: task.commands ?? [],
+          priority: (task.priority ?? 0) + 5,
+          riskLevel: task.riskLevel ?? "medium",
+          role: task.role ?? "worker",
+          dependencies: task.dependencies ?? [],
+          timeboxMinutes: Math.max(30, Math.floor((task.timeboxMinutes ?? 60) * 0.8)),
+          status: "queued",
+          blockReason: null,
+        })
+        .returning({ id: tasks.id });
+
+      await db
+        .update(tasks)
+        .set({
+          status: "failed",
+          blockReason: null,
+          retryCount: nextRetryCount,
+          updatedAt: new Date(),
+        })
+        .where(eq(tasks.id, task.id));
+
+      if (reworkTask) {
+        await recordEvent({
+          type: "task.split",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: "needs_rework",
+            reworkTaskId: reworkTask.id,
+            retryCount: nextRetryCount,
+          },
+        });
+        console.log(
+          `[Cleanup] Created rework task ${reworkTask.id} from blocked task ${task.id}`
+        );
+      }
+      handled++;
+      continue;
+    }
+
+    if (reason === "awaiting_judge" && (await hasPendingJudgeRun(task.id))) {
+      // Judge未処理の成功Runが残っている間は再実行しない
+      continue;
+    }
+
+    await db
+      .update(tasks)
+      .set({
+        status: "queued",
+        blockReason: null,
+        retryCount: nextRetryCount,
+        updatedAt: new Date(),
+      })
+      .where(eq(tasks.id, task.id));
+
+    await recordEvent({
+      type: "task.requeued",
+      entityType: "task",
+      entityId: task.id,
+      payload: {
+        reason: reason === "awaiting_judge"
+          ? "awaiting_judge_timeout_retry"
+          : "blocked_cooldown_retry",
+        retryCount: nextRetryCount,
+      },
+    });
+    console.log(`[Cleanup] Requeued blocked task: ${task.id}`);
+    handled++;
+  }
+
+  return handled;
 }

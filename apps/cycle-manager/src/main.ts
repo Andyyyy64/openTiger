@@ -22,6 +22,7 @@ import {
   resetOfflineAgents,
   cancelStuckRuns,
   requeueFailedTasksWithCooldown,
+  requeueBlockedTasksWithCooldown,
 } from "./cleaners/index.js";
 import {
   recordEvent,
@@ -88,6 +89,8 @@ interface CycleManagerConfig {
   replanWorkdir: string; // Planner実行ディレクトリ
   replanRepoUrl?: string; // 差分判定に使うリポジトリURL
   replanBaseBranch: string; // 差分判定に使うベースブランチ
+  failedTaskRetryCooldownMs: number; // failedタスク再投入までの待機時間
+  blockedTaskRetryCooldownMs: number; // blockedタスク再投入までの待機時間
 }
 
 // デフォルト設定
@@ -119,6 +122,14 @@ const DEFAULT_CONFIG: CycleManagerConfig = {
   replanBaseBranch: process.env.REPLAN_BASE_BRANCH
     ?? process.env.BASE_BRANCH
     ?? "main",
+  failedTaskRetryCooldownMs: parseInt(
+    process.env.FAILED_TASK_RETRY_COOLDOWN_MS ?? "30000",
+    10
+  ),
+  blockedTaskRetryCooldownMs: parseInt(
+    process.env.BLOCKED_TASK_RETRY_COOLDOWN_MS ?? "120000",
+    10
+  ),
 };
 
 // Cycle Managerの状態
@@ -602,10 +613,19 @@ async function runCleanupLoop(): Promise<void> {
       console.log(`[Cleanup] Cancelled ${stuckRuns} stuck runs`);
     }
 
-    // 失敗タスクをクールダウン後に再キュー（2分経過後、最大3回まで）
-    const requeuedTasks = await requeueFailedTasksWithCooldown(2 * 60 * 1000);
+    // 失敗タスクをクールダウン後に再キュー（最大3回まで）
+    const requeuedTasks = await requeueFailedTasksWithCooldown(
+      activeConfig.failedTaskRetryCooldownMs
+    );
     if (requeuedTasks > 0) {
       console.log(`[Cleanup] Requeued ${requeuedTasks} failed tasks`);
+    }
+
+    const requeuedBlockedTasks = await requeueBlockedTasksWithCooldown(
+      activeConfig.blockedTaskRetryCooldownMs
+    );
+    if (requeuedBlockedTasks > 0) {
+      console.log(`[Cleanup] Requeued ${requeuedBlockedTasks} blocked tasks`);
     }
   } catch (error) {
     console.error("[CycleManager] Cleanup loop error:", error);
@@ -728,6 +748,12 @@ async function main(): Promise<void> {
 
   console.log(`Monitor interval: ${activeConfig.monitorIntervalMs}ms`);
   console.log(`Cleanup interval: ${activeConfig.cleanupIntervalMs}ms`);
+  console.log(
+    `Failed task retry cooldown: ${activeConfig.failedTaskRetryCooldownMs}ms`
+  );
+  console.log(
+    `Blocked task retry cooldown: ${activeConfig.blockedTaskRetryCooldownMs}ms`
+  );
   console.log(`Stats interval: ${activeConfig.statsIntervalMs}ms`);
   console.log(`Max cycle duration: ${activeConfig.cycleConfig.maxDurationMs}ms`);
   console.log(`Max tasks per cycle: ${activeConfig.cycleConfig.maxTasksPerCycle}`);

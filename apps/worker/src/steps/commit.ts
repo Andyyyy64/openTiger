@@ -65,13 +65,22 @@ export async function commitAndPush(
   // コミット
   const commitResult = await commit(repoPath, commitMessage);
   if (!commitResult.success) {
-    const combined = `${commitResult.stdout}\n${commitResult.stderr}`.toLowerCase();
+    const combinedRaw = `${commitResult.stdout}\n${commitResult.stderr}`.trim();
+    const combined = combinedRaw.toLowerCase();
+    const noChangesPatterns = [
+      "nothing to commit",
+      "nothing added to commit",
+      "no changes added to commit",
+      "working tree clean",
+    ];
+    const isNoChanges = noChangesPatterns.some((pattern) => combined.includes(pattern));
+
     // 既にコミット済みの差分がある場合はそのまま進める
-    if (!combined.includes("nothing to commit")) {
+    if (!isNoChanges) {
       return {
         success: false,
         commitMessage,
-        error: `Failed to commit: ${commitResult.stderr}`,
+        error: `Failed to commit: ${combinedRaw || "git commit returned non-zero exit code"}`,
       };
     }
     console.log("No new changes to commit, skipping commit step");

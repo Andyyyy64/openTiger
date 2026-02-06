@@ -125,6 +125,7 @@ export async function reclaimDeadAgentLeases(): Promise<number> {
         .update(tasks)
         .set({
           status: "queued",
+          blockReason: null,
           updatedAt: new Date(),
         })
         .where(eq(tasks.id, lease.taskId));
@@ -215,4 +216,14 @@ export async function getAgentStats() {
     busy,
     offline,
   };
+}
+
+// 現在busy状態のエージェント数を取得（同時実行上限の算出に利用）
+export async function getBusyAgentCount(): Promise<number> {
+  const result = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(eq(agents.status, "busy"));
+
+  return result.length;
 }

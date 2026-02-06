@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "dotenv";
 import { db } from "@sebastian-code/db";
@@ -63,6 +63,7 @@ const OPEN_CODE_ENV_KEYS = new Set([
   "OPENCODE_FALLBACK_MODEL",
   "OPENCODE_MAX_RETRIES",
   "OPENCODE_RETRY_DELAY_MS",
+  "OPENCODE_CONFIG",
 ]);
 
 function shouldStripEnvKey(key: string): boolean {
@@ -79,6 +80,24 @@ async function loadProjectEnv(cwd: string): Promise<Record<string, string>> {
   } catch {
     return {};
   }
+}
+
+async function resolveDefaultOpenCodeConfigPath(cwd: string): Promise<string | undefined> {
+  const candidates = [
+    process.env.OPENCODE_CONFIG,
+    join(process.cwd(), "opencode.json"),
+    join(cwd, "opencode.json"),
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      // 次の候補を確認する
+    }
+  }
+  return undefined;
 }
 
 export async function getProjectEnvSummary(
@@ -145,7 +164,7 @@ export async function buildOpenCodeEnv(
 ): Promise<Record<string, string>> {
   // 実行対象の.envは引き継ぎ、LLM用のキーだけ許可する
   const env = await buildTaskEnv(cwd);
-  
+
   // DBから最新の設定を取得してOpenCodeに渡す
   const dbConfig = await loadConfigFromDb();
   for (const [key, value] of Object.entries(dbConfig)) {
@@ -153,7 +172,7 @@ export async function buildOpenCodeEnv(
       env[key] = value;
     }
   }
-  
+
   // process.envからもフォールバックで取得（DB優先）
   for (const key of OPEN_CODE_ENV_KEYS) {
     if (env[key]) {
@@ -165,5 +184,14 @@ export async function buildOpenCodeEnv(
     }
     env[key] = value;
   }
+
+  // OPENCODE_CONFIG が明示されていない場合でも既定の設定ファイルを使う
+  if (!env.OPENCODE_CONFIG) {
+    const configPath = await resolveDefaultOpenCodeConfigPath(cwd);
+    if (configPath) {
+      env.OPENCODE_CONFIG = configPath;
+    }
+  }
+
   return env;
 }

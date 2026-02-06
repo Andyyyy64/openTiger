@@ -1,4 +1,16 @@
-import { createPR, findPRs, updatePR, type PRInfo, remoteBranchExists, push } from "@sebastian-code/vcs";
+import {
+  createPR,
+  findPRs,
+  updatePR,
+  type PRInfo,
+  remoteBranchExists,
+  push,
+  getCurrentBranch,
+  checkoutBranch,
+  createOrphanBranch,
+  removeAllFiles,
+  commitAllowEmpty,
+} from "@sebastian-code/vcs";
 import { getRepoMode } from "@sebastian-code/core";
 import type { Task } from "@sebastian-code/core";
 
@@ -88,6 +100,53 @@ function generatePRBody(options: CreatePROptions): string {
   return lines.join("\n");
 }
 
+// agent ブランチを push する前にベースブランチをリモートに確保する
+export async function ensureRemoteBaseBranch(
+  repoPath: string,
+  baseBranch: string,
+  currentBranch: string
+): Promise<{ success: boolean; created: boolean; error?: string }> {
+  if (getRepoMode() === "local") {
+    return { success: true, created: false };
+  }
+
+  const baseExists = await remoteBranchExists(repoPath, baseBranch);
+  if (baseExists) {
+    return { success: true, created: false };
+  }
+
+  console.log(`[Worker] Base branch ${baseBranch} does not exist on remote. Creating...`);
+  const orphanResult = await createOrphanBranch(repoPath, baseBranch);
+  if (!orphanResult.success) {
+    return { success: false, created: false, error: `Failed to create orphan branch: ${orphanResult.stderr}` };
+  }
+
+  const cleanupResult = await removeAllFiles(repoPath);
+  if (!cleanupResult.success && cleanupResult.stderr.trim().length > 0) {
+    console.warn(`[Worker] Failed to clean working tree for ${baseBranch}: ${cleanupResult.stderr}`);
+  }
+
+  const commitResult = await commitAllowEmpty(repoPath, "chore: initialize default branch");
+  if (!commitResult.success) {
+    await checkoutBranch(repoPath, currentBranch);
+    return { success: false, created: false, error: `Failed to commit on base branch: ${commitResult.stderr}` };
+  }
+
+  const pushResult = await push(repoPath, baseBranch);
+  if (!pushResult.success) {
+    await checkoutBranch(repoPath, currentBranch);
+    return { success: false, created: false, error: `Failed to push base branch: ${pushResult.stderr}` };
+  }
+
+  const restoreResult = await checkoutBranch(repoPath, currentBranch);
+  if (!restoreResult.success) {
+    return { success: false, created: false, error: `Failed to restore branch ${currentBranch}: ${restoreResult.stderr}` };
+  }
+
+  console.log(`[Worker] Base branch ${baseBranch} created and pushed.`);
+  return { success: true, created: true };
+}
+
 // PRを作成または更新
 export async function createTaskPR(
   options: CreatePROptions
@@ -101,28 +160,6 @@ export async function createTaskPR(
     };
   }
   const { repoPath, branchName, task, baseBranch = "main" } = options;
-
-  // ベースブランチがリモートに存在するか確認
-  const baseExists = await remoteBranchExists(repoPath, baseBranch);
-  
-  if (!baseExists) {
-    console.log(`Base branch ${baseBranch} does not exist on remote. Pushing directly to ${baseBranch}...`);
-    // ベースブランチが存在しない場合（空のリポジトリなど）、直接ベースブランチとしてプッシュする
-    const pushResult = await push(repoPath, `${branchName}:${baseBranch}`, true);
-    
-    if (!pushResult.success) {
-      return {
-        success: false,
-        error: `Failed to push directly to non-existent base branch ${baseBranch}: ${pushResult.stderr}`,
-      };
-    }
-
-    console.log(`Successfully pushed directly to ${baseBranch}. No PR needed.`);
-    return {
-      success: true,
-      isUpdate: false,
-    };
-  }
 
   console.log("Checking for existing PR...");
 

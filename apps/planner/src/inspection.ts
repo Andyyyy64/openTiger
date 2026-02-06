@@ -363,6 +363,34 @@ function extractJsonFromResponse(response: string): unknown {
   throw new Error("No valid JSON found in response");
 }
 
+// 1回あたりのLLM呼び出しタイムアウト（秒）
+const PER_ATTEMPT_TIMEOUT_SECONDS = 120;
+// 応答がない場合のリトライ上限
+const INSPECTION_MAX_RETRIES = 3;
+
+// runOpenCode が内部でハングした場合に備えて Promise.race で強制打ち切りする
+function withHardTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label}: hard timeout after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); }
+    );
+  });
+}
+
+function isQuotaExceededMessage(message: string): boolean {
+  return /quota exceeded|exceeded your current quota|generate_requests_per_model_per_day|resource_exhausted/i.test(
+    message
+  );
+}
+
 export async function inspectCodebase(
   requirement: Requirement,
   options: {
@@ -374,23 +402,72 @@ export async function inspectCodebase(
   const prompt = buildInspectionPrompt(requirement, snapshot);
 
   const model = process.env.PLANNER_INSPECT_MODEL ?? process.env.PLANNER_MODEL;
+  const totalTimeout = options.timeoutSeconds ?? 180;
+  // 1回あたりのタイムアウトを全体枠に収まるように調整する
+  const perAttemptTimeout = Math.min(
+    PER_ATTEMPT_TIMEOUT_SECONDS,
+    Math.floor(totalTimeout / 2)
+  );
+  const deadline = Date.now() + totalTimeout * 1000;
 
-  // 差分点検は要件と現状のズレを掘り起こすために行う
-  const result = await runOpenCode({
-    workdir: options.workdir,
-    task: prompt,
-    model,
-    timeoutSeconds: options.timeoutSeconds ?? 180,
-    // Gemini 3系のfunction calling制約を避けるためツールを無効化する
-    env: { OPENCODE_CONFIG: PLANNER_OPENCODE_CONFIG_PATH },
-  });
+  let lastError = "";
+  for (let attempt = 0; attempt < INSPECTION_MAX_RETRIES; attempt++) {
+    const remaining = Math.floor((deadline - Date.now()) / 1000);
+    if (remaining <= 10) {
+      console.warn("[Planner] Inspection deadline reached, giving up.");
+      break;
+    }
 
-  if (!result.success) {
-    console.warn("[Planner] Codebase inspection failed:", result.stderr);
-    return;
+    const attemptTimeout = Math.min(perAttemptTimeout, remaining);
+    if (attempt > 0) {
+      console.log(`[Planner] Inspection retry ${attempt}/${INSPECTION_MAX_RETRIES - 1} (timeout: ${attemptTimeout}s)`);
+    }
+
+    try {
+      // opencode プロセスが SIGTERM/SIGKILL を無視してハングする場合に備え、
+      // runOpenCode の Promise 自体を強制打ち切りする
+      const hardTimeoutMs = (attemptTimeout + 10) * 1000;
+      const result = await withHardTimeout(
+        runOpenCode({
+          workdir: options.workdir,
+          task: prompt,
+          model,
+          timeoutSeconds: attemptTimeout,
+          // runOpenCode内部のリトライは無効化し、ここで制御する
+          maxRetries: 0,
+          // Gemini 3系のfunction calling制約を避けるためツールを無効化する
+          env: { OPENCODE_CONFIG: PLANNER_OPENCODE_CONFIG_PATH },
+        }),
+        hardTimeoutMs,
+        "Inspection"
+      );
+
+      if (result.success && result.stdout.trim().length > 0) {
+        return parseInspectionResult(result.stdout);
+      }
+
+      lastError = result.stderr || `exit code ${result.exitCode}`;
+      if (isQuotaExceededMessage(lastError)) {
+        console.warn("[Planner] クォータ上限のため差分点検を中断します。");
+        break;
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      if (isQuotaExceededMessage(lastError)) {
+        console.warn("[Planner] クォータ上限のため差分点検を中断します。");
+        break;
+      }
+    }
+
+    console.warn(`[Planner] Inspection attempt ${attempt + 1} failed: ${lastError.slice(0, 200)}`);
   }
 
-  const parsed = extractJsonFromResponse(result.stdout) as {
+  console.warn(`[Planner] Codebase inspection failed after ${INSPECTION_MAX_RETRIES} attempts: ${lastError.slice(0, 200)}`);
+  return;
+}
+
+function parseInspectionResult(stdout: string): CodebaseInspection {
+  const parsed = extractJsonFromResponse(stdout) as {
     summary?: string;
     satisfied?: string[];
     gaps?: string[];

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { join } from "node:path";
 import {
@@ -46,10 +46,22 @@ export interface VerifyResult {
 
 // テスト成果物はポリシー検証から除外する
 const GENERATED_PATHS = [
+  "node_modules",
   "node_modules/**",
+  "**/node_modules",
+  "**/node_modules/**",
+  "dist",
   "dist/**",
+  "**/dist",
+  "**/dist/**",
+  ".turbo",
   ".turbo/**",
+  "**/.turbo",
+  "**/.turbo/**",
+  "coverage",
   "coverage/**",
+  "**/coverage",
+  "**/coverage/**",
   "**/playwright-report/**",
   "**/test-results/**",
 ];
@@ -169,6 +181,36 @@ function shouldForceCi(command: string): boolean {
   return /\b(pnpm|npm|yarn|bun)\b[^\n]*\btest\b/.test(command);
 }
 
+function matchDeniedCommand(
+  command: string,
+  deniedCommands: string[]
+): string | undefined {
+  const target = command.trim();
+  const lowerTarget = target.toLowerCase();
+
+  for (const denied of deniedCommands) {
+    const pattern = denied.trim();
+    if (!pattern) {
+      continue;
+    }
+
+    try {
+      const regex = new RegExp(pattern, "i");
+      if (regex.test(target)) {
+        return denied;
+      }
+    } catch {
+      // 非正規表現として扱う
+    }
+
+    if (lowerTarget.includes(pattern.toLowerCase())) {
+      return denied;
+    }
+  }
+
+  return undefined;
+}
+
 // pnpm/npmのtestコマンドは引数の前に"--"が必要なので補正する
 function normalizeVerificationCommand(command: string): string {
   let normalized = command;
@@ -219,63 +261,6 @@ async function loadRootScripts(repoPath: string): Promise<Record<string, string>
     return parsed.scripts ?? {};
   } catch {
     return {};
-  }
-}
-
-function buildDefaultRootScript(scriptName: string): string | undefined {
-  switch (scriptName) {
-    case "dev":
-      return "pnpm -r --parallel --if-present dev";
-    case "build":
-      return "pnpm -r --if-present build";
-    case "lint":
-      return "pnpm -r --if-present lint";
-    case "typecheck":
-      return "pnpm -r --if-present typecheck";
-    case "test":
-      return "pnpm -r --if-present test";
-    case "check":
-      return "pnpm -r --if-present check";
-    default:
-      return undefined;
-  }
-}
-
-async function ensureRootScript(
-  repoPath: string,
-  scriptName: string
-): Promise<{ added: boolean; error?: string; command?: string }> {
-  try {
-    const packageJsonPath = join(repoPath, "package.json");
-    const content = await readFile(packageJsonPath, "utf-8");
-    const parsed = JSON.parse(content) as {
-      scripts?: Record<string, string>;
-      [key: string]: unknown;
-    };
-    if (parsed.scripts?.[scriptName]) {
-      return { added: false };
-    }
-    const command = buildDefaultRootScript(scriptName);
-    if (!command) {
-      return { added: false };
-    }
-
-    // 検証用に最低限のスクリプトを追加する
-    parsed.scripts = {
-      ...(parsed.scripts ?? {}),
-      [scriptName]: command,
-    };
-    await writeFile(
-      packageJsonPath,
-      `${JSON.stringify(parsed, null, 2)}\n`,
-      "utf-8"
-    );
-    return { added: true, command };
-  } catch (error) {
-    return {
-      added: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
   }
 }
 
@@ -672,6 +657,21 @@ export async function verifyChanges(
   const rootScripts = await loadRootScripts(repoPath);
 
   for (const command of commands) {
+    const deniedMatch = matchDeniedCommand(command, policy.deniedCommands ?? []);
+    if (deniedMatch) {
+      const message = `Denied command detected: ${command} (matched: ${deniedMatch})`;
+      console.error(`  ✗ ${message}`);
+      commandResults.push({
+        command,
+        success: false,
+        stdout: "",
+        stderr: message,
+        durationMs: 0,
+      });
+      allPassed = false;
+      break;
+    }
+
     // checkスクリプトがない場合は検証コマンドから除外する
     if (isCheckCommand(command) && !checkScriptAvailable) {
       const notice = `Skipped: ${command} (check script not found)`;
@@ -692,19 +692,6 @@ export async function verifyChanges(
     }
 
     const scriptName = resolveRunScript(normalizedCommand);
-    if (scriptName && !isFilteredCommand(normalizedCommand) && !rootScripts[scriptName]) {
-      const ensureResult = await ensureRootScript(repoPath, scriptName);
-      if (ensureResult.added) {
-        rootScripts[scriptName] = ensureResult.command ?? "";
-        console.warn(
-          `  WARN: Added missing root script "${scriptName}" for verification`
-        );
-      } else if (ensureResult.error) {
-        console.warn(
-          `  WARN: Failed to add root script "${scriptName}": ${ensureResult.error}`
-        );
-      }
-    }
     if (scriptName && !isFilteredCommand(normalizedCommand) && !rootScripts[scriptName]) {
       const notice = `Skipped: ${normalizedCommand} (script not found: ${scriptName})`;
       console.warn(`  WARN: ${notice}`);

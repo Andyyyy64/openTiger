@@ -1,6 +1,6 @@
 import { db } from "@sebastian-code/db";
 import { cycles, tasks, runs, agents } from "@sebastian-code/db/schema";
-import { eq, count, sql, and, gte, lte } from "drizzle-orm";
+import { eq, count, sql, and, gte, lte, inArray, lt } from "drizzle-orm";
 import type { CycleStats, StateSnapshot } from "@sebastian-code/core";
 
 // システム状態のスナップショット
@@ -220,6 +220,9 @@ export interface HealthCheckResult {
     database: boolean;
     activeAgents: boolean;
     noStuckTasks: boolean;
+    queueLatencyWithinSlo: boolean;
+    blockedWithinSlo: boolean;
+    retryExhaustionWithinLimit: boolean;
     withinCostLimits: boolean;
   };
   details: Record<string, unknown>;
@@ -239,11 +242,19 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
   }
 
   // アクティブエージェントチェック
+  const agentThreshold = new Date(Date.now() - 2 * 60 * 1000);
   const [agentCount] = await db
     .select({ count: count() })
     .from(agents)
-    .where(eq(agents.status, "busy"));
-  const hasActiveAgents = (agentCount?.count ?? 0) >= 0; // 0でもOK（待機中）
+    .where(
+      and(
+        inArray(agents.status, ["idle", "busy"]),
+        gte(agents.lastHeartbeat, agentThreshold)
+      )
+    );
+  const activeAgentCount = agentCount?.count ?? 0;
+  const hasActiveAgents = activeAgentCount > 0;
+  details.activeAgentCount = activeAgentCount;
 
   // 停滞タスクチェック
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
@@ -259,7 +270,56 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
   const noStuckTasks = (stuckCount?.count ?? 0) === 0;
   details.stuckTaskCount = stuckCount?.count ?? 0;
 
-  const healthy = dbHealthy && hasActiveAgents && noStuckTasks;
+  // SLO: queued -> running 5分以内
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  const [queuedSloViolation] = await db
+    .select({ count: count() })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.status, "queued"),
+        lt(tasks.updatedAt, fiveMinutesAgo)
+      )
+    );
+  const queuedSloViolationCount = queuedSloViolation?.count ?? 0;
+  const queueLatencyWithinSlo = queuedSloViolationCount === 0;
+  details.queuedOver5mCount = queuedSloViolationCount;
+
+  // SLO: blocked 30分以内に自動処理
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+  const [blockedSloViolation] = await db
+    .select({ count: count() })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.status, "blocked"),
+        lt(tasks.updatedAt, thirtyMinutesAgo)
+      )
+    );
+  const blockedSloViolationCount = blockedSloViolation?.count ?? 0;
+  const blockedWithinSlo = blockedSloViolationCount === 0;
+  details.blockedOver30mCount = blockedSloViolationCount;
+
+  const retryLimit = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "3", 10);
+  const [retryExhausted] = await db
+    .select({ count: count() })
+    .from(tasks)
+    .where(
+      and(
+        inArray(tasks.status, ["failed", "blocked"]),
+        gte(tasks.retryCount, Number.isFinite(retryLimit) ? retryLimit : 3)
+      )
+    );
+  const retryExhaustedCount = retryExhausted?.count ?? 0;
+  const retryExhaustionWithinLimit = retryExhaustedCount === 0;
+  details.retryExhaustedCount = retryExhaustedCount;
+
+  const healthy =
+    dbHealthy &&
+    hasActiveAgents &&
+    noStuckTasks &&
+    queueLatencyWithinSlo &&
+    blockedWithinSlo;
 
   return {
     healthy,
@@ -267,6 +327,9 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
       database: dbHealthy,
       activeAgents: hasActiveAgents,
       noStuckTasks,
+      queueLatencyWithinSlo,
+      blockedWithinSlo,
+      retryExhaustionWithinLimit,
       withinCostLimits: true, // 別途実装
     },
     details,
