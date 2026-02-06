@@ -15,6 +15,13 @@ export interface CommitResult {
   error?: string;
 }
 
+function isNonFastForwardPush(stderr: string, stdout: string): boolean {
+  const message = `${stderr}\n${stdout}`.toLowerCase();
+  return message.includes("fetch first")
+    || message.includes("non-fast-forward")
+    || message.includes("failed to push some refs");
+}
+
 // コミットメッセージを生成
 function generateCommitMessage(task: Task, changedFiles: string[]): string {
   const lines: string[] = [
@@ -90,7 +97,31 @@ export async function commitAndPush(
 
   if (repoMode === "git") {
     // プッシュ
-    const pushResult = await push(repoPath, branchName);
+    let pushResult = await push(repoPath, branchName);
+    if (!pushResult.success) {
+      if (branchName.startsWith("agent/")
+        && isNonFastForwardPush(pushResult.stderr, pushResult.stdout)) {
+        console.warn(
+          `Push rejected for ${branchName} due to non-fast-forward. Retrying with force push...`
+        );
+        const forcePushResult = await push(repoPath, branchName, true);
+        if (forcePushResult.success) {
+          pushResult = forcePushResult;
+        } else {
+          return {
+            success: false,
+            commitMessage,
+            error: `Failed to push after force retry: ${forcePushResult.stderr}`,
+          };
+        }
+      } else {
+        return {
+          success: false,
+          commitMessage,
+          error: `Failed to push: ${pushResult.stderr}`,
+        };
+      }
+    }
     if (!pushResult.success) {
       return {
         success: false,

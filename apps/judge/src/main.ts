@@ -679,14 +679,6 @@ async function requeueTaskAfterJudge(params: {
 }): Promise<void> {
   const { taskId, runId, agentId, reason } = params;
 
-  await db
-    .update(runs)
-    .set({
-      status: "failed",
-      errorMessage: reason,
-    })
-    .where(eq(runs.id, runId));
-
   const [task] = await db
     .select({ retryCount: tasks.retryCount })
     .from(tasks)
@@ -713,6 +705,36 @@ async function requeueTaskAfterJudge(params: {
       runId,
       reason,
       retryCount: nextRetryCount,
+    },
+  });
+}
+
+async function blockTaskNeedsHumanAfterJudge(params: {
+  taskId: string;
+  runId: string;
+  agentId: string;
+  reason: string;
+}): Promise<void> {
+  const { taskId, runId, agentId, reason } = params;
+
+  await db
+    .update(tasks)
+    .set({
+      status: "blocked",
+      blockReason: "needs_human",
+      updatedAt: new Date(),
+    })
+    .where(eq(tasks.id, taskId));
+
+  await db.insert(events).values({
+    type: "judge.task_blocked",
+    entityType: "task",
+    entityId: taskId,
+    agentId,
+    payload: {
+      runId,
+      blockReason: "needs_human",
+      reason,
     },
   });
 }
@@ -1038,10 +1060,9 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
             }
 
             const { result, summary } = await judgeSinglePR(pr, config);
-            const effectiveResult =
-              result.verdict === "approve" && config.mergeOnApprove
-                ? { ...result, autoMerge: true }
-                : result;
+            const effectiveResult = config.mergeOnApprove
+              ? result
+              : { ...result, autoMerge: false };
             let actionResult = {
               commented: false,
               approved: false,
@@ -1095,15 +1116,15 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                   });
                   console.log(`  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`);
                 } else if (effectiveResult.verdict === "approve") {
-                  // approveだが未マージ（APIエラー等）は停滞させず再実行へ戻す
-                  requeueReason = "Judge approved but merge was not completed";
-                  await requeueTaskAfterJudge({
+                  // approve でもマージ完了しなければ同一task再実行は行わず、人手対応へ退避する
+                  const blockReason = "Judge approved but merge was not completed";
+                  await blockTaskNeedsHumanAfterJudge({
                     taskId: pr.taskId,
                     runId: pr.runId,
                     agentId: config.agentId,
-                    reason: requeueReason,
+                    reason: blockReason,
                   });
-                  console.warn(`  Task ${pr.taskId} requeued because merge did not complete`);
+                  console.warn(`  Task ${pr.taskId} moved to needs_human because merge did not complete`);
                 } else {
                   await db
                     .update(tasks)
