@@ -10,7 +10,7 @@
   "scripts": {
     "ui": "pnpm --filter @sebastian-code/dashboard dev",
     "server": "pnpm --filter @sebastian-code/api dev",
-    "up": "docker compose up -d postgres redis && pnpm db:push && pnpm -r --filter @sebastian-code/api --filter @sebastian-code/dashboard dev",
+    "up": "docker compose up -d postgres redis && pnpm db:push && pnpm config:export && pnpm -r --filter @sebastian-code/api --filter @sebastian-code/dashboard dev",
     "dev": "turbo run dev dev:2 dev:3 dev:4 --concurrency 30",
     "dev:all": "turbo run dev dev:1 dev:2 dev:3 dev:4 --concurrency 30",
     "build": "turbo build",
@@ -23,6 +23,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
     "config:import": "tsx scripts/import-config-from-env.ts",
+    "config:export": "tsx scripts/export-config-to-env.ts",
     "logs:cycle": "tail -n 200 raw-logs/cycle-manager.log",
     "logs:all": "tsx ops/scripts/all-logs.ts",
     "logs:all:30m": "tsx ops/scripts/all-logs.ts --since-minutes 30",
