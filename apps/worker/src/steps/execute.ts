@@ -140,14 +140,37 @@ export async function executeTask(
 
   // OpenCodeを実行
   const taskEnv = await buildOpenCodeEnv(repoPath);
-  const openCodeResult = await runOpenCode({
-    workdir: repoPath,
-    instructionsPath,
-    task: prompt,
-    model: workerModel, // Workerは速度重視のモデルで実装を進める
-    timeoutSeconds: task.timeboxMinutes * 60,
-    env: taskEnv,
-    inheritEnv: false,
+  const requestedTimeoutSeconds = Math.max(task.timeboxMinutes * 60, 60);
+  const hardTimeoutMs = (requestedTimeoutSeconds + 30) * 1000;
+  let hardTimeoutHandle: NodeJS.Timeout | undefined;
+  const hardTimeoutResult = new Promise<OpenCodeResult>((resolve) => {
+    hardTimeoutHandle = setTimeout(() => {
+      resolve({
+        success: false,
+        exitCode: -1,
+        stdout: "",
+        stderr: `[OpenCode] Hard timeout guard exceeded (${hardTimeoutMs}ms)`,
+        durationMs: hardTimeoutMs,
+        retryCount: 0,
+      });
+    }, hardTimeoutMs);
+  });
+
+  const openCodeResult = await Promise.race([
+    runOpenCode({
+      workdir: repoPath,
+      instructionsPath,
+      task: prompt,
+      model: workerModel, // Workerは速度重視のモデルで実装を進める
+      timeoutSeconds: requestedTimeoutSeconds,
+      env: taskEnv,
+      inheritEnv: false,
+    }),
+    hardTimeoutResult,
+  ]).finally(() => {
+    if (hardTimeoutHandle) {
+      clearTimeout(hardTimeoutHandle);
+    }
   });
 
   if (!openCodeResult.success) {

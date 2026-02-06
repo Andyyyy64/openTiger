@@ -66,6 +66,12 @@ const DOOM_LOOP_WINDOW = 24;
 const DOOM_LOOP_IDENTICAL_THRESHOLD = 5;
 const DOOM_LOOP_PATTERN_MAX_LENGTH = 4;
 const DOOM_LOOP_PATTERN_REPEAT_THRESHOLD = 4;
+const DEFAULT_IDLE_TIMEOUT_SECONDS = parseInt(
+  process.env.OPENCODE_IDLE_TIMEOUT_SECONDS ?? "900",
+  10
+);
+const IDLE_CHECK_INTERVAL_MS = 5000;
+const PROGRESS_LOG_INTERVAL_MS = 30000;
 
 function isRetryableError(stderr: string, exitCode: number): boolean {
   if (exitCode === 1 && !stderr) return false;
@@ -137,6 +143,16 @@ async function executeOpenCodeOnce(
   options: OpenCodeOptions
 ): Promise<Omit<OpenCodeResult, "retryCount">> {
   const startTime = Date.now();
+  const resolvedIdleTimeoutSeconds = Number.isFinite(DEFAULT_IDLE_TIMEOUT_SECONDS)
+    && DEFAULT_IDLE_TIMEOUT_SECONDS > 0
+    ? DEFAULT_IDLE_TIMEOUT_SECONDS
+    : 900;
+  const idleTimeoutMs = Math.min(
+    options.timeoutSeconds * 1000,
+    resolvedIdleTimeoutSeconds * 1000
+  );
+  const idleTimeoutEnabled = idleTimeoutMs > 0;
+  let lastOutputAt = startTime;
   const args: string[] = ["run"];
   const tempDir = await mkdtemp(join(tmpdir(), "sebastian-code-opencode-"));
   const promptPath = join(tempDir, "prompt.txt");
@@ -171,6 +187,7 @@ async function executeOpenCodeOnce(
   });
   const timeoutMs = options.timeoutSeconds * 1000;
   let timedOut = false;
+  let idleTimedOut = false;
   let quotaExceeded = false;
   let printedErrorSummary = false;
   const MAX_ERROR_SUMMARY_LENGTH = 240;
@@ -203,6 +220,27 @@ async function executeOpenCodeOnce(
     terminateOpenCode("SIGTERM");
     setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
   }, timeoutMs);
+  const idleWatchdog = setInterval(() => {
+    if (!idleTimeoutEnabled) {
+      return;
+    }
+    const idleMs = Date.now() - lastOutputAt;
+    if (idleMs >= idleTimeoutMs && !idleTimedOut) {
+      idleTimedOut = true;
+      process.stderr.write(
+        `\n[OpenCode] Idle timeout exceeded (${Math.round(idleTimeoutMs / 1000)}s without output)\n`
+      );
+      terminateOpenCode("SIGTERM");
+      setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
+    }
+  }, IDLE_CHECK_INTERVAL_MS);
+  const progressTimer = setInterval(() => {
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    const idleSec = Math.round((Date.now() - lastOutputAt) / 1000);
+    process.stdout.write(
+      `[OpenCode] Running... elapsed=${elapsed}s idle=${idleSec}s\n`
+    );
+  }, PROGRESS_LOG_INTERVAL_MS);
 
   let stdout = "";
   let stderr = "";
@@ -248,6 +286,7 @@ async function executeOpenCodeOnce(
   childProcess.stdout.on("data", (data: Buffer) => {
     const chunk = data.toString();
     stdout += chunk;
+    lastOutputAt = Date.now();
     // リアルタイムでログに出力
     process.stdout.write(chunk);
     for (const line of chunk.split(/\r?\n/)) {
@@ -258,6 +297,7 @@ async function executeOpenCodeOnce(
   childProcess.stderr.on("data", (data: Buffer) => {
     const chunk = data.toString();
     stderr += chunk;
+    lastOutputAt = Date.now();
     const lines = chunk.split(/\r?\n/).filter((line) => line.trim().length > 0);
     for (const line of lines) {
       if (!quotaExceeded && isQuotaExceededError(line)) {
@@ -280,31 +320,61 @@ async function executeOpenCodeOnce(
   });
 
   return new Promise((resolve) => {
-    childProcess.on("close", (code) => {
+    let settled = false;
+    let settleGuard: ReturnType<typeof setInterval> | null = null;
+    const settle = (result: Omit<OpenCodeResult, "retryCount">): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
       clearTimeout(timeout);
+      clearInterval(idleWatchdog);
+      clearInterval(progressTimer);
+      if (settleGuard) {
+        clearInterval(settleGuard);
+      }
+      rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+      resolve(result);
+    };
+
+    const buildResult = (code: number | null): Omit<OpenCodeResult, "retryCount"> => {
       const durationMs = Date.now() - startTime;
       const tokenUsage = extractOpenCodeTokenUsage(stdout);
       const timeoutMessage = timedOut ? "\n[OpenCode] Timeout exceeded" : "";
+      const idleTimeoutMessage = idleTimedOut
+        ? `\n[OpenCode] Idle timeout exceeded (${Math.round(idleTimeoutMs / 1000)}s without output)`
+        : "";
       const quotaMessage = quotaExceeded ? "\n[OpenCode] クォータ上限に到達しました" : "";
       const doomLoopMessage = doomLoopDetected ? "\n[OpenCode] Doom loop detected" : "";
 
-      rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-
-      resolve({
-        success: !timedOut && !quotaExceeded && !doomLoopDetected && code === 0,
-        exitCode: timedOut || quotaExceeded || doomLoopDetected ? -1 : code ?? -1,
+      return {
+        success: !timedOut && !idleTimedOut && !quotaExceeded && !doomLoopDetected && code === 0,
+        exitCode: timedOut || idleTimedOut || quotaExceeded || doomLoopDetected ? -1 : code ?? -1,
         stdout,
-        stderr: stderr + timeoutMessage + quotaMessage + doomLoopMessage,
+        stderr: stderr + timeoutMessage + idleTimeoutMessage + quotaMessage + doomLoopMessage,
         durationMs,
         tokenUsage,
-      });
+      };
+    };
+
+    childProcess.on("close", (code) => {
+      settle(buildResult(code));
+    });
+
+    childProcess.on("exit", (code, signal) => {
+      if (settled) {
+        return;
+      }
+      // closeイベント取りこぼし時の保険
+      if (signal) {
+        stderr += `\n[OpenCode] Process exited by signal: ${signal}`;
+      }
+      settle(buildResult(code));
     });
 
     childProcess.on("error", (error) => {
-      clearTimeout(timeout);
       const durationMs = Date.now() - startTime;
-      rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
-      resolve({
+      settle({
         success: false,
         exitCode: -1,
         stdout,
@@ -312,6 +382,16 @@ async function executeOpenCodeOnce(
         durationMs,
       });
     });
+
+    // ごく稀にclose/exitが飛ばない環境差を吸収する
+    settleGuard = setInterval(() => {
+      if (settled) {
+        return;
+      }
+      if (childProcess.exitCode !== null) {
+        settle(buildResult(childProcess.exitCode));
+      }
+    }, 1000);
   });
 }
 
