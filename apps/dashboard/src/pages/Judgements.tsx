@@ -59,6 +59,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
     queryFn: () => judgementsApi.diff(event.id),
     enabled: showDiff,
   });
+  const diffErrorMessage = diffError instanceof Error ? diffError.message : 'Could not retrieve diff data.';
 
   return (
     <section className="border border-[var(--color-term-border)] p-0 font-mono">
@@ -189,7 +190,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
           {isDiffLoading ? (
             <div className="text-zinc-500 text-xs animate-pulse">&gt; Fetching diff...</div>
           ) : diffError ? (
-            <div className="text-red-500 text-xs">&gt; ERR: Could not retrieve diff data.</div>
+            <div className="text-red-500 text-xs">&gt; ERR: {diffErrorMessage}</div>
           ) : (
             <pre className="text-xs text-zinc-300 whitespace-pre-wrap overflow-x-auto">
               {diffData?.diff || '// No diff available'}
@@ -227,4 +228,3 @@ const getStatusColor = (status: string) => {
       return 'text-zinc-500';
   }
 };
-

@@ -158,6 +158,38 @@ export interface SystemProcess {
   lastCommand?: string;
 }
 
+export interface SystemPreflightSummary {
+  preflight: {
+    github: {
+      enabled: boolean;
+      openIssueCount: number;
+      openPrCount: number;
+      issueTaskBacklogCount: number;
+      generatedTaskCount: number;
+      generatedTaskIds: string[];
+      skippedIssueNumbers: number[];
+      warnings: string[];
+    };
+    local: {
+      queuedTaskCount: number;
+      runningTaskCount: number;
+      failedTaskCount: number;
+      blockedTaskCount: number;
+      pendingJudgeTaskCount: number;
+    };
+  };
+  recommendations: {
+    startPlanner: boolean;
+    startDispatcher: boolean;
+    startJudge: boolean;
+    startCycleManager: boolean;
+    workerCount: number;
+    testerCount: number;
+    docserCount: number;
+    reasons: string[];
+  };
+}
+
 export interface RequirementResponse {
   path: string;
   content: string;
@@ -236,6 +268,11 @@ export const systemApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }).then(res => res.repo),
+  preflight: (payload?: { content?: string; autoCreateIssueTasks?: boolean }) =>
+    fetchApi<SystemPreflightSummary>('/system/preflight', {
+      method: 'POST',
+      body: JSON.stringify(payload ?? {}),
+    }),
 };
 
 // エージェント関連

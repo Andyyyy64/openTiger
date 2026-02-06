@@ -1,8 +1,10 @@
 import { Hono } from "hono";
 import { db } from "@sebastian-code/db";
-import { artifacts, events } from "@sebastian-code/db/schema";
+import { artifacts, events, runs } from "@sebastian-code/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { getDiffBetweenRefs, getOctokit, getRepoInfo } from "@sebastian-code/vcs";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 
 export const judgementsRoute = new Hono();
 
@@ -36,9 +38,31 @@ function readNumber(record: Record<string, unknown>, key: string): number | unde
   return typeof value === "number" ? value : undefined;
 }
 
-async function getPullRequestDiff(prNumber: number): Promise<string> {
+function parseRepoInfoFromPrUrl(prUrl: string): { owner: string; repo: string } | undefined {
+  try {
+    const url = new URL(prUrl);
+    if (url.hostname !== "github.com") {
+      return undefined;
+    }
+    const segments = url.pathname.split("/").filter(Boolean);
+    const owner = segments[0];
+    const repo = segments[1];
+    if (!owner || !repo) {
+      return undefined;
+    }
+    return { owner, repo };
+  } catch {
+    return undefined;
+  }
+}
+
+async function getPullRequestDiffFromUrl(
+  prNumber: number,
+  prUrl?: string
+): Promise<string> {
   const octokit = getOctokit();
-  const { owner, repo } = getRepoInfo();
+  const repoInfo = prUrl ? parseRepoInfoFromPrUrl(prUrl) : undefined;
+  const { owner, repo } = repoInfo ?? getRepoInfo();
   const response = await octokit.pulls.get({
     owner,
     repo,
@@ -48,6 +72,21 @@ async function getPullRequestDiff(prNumber: number): Promise<string> {
     },
   });
   return String(response.data ?? "");
+}
+
+function uniqueStrings(values: Array<string | undefined>): string[] {
+  const set = new Set<string>();
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+    const trimmed = value.trim();
+    if (!trimmed) {
+      continue;
+    }
+    set.add(trimmed);
+  }
+  return Array.from(set);
 }
 
 judgementsRoute.get("/:id/diff", async (c) => {
@@ -75,10 +114,12 @@ judgementsRoute.get("/:id/diff", async (c) => {
   const baseBranch = readString(payload, "baseBranch");
   const branchName = readString(payload, "branchName");
   const prNumber = readNumber(payload, "prNumber");
+  const prUrl = readString(payload, "prUrl");
 
   let diff = "";
   let source = "unknown";
   let truncated = false;
+  let lastError: string | undefined;
 
   // 保存済みの成果物 -> ローカル差分 -> PR差分の順に探索する
   if (runId) {
@@ -105,16 +146,72 @@ judgementsRoute.get("/:id/diff", async (c) => {
     if (diffResult.success) {
       diff = diffResult.stdout;
       source = "local";
+    } else {
+      lastError = diffResult.stderr || "local diff failed";
     }
   }
 
   if (!diff && typeof prNumber === "number") {
-    diff = await getPullRequestDiff(prNumber);
-    source = "pr";
+    try {
+      diff = await getPullRequestDiffFromUrl(prNumber, prUrl);
+      if (diff) {
+        source = "pr";
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      console.warn("[Judgements] Failed to fetch PR diff:", error);
+    }
+  }
+
+  // GitHub認証エラー時でも、手元workspaceが残っていれば差分を復元する
+  if (!diff && runId) {
+    const [runRecord] = await db
+      .select({
+        taskId: runs.taskId,
+        agentId: runs.agentId,
+      })
+      .from(runs)
+      .where(eq(runs.id, runId))
+      .limit(1);
+
+    const [branchArtifact] = await db
+      .select({
+        ref: artifacts.ref,
+      })
+      .from(artifacts)
+      .where(and(eq(artifacts.runId, runId), eq(artifacts.type, "branch")))
+      .limit(1);
+
+    if (runRecord?.taskId && runRecord.agentId && branchArtifact?.ref) {
+      const workspaceRoot = process.env.WORKSPACE_PATH ?? "/tmp/sebastian-code-workspace";
+      const repoPath = join(workspaceRoot, runRecord.agentId, runRecord.taskId);
+      if (existsSync(repoPath)) {
+        const baseCandidates = uniqueStrings([
+          baseBranch,
+          process.env.BASE_BRANCH,
+          "master",
+          "main",
+        ]);
+        for (const candidateBase of baseCandidates) {
+          const localDiff = await getDiffBetweenRefs(repoPath, candidateBase, branchArtifact.ref);
+          if (localDiff.success && localDiff.stdout.trim().length > 0) {
+            diff = localDiff.stdout;
+            source = `workspace:${candidateBase}`;
+            break;
+          }
+          if (!localDiff.success && localDiff.stderr) {
+            lastError = localDiff.stderr;
+          }
+        }
+      }
+    }
   }
 
   if (!diff) {
-    return c.json({ error: "Diff not available" }, 404);
+    const message = lastError
+      ? `Diff not available: ${lastError}`
+      : "Diff not available";
+    return c.json({ error: message }, 404);
   }
 
   if (diff.length > diffLimit) {

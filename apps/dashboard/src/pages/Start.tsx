@@ -116,11 +116,6 @@ export const StartPage: React.FC = () => {
       if (repoMode === 'git' && !hasRepoUrl && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
         throw new Error('GitHub repo is not configured');
       }
-      if (content.trim().length === 0) throw new Error('Requirements empty');
-
-      const dispatcherEnabled = parseBoolean(settings.DISPATCHER_ENABLED, true);
-      const judgeEnabled = parseBoolean(settings.JUDGE_ENABLED, true);
-      const cycleEnabled = parseBoolean(settings.CYCLE_MANAGER_ENABLED, true);
 
       const workerCount = parseCount(settings.WORKER_COUNT, 1, MAX_WORKERS, 'Worker');
       const testerCount = parseCount(settings.TESTER_COUNT, 1, MAX_TESTERS, 'Tester');
@@ -129,6 +124,35 @@ export const StartPage: React.FC = () => {
       const warnings = [workerCount.warning, testerCount.warning, docserCount.warning].filter(
         (value): value is string => typeof value === 'string'
       );
+
+      const hasRequirementContent = content.trim().length > 0;
+      const preflight = await systemApi.preflight({
+        content,
+        autoCreateIssueTasks: true,
+      });
+      const recommendations = preflight.recommendations;
+      const backlog =
+        preflight.preflight.github.issueTaskBacklogCount
+        + preflight.preflight.github.openPrCount
+        + preflight.preflight.local.queuedTaskCount
+        + preflight.preflight.local.runningTaskCount
+        + preflight.preflight.local.failedTaskCount
+        + preflight.preflight.local.blockedTaskCount
+        + preflight.preflight.local.pendingJudgeTaskCount;
+
+      if (!recommendations.startPlanner && backlog === 0) {
+        throw new Error('Requirements empty and no issue/PR backlog found');
+      }
+
+      warnings.push(...preflight.preflight.github.warnings.map((warning) => `GitHub: ${warning}`));
+      warnings.push(...recommendations.reasons);
+
+      if (preflight.preflight.github.generatedTaskCount > 0) {
+        warnings.push(`Issue tasks generated: ${preflight.preflight.github.generatedTaskCount}`);
+      }
+      if (hasRequirementContent && !recommendations.startPlanner) {
+        warnings.push('Open issue backlog detected; planner launch skipped for this run');
+      }
 
       const started: string[] = [];
       const errors: string[] = [];
@@ -143,15 +167,28 @@ export const StartPage: React.FC = () => {
         }
       };
 
-      await startProcess('planner', { requirementPath, content });
+      if (recommendations.startPlanner) {
+        await startProcess('planner', { requirementPath, content });
+      }
+      if (recommendations.startDispatcher) {
+        await startProcess('dispatcher');
+      }
+      if (recommendations.startJudge) {
+        await startProcess('judge');
+      } else if (parseBoolean(settings.JUDGE_ENABLED, true) && preflight.preflight.github.openPrCount > 0) {
+        warnings.push('Open PR backlog exists but judge was not recommended');
+      }
+      if (recommendations.startCycleManager) {
+        await startProcess('cycle-manager');
+      }
 
-      if (dispatcherEnabled) await startProcess('dispatcher');
-      if (judgeEnabled) await startProcess('judge');
-      if (cycleEnabled) await startProcess('cycle-manager');
+      const workerStartCount = Math.min(workerCount.count, recommendations.workerCount);
+      const testerStartCount = Math.min(testerCount.count, recommendations.testerCount);
+      const docserStartCount = Math.min(docserCount.count, recommendations.docserCount);
 
-      for (let i = 1; i <= workerCount.count; i += 1) await startProcess(`worker-${i}`);
-      for (let i = 1; i <= testerCount.count; i += 1) await startProcess(`tester-${i}`);
-      if (docserCount.count > 0) await startProcess('docser-1');
+      for (let i = 1; i <= workerStartCount; i += 1) await startProcess(`worker-${i}`);
+      for (let i = 1; i <= testerStartCount; i += 1) await startProcess(`tester-${i}`);
+      if (docserStartCount > 0) await startProcess('docser-1');
 
       return { started, errors, warnings };
     },
@@ -345,7 +382,7 @@ export const StartPage: React.FC = () => {
               </span>
               <button
                 onClick={() => startMutation.mutate()}
-                disabled={startMutation.isPending || isContentEmpty || isStartBlocked}
+                disabled={startMutation.isPending || isStartBlocked}
                 className="bg-[var(--color-term-green)] text-black px-6 py-2 text-sm font-bold uppercase hover:opacity-90 disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500"
               >
                 {startMutation.isPending ? '> INITIATING...' : '> EXECUTE RUN'}
@@ -355,7 +392,7 @@ export const StartPage: React.FC = () => {
             {/* Result Console */}
             {(startResult || isContentEmpty || isStartBlocked) && (
               <div className="border-t border-[var(--color-term-border)] mt-2 pt-2 gap-1 flex flex-col text-xs font-mono">
-                {isContentEmpty && <div className="text-yellow-500">&gt; WARN: Content empty</div>}
+                {isContentEmpty && <div className="text-yellow-500">&gt; WARN: Content empty (Issue/PR preflight only)</div>}
                 {isStartBlocked && <div className="text-yellow-500">&gt; WARN: GitHub repo is missing</div>}
                 {startResult?.warnings.map(w => <div key={w} className="text-yellow-500">&gt; WARN: {w}</div>)}
                 {startResult?.errors.map(e => <div key={e} className="text-red-500">&gt; ERR: {e}</div>)}
@@ -397,4 +434,3 @@ export const StartPage: React.FC = () => {
     </div>
   );
 };
-

@@ -250,7 +250,7 @@ type FailureClassification = {
 const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
   env: 0,
   setup: 1,
-  policy: 0,
+  policy: 2,
   test: 2,
   flaky: 5,
   model: 2,
@@ -264,7 +264,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
   ) {
     return {
       category: "policy",
-      retryable: false,
+      retryable: true,
       reason: "policy_violation",
     };
   }
@@ -414,9 +414,7 @@ export async function requeueFailedTasksWithCooldown(
         .update(tasks)
         .set({
           status: "blocked",
-          blockReason: failure.category === "policy" || failure.category === "env"
-            ? "needs_human"
-            : "needs_rework",
+          blockReason: "needs_rework",
           updatedAt: new Date(),
         })
         .where(eq(tasks.id, task.id));
@@ -510,7 +508,52 @@ export async function requeueBlockedTasksWithCooldown(
     const nextRetryCount = (task.retryCount ?? 0) + 1;
 
     if (reason === "needs_human") {
-      // needs_human は自動再実行せず隔離扱い（blocked維持）
+      // policy由来の needs_human は自動再試行対象へ戻す（manual停滞を回避）
+      const [latestRun] = await db
+        .select({
+          errorMessage: runs.errorMessage,
+        })
+        .from(runs)
+        .where(
+          and(
+            eq(runs.taskId, task.id),
+            inArray(runs.status, ["failed", "cancelled"])
+          )
+        )
+        .orderBy(desc(runs.startedAt))
+        .limit(1);
+
+      const failure = classifyFailure(latestRun?.errorMessage ?? null);
+      const categoryRetryLimit = Math.min(CATEGORY_RETRY_LIMIT[failure.category], MAX_RETRY_COUNT);
+      if (failure.category === "policy" && failure.retryable && (task.retryCount ?? 0) < categoryRetryLimit) {
+        await db
+          .update(tasks)
+          .set({
+            status: "queued",
+            blockReason: null,
+            retryCount: nextRetryCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
+
+        await recordEvent({
+          type: "task.requeued",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: "needs_human_policy_retry",
+            category: failure.category,
+            retryCount: nextRetryCount,
+          },
+        });
+        console.log(
+          `[Cleanup] Requeued needs_human policy task: ${task.id} (retry=${nextRetryCount}/${categoryRetryLimit})`
+        );
+        handled++;
+        continue;
+      }
+
+      // needs_human は原則として自動再実行せず隔離扱い（blocked維持）
       await recordEvent({
         type: "task.isolated",
         entityType: "task",

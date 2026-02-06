@@ -148,7 +148,7 @@ function formatRetryStatus(retry: TaskRetryInfo | null | undefined, nowMs: numbe
   if (!retry.autoRetry) {
     switch (retry.reason) {
       case 'needs_human':
-        return 'manual';
+        return 'needs_human';
       case 'retry_exhausted':
         return 'exhausted';
       case 'non_retryable_failure':

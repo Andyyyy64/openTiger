@@ -5,10 +5,10 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, relative, isAbsolute } from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@sebastian-code/db";
-import { config as configTable } from "@sebastian-code/db/schema";
+import { config as configTable, events, tasks } from "@sebastian-code/db/schema";
 import { configToEnv, DEFAULT_CONFIG, buildConfigRecord } from "../system-config.js";
 import { getAuthInfo } from "../middleware/index.js";
-import { createRepo } from "@sebastian-code/vcs";
+import { createRepo, getOctokit, getRepoInfo } from "@sebastian-code/vcs";
 import { obliterateAllQueues } from "@sebastian-code/queue";
 
 type RestartStatus = {
@@ -84,6 +84,57 @@ let restartProcess: ChildProcess | null = null;
 let restartStatus: RestartStatus = { status: "idle" };
 const managedProcesses = new Map<string, ProcessRuntime>();
 const processStartLocks = new Set<string>();
+
+type GitHubContext = {
+  token: string;
+  owner: string;
+  repo: string;
+};
+type ConfigRow = typeof configTable.$inferSelect;
+
+type OpenIssueSnapshot = {
+  number: number;
+  title: string;
+  body: string;
+  url: string;
+  labels: string[];
+};
+
+type TaskIssueLink = {
+  id: string;
+  status: string;
+};
+
+type SystemPreflightSummary = {
+  github: {
+    enabled: boolean;
+    openIssueCount: number;
+    openPrCount: number;
+    issueTaskBacklogCount: number;
+    generatedTaskCount: number;
+    generatedTaskIds: string[];
+    skippedIssueNumbers: number[];
+    warnings: string[];
+  };
+  local: {
+    queuedTaskCount: number;
+    runningTaskCount: number;
+    failedTaskCount: number;
+    blockedTaskCount: number;
+    pendingJudgeTaskCount: number;
+  };
+};
+
+function parseBooleanSetting(value: string | undefined, fallback: boolean): boolean {
+  if (!value) return fallback;
+  return value.toLowerCase() !== "false";
+}
+
+function parseCountSetting(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, parsed);
+}
 
 function resolveRepoRoot(): string {
   return resolve(import.meta.dirname, "../../../..");
@@ -167,6 +218,390 @@ async function readRequirementFile(path: string): Promise<string> {
 
 function describeCommand(command: StartCommand): string {
   return [command.command, ...command.args].join(" ");
+}
+
+function resolveGitHubContext(configRow: ConfigRow): GitHubContext | null {
+  const token = configRow.githubToken?.trim();
+  const owner = configRow.githubOwner?.trim();
+  const repo = configRow.githubRepo?.trim();
+  if (!token || !owner || !repo) {
+    return null;
+  }
+  return { token, owner, repo };
+}
+
+function normalizeAllowedPathToken(token: string): string[] {
+  let value = token.trim();
+  value = value.replace(/^`+|`+$/g, "");
+  value = value.replace(/^"+|"+$/g, "");
+  value = value.replace(/^'+|'+$/g, "");
+  value = value.replace(/^\.\//, "");
+  value = value.trim();
+
+  if (!value || value === "." || value === "/" || value === "./") {
+    return ["**"];
+  }
+  if (value.includes("*")) {
+    return [value];
+  }
+  if (value.endsWith("/")) {
+    value = value.slice(0, -1);
+  }
+
+  const basename = value.split("/").pop() ?? value;
+  const looksLikeFile = basename.includes(".");
+  if (looksLikeFile) {
+    return [value];
+  }
+  return [value, `${value}/**`];
+}
+
+function parseAllowedPathsFromIssueBody(body: string): string[] {
+  if (!body) {
+    return ["**"];
+  }
+  const lines = body.split(/\r?\n/);
+  const tokens: string[] = [];
+  let inSection = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^#{1,6}\s*allowed\s*paths?\b/i.test(trimmed)) {
+      inSection = true;
+      continue;
+    }
+    if (inSection && /^#{1,6}\s+/.test(trimmed)) {
+      break;
+    }
+    if (!inSection) {
+      continue;
+    }
+
+    const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
+    if (bulletMatch?.[1]) {
+      tokens.push(bulletMatch[1]);
+      continue;
+    }
+    if (trimmed.length > 0) {
+      tokens.push(trimmed);
+    }
+  }
+
+  if (tokens.length === 0) {
+    const inlineMatch = body.match(/allowed\s*paths?\s*:\s*([^\n]+)/i);
+    if (inlineMatch?.[1]) {
+      tokens.push(...inlineMatch[1].split(","));
+    }
+  }
+
+  const normalized = new Set<string>();
+  for (const token of tokens) {
+    for (const value of normalizeAllowedPathToken(token)) {
+      normalized.add(value);
+    }
+  }
+
+  if (normalized.size === 0) {
+    normalized.add("**");
+  }
+  return Array.from(normalized);
+}
+
+function inferRoleFromLabels(labels: string[]): "worker" | "tester" | "docser" {
+  const lower = labels.map((label) => label.toLowerCase());
+  if (lower.some((label) => label.includes("docs") || label.includes("docser"))) {
+    return "docser";
+  }
+  if (lower.some((label) => label.includes("test") || label.includes("qa") || label.includes("e2e"))) {
+    return "tester";
+  }
+  return "worker";
+}
+
+function inferRiskFromLabels(labels: string[]): "low" | "medium" | "high" {
+  const lower = labels.map((label) => label.toLowerCase());
+  if (lower.some((label) => label.includes("critical") || label.includes("security") || label.includes("urgent"))) {
+    return "high";
+  }
+  if (lower.some((label) => label.includes("bug") || label.includes("important") || label.includes("fix"))) {
+    return "medium";
+  }
+  return "low";
+}
+
+function inferPriorityFromLabels(labels: string[]): number {
+  const lower = labels.map((label) => label.toLowerCase());
+  if (lower.some((label) => label.includes("priority:high") || label.includes("p0") || label.includes("p1"))) {
+    return 90;
+  }
+  if (lower.some((label) => label.includes("priority:medium") || label.includes("p2"))) {
+    return 60;
+  }
+  return 40;
+}
+
+function extractIssueNumberFromTaskContext(context: unknown): number | null {
+  if (!context || typeof context !== "object") {
+    return null;
+  }
+  const issue = (context as { issue?: unknown }).issue;
+  if (!issue || typeof issue !== "object") {
+    return null;
+  }
+  const number = (issue as { number?: unknown }).number;
+  if (typeof number !== "number" || !Number.isInteger(number)) {
+    return null;
+  }
+  return number;
+}
+
+async function resolveIssueTaskCommands(): Promise<string[]> {
+  const repoRoot = resolveRepoRoot();
+  try {
+    const raw = await readFile(join(repoRoot, "package.json"), "utf-8");
+    const parsed = JSON.parse(raw) as { scripts?: Record<string, unknown> };
+    const scripts = parsed.scripts ?? {};
+    if (typeof scripts.check === "string") {
+      return ["pnpm run check"];
+    }
+    if (typeof scripts.test === "string") {
+      return ["pnpm test"];
+    }
+    if (typeof scripts.typecheck === "string") {
+      return ["pnpm run typecheck"];
+    }
+  } catch {
+    // 取得できない場合は安全側のデフォルトへフォールバック
+  }
+  return ["pnpm -r --if-present test"];
+}
+
+async function fetchOpenIssues(context: GitHubContext): Promise<OpenIssueSnapshot[]> {
+  const octokit = getOctokit({ token: context.token });
+  const { owner, repo } = getRepoInfo({
+    owner: context.owner,
+    repo: context.repo,
+  });
+
+  const rows = await octokit.paginate(octokit.issues.listForRepo, {
+    owner,
+    repo,
+    state: "open",
+    per_page: 100,
+  });
+
+  return rows
+    .filter((row) => !row.pull_request)
+    .map((row) => ({
+      number: row.number,
+      title: row.title,
+      body: row.body ?? "",
+      url: row.html_url,
+      labels: row.labels
+        .map((label) =>
+          typeof label === "string" ? label : (label.name ?? "")
+        )
+        .filter((label): label is string => label.length > 0),
+    }));
+}
+
+async function fetchOpenPrCount(context: GitHubContext): Promise<number> {
+  const octokit = getOctokit({ token: context.token });
+  const { owner, repo } = getRepoInfo({
+    owner: context.owner,
+    repo: context.repo,
+  });
+  const rows = await octokit.paginate(octokit.pulls.list, {
+    owner,
+    repo,
+    state: "open",
+    per_page: 100,
+  });
+  return rows.length;
+}
+
+async function createTaskFromIssue(
+  issue: OpenIssueSnapshot,
+  commands: string[]
+): Promise<string | null> {
+  const allowedPaths = parseAllowedPathsFromIssueBody(issue.body);
+  const role = inferRoleFromLabels(issue.labels);
+  const riskLevel = inferRiskFromLabels(issue.labels);
+  const priority = inferPriorityFromLabels(issue.labels);
+  const notes = `Imported from GitHub Issue #${issue.number}`;
+
+  const [created] = await db
+    .insert(tasks)
+    .values({
+      title: issue.title,
+      goal: `Resolve GitHub Issue #${issue.number} and make it closable via PR.`,
+      context: {
+        specs: issue.body || undefined,
+        notes,
+        issue: {
+          number: issue.number,
+          url: issue.url,
+          title: issue.title,
+        },
+      },
+      allowedPaths,
+      commands,
+      priority,
+      riskLevel,
+      role,
+      status: "queued",
+      timeboxMinutes: 60,
+    })
+    .returning({ id: tasks.id });
+
+  if (!created?.id) {
+    return null;
+  }
+
+  await db.insert(events).values({
+    type: "task.created_from_issue",
+    entityType: "task",
+    entityId: created.id,
+    agentId: "system",
+    payload: {
+      issueNumber: issue.number,
+      issueUrl: issue.url,
+      issueTitle: issue.title,
+      labels: issue.labels,
+    },
+  });
+
+  return created.id;
+}
+
+async function buildPreflightSummary(options: {
+  configRow: ConfigRow;
+  autoCreateIssueTasks: boolean;
+}): Promise<SystemPreflightSummary> {
+  const taskRows = await db
+    .select({
+      id: tasks.id,
+      status: tasks.status,
+      blockReason: tasks.blockReason,
+      context: tasks.context,
+    })
+    .from(tasks);
+
+  let queuedTaskCount = 0;
+  let runningTaskCount = 0;
+  let failedTaskCount = 0;
+  let blockedTaskCount = 0;
+  let pendingJudgeTaskCount = 0;
+  const issueTaskMap = new Map<number, TaskIssueLink[]>();
+
+  for (const row of taskRows) {
+    if (row.status === "queued") queuedTaskCount += 1;
+    if (row.status === "running") runningTaskCount += 1;
+    if (row.status === "failed") failedTaskCount += 1;
+    if (row.status === "blocked") {
+      blockedTaskCount += 1;
+      if (row.blockReason === "awaiting_judge") {
+        pendingJudgeTaskCount += 1;
+      }
+    }
+
+    const issueNumber = extractIssueNumberFromTaskContext(row.context);
+    if (!issueNumber) continue;
+    const current = issueTaskMap.get(issueNumber) ?? [];
+    current.push({
+      id: row.id,
+      status: row.status,
+    });
+    issueTaskMap.set(issueNumber, current);
+  }
+
+  const summary: SystemPreflightSummary = {
+    github: {
+      enabled: false,
+      openIssueCount: 0,
+      openPrCount: 0,
+      issueTaskBacklogCount: 0,
+      generatedTaskCount: 0,
+      generatedTaskIds: [],
+      skippedIssueNumbers: [],
+      warnings: [],
+    },
+    local: {
+      queuedTaskCount,
+      runningTaskCount,
+      failedTaskCount,
+      blockedTaskCount,
+      pendingJudgeTaskCount,
+    },
+  };
+
+  if ((options.configRow.repoMode ?? "git").toLowerCase() !== "git") {
+    summary.github.warnings.push("REPO_MODE is not git. Skipping GitHub issue/PR preflight.");
+    return summary;
+  }
+
+  const githubContext = resolveGitHubContext(options.configRow);
+  if (!githubContext) {
+    summary.github.warnings.push(
+      "GitHub token/owner/repo is not fully configured. Skipping issue and PR preflight."
+    );
+    return summary;
+  }
+
+  summary.github.enabled = true;
+
+  let openIssues: OpenIssueSnapshot[] = [];
+  try {
+    const [issues, openPrCount] = await Promise.all([
+      fetchOpenIssues(githubContext),
+      fetchOpenPrCount(githubContext),
+    ]);
+    openIssues = issues;
+    summary.github.openIssueCount = issues.length;
+    summary.github.openPrCount = openPrCount;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    summary.github.warnings.push(`Failed to query GitHub backlog: ${message}`);
+    return summary;
+  }
+
+  const commands = options.autoCreateIssueTasks
+    ? await resolveIssueTaskCommands()
+    : [];
+
+  for (const issue of openIssues) {
+    const linkedTasks = issueTaskMap.get(issue.number) ?? [];
+    const isDone = linkedTasks.some((task) => task.status === "done");
+    const hasOngoingTask = linkedTasks.some(
+      (task) => task.status !== "done" && task.status !== "cancelled"
+    );
+
+    if (isDone) {
+      summary.github.skippedIssueNumbers.push(issue.number);
+      continue;
+    }
+
+    if (hasOngoingTask) {
+      summary.github.issueTaskBacklogCount += 1;
+      continue;
+    }
+
+    if (!options.autoCreateIssueTasks) {
+      summary.github.issueTaskBacklogCount += 1;
+      continue;
+    }
+
+    const createdTaskId = await createTaskFromIssue(issue, commands);
+    if (createdTaskId) {
+      summary.github.generatedTaskCount += 1;
+      summary.github.generatedTaskIds.push(createdTaskId);
+      summary.github.issueTaskBacklogCount += 1;
+    } else {
+      summary.github.warnings.push(`Failed to create task for issue #${issue.number}.`);
+    }
+  }
+
+  return summary;
 }
 
 const processDefinitions: ProcessDefinition[] = [
@@ -708,6 +1143,79 @@ systemRoute.post("/github/repo", async (c) => {
       );
     }
     return c.json({ error: message }, status === 403 ? 403 : 500);
+  }
+});
+
+systemRoute.post("/preflight", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  try {
+    const rawBody = await c.req.json().catch(() => ({}));
+    const content = typeof rawBody?.content === "string" ? rawBody.content : "";
+    const autoCreateIssueTasks =
+      typeof rawBody?.autoCreateIssueTasks === "boolean"
+        ? rawBody.autoCreateIssueTasks
+        : true;
+    const hasRequirementContent = content.trim().length > 0;
+
+    const configRow = await ensureConfigRow();
+    const preflight = await buildPreflightSummary({
+      configRow,
+      autoCreateIssueTasks,
+    });
+
+    const dispatcherEnabled = parseBooleanSetting(configRow.dispatcherEnabled, true);
+    const judgeEnabled = parseBooleanSetting(configRow.judgeEnabled, true);
+    const cycleManagerEnabled = parseBooleanSetting(configRow.cycleManagerEnabled, true);
+    const workerCount = parseCountSetting(configRow.workerCount, 1);
+    const testerCount = parseCountSetting(configRow.testerCount, 1);
+    const docserCount = parseCountSetting(configRow.docserCount, 1);
+
+    const hasIssueBacklog = preflight.github.issueTaskBacklogCount > 0;
+    const hasLocalTaskBacklog =
+      preflight.local.queuedTaskCount > 0
+      || preflight.local.runningTaskCount > 0
+      || preflight.local.failedTaskCount > 0
+      || preflight.local.blockedTaskCount > 0;
+    const hasJudgeBacklog =
+      preflight.github.openPrCount > 0 || preflight.local.pendingJudgeTaskCount > 0;
+
+    const startPlanner = hasRequirementContent && !hasIssueBacklog;
+    const startExecutionAgents = startPlanner || hasIssueBacklog || hasLocalTaskBacklog;
+
+    const recommendations = {
+      startPlanner,
+      startDispatcher: dispatcherEnabled && startExecutionAgents,
+      startJudge: judgeEnabled && hasJudgeBacklog,
+      startCycleManager:
+        cycleManagerEnabled
+        && (startExecutionAgents || hasJudgeBacklog || preflight.local.blockedTaskCount > 0),
+      workerCount: startExecutionAgents ? workerCount : 0,
+      testerCount: startExecutionAgents ? testerCount : 0,
+      docserCount: startExecutionAgents ? docserCount : 0,
+      reasons: [
+        hasIssueBacklog
+          ? `Issue backlog detected (${preflight.github.issueTaskBacklogCount})`
+          : "No issue backlog",
+        hasJudgeBacklog
+          ? `Judge backlog detected (openPR=${preflight.github.openPrCount}, awaitingJudge=${preflight.local.pendingJudgeTaskCount})`
+          : "No judge backlog",
+        startPlanner
+          ? "Planner is enabled because requirement content is present and issue backlog is empty"
+          : "Planner is skipped for this launch",
+      ],
+    };
+
+    return c.json({
+      preflight,
+      recommendations,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to run preflight";
+    return c.json({ error: message }, 500);
   }
 });
 

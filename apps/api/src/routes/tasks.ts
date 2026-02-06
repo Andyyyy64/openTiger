@@ -45,7 +45,7 @@ const MAX_RETRY_COUNT = Number.parseInt(
 const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
   env: 0,
   setup: 1,
-  policy: 0,
+  policy: 2,
   test: 2,
   flaky: 5,
   model: 2,
@@ -67,7 +67,7 @@ function classifyFailure(errorMessage: string | null): {
   if (
     /policy violation|denied command|outside allowed paths|change to denied path/.test(message)
   ) {
-    return { category: "policy", retryable: false };
+    return { category: "policy", retryable: true };
   }
 
   if (
