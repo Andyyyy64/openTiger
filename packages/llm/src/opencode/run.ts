@@ -55,10 +55,57 @@ const RETRYABLE_ERRORS = [
 ];
 
 const THOUGHT_SIGNATURE_ERROR = /thought[_\s-]?signature/i;
+const QUOTA_EXCEEDED_ERRORS = [
+  /quota exceeded/i,
+  /exceeded your current quota/i,
+  /generate_requests_per_model_per_day/i,
+];
+const ANSI_ESCAPE_REGEX = /\x1B\[[0-9;]*m/g;
+
+const DOOM_LOOP_WINDOW = 24;
+const DOOM_LOOP_IDENTICAL_THRESHOLD = 5;
+const DOOM_LOOP_PATTERN_MAX_LENGTH = 4;
+const DOOM_LOOP_PATTERN_REPEAT_THRESHOLD = 4;
 
 function isRetryableError(stderr: string, exitCode: number): boolean {
   if (exitCode === 1 && !stderr) return false;
   return RETRYABLE_ERRORS.some((pattern) => pattern.test(stderr));
+}
+
+function isQuotaExceededError(message: string): boolean {
+  return QUOTA_EXCEEDED_ERRORS.some((pattern) => pattern.test(message));
+}
+
+function normalizeChunkLine(line: string): string {
+  return line
+    .replace(ANSI_ESCAPE_REGEX, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 200);
+}
+
+function hasRepeatedPattern(chunks: string[]): boolean {
+  for (let patternLength = 1; patternLength <= DOOM_LOOP_PATTERN_MAX_LENGTH; patternLength++) {
+    const requiredLength = patternLength * DOOM_LOOP_PATTERN_REPEAT_THRESHOLD;
+    if (chunks.length < requiredLength) {
+      continue;
+    }
+    const pattern = chunks.slice(-patternLength);
+    let repeats = 1;
+    while (chunks.length >= patternLength * (repeats + 1)) {
+      const start = chunks.length - patternLength * (repeats + 1);
+      const segment = chunks.slice(start, start + patternLength);
+      const matched = segment.every((value, index) => value === pattern[index]);
+      if (!matched) {
+        break;
+      }
+      repeats++;
+    }
+    if (repeats >= DOOM_LOOP_PATTERN_REPEAT_THRESHOLD) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function calculateBackoffDelay(retryCount: number, baseDelayMs: number): number {
@@ -103,43 +150,133 @@ async function executeOpenCodeOnce(
     args.push("--model", model);
   }
 
+  // opencode 側の致命的エラーを stderr に出し、検知できるようにする
+  args.push("--print-logs", "--log-level", "ERROR");
   args.push("--file", promptPath);
   args.push("--");
   args.push("添付したプロンプトを読んで指示に従ってください。");
 
   const baseEnv = options.inheritEnv === false ? {} : globalThis.process.env;
+  const useProcessGroup = process.platform !== "win32";
   const childProcess = spawn("opencode", args, {
     cwd: options.workdir,
     env: {
       ...baseEnv,
       ...options.env,
     },
+    // 子プロセスが残留しないようにプロセスグループで停止できる形にする
+    detached: useProcessGroup,
     timeout: options.timeoutSeconds * 1000,
     stdio: ["ignore", "pipe", "pipe"],
   });
   const timeoutMs = options.timeoutSeconds * 1000;
   let timedOut = false;
+  let quotaExceeded = false;
+  let printedErrorSummary = false;
+  const MAX_ERROR_SUMMARY_LENGTH = 240;
+  const terminateOpenCode = (signal: NodeJS.Signals): void => {
+    const pid = childProcess.pid;
+    if (!pid) {
+      try {
+        childProcess.kill(signal);
+      } catch {
+        // 既に終了している場合は無視する
+      }
+      return;
+    }
+    if (useProcessGroup) {
+      try {
+        process.kill(-pid, signal);
+        return;
+      } catch {
+        // プロセスグループ停止が失敗した場合はPIDを直接停止する
+      }
+    }
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // 既に終了している場合は無視する
+    }
+  };
   const timeout = setTimeout(() => {
     timedOut = true;
-    childProcess.kill("SIGTERM");
-    setTimeout(() => childProcess.kill("SIGKILL"), 2000);
+    terminateOpenCode("SIGTERM");
+    setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
   }, timeoutMs);
 
   let stdout = "";
   let stderr = "";
+  let doomLoopDetected = false;
+  const recentChunks: string[] = [];
+  const markDoomLoopAndTerminate = (): void => {
+    if (doomLoopDetected) {
+      return;
+    }
+    doomLoopDetected = true;
+    process.stderr.write("\n[OpenCode] ドゥームループを検出したため強制終了します。\n");
+    terminateOpenCode("SIGTERM");
+    setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
+  };
+
+  const pushChunkAndDetectDoomLoop = (line: string): void => {
+    if (doomLoopDetected) {
+      return;
+    }
+    const normalized = normalizeChunkLine(line);
+    if (normalized.length <= 10) {
+      return;
+    }
+    recentChunks.push(normalized);
+    if (recentChunks.length > DOOM_LOOP_WINDOW) {
+      recentChunks.shift();
+    }
+
+    if (recentChunks.length >= DOOM_LOOP_IDENTICAL_THRESHOLD) {
+      const last = recentChunks[recentChunks.length - 1];
+      const repeats = recentChunks.filter((chunk) => chunk === last).length;
+      if (repeats >= DOOM_LOOP_IDENTICAL_THRESHOLD) {
+        markDoomLoopAndTerminate();
+        return;
+      }
+    }
+
+    if (hasRepeatedPattern(recentChunks)) {
+      markDoomLoopAndTerminate();
+    }
+  };
 
   childProcess.stdout.on("data", (data: Buffer) => {
     const chunk = data.toString();
     stdout += chunk;
     // リアルタイムでログに出力
     process.stdout.write(chunk);
+    for (const line of chunk.split(/\r?\n/)) {
+      pushChunkAndDetectDoomLoop(line);
+    }
   });
 
   childProcess.stderr.on("data", (data: Buffer) => {
     const chunk = data.toString();
     stderr += chunk;
-    // リアルタイムでログに出力
-    process.stderr.write(chunk);
+    const lines = chunk.split(/\r?\n/).filter((line) => line.trim().length > 0);
+    for (const line of lines) {
+      if (!quotaExceeded && isQuotaExceededError(line)) {
+        quotaExceeded = true;
+        // クォータ超過は継続しても回復しないため早期に停止する
+        process.stderr.write("\n[OpenCode] クォータ上限に到達したため中断します。\n");
+        terminateOpenCode("SIGTERM");
+        setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
+        continue;
+      }
+      if (!printedErrorSummary && (line.startsWith("ERROR") || line.includes(" error="))) {
+        printedErrorSummary = true;
+        const summary =
+          line.length > MAX_ERROR_SUMMARY_LENGTH
+            ? `${line.slice(0, MAX_ERROR_SUMMARY_LENGTH)}...`
+            : line;
+        process.stderr.write(`${summary}\n`);
+      }
+    }
   });
 
   return new Promise((resolve) => {
@@ -148,14 +285,16 @@ async function executeOpenCodeOnce(
       const durationMs = Date.now() - startTime;
       const tokenUsage = extractOpenCodeTokenUsage(stdout);
       const timeoutMessage = timedOut ? "\n[OpenCode] Timeout exceeded" : "";
+      const quotaMessage = quotaExceeded ? "\n[OpenCode] クォータ上限に到達しました" : "";
+      const doomLoopMessage = doomLoopDetected ? "\n[OpenCode] Doom loop detected" : "";
 
       rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
 
       resolve({
-        success: !timedOut && code === 0,
-        exitCode: timedOut ? -1 : code ?? -1,
+        success: !timedOut && !quotaExceeded && !doomLoopDetected && code === 0,
+        exitCode: timedOut || quotaExceeded || doomLoopDetected ? -1 : code ?? -1,
         stdout,
-        stderr: stderr + timeoutMessage,
+        stderr: stderr + timeoutMessage + quotaMessage + doomLoopMessage,
         durationMs,
         tokenUsage,
       });
@@ -193,6 +332,13 @@ export async function runOpenCode(
 
     if (result.success) {
       return { ...result, retryCount };
+    }
+
+    if (isQuotaExceededError(result.stderr)) {
+      console.error(
+        `[OpenCode] ${currentModel ?? "unknown model"} のクォータ上限に到達しました。API利用枠を確認してください。`
+      );
+      break;
     }
 
     if (

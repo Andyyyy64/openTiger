@@ -73,7 +73,10 @@ export async function enqueueTask(
   queue: Queue<TaskJobData>,
   data: TaskJobData
 ): Promise<Job<TaskJobData>> {
-  return queue.add(`task:${data.taskId}`, data, {
+  const jobName = `task:${data.taskId}`;
+  // taskId 固定の jobId を使うと、failed/completed ジョブが残っている間に
+  // 再試行を再投入できなくなるため、毎回新規ジョブとして追加する。
+  return await queue.add(jobName, data, {
     priority: data.priority,
   });
 }

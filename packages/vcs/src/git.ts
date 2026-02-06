@@ -267,6 +267,26 @@ export async function commit(
   return execGit(["commit", "-m", message], cwd);
 }
 
+export async function commitAllowEmpty(
+  cwd: string,
+  message: string
+): Promise<GitResult> {
+  return execGit(["commit", "--allow-empty", "-m", message], cwd);
+}
+
+export async function createOrphanBranch(
+  cwd: string,
+  branchName: string
+): Promise<GitResult> {
+  return execGit(["checkout", "--orphan", branchName], cwd);
+}
+
+export async function removeAllFiles(
+  cwd: string
+): Promise<GitResult> {
+  return execGit(["rm", "-rf", "."], cwd);
+}
+
 // プッシュ
 export async function push(
   cwd: string,
@@ -371,7 +391,11 @@ export async function refExists(cwd: string, ref: string): Promise<boolean> {
 }
 
 export async function getChangedFilesFromRoot(cwd: string): Promise<string[]> {
-  const result = await execGit(["diff", "--name-only", "--root", "HEAD"], cwd);
+  // 初回コミットの場合は作業ツリーではなくコミットの内容を参照する
+  const result = await execGit(
+    ["show", "--name-only", "--pretty=", "--root", "HEAD"],
+    cwd
+  );
   if (!result.success) {
     return [];
   }
@@ -382,7 +406,11 @@ export async function getChangedFilesFromRoot(cwd: string): Promise<string[]> {
 }
 
 export async function getDiffStatsFromRoot(cwd: string): Promise<DiffStats> {
-  const result = await execGit(["diff", "--numstat", "--root", "HEAD"], cwd);
+  // 初回コミットの場合は作業ツリーではなくコミットの内容を参照する
+  const result = await execGit(
+    ["show", "--numstat", "--pretty=", "--root", "HEAD"],
+    cwd
+  );
   if (!result.success) {
     return {
       additions: 0,
@@ -423,21 +451,31 @@ export async function getDiffStatsFromRoot(cwd: string): Promise<DiffStats> {
 
 // 変更されたファイル一覧を取得
 export async function getChangedFiles(cwd: string): Promise<string[]> {
-  const result = await execGit(["status", "--porcelain"], cwd);
+  // -uall で未追跡ディレクトリを展開し、ファイル単位で取得する
+  const result = await execGit(["status", "--porcelain", "-uall"], cwd);
   if (!result.success) {
     return [];
   }
 
-  return result.stdout
+  const files = result.stdout
     .split("\n")
-    .filter((line) => line.length > 2)
+    .filter((line) => line.length > 3)
     .map((line) => {
-      // Porcelain形式は先頭2文字がステータス、その後ろにパスが続く
-      // 2文字目以降をすべて取得してトリムすることで、スペースの数に関わらずパスを抽出
-      const path = line.slice(2).trim();
+      // Porcelain形式は `XY <path>` なので先頭3文字を除外する
+      const rawPath = line.slice(3).trim();
       // 引用符で囲まれている場合は除去
-      return path.replace(/^"|"$/g, "");
-    });
+      const normalized = rawPath.replace(/^"|"$/g, "");
+      // rename/copy (`old -> new`) は新しいパスを優先して扱う
+      if (normalized.includes(" -> ")) {
+        const [, to] = normalized.split(/\s+->\s+/);
+        return (to ?? normalized).trim();
+      }
+      return normalized;
+    })
+    // ディレクトリ単位のエントリはポリシー判定では扱わない
+    .filter((path) => path.length > 0 && !path.endsWith("/"));
+
+  return Array.from(new Set(files));
 }
 
 // 変更行数を取得
