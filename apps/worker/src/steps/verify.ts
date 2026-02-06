@@ -159,6 +159,10 @@ function isDevCommand(command: string): boolean {
   return /\b(pnpm|npm|yarn|bun)\b[^\n]*\b(run\s+)?dev\b/.test(command);
 }
 
+function isUnsafeRuntimeCommand(command: string): boolean {
+  return /\b(pnpm|npm|yarn|bun)\b[^\n]*\b(run\s+)?(dev|start|watch)\b/.test(command);
+}
+
 function isE2ECommand(command: string): boolean {
   return /\b(test:e2e|playwright)\b/i.test(command);
 }
@@ -675,6 +679,19 @@ export async function verifyChanges(
     // checkスクリプトがない場合は検証コマンドから除外する
     if (isCheckCommand(command) && !checkScriptAvailable) {
       const notice = `Skipped: ${command} (check script not found)`;
+      console.warn(`  WARN: ${notice}`);
+      commandResults.push({
+        command,
+        success: true,
+        stdout: notice,
+        stderr: "",
+        durationMs: 0,
+      });
+      continue;
+    }
+
+    if (isUnsafeRuntimeCommand(command) && !isE2ECommand(command)) {
+      const notice = `Skipped: ${command} (runtime/watch command is not allowed in verification)`;
       console.warn(`  WARN: ${notice}`);
       commandResults.push({
         command,

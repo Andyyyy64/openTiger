@@ -330,10 +330,8 @@ function isDevCommand(command: string): boolean {
 }
 
 function ensureDevCommand(commands: string[], devCommand?: string): string[] {
-  if (!devCommand || commands.length > 0) {
-    return commands;
-  }
-  return [devCommand];
+  // `dev` は常駐プロセスになりやすく検証用途には不向きなので自動補完しない
+  return commands;
 }
 
 function applyDevCommandPolicy(
@@ -357,11 +355,15 @@ function filterVerificationCommands(
   commands: string[],
   checkScriptAvailable: boolean
 ): string[] {
-  if (checkScriptAvailable) {
-    return commands;
-  }
-
-  return commands.filter((command) => !isCheckCommand(command));
+  return commands.filter((command) => {
+    if (isDevCommand(command)) {
+      return false;
+    }
+    if (!checkScriptAvailable && isCheckCommand(command)) {
+      return false;
+    }
+    return true;
+  });
 }
 
 function applyVerificationCommandPolicy(

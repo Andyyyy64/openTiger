@@ -270,7 +270,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
   }
 
   if (
-    /package\.json|pnpm-workspace\.yaml|cannot find module|enoent|command not found|repository not found|authentication failed|permission denied/.test(
+    /package\.json|pnpm-workspace\.yaml|cannot find module|enoent|command not found|repository not found|authentication failed|permission denied|no commits between|no history in common/.test(
       message
     )
   ) {

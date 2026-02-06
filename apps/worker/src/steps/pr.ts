@@ -10,6 +10,9 @@ import {
   createOrphanBranch,
   removeAllFiles,
   commitAllowEmpty,
+  rebaseBranch,
+  abortRebase,
+  setRepositoryDefaultBranch,
 } from "@sebastian-code/vcs";
 import { getRepoMode } from "@sebastian-code/core";
 import type { Task } from "@sebastian-code/core";
@@ -112,10 +115,24 @@ export async function ensureRemoteBaseBranch(
 
   const baseExists = await remoteBranchExists(repoPath, baseBranch);
   if (baseExists) {
-    return { success: true, created: false };
+    try {
+      await setRepositoryDefaultBranch(baseBranch);
+      return { success: true, created: false };
+    } catch (error) {
+      return {
+        success: false,
+        created: false,
+        error: `Failed to set default branch to ${baseBranch}: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
   }
 
-  console.log(`[Worker] Base branch ${baseBranch} does not exist on remote. Creating...`);
+  const originalBranch = (await getCurrentBranch(repoPath)) ?? currentBranch;
+
+  // 空リポジトリ時は orphan で base を作り、currentBranch を rebase して
+  // PRの「No commits between」「no history in common」を同時に防ぐ
+  console.log(`[Worker] Base branch ${baseBranch} does not exist on remote. Bootstrapping...`);
+
   const orphanResult = await createOrphanBranch(repoPath, baseBranch);
   if (!orphanResult.success) {
     return { success: false, created: false, error: `Failed to create orphan branch: ${orphanResult.stderr}` };
@@ -123,24 +140,56 @@ export async function ensureRemoteBaseBranch(
 
   const cleanupResult = await removeAllFiles(repoPath);
   if (!cleanupResult.success && cleanupResult.stderr.trim().length > 0) {
-    console.warn(`[Worker] Failed to clean working tree for ${baseBranch}: ${cleanupResult.stderr}`);
+    console.warn(`[Worker] Cleanup warning while creating ${baseBranch}: ${cleanupResult.stderr}`);
   }
 
   const commitResult = await commitAllowEmpty(repoPath, "chore: initialize default branch");
   if (!commitResult.success) {
-    await checkoutBranch(repoPath, currentBranch);
-    return { success: false, created: false, error: `Failed to commit on base branch: ${commitResult.stderr}` };
+    await checkoutBranch(repoPath, originalBranch);
+    return { success: false, created: false, error: `Failed to create base commit: ${commitResult.stderr}` };
   }
 
-  const pushResult = await push(repoPath, baseBranch);
-  if (!pushResult.success) {
-    await checkoutBranch(repoPath, currentBranch);
-    return { success: false, created: false, error: `Failed to push base branch: ${pushResult.stderr}` };
+  const pushBaseResult = await push(repoPath, baseBranch);
+  if (!pushBaseResult.success) {
+    await checkoutBranch(repoPath, originalBranch);
+    return { success: false, created: false, error: `Failed to push base branch: ${pushBaseResult.stderr}` };
   }
 
-  const restoreResult = await checkoutBranch(repoPath, currentBranch);
+  try {
+    await setRepositoryDefaultBranch(baseBranch);
+    console.log(`[Worker] Repository default branch set to ${baseBranch}.`);
+  } catch (error) {
+    await checkoutBranch(repoPath, originalBranch);
+    return {
+      success: false,
+      created: false,
+      error: `Failed to set default branch to ${baseBranch}: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  const restoreResult = await checkoutBranch(repoPath, originalBranch);
   if (!restoreResult.success) {
-    return { success: false, created: false, error: `Failed to restore branch ${currentBranch}: ${restoreResult.stderr}` };
+    return { success: false, created: false, error: `Failed to restore branch ${originalBranch}: ${restoreResult.stderr}` };
+  }
+
+  const rebaseResult = await rebaseBranch(repoPath, baseBranch);
+  if (!rebaseResult.success) {
+    await abortRebase(repoPath);
+    return {
+      success: false,
+      created: false,
+      error: `Failed to rebase ${originalBranch} onto ${baseBranch}: ${rebaseResult.stderr}`,
+    };
+  }
+
+  // rebaseで履歴が変わるため currentBranch を強制更新
+  const pushBranchResult = await push(repoPath, `${originalBranch}:${originalBranch}`, true);
+  if (!pushBranchResult.success) {
+    return {
+      success: false,
+      created: false,
+      error: `Failed to push rebased branch ${originalBranch}: ${pushBranchResult.stderr}`,
+    };
   }
 
   console.log(`[Worker] Base branch ${baseBranch} created and pushed.`);
