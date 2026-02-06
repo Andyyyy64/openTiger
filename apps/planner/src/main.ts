@@ -6,7 +6,7 @@ import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 import { db, closeDb } from "@sebastian-code/db";
 import { tasks, agents, events } from "@sebastian-code/db/schema";
-import { eq, desc, inArray, and, sql } from "drizzle-orm";
+import { eq, desc, inArray, and, sql, gte } from "drizzle-orm";
 import dotenv from "dotenv";
 import { getRepoMode, getLocalRepoPath } from "@sebastian-code/core";
 import { createIssue } from "@sebastian-code/vcs";
@@ -500,6 +500,7 @@ async function computePlanSignature(params: {
 }
 
 const DEFAULT_PLAN_DEDUPE_WINDOW_MS = 10 * 60 * 1000; // 10分
+type DbLike = typeof db;
 
 function resolvePlanDedupeWindowMs(): number {
   const raw = process.env.PLANNER_DEDUPE_WINDOW_MS;
@@ -510,32 +511,80 @@ function resolvePlanDedupeWindowMs(): number {
   return DEFAULT_PLAN_DEDUPE_WINDOW_MS;
 }
 
-async function wasPlanRecentlyCreated(signature: string, windowMs: number): Promise<boolean> {
+async function wasPlanRecentlyCreated(
+  signature: string,
+  windowMs: number,
+  database: DbLike = db
+): Promise<boolean> {
   const since = new Date(Date.now() - windowMs);
-  const [row] = await db
+  const [row] = await database
     .select({ id: events.id })
     .from(events)
     .where(and(
       eq(events.type, "planner.plan_created"),
       sql`${events.payload} ->> 'signature' = ${signature}`,
-      sql`${events.createdAt} >= ${since}`
+      gte(events.createdAt, since)
     ))
     .orderBy(desc(events.createdAt))
     .limit(1);
   return Boolean(row?.id);
 }
 
-async function tryAcquirePlanSaveLock(signature: string): Promise<boolean> {
-  // 同一署名の保存を単一プロセスに限定して、二重起動時の競合と重複保存を防ぐ
-  const result = await db.execute(
-    sql`SELECT pg_try_advisory_lock(hashtext(${signature})) AS locked`
-  );
-  const row = (result as { rows?: Array<{ locked?: boolean | null }> }).rows?.[0];
-  return row?.locked === true;
+function parsePgBoolean(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value === 1;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "t"
+      || normalized === "true"
+      || normalized === "1"
+      || normalized === "y"
+      || normalized === "yes";
+  }
+  return false;
 }
 
-async function releasePlanSaveLock(signature: string): Promise<void> {
-  await db.execute(sql`SELECT pg_advisory_unlock(hashtext(${signature}))`);
+function extractExecuteFirstRow(
+  result: unknown
+): Record<string, unknown> | undefined {
+  if (Array.isArray(result)) {
+    const first = result[0];
+    return (first && typeof first === "object")
+      ? (first as Record<string, unknown>)
+      : undefined;
+  }
+
+  if (result && typeof result === "object" && "rows" in result) {
+    const rows = (result as { rows?: unknown }).rows;
+    if (Array.isArray(rows)) {
+      const first = rows[0];
+      return (first && typeof first === "object")
+        ? (first as Record<string, unknown>)
+        : undefined;
+    }
+  }
+
+  return undefined;
+}
+
+async function tryAcquirePlanSaveLock(
+  signature: string,
+  database: DbLike = db
+): Promise<boolean> {
+  // 同一署名の保存を単一トランザクションに限定して、二重起動時の競合と重複保存を防ぐ
+  const result = await database.execute(
+    sql`SELECT pg_try_advisory_xact_lock(hashtext(${signature})) AS locked`
+  );
+  const row = extractExecuteFirstRow(result);
+  if (!row || !("locked" in row)) {
+    console.warn("[Planner] Could not parse advisory lock result; treat as not acquired.");
+    return false;
+  }
+  return parsePgBoolean(row?.locked);
 }
 
 type DocGapInfo = {
@@ -1150,11 +1199,14 @@ function ensureInitializationTaskForUninitializedRepo(
 }
 
 // タスクをDBに保存
-async function saveTasks(taskInputs: PlannedTaskInput[]): Promise<string[]> {
+async function saveTasks(
+  taskInputs: PlannedTaskInput[],
+  database: DbLike = db
+): Promise<string[]> {
   const savedIds: string[] = [];
 
   for (const input of taskInputs) {
-    const result = await db
+    const result = await database
       .insert(tasks)
       .values({
         title: input.title,
@@ -1184,7 +1236,8 @@ async function saveTasks(taskInputs: PlannedTaskInput[]): Promise<string[]> {
 // 依存関係を解決してDBのIDで更新
 async function resolveDependencies(
   savedIds: string[],
-  originalTasks: PlannedTaskInput[]
+  originalTasks: PlannedTaskInput[],
+  database: DbLike = db
 ): Promise<void> {
   // 元のタスクにdependsOnがあった場合、インデックスからIDに変換
   for (let i = 0; i < originalTasks.length; i++) {
@@ -1211,7 +1264,7 @@ async function resolveDependencies(
       );
     }
 
-    await db
+    await database
       .update(tasks)
       .set({ dependencies: dependencyIds, updatedAt: new Date() })
       .where(eq(tasks.id, savedId));
@@ -1225,8 +1278,10 @@ async function recordPlannerPlanEvent(params: {
   savedIds: string[];
   agentId: string;
   signature?: { signature: string; requirementHash: string; repoHeadSha: string };
+  database?: DbLike;
 }): Promise<void> {
   const { requirementPath, requirement, result, savedIds, agentId, signature } = params;
+  const database = params.database ?? db;
   const taskSummaries = result.tasks
     .map((task, index) => {
       const id = savedIds[index];
@@ -1248,7 +1303,7 @@ async function recordPlannerPlanEvent(params: {
     );
 
   try {
-    await db.insert(events).values({
+    await database.insert(events).values({
       type: "planner.plan_created",
       entityType: "system",
       entityId: "00000000-0000-0000-0000-000000000000",
@@ -1360,7 +1415,9 @@ async function createIssuesForTasks(params: {
   tasks: PlannedTaskInput[];
   savedIds: string[];
 }): Promise<void> {
-  if (getRepoMode() !== "git") {
+  const repoMode = getRepoMode();
+  if (repoMode !== "git") {
+    console.warn(`[Planner] REPO_MODE=${repoMode} のためIssue作成をスキップします。`);
     return;
   }
   if (!process.env.GITHUB_TOKEN || !process.env.GITHUB_OWNER || !process.env.GITHUB_REPO) {
@@ -1608,21 +1665,26 @@ async function planFromRequirement(
 
   const dedupeWindowMs = resolvePlanDedupeWindowMs();
   if (planSignature?.signature) {
-    const acquired = await tryAcquirePlanSaveLock(planSignature.signature);
-    if (!acquired) {
-      console.log("\n[Planner] 同一署名のPlan保存が進行中のため、保存をスキップします。");
-      return;
-    }
-    try {
-      if (await wasPlanRecentlyCreated(planSignature.signature, dedupeWindowMs)) {
-        console.log("\n[Planner] 同一署名のPlanが直近に作成済みのため、保存をスキップします。");
+    let skippedReason: "in_progress" | "recent" | null = null;
+    let savedIdsInTx: string[] = [];
+
+    await db.transaction(async (tx) => {
+      const database = tx as unknown as DbLike;
+      const acquired = await tryAcquirePlanSaveLock(planSignature.signature, database);
+      if (!acquired) {
+        skippedReason = "in_progress";
+        return;
+      }
+
+      if (await wasPlanRecentlyCreated(planSignature.signature, dedupeWindowMs, database)) {
+        skippedReason = "recent";
         return;
       }
 
       // DBに保存
       console.log("\n[Saving tasks to database...]");
-      const savedIds = await saveTasks(result.tasks);
-      await resolveDependencies(savedIds, result.tasks);
+      const savedIds = await saveTasks(result.tasks, database);
+      await resolveDependencies(savedIds, result.tasks, database);
 
       // Plannerの計画内容をUI側で参照できるように記録する
       await recordPlannerPlanEvent({
@@ -1632,27 +1694,41 @@ async function planFromRequirement(
         savedIds,
         agentId,
         signature: planSignature,
+        database,
       });
 
-      await createIssuesForTasks({
-        requirement,
-        tasks: result.tasks,
-        savedIds,
-      });
+      savedIdsInTx = savedIds;
+    });
 
-      console.log(`\nSaved ${savedIds.length} tasks to database`);
-      console.log("Task IDs:");
-      for (const id of savedIds) {
-        console.log(`  - ${id}`);
-      }
-
-      console.log("\n" + "=".repeat(60));
-      console.log("Planning complete!");
-      console.log("=".repeat(60));
+    if (skippedReason === "in_progress") {
+      console.log("\n[Planner] 同一署名のPlan保存が進行中のため、保存をスキップします。");
       return;
-    } finally {
-      await releasePlanSaveLock(planSignature.signature);
     }
+    if (skippedReason === "recent") {
+      console.log("\n[Planner] 同一署名のPlanが直近に作成済みのため、保存をスキップします。");
+      return;
+    }
+    if (savedIdsInTx.length === 0) {
+      console.warn("\n[Planner] Plan was not saved due to an unknown dedupe condition.");
+      return;
+    }
+
+    await createIssuesForTasks({
+      requirement,
+      tasks: result.tasks,
+      savedIds: savedIdsInTx,
+    });
+
+    console.log(`\nSaved ${savedIdsInTx.length} tasks to database`);
+    console.log("Task IDs:");
+    for (const id of savedIdsInTx) {
+      console.log(`  - ${id}`);
+    }
+
+    console.log("\n" + "=".repeat(60));
+    console.log("Planning complete!");
+    console.log("=".repeat(60));
+    return;
   }
 
   // DBに保存

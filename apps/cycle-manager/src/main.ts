@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { db } from "@sebastian-code/db";
 import { events, agents } from "@sebastian-code/db/schema";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, gte, isNotNull } from "drizzle-orm";
 import type { CycleConfig } from "@sebastian-code/core";
 import {
   startNewCycle,
@@ -364,6 +364,32 @@ async function shouldTriggerReplan(
   if (plannerBusy) {
     return { shouldRun: false, reason: "planner_busy" };
   }
+  const plannerRecentWindowRaw = Number.parseInt(
+    process.env.REPLAN_PLANNER_ACTIVE_WINDOW_MS ?? "90000",
+    10
+  );
+  const plannerRecentWindowMs = Number.isFinite(plannerRecentWindowRaw)
+    && plannerRecentWindowRaw > 0
+    ? plannerRecentWindowRaw
+    : 90000;
+  const plannerRecentSince = new Date(Date.now() - plannerRecentWindowMs);
+  const [plannerRecentlyActive] = await db
+    .select({
+      id: agents.id,
+      status: agents.status,
+      lastHeartbeat: agents.lastHeartbeat,
+    })
+    .from(agents)
+    .where(and(
+      eq(agents.role, "planner"),
+      isNotNull(agents.lastHeartbeat),
+      gte(agents.lastHeartbeat, plannerRecentSince)
+    ))
+    .orderBy(desc(agents.lastHeartbeat))
+    .limit(1);
+  if (plannerRecentlyActive) {
+    return { shouldRun: false, reason: "planner_recently_active" };
+  }
   if (!config.replanRequirementPath) {
     if (!warnedMissingRequirementPath) {
       console.warn("[CycleManager] REPLAN_REQUIREMENT_PATH is not set.");
@@ -414,6 +440,27 @@ function buildReplanCommand(config: CycleManagerConfig): string {
   return `${config.replanCommand} "${requirementPath}"`;
 }
 
+function buildPlannerReplanEnv(config: CycleManagerConfig): Record<string, string> {
+  const repoUrl = config.replanRepoUrl?.trim() || process.env.REPO_URL?.trim() || "";
+  const baseBranch = config.replanBaseBranch?.trim() || process.env.BASE_BRANCH?.trim() || "main";
+  const useRemote = repoUrl.length > 0;
+
+  const env: Record<string, string> = {
+    ...process.env,
+    REPLAN_TRIGGERED_BY: "cycle-manager",
+    BASE_BRANCH: baseBranch,
+  };
+
+  if (useRemote) {
+    env.REPO_MODE = "git";
+    env.REPO_URL = repoUrl;
+    env.PLANNER_USE_REMOTE = "true";
+    env.PLANNER_REPO_URL = repoUrl;
+  }
+
+  return env;
+}
+
 async function triggerReplan(
   state: SystemState,
   signature?: ReplanSignature
@@ -430,10 +477,16 @@ async function triggerReplan(
   }
 
   const command = buildReplanCommand(config);
+  const plannerEnv = buildPlannerReplanEnv(config);
   replanInProgress = true;
   lastReplanAt = Date.now();
 
   console.log(`[CycleManager] Triggering planner: ${command}`);
+  if (plannerEnv.PLANNER_REPO_URL) {
+    console.log(
+      `[CycleManager] Replan planner env: REPO_MODE=${plannerEnv.REPO_MODE}, PLANNER_USE_REMOTE=${plannerEnv.PLANNER_USE_REMOTE}, PLANNER_REPO_URL=${plannerEnv.PLANNER_REPO_URL}`
+    );
+  }
   await recordEvent({
     type: "planner.replan_triggered",
     entityType: "system",
@@ -450,10 +503,7 @@ async function triggerReplan(
 
   const child = spawn("sh", ["-c", command], {
     cwd: config.replanWorkdir,
-    env: {
-      ...process.env,
-      REPLAN_TRIGGERED_BY: "cycle-manager",
-    },
+    env: plannerEnv,
   });
 
   // Plannerの標準出力をそのまま流す

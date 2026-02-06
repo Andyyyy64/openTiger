@@ -44,7 +44,7 @@ const MAX_RETRY_COUNT = Number.parseInt(
 
 const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
   env: 0,
-  setup: 1,
+  setup: 3,
   policy: 2,
   test: 2,
   flaky: 5,
@@ -75,7 +75,7 @@ function classifyFailure(errorMessage: string | null): {
       message
     )
   ) {
-    return { category: "setup", retryable: false };
+    return { category: "setup", retryable: true };
   }
 
   if (/database_url|redis_url|connection refused|dns|env/.test(message)) {

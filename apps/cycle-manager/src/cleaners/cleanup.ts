@@ -249,7 +249,7 @@ type FailureClassification = {
 
 const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
   env: 0,
-  setup: 1,
+  setup: 3,
   policy: 2,
   test: 2,
   flaky: 5,
@@ -276,7 +276,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
   ) {
     return {
       category: "setup",
-      retryable: false,
+      retryable: true,
       reason: "setup_or_bootstrap_issue",
     };
   }
