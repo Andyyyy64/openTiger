@@ -171,10 +171,31 @@ export interface GitHubRepoInfo {
   created: boolean;
 }
 
+export interface TaskRetryInfo {
+  autoRetry: boolean;
+  reason:
+    | 'cooldown_pending'
+    | 'retry_due'
+    | 'retry_exhausted'
+    | 'needs_human'
+    | 'non_retryable_failure'
+    | 'awaiting_judge'
+    | 'needs_rework'
+    | 'unknown';
+  retryAt: string | null;
+  retryInSeconds: number | null;
+  cooldownMs: number | null;
+  retryCount: number;
+  retryLimit: number;
+  failureCategory?: 'env' | 'setup' | 'policy' | 'test' | 'flaky' | 'model';
+}
+
+export type TaskView = Task & { retry?: TaskRetryInfo | null };
+
 // タスク関連
 export const tasksApi = {
-  list: () => fetchApi<{ tasks: Task[] }>('/tasks').then(res => res.tasks),
-  get: (id: string) => fetchApi<{ task: Task }>(`/tasks/${id}`).then(res => res.task),
+  list: () => fetchApi<{ tasks: TaskView[] }>('/tasks').then(res => res.tasks),
+  get: (id: string) => fetchApi<{ task: TaskView }>(`/tasks/${id}`).then(res => res.task),
   create: (input: CreateTaskInput) => fetchApi<{ task: Task }>('/tasks', {
     method: 'POST',
     body: JSON.stringify(input),

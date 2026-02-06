@@ -2,9 +2,16 @@ import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { tasksApi, runsApi } from '../lib/api';
+import type { TaskRetryInfo } from '../lib/api';
 
 export const TaskDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const [now, setNow] = React.useState(Date.now());
+
+  React.useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const { data: task, isLoading: isTaskLoading } = useQuery({
     queryKey: ['tasks', id],
@@ -159,6 +166,16 @@ export const TaskDetailsPage: React.FC = () => {
                 <span className="text-zinc-500 uppercase">TIMEBOX</span>
                 <span className="text-[var(--color-term-fg)]">{task.timeboxMinutes}m</span>
               </div>
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-500 uppercase">RETRY</span>
+                <span className="text-[var(--color-term-fg)]">{formatRetrySummary(task.retry, now)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-zinc-500 uppercase">RETRY_COUNT</span>
+                <span className="text-[var(--color-term-fg)]">
+                  {task.retry?.retryCount ?? task.retryCount}/{task.retry?.retryLimit ?? '-'}
+                </span>
+              </div>
             </div>
           </section>
 
@@ -239,3 +256,29 @@ const getRiskColor = (risk: string) => {
   }
 };
 
+function formatRetrySummary(retry: TaskRetryInfo | null | undefined, nowMs: number): string {
+  if (!retry) {
+    return '--';
+  }
+
+  if (!retry.autoRetry) {
+    switch (retry.reason) {
+      case 'needs_human':
+        return 'manual';
+      case 'retry_exhausted':
+        return 'exhausted';
+      case 'non_retryable_failure':
+        return retry.failureCategory ? `no-retry(${retry.failureCategory})` : 'no-retry';
+      default:
+        return 'no-auto-retry';
+    }
+  }
+
+  if (!retry.retryAt) {
+    return 'pending';
+  }
+
+  const retryAtMs = new Date(retry.retryAt).getTime();
+  const seconds = Math.max(0, Math.ceil((retryAtMs - nowMs) / 1000));
+  return seconds > 0 ? `${seconds}s` : 'due';
+}

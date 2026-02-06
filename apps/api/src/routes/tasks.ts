@@ -2,11 +2,221 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@sebastian-code/db";
-import { tasks } from "@sebastian-code/db/schema";
-import { eq } from "drizzle-orm";
+import { tasks, runs } from "@sebastian-code/db/schema";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { CreateTaskInput } from "@sebastian-code/core";
 
 export const tasksRoute = new Hono();
+
+type FailureCategory = "env" | "setup" | "policy" | "test" | "flaky" | "model";
+
+type RetryInfo = {
+  autoRetry: boolean;
+  reason:
+    | "cooldown_pending"
+    | "retry_due"
+    | "retry_exhausted"
+    | "needs_human"
+    | "non_retryable_failure"
+    | "awaiting_judge"
+    | "needs_rework"
+    | "unknown";
+  retryAt: string | null;
+  retryInSeconds: number | null;
+  cooldownMs: number | null;
+  retryCount: number;
+  retryLimit: number;
+  failureCategory?: FailureCategory;
+};
+
+const FAILED_TASK_RETRY_COOLDOWN_MS = Number.parseInt(
+  process.env.FAILED_TASK_RETRY_COOLDOWN_MS ?? "30000",
+  10
+);
+const BLOCKED_TASK_RETRY_COOLDOWN_MS = Number.parseInt(
+  process.env.BLOCKED_TASK_RETRY_COOLDOWN_MS ?? "120000",
+  10
+);
+const MAX_RETRY_COUNT = Number.parseInt(
+  process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "3",
+  10
+);
+
+const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
+  env: 0,
+  setup: 1,
+  policy: 0,
+  test: 2,
+  flaky: 5,
+  model: 2,
+};
+
+function normalizeRetryLimit(limit: number): number {
+  if (!Number.isFinite(limit) || limit < 0) {
+    return 3;
+  }
+  return limit;
+}
+
+function classifyFailure(errorMessage: string | null): {
+  category: FailureCategory;
+  retryable: boolean;
+} {
+  const message = (errorMessage ?? "").toLowerCase();
+
+  if (
+    /policy violation|denied command|outside allowed paths|change to denied path/.test(message)
+  ) {
+    return { category: "policy", retryable: false };
+  }
+
+  if (
+    /package\.json|pnpm-workspace\.yaml|cannot find module|enoent|command not found|repository not found|authentication failed|permission denied|no commits between|no history in common/.test(
+      message
+    )
+  ) {
+    return { category: "setup", retryable: false };
+  }
+
+  if (/database_url|redis_url|connection refused|dns|env/.test(message)) {
+    return { category: "env", retryable: false };
+  }
+
+  if (/vitest|playwright|assert|expected|test failed|verification commands failed/.test(message)) {
+    return { category: "test", retryable: true };
+  }
+
+  if (
+    /rate limit|429|503|502|timeout|timed out|econnreset|eai_again|temporarily unavailable/.test(
+      message
+    )
+  ) {
+    return { category: "flaky", retryable: true };
+  }
+
+  return { category: "model", retryable: true };
+}
+
+function buildRetryInfo(
+  task: typeof tasks.$inferSelect,
+  latestFailureMessage?: string | null
+): RetryInfo | null {
+  if (task.status !== "failed" && task.status !== "blocked") {
+    return null;
+  }
+
+  const now = Date.now();
+  const retryLimit = normalizeRetryLimit(MAX_RETRY_COUNT);
+  const retryCount = task.retryCount ?? 0;
+
+  if (retryCount >= retryLimit) {
+    return {
+      autoRetry: false,
+      reason: "retry_exhausted",
+      retryAt: null,
+      retryInSeconds: null,
+      cooldownMs: null,
+      retryCount,
+      retryLimit,
+    };
+  }
+
+  if (task.status === "blocked") {
+    if (task.blockReason === "needs_human") {
+      return {
+        autoRetry: false,
+        reason: "needs_human",
+        retryAt: null,
+        retryInSeconds: null,
+        cooldownMs: null,
+        retryCount,
+        retryLimit,
+      };
+    }
+
+    const retryAtMs = new Date(task.updatedAt).getTime() + BLOCKED_TASK_RETRY_COOLDOWN_MS;
+    const retryInSeconds = Math.max(0, Math.ceil((retryAtMs - now) / 1000));
+    return {
+      autoRetry: true,
+      reason:
+        task.blockReason === "awaiting_judge"
+          ? "awaiting_judge"
+          : task.blockReason === "needs_rework"
+            ? "needs_rework"
+            : retryInSeconds > 0
+              ? "cooldown_pending"
+              : "retry_due",
+      retryAt: new Date(retryAtMs).toISOString(),
+      retryInSeconds,
+      cooldownMs: BLOCKED_TASK_RETRY_COOLDOWN_MS,
+      retryCount,
+      retryLimit,
+    };
+  }
+
+  const failure = classifyFailure(latestFailureMessage ?? null);
+  const categoryRetryLimit = Math.min(CATEGORY_RETRY_LIMIT[failure.category], retryLimit);
+
+  if (!failure.retryable || retryCount >= categoryRetryLimit) {
+    return {
+      autoRetry: false,
+      reason: "non_retryable_failure",
+      retryAt: null,
+      retryInSeconds: null,
+      cooldownMs: null,
+      retryCount,
+      retryLimit: categoryRetryLimit,
+      failureCategory: failure.category,
+    };
+  }
+
+  const retryAtMs = new Date(task.updatedAt).getTime() + FAILED_TASK_RETRY_COOLDOWN_MS;
+  const retryInSeconds = Math.max(0, Math.ceil((retryAtMs - now) / 1000));
+  return {
+    autoRetry: true,
+    reason: retryInSeconds > 0 ? "cooldown_pending" : "retry_due",
+    retryAt: new Date(retryAtMs).toISOString(),
+    retryInSeconds,
+    cooldownMs: FAILED_TASK_RETRY_COOLDOWN_MS,
+    retryCount,
+    retryLimit: categoryRetryLimit,
+    failureCategory: failure.category,
+  };
+}
+
+async function enrichTasksWithRetryInfo(taskRows: typeof tasks.$inferSelect[]) {
+  const failedTaskIds = taskRows
+    .filter((task) => task.status === "failed")
+    .map((task) => task.id);
+
+  const latestFailureByTaskId = new Map<string, string | null>();
+  if (failedTaskIds.length > 0) {
+    const runRows = await db
+      .select({
+        taskId: runs.taskId,
+        errorMessage: runs.errorMessage,
+      })
+      .from(runs)
+      .where(
+        and(
+          inArray(runs.taskId, failedTaskIds),
+          inArray(runs.status, ["failed", "cancelled"])
+        )
+      )
+      .orderBy(desc(runs.startedAt));
+
+    for (const row of runRows) {
+      if (!latestFailureByTaskId.has(row.taskId)) {
+        latestFailureByTaskId.set(row.taskId, row.errorMessage);
+      }
+    }
+  }
+
+  return taskRows.map((task) => ({
+    ...task,
+    retry: buildRetryInfo(task, latestFailureByTaskId.get(task.id)),
+  }));
+}
 
 // タスク一覧取得
 tasksRoute.get("/", async (c) => {
@@ -19,7 +229,8 @@ tasksRoute.get("/", async (c) => {
   }
 
   const result = await query;
-  return c.json({ tasks: result });
+  const enriched = await enrichTasksWithRetryInfo(result);
+  return c.json({ tasks: enriched });
 });
 
 // タスク詳細取得
@@ -32,7 +243,8 @@ tasksRoute.get("/:id", async (c) => {
     return c.json({ error: "Task not found" }, 404);
   }
 
-  return c.json({ task: result[0] });
+  const [enriched] = await enrichTasksWithRetryInfo(result);
+  return c.json({ task: enriched });
 });
 
 // タスク作成リクエストのスキーマ
