@@ -200,8 +200,8 @@ export async function createBranch(
     console.warn(`Base branch ${baseBranch} not found, creating ${branchName} from current HEAD`);
   }
 
-  // 新しいブランチを作成
-  return execGit(["checkout", "-b", branchName], cwd);
+  // 既存ブランチがあっても再実行できるように -B で作成/リセットする
+  return execGit(["checkout", "-B", branchName], cwd);
 }
 
 // 現在のブランチ名を取得
@@ -251,6 +251,17 @@ export async function mergeBranch(
   return execGit(args, cwd);
 }
 
+export async function rebaseBranch(
+  cwd: string,
+  upstream: string
+): Promise<GitResult> {
+  return execGit(["rebase", upstream], cwd);
+}
+
+export async function abortRebase(cwd: string): Promise<GitResult> {
+  return execGit(["rebase", "--abort"], cwd);
+}
+
 // 変更をステージング
 export async function stageChanges(
   cwd: string,
@@ -271,7 +282,19 @@ export async function commitAllowEmpty(
   cwd: string,
   message: string
 ): Promise<GitResult> {
-  return execGit(["commit", "--allow-empty", "-m", message], cwd);
+  return execGit(
+    [
+      "-c",
+      "user.name=sebastian-code",
+      "-c",
+      "user.email=worker@sebastian-code.ai",
+      "commit",
+      "--allow-empty",
+      "-m",
+      message,
+    ],
+    cwd
+  );
 }
 
 export async function createOrphanBranch(
@@ -451,28 +474,21 @@ export async function getDiffStatsFromRoot(cwd: string): Promise<DiffStats> {
 
 // 変更されたファイル一覧を取得
 export async function getChangedFiles(cwd: string): Promise<string[]> {
-  // -uall で未追跡ディレクトリを展開し、ファイル単位で取得する
-  const result = await execGit(["status", "--porcelain", "-uall"], cwd);
-  if (!result.success) {
-    return [];
-  }
+  // statusのフォーマット依存を避け、diff + untracked を個別に集約する
+  const [unstaged, staged, untracked] = await Promise.all([
+    execGit(["diff", "--name-only"], cwd),
+    execGit(["diff", "--name-only", "--cached"], cwd),
+    execGit(["ls-files", "--others", "--exclude-standard"], cwd),
+  ]);
 
-  const files = result.stdout
-    .split("\n")
-    .filter((line) => line.length > 3)
-    .map((line) => {
-      // Porcelain形式は `XY <path>` なので先頭3文字を除外する
-      const rawPath = line.slice(3).trim();
-      // 引用符で囲まれている場合は除去
-      const normalized = rawPath.replace(/^"|"$/g, "");
-      // rename/copy (`old -> new`) は新しいパスを優先して扱う
-      if (normalized.includes(" -> ")) {
-        const [, to] = normalized.split(/\s+->\s+/);
-        return (to ?? normalized).trim();
-      }
-      return normalized;
-    })
-    // ディレクトリ単位のエントリはポリシー判定では扱わない
+  const allLines = [
+    ...(unstaged.success ? unstaged.stdout.split("\n") : []),
+    ...(staged.success ? staged.stdout.split("\n") : []),
+    ...(untracked.success ? untracked.stdout.split("\n") : []),
+  ];
+
+  const files = allLines
+    .map((line) => line.trim())
     .filter((path) => path.length > 0 && !path.endsWith("/"));
 
   return Array.from(new Set(files));

@@ -1,4 +1,5 @@
 import { Octokit } from "@octokit/rest";
+import { getOctokit, getRepoInfo } from "./client.js";
 
 export interface CreateRepoOptions {
   token: string;
@@ -75,4 +76,21 @@ export async function createRepo(options: CreateRepoOptions): Promise<RepoCreate
     }
     throw error;
   }
+}
+
+// 既存リポジトリのデフォルトブランチを設定する
+export async function setRepositoryDefaultBranch(defaultBranch: string): Promise<void> {
+  const octokit = getOctokit();
+  const { owner, repo } = getRepoInfo();
+
+  const current = await octokit.repos.get({ owner, repo });
+  if (current.data.default_branch === defaultBranch) {
+    return;
+  }
+
+  await octokit.repos.update({
+    owner,
+    repo,
+    default_branch: defaultBranch,
+  });
 }
