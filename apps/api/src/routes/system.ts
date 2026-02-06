@@ -100,9 +100,15 @@ type OpenIssueSnapshot = {
   labels: string[];
 };
 
+type OpenPrSnapshot = {
+  count: number;
+  linkedIssueNumbers: Set<number>;
+};
+
 type TaskIssueLink = {
   id: string;
   status: string;
+  updatedAt: Date;
 };
 
 type SystemPreflightSummary = {
@@ -307,6 +313,57 @@ function parseAllowedPathsFromIssueBody(body: string): string[] {
   return Array.from(normalized);
 }
 
+function parseIssueNumberRefs(text: string): number[] {
+  const numbers = new Set<number>();
+  for (const match of text.matchAll(/(?:#|\/issues\/)(\d{1,10})\b/g)) {
+    const parsed = Number.parseInt(match[1] ?? "", 10);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      numbers.add(parsed);
+    }
+  }
+  return Array.from(numbers);
+}
+
+function parseDependencyIssueNumbersFromIssueBody(body: string): number[] {
+  if (!body) {
+    return [];
+  }
+
+  const numbers = new Set<number>();
+  const lines = body.split(/\r?\n/);
+  let inDependencySection = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) {
+      continue;
+    }
+
+    if (/^#{1,6}\s*(dependencies?|depends\s*on|blocked\s*by|dependency|依存関係)\b/i.test(trimmed)) {
+      inDependencySection = true;
+      continue;
+    }
+    if (inDependencySection && /^#{1,6}\s+/.test(trimmed)) {
+      inDependencySection = false;
+    }
+
+    if (inDependencySection) {
+      for (const number of parseIssueNumberRefs(trimmed)) {
+        numbers.add(number);
+      }
+      continue;
+    }
+
+    if (/(depends?\s*on|blocked\s*by|requires?|dependency|依存)/i.test(trimmed)) {
+      for (const number of parseIssueNumberRefs(trimmed)) {
+        numbers.add(number);
+      }
+    }
+  }
+
+  return Array.from(numbers);
+}
+
 function inferRoleFromLabels(labels: string[]): "worker" | "tester" | "docser" {
   const lower = labels.map((label) => label.toLowerCase());
   if (lower.some((label) => label.includes("docs") || label.includes("docser"))) {
@@ -405,7 +462,7 @@ async function fetchOpenIssues(context: GitHubContext): Promise<OpenIssueSnapsho
     }));
 }
 
-async function fetchOpenPrCount(context: GitHubContext): Promise<number> {
+async function fetchOpenPrCount(context: GitHubContext): Promise<OpenPrSnapshot> {
   const octokit = getOctokit({ token: context.token });
   const { owner, repo } = getRepoInfo({
     owner: context.owner,
@@ -417,12 +474,59 @@ async function fetchOpenPrCount(context: GitHubContext): Promise<number> {
     state: "open",
     per_page: 100,
   });
-  return rows.length;
+
+  const linkedIssueNumbers = new Set<number>();
+  for (const row of rows) {
+    const title = row.title ?? "";
+    const body = row.body ?? "";
+    for (const issueNumber of parseLinkedIssueNumbersFromPr(title, body)) {
+      linkedIssueNumbers.add(issueNumber);
+    }
+  }
+
+  return {
+    count: rows.length,
+    linkedIssueNumbers,
+  };
+}
+
+function parseLinkedIssueNumbersFromPr(title: string, body: string): number[] {
+  const numbers = new Set<number>();
+  const lines = `${title}\n${body}`.split(/\r?\n/);
+
+  for (const line of lines) {
+    const normalized = line.trim();
+    if (!normalized) {
+      continue;
+    }
+
+    if (
+      /\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|related|issue|closes|fixes|resolves)\b/i.test(
+        normalized
+      )
+    ) {
+      for (const issueNumber of parseIssueNumberRefs(normalized)) {
+        numbers.add(issueNumber);
+      }
+    }
+  }
+
+  // 1行に複数 closing keyword が来るケースを拾う
+  for (const match of `${title}\n${body}`.matchAll(
+    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b([^\n]+)/gi
+  )) {
+    for (const issueNumber of parseIssueNumberRefs(match[1] ?? "")) {
+      numbers.add(issueNumber);
+    }
+  }
+
+  return Array.from(numbers);
 }
 
 async function createTaskFromIssue(
   issue: OpenIssueSnapshot,
-  commands: string[]
+  commands: string[],
+  dependencyTaskIds: string[] = []
 ): Promise<string | null> {
   const allowedPaths = parseAllowedPathsFromIssueBody(issue.body);
   const role = inferRoleFromLabels(issue.labels);
@@ -446,6 +550,7 @@ async function createTaskFromIssue(
       },
       allowedPaths,
       commands,
+      dependencies: dependencyTaskIds,
       priority,
       riskLevel,
       role,
@@ -474,6 +579,34 @@ async function createTaskFromIssue(
   return created.id;
 }
 
+function isTerminalTaskStatus(status: string): boolean {
+  return status === "done" || status === "cancelled";
+}
+
+function pickDependencyTaskId(links: TaskIssueLink[]): string | null {
+  const statusWeight: Record<string, number> = {
+    running: 0,
+    queued: 1,
+    blocked: 2,
+    failed: 3,
+  };
+
+  const candidates = links
+    .filter((link) => !isTerminalTaskStatus(link.status))
+    .sort((a, b) => {
+      const weightDiff = (statusWeight[a.status] ?? 99) - (statusWeight[b.status] ?? 99);
+      if (weightDiff !== 0) {
+        return weightDiff;
+      }
+      return b.updatedAt.getTime() - a.updatedAt.getTime();
+    });
+
+  if (candidates.length === 0) {
+    return null;
+  }
+  return candidates[0]?.id ?? null;
+}
+
 async function buildPreflightSummary(options: {
   configRow: ConfigRow;
   autoCreateIssueTasks: boolean;
@@ -484,6 +617,7 @@ async function buildPreflightSummary(options: {
       status: tasks.status,
       blockReason: tasks.blockReason,
       context: tasks.context,
+      updatedAt: tasks.updatedAt,
     })
     .from(tasks);
 
@@ -511,6 +645,7 @@ async function buildPreflightSummary(options: {
     current.push({
       id: row.id,
       status: row.status,
+      updatedAt: row.updatedAt,
     });
     issueTaskMap.set(issueNumber, current);
   }
@@ -549,16 +684,18 @@ async function buildPreflightSummary(options: {
   }
 
   summary.github.enabled = true;
+  let prLinkedIssueNumbers = new Set<number>();
 
   let openIssues: OpenIssueSnapshot[] = [];
   try {
-    const [issues, openPrCount] = await Promise.all([
+    const [issues, openPrSnapshot] = await Promise.all([
       fetchOpenIssues(githubContext),
       fetchOpenPrCount(githubContext),
     ]);
     openIssues = issues;
     summary.github.openIssueCount = issues.length;
-    summary.github.openPrCount = openPrCount;
+    summary.github.openPrCount = openPrSnapshot.count;
+    prLinkedIssueNumbers = openPrSnapshot.linkedIssueNumbers;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     summary.github.warnings.push(`Failed to query GitHub backlog: ${message}`);
@@ -568,8 +705,14 @@ async function buildPreflightSummary(options: {
   const commands = options.autoCreateIssueTasks
     ? await resolveIssueTaskCommands()
     : [];
+  const generatedIssueTaskIds = new Map<number, string>();
 
   for (const issue of openIssues) {
+    if (prLinkedIssueNumbers.has(issue.number)) {
+      summary.github.skippedIssueNumbers.push(issue.number);
+      continue;
+    }
+
     const linkedTasks = issueTaskMap.get(issue.number) ?? [];
     const isDone = linkedTasks.some((task) => task.status === "done");
     const hasOngoingTask = linkedTasks.some(
@@ -593,11 +736,75 @@ async function buildPreflightSummary(options: {
 
     const createdTaskId = await createTaskFromIssue(issue, commands);
     if (createdTaskId) {
+      generatedIssueTaskIds.set(issue.number, createdTaskId);
+      const current = issueTaskMap.get(issue.number) ?? [];
+      current.push({
+        id: createdTaskId,
+        status: "queued",
+        updatedAt: new Date(),
+      });
+      issueTaskMap.set(issue.number, current);
       summary.github.generatedTaskCount += 1;
       summary.github.generatedTaskIds.push(createdTaskId);
       summary.github.issueTaskBacklogCount += 1;
     } else {
       summary.github.warnings.push(`Failed to create task for issue #${issue.number}.`);
+    }
+  }
+
+  if (generatedIssueTaskIds.size > 0) {
+    for (const issue of openIssues) {
+      const taskId = generatedIssueTaskIds.get(issue.number);
+      if (!taskId) {
+        continue;
+      }
+
+      const dependencyIssueNumbers = parseDependencyIssueNumbersFromIssueBody(issue.body).filter(
+        (number) => number !== issue.number
+      );
+      if (dependencyIssueNumbers.length === 0) {
+        continue;
+      }
+
+      const dependencyTaskIds = Array.from(
+        new Set(
+          dependencyIssueNumbers
+            .map((number) => pickDependencyTaskId(issueTaskMap.get(number) ?? []))
+            .filter((value): value is string => Boolean(value))
+        )
+      );
+
+      const missingIssueNumbers = dependencyIssueNumbers.filter(
+        (number) => !issueTaskMap.has(number)
+      );
+      if (missingIssueNumbers.length > 0) {
+        summary.github.warnings.push(
+          `Issue #${issue.number} references missing dependencies: ${missingIssueNumbers
+            .map((number) => `#${number}`)
+            .join(", ")}`
+        );
+      }
+
+      if (dependencyTaskIds.length === 0) {
+        continue;
+      }
+
+      await db
+        .update(tasks)
+        .set({ dependencies: dependencyTaskIds, updatedAt: new Date() })
+        .where(eq(tasks.id, taskId));
+
+      await db.insert(events).values({
+        type: "task.dependencies_set_from_issue",
+        entityType: "task",
+        entityId: taskId,
+        agentId: "system",
+        payload: {
+          issueNumber: issue.number,
+          dependencyIssueNumbers,
+          dependencyTaskIds,
+        },
+      });
     }
   }
 
@@ -853,7 +1060,12 @@ async function startManagedProcess(
 
   const child = spawn(command.command, command.args, {
     cwd: command.cwd ?? resolveRepoRoot(),
-    env: { ...process.env, ...configEnv, ...command.env },
+    env: {
+      ...process.env,
+      ...configEnv,
+      ...command.env,
+      SEBASTIAN_LOG_DIR: logDir,
+    },
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -1189,7 +1401,8 @@ systemRoute.post("/preflight", async (c) => {
     const recommendations = {
       startPlanner,
       startDispatcher: dispatcherEnabled && startExecutionAgents,
-      startJudge: judgeEnabled && hasJudgeBacklog,
+      // 実行系エージェントが動くサイクルではJudgeを常駐させる。
+      startJudge: judgeEnabled && (hasJudgeBacklog || startExecutionAgents),
       startCycleManager:
         cycleManagerEnabled
         && (startExecutionAgents || hasJudgeBacklog || preflight.local.blockedTaskCount > 0),
