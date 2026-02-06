@@ -6,11 +6,21 @@
 
 要件を実行可能な task 群へ分割して `tasks` に保存する。
 
+補足:
+
+- Start preflight で Issue backlog が検出された場合、Planner は優先起動されない
+- この場合は Issue 由来 task の実行を先に進める
+
 ## 2. 入力
 
 - requirement ファイル
 - 既存 task 状態
 - policy / allowed paths
+
+preflight 後に Planner が起動される主条件:
+
+- requirement テキストがある
+- open Issue backlog がない
 
 ## 3. 出力
 

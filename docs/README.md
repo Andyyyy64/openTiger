@@ -26,6 +26,12 @@ Sebastian-code の設計・運用・エージェント仕様の索引。
 
 ## 3. 2026-02-06 の重要更新
 
+- Start preflight 導入
+  - 起動前に GitHub の open Issue / open PR とローカル task 状態を確認
+- Issue バックログ処理を自動化
+  - open Issue は planner 経由ではなく task として直接投入
+- Judge 起動条件を明確化
+  - open PR または `awaiting_judge` backlog がある場合に judge を起動
 - Judge 冪等化
   - `runs.judged_at` / `judgement_version` を導入し、同一runの再レビューを防止
 - blocked reason 導入

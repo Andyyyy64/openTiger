@@ -12,6 +12,11 @@
 - PR情報（git mode）または local diff（local mode）
 - CI/policy/LLM評価結果
 
+起動トリガ（Start preflight）:
+
+- GitHub open PR がある
+- または `blocked(awaiting_judge)` のtask backlog がある
+
 ## 3. 判定
 
 - `approve`

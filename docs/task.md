@@ -8,6 +8,12 @@
 
 完了済み:
 
+- [x] Start preflight
+  - 起動前に GitHub open Issue/open PR とローカル backlog を確認
+- [x] Issue 直投入フロー
+  - open Issue を planner 経由ではなく task として自動生成
+- [x] Judge 起動判定の明確化
+  - open PR または `awaiting_judge` backlog で judge を起動
 - [x] Judge冪等化
   - `runs.judged_at` / `judgement_version`
 - [x] blocked reason 導入

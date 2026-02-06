@@ -4,13 +4,27 @@
 
 ## 1. 全体ループ
 
-1. Planner が要件から task を生成する
-2. Dispatcher が `queued` task を選択し、lease を取得して worker に割り当てる
-3. Worker/Tester/Docser が実装・検証を実行する
-4. 成功時は task を `blocked(awaiting_judge)` に遷移し、Judge を待つ
-5. Judge が run を判定し、`done` / `queued` / `blocked` に遷移させる
-6. Cycle Manager が stuck 回復・failed/blocked 再投入・メトリクス更新を行う
-7. すべての task が終わるか、停止条件を満たすまで継続する
+1. Start preflight が backlog を確認する
+   - GitHub open Issue / open PR
+   - ローカル `tasks`（queued/running/failed/blocked）
+2. preflight が open Issue を task として直接投入する（必要時）
+3. 要件テキストがあり、Issue backlog がない場合のみ Planner が task を生成する
+4. Dispatcher が `queued` task を選択し、lease を取得して worker に割り当てる
+5. Worker/Tester/Docser が実装・検証を実行する
+6. 成功時は task を `blocked(awaiting_judge)` に遷移し、Judge を待つ
+7. Judge が run を判定し、`done` / `queued` / `blocked` に遷移させる
+8. Cycle Manager が stuck 回復・failed/blocked 再投入・メトリクス更新を行う
+9. すべての task が終わるか、停止条件を満たすまで継続する
+
+## 1.1 Start preflight の起動判定
+
+- Issue backlog がある:
+  - Planner は起動せず、Issue 由来 task の実行を優先
+  - Dispatcher/Worker 系を起動
+- PR backlog がある:
+  - Judge を起動
+- backlog がなく requirement のみある:
+  - Planner 起動で通常計画フローへ
 
 ## 2. Task ステータス遷移
 
@@ -67,6 +81,11 @@
   - requeue無効時は `blocked(needs_rework|needs_human)` を維持
 - `approve だが merge失敗`:
   - 停滞防止のため `queued` に戻す
+
+補足:
+
+- task に `context.issue.number` がある場合、Worker の PR本文に `Closes #<issue>` を付与する
+- これにより GitHub 上で task 実行結果と Issue の紐づけを自動化する
 
 ## 6. 回復処理
 
