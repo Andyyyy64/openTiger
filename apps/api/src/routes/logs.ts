@@ -37,6 +37,75 @@ function resolveLogDir(): string {
   return join(resolve(import.meta.dirname, "../../../.."), "raw-logs");
 }
 
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function buildAgentNameAliases(agentId: string): string[] {
+  const aliases = new Set<string>([agentId]);
+  const withoutIndex = agentId.replace(/-\d+$/, "");
+  if (withoutIndex && withoutIndex !== agentId) {
+    aliases.add(withoutIndex);
+  }
+  return Array.from(aliases);
+}
+
+function extractSystemLogTimestamp(fileName: string): number {
+  const match = fileName.match(/-(\d+)\.log$/);
+  if (match?.[1]) {
+    const parsed = Number.parseInt(match[1], 10);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return 0;
+}
+
+async function findLatestSystemLog(
+  logDir: string,
+  processNames: string[]
+): Promise<string | null> {
+  let entries: string[] = [];
+  try {
+    entries = await readdir(logDir);
+  } catch {
+    return null;
+  }
+
+  const candidates = entries
+    .filter((entry) =>
+      entry.endsWith(".log")
+      && processNames.some((name) => entry.startsWith(`system-${name}-`))
+    )
+    .sort(
+      (a, b) => extractSystemLogTimestamp(b) - extractSystemLogTimestamp(a)
+    );
+
+  const latest = candidates[0];
+  if (!latest) {
+    return null;
+  }
+  return join(logDir, latest);
+}
+
+async function resolveAgentLogPath(logDir: string, agentId: string): Promise<string | null> {
+  const aliases = buildAgentNameAliases(agentId);
+
+  for (const alias of aliases) {
+    const direct = join(logDir, `${alias}.log`);
+    if (await pathExists(direct)) {
+      return direct;
+    }
+  }
+
+  return findLatestSystemLog(logDir, aliases);
+}
+
 function parseAllLimit(value: string | undefined): number {
   const parsed = value ? parseInt(value, 10) : NaN;
   if (!Number.isFinite(parsed) || parsed <= 0) {
@@ -246,7 +315,10 @@ logsRoute.get("/agents/:id", async (c) => {
 
   const lines = parseLines(c.req.query("lines"));
   const logDir = resolveLogDir();
-  const logPath = join(logDir, `${agentId}.log`);
+  const logPath = await resolveAgentLogPath(logDir, agentId);
+  if (!logPath) {
+    return c.json({ error: "Log not found" }, 404);
+  }
 
   try {
     const { log, sizeBytes, updatedAt } = await readTailLines(logPath, lines);
@@ -260,7 +332,11 @@ logsRoute.get("/agents/:id", async (c) => {
 logsRoute.get("/cycle-manager", async (c) => {
   const lines = parseLines(c.req.query("lines"));
   const logDir = resolveLogDir();
-  const logPath = join(logDir, "cycle-manager.log");
+  const directPath = join(logDir, "cycle-manager.log");
+  const logPath =
+    (await pathExists(directPath))
+      ? directPath
+      : (await findLatestSystemLog(logDir, ["cycle-manager"])) ?? directPath;
 
   try {
     const { log, sizeBytes, updatedAt } = await readTailLines(logPath, lines);
