@@ -109,6 +109,23 @@ export interface AgentLogResponse {
   path: string;
 }
 
+export interface AllLogEntry {
+  timestamp: string;
+  explicitTimestamp: boolean;
+  source: string;
+  lineNo: number;
+  line: string;
+}
+
+export interface AllLogsResponse {
+  entries: AllLogEntry[];
+  total: number;
+  returned: number;
+  truncated: boolean;
+  sourceCount: number;
+  generatedAt: string;
+}
+
 export interface ConfigResponse {
   config: Record<string, string>;
 }
@@ -239,6 +256,20 @@ export const logsApi = {
     if (lines) query.set('lines', String(lines));
     const suffix = query.toString();
     return fetchApi<AgentLogResponse>(`/logs/agents/${agentId}${suffix ? `?${suffix}` : ''}`);
+  },
+  cycleManager: (lines?: number) => {
+    const query = new URLSearchParams();
+    if (lines) query.set('lines', String(lines));
+    const suffix = query.toString();
+    return fetchApi<AgentLogResponse>(`/logs/cycle-manager${suffix ? `?${suffix}` : ''}`);
+  },
+  all: (params?: { sinceMinutes?: number; limit?: number; source?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.sinceMinutes !== undefined) query.set('sinceMinutes', String(params.sinceMinutes));
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    if (params?.source) query.set('source', params.source);
+    const suffix = query.toString();
+    return fetchApi<AllLogsResponse>(`/logs/all${suffix ? `?${suffix}` : ''}`);
   },
 };
 

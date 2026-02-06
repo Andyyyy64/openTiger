@@ -12,6 +12,7 @@ import { JudgementsPage } from './pages/Judgements'
 import { AgentDetailsPage } from './pages/AgentDetails'
 import { SettingsPage } from './pages/Settings'
 import { StartPage } from './pages/Start'
+import { LogsPage } from './pages/Logs'
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
           <Route path="/agents/:id" element={<AgentDetailsPage />} />
           <Route path="/plans" element={<PlansPage />} />
           <Route path="/judgements" element={<JudgementsPage />} />
+          <Route path="/logs" element={<LogsPage />} />
           <Route path="/start" element={<StartPage />} />
           <Route path="/requirement" element={<StartPage />} />
           <Route path="/system" element={<SettingsPage />} />

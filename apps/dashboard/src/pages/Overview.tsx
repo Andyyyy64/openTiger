@@ -6,12 +6,29 @@ export const OverviewPage: React.FC = () => {
   const { data: tasks } = useQuery({ queryKey: ['tasks'], queryFn: () => tasksApi.list() });
   const { data: runs } = useQuery({ queryKey: ['runs'], queryFn: () => runsApi.list() });
   const { data: agents } = useQuery({ queryKey: ['agents'], queryFn: () => agentsApi.list() });
+  const now = Date.now();
+  const queuedTasks = tasks?.filter(t => t.status === 'queued') ?? [];
+  const blockedTasks = tasks?.filter(t => t.status === 'blocked') ?? [];
+  const retryExhaustedTasks =
+    tasks?.filter(t => (t.status === 'failed' || t.status === 'blocked') && (t.retryCount ?? 0) >= 3) ?? [];
 
   const stats = {
     activeWorkers: agents?.filter(a => a.status === 'busy').length ?? 0,
-    pendingTasks: tasks?.filter(t => t.status === 'queued').length ?? 0,
+    pendingTasks: queuedTasks.length,
     completedTasks: tasks?.filter(t => t.status === 'done').length ?? 0,
     successRate: runs ? Math.round((runs.filter(r => r.status === 'success').length / runs.length) * 100) : 0,
+    oldestQueuedMinutes:
+      queuedTasks.length === 0
+        ? 0
+        : Math.max(
+            ...queuedTasks.map((task) =>
+              Math.floor((now - new Date(task.updatedAt).getTime()) / 60000)
+            )
+          ),
+    blockedOver30m: blockedTasks.filter(
+      (task) => now - new Date(task.updatedAt).getTime() > 30 * 60 * 1000
+    ).length,
+    retryExhausted: retryExhaustedTasks.length,
   };
 
   return (
@@ -40,6 +57,24 @@ export const OverviewPage: React.FC = () => {
           title="SUCCESS RATE"
           value={`${stats.successRate}%`}
           subValue="LIFETIME"
+        />
+        <StatCard
+          title="QUEUE AGE MAX"
+          value={`${stats.oldestQueuedMinutes}m`}
+          subValue="SLO <= 5m"
+          alert={stats.oldestQueuedMinutes > 5}
+        />
+        <StatCard
+          title="BLOCKED > 30M"
+          value={stats.blockedOver30m.toString()}
+          subValue="AUTO RECOVERY"
+          alert={stats.blockedOver30m > 0}
+        />
+        <StatCard
+          title="RETRY EXHAUSTED"
+          value={stats.retryExhausted.toString()}
+          subValue="FAILED/BLOCKED"
+          alert={stats.retryExhausted > 0}
         />
       </div>
 
@@ -98,12 +133,22 @@ export const OverviewPage: React.FC = () => {
   );
 };
 
-const StatCard = ({ title, value, subValue }: { title: string, value: string, subValue: string }) => (
+const StatCard = ({
+  title,
+  value,
+  subValue,
+  alert = false,
+}: {
+  title: string;
+  value: string;
+  subValue: string;
+  alert?: boolean;
+}) => (
   <div className="border border-[var(--color-term-border)] p-4 hover:bg-[var(--color-term-border)]/10 transition-colors cursor-default">
     <div className="flex justify-between items-start mb-2">
       <h3 className="text-zinc-500 text-xs font-bold uppercase">{title}</h3>
     </div>
-    <p className="text-3xl font-mono text-[var(--color-term-green)] mb-1">{value}</p>
+    <p className={`text-3xl font-mono mb-1 ${alert ? 'text-red-500' : 'text-[var(--color-term-green)]'}`}>{value}</p>
     <p className="text-zinc-600 text-xs font-mono">{subValue}</p>
   </div>
 );

@@ -65,6 +65,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <NavItem to="/agents" label="agents" />
               <NavItem to="/plans" label="plans" />
               <NavItem to="/judgements" label="judgements" />
+              <NavItem to="/logs" label="logs" />
             </div>
           </nav>
 
