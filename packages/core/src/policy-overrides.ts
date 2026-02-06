@@ -6,21 +6,29 @@ export function applyRepoModePolicyOverrides(
   env: NodeJS.ProcessEnv = process.env
 ): Policy {
   const repoMode = getRepoMode(env);
-  if (repoMode !== "local") {
-    return policy;
-  }
 
+  // 環境変数による明示的なオーバーライドはモードを問わず適用する
   const maxLinesOverride = parseInt(env.LOCAL_POLICY_MAX_LINES ?? "", 10);
   const maxFilesOverride = parseInt(env.LOCAL_POLICY_MAX_FILES ?? "", 10);
 
-  // local modeはローカル開発の試行錯誤を妨げないように上限を緩める
-  return {
+  const overridden = {
     ...policy,
     maxLinesChanged: Number.isFinite(maxLinesOverride)
-      ? Math.max(policy.maxLinesChanged, maxLinesOverride)
-      : Math.max(policy.maxLinesChanged, 5000),
+      ? maxLinesOverride
+      : policy.maxLinesChanged,
     maxFilesChanged: Number.isFinite(maxFilesOverride)
-      ? Math.max(policy.maxFilesChanged, maxFilesOverride)
-      : Math.max(policy.maxFilesChanged, 100),
+      ? maxFilesOverride
+      : policy.maxFilesChanged,
   };
+
+  if (repoMode === "local") {
+    // local modeはローカル開発の試行錯誤を妨げないように下限を保証する
+    return {
+      ...overridden,
+      maxLinesChanged: Math.max(overridden.maxLinesChanged, 5000),
+      maxFilesChanged: Math.max(overridden.maxFilesChanged, 100),
+    };
+  }
+
+  return overridden;
 }

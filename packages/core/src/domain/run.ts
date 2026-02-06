@@ -20,6 +20,8 @@ export const RunSchema = z.object({
   costTokens: z.number().int().nonnegative().nullable(), // 消費トークン数
   logPath: z.string().nullable(), // ログファイルパス
   errorMessage: z.string().nullable(), // エラーメッセージ
+  judgedAt: z.date().nullable().optional(),
+  judgementVersion: z.number().int().nonnegative().default(0),
 });
 export type Run = z.infer<typeof RunSchema>;
 

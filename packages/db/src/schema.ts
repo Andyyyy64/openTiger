@@ -19,6 +19,7 @@ export const tasks = pgTable("tasks", {
   riskLevel: text("risk_level").default("low").notNull(), // low/medium/high
   role: text("role").default("worker").notNull(), // worker/tester
   status: text("status").default("queued").notNull(), // queued/running/done/failed/blocked/cancelled
+  blockReason: text("block_reason"), // blocked理由（awaiting_judge/needs_rework/needs_human）
   targetArea: text("target_area"), // 担当領域（コンフリクト制御用）
   touches: text("touches").array().default([]).notNull(), // 変更対象のファイル/ディレクトリ
   dependencies: uuid("dependencies").array().default([]).notNull(), // 先行タスクID
@@ -47,6 +48,8 @@ export const runs = pgTable("runs", {
   costTokens: integer("cost_tokens"), // 消費トークン数
   logPath: text("log_path"), // ログファイルパス
   errorMessage: text("error_message"),
+  judgedAt: timestamp("judged_at", { withTimezone: true }),
+  judgementVersion: integer("judgement_version").default(0).notNull(),
 });
 
 // 成果物テーブル: PR、コミット、CI結果など

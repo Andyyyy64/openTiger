@@ -43,6 +43,13 @@
       "when": 1770295000000,
       "tag": "0005_add_github_config",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770390000000,
+      "tag": "0006_judge_idempotency_and_block_reason",
+      "breakpoints": true
     }
   ]
 }
