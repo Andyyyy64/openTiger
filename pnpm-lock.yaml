@@ -48,6 +48,9 @@ importers:
       '@sebastian-code/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@sebastian-code/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
       '@sebastian-code/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs

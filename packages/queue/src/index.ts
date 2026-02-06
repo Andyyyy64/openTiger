@@ -57,9 +57,14 @@ export function createTaskWorker(
   processor: (job: Job<TaskJobData>) => Promise<void>,
   queueName = TASK_QUEUE_NAME
 ): Worker<TaskJobData> {
+  // タスクが長時間実行される可能性があるため、lockDurationを十分長く設定する
+  const maxTaskTimeoutSeconds = parseInt(process.env.TASK_TIMEOUT_SECONDS ?? "3600", 10);
+  const lockDurationMs = (maxTaskTimeoutSeconds + 600) * 1000; // タイムアウト + 10分のバッファ
+  
   return new Worker(queueName, processor, {
     connection: getConnectionConfig(),
     concurrency: parseInt(process.env.MAX_CONCURRENT_WORKERS ?? "5", 10),
+    lockDuration: lockDurationMs, // ジョブのロック期間を延長してstalled判定を防ぐ
   });
 }
 
@@ -260,6 +265,49 @@ export async function cleanOldFailedJobs(
       await job.remove();
       removedCount++;
     }
+  }
+
+  return removedCount;
+}
+
+// すべてのキューを削除（DB Cleanup時に利用）
+export async function obliterateAllQueues(): Promise<number> {
+  const connection = getConnectionConfig();
+  let removedCount = 0;
+
+  // 全エージェント用のキューを削除
+  const agentRoles = ["worker", "tester", "docser"];
+  const maxAgents = 10;
+
+  for (const role of agentRoles) {
+    for (let i = 1; i <= maxAgents; i++) {
+      const agentId = `${role}-${i}`;
+      const queueName = getTaskQueueName(agentId);
+      try {
+        const queue = new Queue(queueName, { connection });
+        await queue.obliterate({ force: true });
+        removedCount++;
+      } catch (error) {
+        // キューが存在しない場合はスキップ
+      }
+    }
+  }
+
+  // 共通キューも削除
+  try {
+    const mainQueue = new Queue(TASK_QUEUE_NAME, { connection });
+    await mainQueue.obliterate({ force: true });
+    removedCount++;
+  } catch {
+    // スキップ
+  }
+
+  try {
+    const deadLetterQueue = new Queue(DEAD_LETTER_QUEUE_NAME, { connection });
+    await deadLetterQueue.obliterate({ force: true });
+    removedCount++;
+  } catch {
+    // スキップ
   }
 
   return removedCount;

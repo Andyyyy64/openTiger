@@ -9,6 +9,7 @@ import { config as configTable } from "@sebastian-code/db/schema";
 import { configToEnv, DEFAULT_CONFIG, buildConfigRecord } from "../system-config.js";
 import { getAuthInfo } from "../middleware/index.js";
 import { createRepo } from "@sebastian-code/vcs";
+import { obliterateAllQueues } from "@sebastian-code/queue";
 
 type RestartStatus = {
   status: "idle" | "running" | "completed" | "failed";
@@ -82,6 +83,7 @@ const systemRoute = new Hono();
 let restartProcess: ChildProcess | null = null;
 let restartStatus: RestartStatus = { status: "idle" };
 const managedProcesses = new Map<string, ProcessRuntime>();
+const processStartLocks = new Set<string>();
 
 function resolveRepoRoot(): string {
   return resolve(import.meta.dirname, "../../../..");
@@ -487,12 +489,37 @@ function stopManagedProcess(
   runtime.message = "停止要求済み";
   managedProcesses.set(definition.name, runtime);
 
-  // 停止要求は先に反映し、終了はイベントで確定する
-  runtime.process.kill("SIGTERM");
-  setTimeout(() => {
-    if (runtime.process && !runtime.process.killed) {
-      runtime.process.kill("SIGKILL");
+  const processRef = runtime.process;
+  const pid = runtime.pid ?? processRef.pid;
+
+  function killRuntime(signal: NodeJS.Signals): void {
+    if (!pid) {
+      processRef.kill(signal);
+      return;
     }
+
+    // detachedで起動したプロセスは新しいプロセスグループになるため、
+    // グループごと停止して pnpm/tsx 配下の子プロセスが残るのを避ける
+    if (process.platform !== "win32") {
+      try {
+        process.kill(-pid, signal);
+        return;
+      } catch {
+        // フォールバックとして単体PIDを停止する
+      }
+    }
+
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // 既に終了しているケースは無視する
+    }
+  }
+
+  // 停止要求は先に反映し、終了はイベントで確定する
+  killRuntime("SIGTERM");
+  setTimeout(() => {
+    killRuntime("SIGKILL");
   }, 5000);
 
   return buildProcessInfo(definition, runtime);
@@ -714,32 +741,57 @@ systemRoute.post("/processes/:name/start", async (c) => {
   }
 
   const existing = managedProcesses.get(name);
-  if (existing?.status === "running") {
+  const shouldRejectDuplicateStart = name === "planner";
+  if (shouldRejectDuplicateStart) {
+    // Plannerは重複起動すると同一要件から複数回計画が保存されやすいので、起動要求を排他する
+    if (existing?.status === "running") {
+      return c.json(
+        {
+          error: "Planner already running",
+          process: buildProcessInfo(definition, existing),
+        },
+        409
+      );
+    }
+    if (processStartLocks.has(name)) {
+      return c.json(
+        {
+          error: "Planner start already in progress",
+          process: buildProcessInfo(definition, managedProcesses.get(name)),
+        },
+        409
+      );
+    }
+    processStartLocks.add(name);
+  } else if (existing?.status === "running") {
     return c.json({
       process: buildProcessInfo(definition, existing),
       alreadyRunning: true,
     });
   }
 
-  const rawBody = await c.req.json().catch(() => ({}));
-  const rawContent = typeof rawBody?.content === "string" ? rawBody.content : undefined;
-  if (rawContent !== undefined && rawContent.trim().length === 0) {
-    return c.json({ error: "Requirement content is empty" }, 400);
-  }
-  const payload: StartPayload = {
-    requirementPath:
-      typeof rawBody?.requirementPath === "string"
-        ? rawBody.requirementPath
-        : undefined,
-    content: rawContent,
-  };
-
   try {
+    const rawBody = await c.req.json().catch(() => ({}));
+    const rawContent = typeof rawBody?.content === "string" ? rawBody.content : undefined;
+    if (rawContent !== undefined && rawContent.trim().length === 0) {
+      return c.json({ error: "Requirement content is empty" }, 400);
+    }
+    const payload: StartPayload = {
+      requirementPath:
+        typeof rawBody?.requirementPath === "string"
+          ? rawBody.requirementPath
+          : undefined,
+      content: rawContent,
+    };
     const processInfo = await startManagedProcess(definition, payload);
     return c.json({ process: processInfo });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to start process";
     return c.json({ error: message }, 400);
+  } finally {
+    if (shouldRejectDuplicateStart) {
+      processStartLocks.delete(name);
+    }
   }
 });
 
@@ -807,6 +859,10 @@ systemRoute.post("/cleanup", async (c) => {
   }
 
   try {
+    // Redisのキューを全削除してジョブの残骸を消す
+    const queuesCleaned = await obliterateAllQueues();
+    console.log(`[Cleanup] Obliterated ${queuesCleaned} queues`);
+
     // 稼働中のプロセスがあってもDBのみをリセットできるようにする
     await db.execute(sql`
       UPDATE agents
@@ -818,7 +874,7 @@ systemRoute.post("/cleanup", async (c) => {
       TRUNCATE artifacts, runs, leases, events, cycles, tasks RESTART IDENTITY
       CASCADE
     `);
-    return c.json({ cleaned: true });
+    return c.json({ cleaned: true, queuesObliterated: queuesCleaned });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Cleanup failed";
     return c.json({ error: message }, 500);

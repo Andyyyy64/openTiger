@@ -75,8 +75,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           <div className="px-4">
             <div className="border-t border-[var(--color-term-border)] pt-4 text-[10px] text-zinc-600">
-              <p>SEBASTIAN_OS v1.0</p>
-              <p className="mt-1">Use arrow keys to nav (todo)</p>
+              <p>SEBASTIANCODE v0.1.0</p>
             </div>
           </div>
         </aside>

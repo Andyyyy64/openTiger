@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "dotenv";
+import { db } from "@sebastian-code/db";
+import { config as configTable } from "@sebastian-code/db/schema";
 
 const STRIP_ENV_PREFIXES = [
   "H1VE_",
@@ -115,12 +117,48 @@ export async function buildTaskEnv(
   return baseEnv;
 }
 
+async function loadConfigFromDb(): Promise<Record<string, string>> {
+  // DBからランタイム設定を取得してOpenCodeに渡す
+  try {
+    const rows = await db.select().from(configTable).limit(1);
+    const row = rows[0];
+    if (!row) {
+      return {};
+    }
+    return {
+      GEMINI_API_KEY: row.geminiApiKey ?? "",
+      ANTHROPIC_API_KEY: row.anthropicApiKey ?? "",
+      OPENAI_API_KEY: row.openaiApiKey ?? "",
+      XAI_API_KEY: row.xaiApiKey ?? "",
+      DEEPSEEK_API_KEY: row.deepseekApiKey ?? "",
+      OPENCODE_MODEL: row.opencodeModel ?? "",
+      GITHUB_TOKEN: row.githubToken ?? "",
+    };
+  } catch (error) {
+    console.warn("[Worker] Failed to load config from DB:", error);
+    return {};
+  }
+}
+
 export async function buildOpenCodeEnv(
   cwd: string
 ): Promise<Record<string, string>> {
   // 実行対象の.envは引き継ぎ、LLM用のキーだけ許可する
   const env = await buildTaskEnv(cwd);
+  
+  // DBから最新の設定を取得してOpenCodeに渡す
+  const dbConfig = await loadConfigFromDb();
+  for (const [key, value] of Object.entries(dbConfig)) {
+    if (value && OPEN_CODE_ENV_KEYS.has(key)) {
+      env[key] = value;
+    }
+  }
+  
+  // process.envからもフォールバックで取得（DB優先）
   for (const key of OPEN_CODE_ENV_KEYS) {
+    if (env[key]) {
+      continue;
+    }
     const value = process.env[key];
     if (!value) {
       continue;

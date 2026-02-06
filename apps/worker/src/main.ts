@@ -212,7 +212,14 @@ export async function runWorker(
     });
 
     if (!executeResult.success) {
-      throw new Error(executeResult.error);
+      const isTimeout = executeResult.openCodeResult.exitCode === -1
+        && executeResult.openCodeResult.stderr.includes("[OpenCode] Timeout exceeded");
+      if (isTimeout) {
+        // タイムアウトでも変更があれば続行する（検証ステップで判定）
+        console.warn("[Worker] OpenCode timed out, but continuing to verify changes...");
+      } else {
+        throw new Error(executeResult.error);
+      }
     }
 
     // Step 4: 期待ファイルのチェック
@@ -233,8 +240,8 @@ export async function runWorker(
       policy: effectivePolicy,
       baseBranch,
       headBranch: branchName,
-      // local modeではロックファイルの変更で止めない
-      allowLockfileOutsidePaths: repoMode === "local",
+      // pnpm install に伴う lockfile 変更は常に許容する
+      allowLockfileOutsidePaths: true,
       // local modeでは.env.exampleの作成で止めない
       allowEnvExampleOutsidePaths: repoMode === "local",
       allowNoChanges: shouldAllowNoChanges(taskData),
@@ -766,7 +773,9 @@ async function main() {
       .where(eq(tasks.id, job.data.taskId));
 
     if (!taskData) {
-      throw new Error(`Task not found: ${job.data.taskId}`);
+      // DB Cleanup後にキューに残っていたジョブはスキップする
+      console.warn(`[Queue] Task not found in DB (likely cleaned up): ${job.data.taskId}`);
+      return;
     }
 
     await runWorker(

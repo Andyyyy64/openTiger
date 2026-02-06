@@ -6,7 +6,7 @@ import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
 import { db, closeDb } from "@sebastian-code/db";
 import { tasks, agents, events } from "@sebastian-code/db/schema";
-import { eq, desc, inArray, and } from "drizzle-orm";
+import { eq, desc, inArray, and, sql } from "drizzle-orm";
 import dotenv from "dotenv";
 import { getRepoMode, getLocalRepoPath } from "@sebastian-code/core";
 import { createIssue } from "@sebastian-code/vcs";
@@ -140,7 +140,15 @@ const INIT_ROOT_FILES = [
   ".gitignore",
 ];
 const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
-const DOCSER_ALLOWED_PATHS = ["docs/**", "ops/runbooks/**", "README.md"];
+// docser はドキュメント整備が主務だが、package.json の scripts 補完や
+// .env.example の追記など軽微なルート変更が必要になるケースを許容する
+const DOCSER_ALLOWED_PATHS = [
+  "docs/**",
+  "ops/**",
+  "README.md",
+  "package.json",
+  ".env.example",
+];
 
 function mergeAllowedPaths(current: string[], extra: string[]): string[] {
   const seen = new Set(current);
@@ -194,13 +202,11 @@ function normalizeGeneratedTasks(result: TaskGenerationResult): TaskGenerationRe
       };
     }
 
-    if (requiresLockfile(task.commands)) {
-      // install に付随する lockfile の変更を許可する
-      normalized = {
-        ...normalized,
-        allowedPaths: mergeAllowedPaths(task.allowedPaths, LOCKFILE_PATHS),
-      };
-    }
+    // AIが依存追加を行う可能性があるため、全タスクで lockfile の変更を許可する
+    normalized = {
+      ...normalized,
+      allowedPaths: mergeAllowedPaths(normalized.allowedPaths, LOCKFILE_PATHS),
+    };
 
     return normalized;
   });
@@ -429,6 +435,45 @@ async function computePlanSignature(params: {
     .digest("hex");
 
   return { signature, requirementHash, repoHeadSha };
+}
+
+const DEFAULT_PLAN_DEDUPE_WINDOW_MS = 10 * 60 * 1000; // 10分
+
+function resolvePlanDedupeWindowMs(): number {
+  const raw = process.env.PLANNER_DEDUPE_WINDOW_MS;
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  return DEFAULT_PLAN_DEDUPE_WINDOW_MS;
+}
+
+async function wasPlanRecentlyCreated(signature: string, windowMs: number): Promise<boolean> {
+  const since = new Date(Date.now() - windowMs);
+  const [row] = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(and(
+      eq(events.type, "planner.plan_created"),
+      sql`${events.payload} ->> 'signature' = ${signature}`,
+      sql`${events.createdAt} >= ${since}`
+    ))
+    .orderBy(desc(events.createdAt))
+    .limit(1);
+  return Boolean(row?.id);
+}
+
+async function tryAcquirePlanSaveLock(signature: string): Promise<boolean> {
+  // 同一署名の保存を単一プロセスに限定して、二重起動時の競合と重複保存を防ぐ
+  const result = await db.execute(
+    sql`SELECT pg_try_advisory_lock(hashtext(${signature})) AS locked`
+  );
+  const row = (result as { rows?: Array<{ locked?: boolean | null }> }).rows?.[0];
+  return row?.locked === true;
+}
+
+async function releasePlanSaveLock(signature: string): Promise<void> {
+  await db.execute(sql`SELECT pg_advisory_unlock(hashtext(${signature}))`);
 }
 
 type DocGapInfo = {
@@ -902,7 +947,7 @@ function generateInitializationTasks(requirement: Requirement): TaskGenerationRe
     riskLevel: "low",
     dependencies: [],
     dependsOnIndexes: [],
-    timeboxMinutes: 45,
+    timeboxMinutes: 90,
     targetArea: undefined,
     touches: [],
   };
@@ -1191,8 +1236,8 @@ async function planFromRequirement(
   try {
     requirement = await parseRequirementFile(requirementPath);
   } catch (error) {
-    console.error(`Failed to read requirement file: ${error}`);
-    process.exit(1);
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to read requirement file: ${message}`);
   }
 
   // 要件を検証
@@ -1202,7 +1247,7 @@ async function planFromRequirement(
     for (const error of validationErrors) {
       console.error(`  - ${error}`);
     }
-    process.exit(1);
+    throw new Error("Validation failed");
   }
 
   console.log("\n[Parsed Requirement]");
@@ -1230,7 +1275,7 @@ async function planFromRequirement(
 
   if (!repoUninitialized && !config.useLlm) {
     console.error("[Planner] 差分点検が必須のため、LLMを無効化できません。");
-    process.exit(1);
+    throw new Error("LLM cannot be disabled when inspection is required");
   }
 
   if (!repoUninitialized) {
@@ -1244,7 +1289,7 @@ async function planFromRequirement(
     });
     if (!inspection) {
       console.error("[Planner] 差分点検に失敗したためタスク生成を中断します。");
-      process.exit(1);
+      throw new Error("Inspection failed");
     }
     inspectionResult = inspection;
     inspectionNotes = formatInspectionNotes(inspection);
@@ -1323,18 +1368,68 @@ async function planFromRequirement(
     return;
   }
 
-  // DBに保存
-  console.log("\n[Saving tasks to database...]");
-  const savedIds = await saveTasks(result.tasks);
-  await resolveDependencies(savedIds, result.tasks);
-
-  // Plannerの計画内容をUI側で参照できるように記録する
   const planSignature = await computePlanSignature({
     requirementPath,
     workdir: config.workdir,
     repoUrl: config.repoUrl,
     baseBranch: config.baseBranch,
   });
+
+  const dedupeWindowMs = resolvePlanDedupeWindowMs();
+  if (planSignature?.signature) {
+    const acquired = await tryAcquirePlanSaveLock(planSignature.signature);
+    if (!acquired) {
+      console.log("\n[Planner] 同一署名のPlan保存が進行中のため、保存をスキップします。");
+      return;
+    }
+    try {
+      if (await wasPlanRecentlyCreated(planSignature.signature, dedupeWindowMs)) {
+        console.log("\n[Planner] 同一署名のPlanが直近に作成済みのため、保存をスキップします。");
+        return;
+      }
+
+      // DBに保存
+      console.log("\n[Saving tasks to database...]");
+      const savedIds = await saveTasks(result.tasks);
+      await resolveDependencies(savedIds, result.tasks);
+
+      // Plannerの計画内容をUI側で参照できるように記録する
+      await recordPlannerPlanEvent({
+        requirementPath,
+        requirement,
+        result,
+        savedIds,
+        agentId,
+        signature: planSignature,
+      });
+
+      await createIssuesForTasks({
+        requirement,
+        tasks: result.tasks,
+        savedIds,
+      });
+
+      console.log(`\nSaved ${savedIds.length} tasks to database`);
+      console.log("Task IDs:");
+      for (const id of savedIds) {
+        console.log(`  - ${id}`);
+      }
+
+      console.log("\n" + "=".repeat(60));
+      console.log("Planning complete!");
+      console.log("=".repeat(60));
+      return;
+    } finally {
+      await releasePlanSaveLock(planSignature.signature);
+    }
+  }
+
+  // DBに保存
+  console.log("\n[Saving tasks to database...]");
+  const savedIds = await saveTasks(result.tasks);
+  await resolveDependencies(savedIds, result.tasks);
+
+  // Plannerの計画内容をUI側で参照できるように記録する
   await recordPlannerPlanEvent({
     requirementPath,
     requirement,
@@ -1633,12 +1728,12 @@ async function main(): Promise<void> {
   const agentId = process.env.AGENT_ID ?? "planner-1";
   setupProcessLogging(agentId);
   const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
-  await db.delete(agents).where(eq(agents.id, agentId));
 
   await db.insert(agents).values({
     id: agentId,
     role: "planner",
-    status: "idle",
+    // 再計画の重複起動を避けるため、起動直後からbusyとして扱う
+    status: "busy",
     lastHeartbeat: new Date(),
     metadata: {
       model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
@@ -1647,7 +1742,7 @@ async function main(): Promise<void> {
   }).onConflictDoUpdate({
     target: agents.id,
     set: {
-      status: "idle",
+      status: "busy",
       lastHeartbeat: new Date(),
     },
   });
@@ -1656,31 +1751,25 @@ async function main(): Promise<void> {
   const heartbeatTimer = startHeartbeat(agentId);
 
   // 引数がない場合は環境変数の要件パスを利用する
-  const requirementPath = args.find((arg) => !arg.startsWith("--"))
-    ?? process.env.REQUIREMENT_PATH
-    ?? process.env.REPLAN_REQUIREMENT_PATH;
-
-  if (!requirementPath) {
-    console.error("Error: Requirement file path is required");
-    showHelp();
-    process.exit(1);
-  }
-
-  // ファイルの存在確認
   try {
-    await stat(requirementPath);
-  } catch {
-    console.error(`Error: File not found: ${requirementPath}`);
-    process.exit(1);
-  }
+    const requirementPath = args.find((arg) => !arg.startsWith("--"))
+      ?? process.env.REQUIREMENT_PATH
+      ?? process.env.REPLAN_REQUIREMENT_PATH;
 
-  // 実行中はbusyに切り替える
-  await db
-    .update(agents)
-    .set({ status: "busy", lastHeartbeat: new Date() })
-    .where(eq(agents.id, agentId));
+    if (!requirementPath) {
+      console.error("Error: Requirement file path is required");
+      showHelp();
+      throw new Error("Requirement file path is required");
+    }
 
-  try {
+    // ファイルの存在確認
+    try {
+      await stat(requirementPath);
+    } catch {
+      console.error(`Error: File not found: ${requirementPath}`);
+      throw new Error(`File not found: ${requirementPath}`);
+    }
+
     const { workdir, cleanup } = await preparePlannerWorkdir(config);
     try {
       await planFromRequirement(resolve(requirementPath), { ...config, workdir }, agentId);

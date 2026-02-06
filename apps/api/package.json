@@ -17,6 +17,7 @@
   "dependencies": {
     "@sebastian-code/core": "workspace:*",
     "@sebastian-code/db": "workspace:*",
+    "@sebastian-code/queue": "workspace:*",
     "@sebastian-code/vcs": "workspace:*",
     "@hono/node-server": "^1.13.8",
     "@hono/zod-validator": "^0.4.2",

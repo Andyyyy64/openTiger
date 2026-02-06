@@ -44,4 +44,4 @@
 
 # Notes
 
-Gemini 3 Flash Preview を使って、モダンなUIで実装してください。
+モダンなUIで実装してください。
