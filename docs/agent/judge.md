@@ -1,49 +1,49 @@
-# Judge
+# Judge Agent
 
----
+最終更新: 2026-02-06
 
-## 役割
+## 1. 役割
 
-実装結果を評価し、採否を決定する。
+成功runを評価して、task を完了・再実行・隔離へ遷移させる。
 
----
+## 2. 入力
 
-## 入力
+- run（`status=success`）
+- PR情報（git mode）または local diff（local mode）
+- CI/policy/LLM評価結果
 
-- CI結果
-- ポリシー違反の有無
-- LLMレビュー結果
+## 3. 判定
 
----
+- `approve`
+- `request_changes`
+- `needs_human`
 
-## 出力
+## 4. 重要仕様
 
-- 判定結果（approve / request_changes / needs_human）
-- PRへのコメント
+- 冪等性:
+  - `runs.judgedAt IS NULL` のrunのみ対象
+  - claim時に `judgementVersion` をインクリメント
+- 対象task:
+  - `status=blocked` のみ
+- 非承認時:
+  - 既定で task を `queued` へ戻す
+  - requeue無効時は `blocked(needs_rework|needs_human)` を維持
+- approveだがmerge不可:
+  - 停滞防止のため再キュー
 
----
+## 5. 主な設定
 
-## 重要な方針
-
-- 自動マージは低リスクかつ機械判定が満たされた場合のみ
-- 高リスクは人間レビューへ切り替える
-
----
-
-## 主要な設定
-
-- `JUDGE_MODE`
+- `JUDGE_MODE=git|local|auto`
+- `JUDGE_MODEL`
+- `JUDGE_MERGE_ON_APPROVE`
+- `JUDGE_REQUEUE_ON_NON_APPROVE`
 - `JUDGE_LOCAL_BASE_REPO_RECOVERY`
 - `JUDGE_LOCAL_BASE_REPO_RECOVERY_CONFIDENCE`
 - `JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT`
 
----
+## 6. 出力
 
-## 失敗時の扱い
-
-- 判定不能な場合は `needs_human` として扱う
-- 差分が大きい場合はタスク分割を要求する
-
----
-
-最終更新: 2026/2/3
+- `events` へ review/requeue 記録
+- run更新（失敗理由含む）
+- task更新（`done`/`queued`/`blocked`）
+- 必要に応じて docser task 生成

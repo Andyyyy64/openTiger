@@ -12,6 +12,16 @@
     "edit": "allow",
     "bash": "allow",
     "read": "allow",
-    "write": "allow"
+    "write": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "external_directory": "allow",
+    "todowrite": "allow",
+    "todoread": "allow",
+    "question": "deny",
+    "plan_enter": "deny",
+    "plan_exit": "deny",
+    "doom_loop": "deny"
   }
 }

@@ -1,75 +1,106 @@
-# 動作フロー
+# 動作フロー（最新版）
 
----
+最終更新: 2026-02-06
 
-## 目的
+## 1. 全体ループ
 
-要件定義からタスク生成、実装、検証、判定、停止までの一連の流れを整理する。
+1. Planner が要件から task を生成する
+2. Dispatcher が `queued` task を選択し、lease を取得して worker に割り当てる
+3. Worker/Tester/Docser が実装・検証を実行する
+4. 成功時は task を `blocked(awaiting_judge)` に遷移し、Judge を待つ
+5. Judge が run を判定し、`done` / `queued` / `blocked` に遷移させる
+6. Cycle Manager が stuck 回復・failed/blocked 再投入・メトリクス更新を行う
+7. すべての task が終わるか、停止条件を満たすまで継続する
 
----
+## 2. Task ステータス遷移
 
-## フロー全体
+- `queued`
+  - 実行待ち
+- `running`
+  - lease取得後に Dispatcher が遷移
+- `blocked`
+  - Judge待ちまたは再作業待ち
+  - `blockReason`:
+    - `awaiting_judge`
+    - `needs_rework`
+    - `needs_human`
+- `failed`
+  - Worker実行失敗
+- `done`
+  - Judge承認済みで完了
+- `cancelled`
+  - timeout等の中断
 
-1. 要件定義を用意する（`docs/requirement.md` など）
-2. Plannerが要件を読み、タスクを生成してDBに保存する
-3. Dispatcherがタスクを取得し、依存関係と優先度を整理する
-4. DispatcherがLeaseを発行し、Workerを起動する
-5. Workerが対象リポジトリを準備し、実装・検証を行う
-6. Testerが必要なテストを追加し、実行結果を整理する
-7. JudgeがCI/ポリシー/LLMレビューをもとに採否を決定する
-8. Cycle Managerが状態を整理し、再計画または停止を判断する
+代表遷移:
 
----
+- `queued -> running`
+- `running -> blocked(awaiting_judge)`
+- `blocked(awaiting_judge) -> done | queued | blocked(needs_*)`
+- `failed -> queued | blocked`
+- `blocked(needs_rework) -> failed + new rework task(queued)`
 
-## フロー詳細
+## 3. Run ライフサイクル
 
-### 1. 要件定義
+- Worker開始時に `runs` へ `running` を作成
+- 成功時は `success` と `costTokens` を保存
+- 失敗時は `failed` と `errorMessage` を保存
+- Judge は `runs.judgedAt IS NULL` の成功runのみ対象
+- Judge処理時に原子的claim:
+  - `judgedAt = now`
+  - `judgementVersion = judgementVersion + 1`
 
-- 要件は人間が記述し、曖昧さを残さない
-- 受け入れ条件は機械的に判定できる形にする
+これにより同一runの再レビューを防止する。
 
-### 2. Planner
+## 4. Dispatcher の並列制御
 
-- 要件を読み、30〜90分単位のタスクに分割する
-- 依存関係と変更許可パスを明示する
-- 生成したタスクを `tasks` テーブルに保存する
+- 依存関係が未解決の task は実行しない
+- `targetArea` が衝突する task は同時実行しない
+- 同時実行枠は `maxConcurrentWorkers - busyAgentCount`
+  - process/queue モードに関係なく上限が効く
 
-### 3. Dispatcher
+## 5. Judge 判定後の挙動
 
-- `queued` 状態のタスクを取得する
-- 依存関係を満たすタスクのみ実行対象にする
-- Leaseを発行して並列安全性を確保する
+- `approve + merge成功`:
+  - task を `done`
+- `request_changes` / `needs_human`:
+  - 既定では `queued` に戻して再実行
+  - requeue無効時は `blocked(needs_rework|needs_human)` を維持
+- `approve だが merge失敗`:
+  - 停滞防止のため `queued` に戻す
 
-### 4. Worker
+## 6. 回復処理
 
-- 作業用ブランチを作成し、実装を行う
-- 変更を検証し、成功条件を満たすまで自己修正を試みる
-- 成果物（PR、ログ、差分）を記録する
+Cycle Manager が定期的に以下を実施:
 
-### 5. Tester
+- timeout run の `cancelled` 化
+- orphan `running` task の `queued` 復帰
+- failed task の分類ベース再試行
+- blocked task の reason ベース処理
+  - `awaiting_judge`: judge待ちrunがなければ再投入
+  - `needs_rework`: 分割タスク生成
+  - `needs_human`: 隔離（自動再実行しない）
 
-- テスト追加と実行を担当する
-- 失敗時は原因を分類し、次のタスク生成に利用する
+## 7. 失敗分類（adaptive retry）
 
-### 6. Judge
+失敗は次カテゴリに分類して再試行戦略を変える。
 
-- CI結果とポリシー違反の有無を確認する
-- リスクが高い場合は人間レビューへエスカレーションする
-- 採否を `runs` と `artifacts` に記録する
+- `env`
+- `setup`
+- `policy`
+- `test`
+- `flaky`
+- `model`
 
-### 7. Cycle Manager
+同じ原因の盲目的再実行を防ぎ、上限到達時は `blocked` へ遷移する。
 
-- 一定の時間/件数/失敗率に応じてサイクルを区切る
-- すべてのWorker完了後に再計画を実行する
+## 8. SLO と観測項目
 
----
+- SLO1: `queued -> running` 5分以内
+- SLO2: `blocked` 30分超を残さない
+- SLO3: retry exhaustion の可視化
 
-## 停止条件
+Dashboard Overview で以下を表示:
 
-- すべてのタスクが完了し、新しい要件差分が存在しない
-- リスクが高く自動化が危険と判定された
-- 失敗率やコストが閾値を超えた
-
----
-
-最終更新: 2026/2/3
+- `QUEUE AGE MAX`
+- `BLOCKED > 30M`
+- `RETRY EXHAUSTED`

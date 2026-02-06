@@ -1,49 +1,48 @@
-# Planner
+# Planner Agent
 
----
+最終更新: 2026-02-06
 
-## 役割
+## 1. 役割
 
-要件定義を読み取り、実行可能なタスクへ分割する。
+要件を実行可能な task 群へ分割して `tasks` に保存する。
 
----
+## 2. 入力
 
-## 入力
+- requirement ファイル
+- 既存 task 状態
+- policy / allowed paths
 
-- 要件ファイル（例: `docs/requirement.md`）
-- 変更許可パスや制約条件
+## 3. 出力
 
----
+- task作成
+- 依存関係
+- 優先度
+- リスクレベル
 
-## 出力
+## 4. 重要仕様
 
-- `tasks` テーブルへのタスク登録
-- 依存関係、優先度、リスクの付与
+- task は機械判定可能な goal を必須とする
+- 依存関係は循環・未来参照を補正する
+- 未初期化repoでは初期化taskを自動注入する
+- 重複計画を避けるため dedupe window を使う
 
----
+## 5. 主な設定
 
-## 重要な方針
-
-- 1タスクは30〜90分程度で完了できる粒度にする
-- 成功条件は必ず機械的に判定できる形式にする
-- 変更範囲が広い場合は分割して衝突を避ける
-
----
-
-## 主要な設定
-
+- `PLANNER_MODEL`
 - `PLANNER_USE_REMOTE`
 - `PLANNER_REPO_URL`
-- `REPLAN_REQUIREMENT_PATH`
-- `REPLAN_INTERVAL_MS`
+- `PLANNER_TIMEOUT`
+- `PLANNER_INSPECT`
+- `PLANNER_INSPECT_TIMEOUT`
+- `PLANNER_DEDUPE_WINDOW_MS`
 
----
+## 6. 失敗時
 
-## 失敗時の扱い
+- requirement パース不能はエラー記録
+- 生成結果が不正なら sanitize して保存
+- 重大失敗時は既存taskを壊さず終了
 
-- パース不能な要件はエラーとして記録する
-- 生成不能な場合は再計画を停止し、人間レビューが必要になる
+## 7. 運用メモ
 
----
-
-最終更新: 2026/2/3
+- Planner は「最適化」より「詰まらない分割」を優先する
+- 依存が濃すぎる計画より、小さく再実行可能な計画を選ぶ

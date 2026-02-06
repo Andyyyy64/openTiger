@@ -2,95 +2,93 @@
 
 **AI Agent Orchestration System for Autonomous Coding**
 
-数十のAIエージェントを協調させ、自律的にコードを積み上げるオーケストレーションシステム。  
-[Cursor Research: Scaling Long-Running Autonomous Coding](https://cursor.com/ja/blog/scaling-agents) の設計思想を、実運用可能な形で実装する。
+複数のAIエージェントを協調させ、要件から実装・判定・再試行までを自律運転するオーケストレーションシステム。  
+設計思想は [Cursor Research: Scaling Long-Running Autonomous Coding](https://cursor.com/ja/blog/scaling-agents) をベースにしている。
 
 ---
 
 ## 思想
 
-- 役割分離を徹底し、Planner/Judgeが統制する
-- 成功条件は機械的に判定できる形に限定する
-- ロックではなくリースで回収可能な並列制御を行う
-- 定期的なクリーン再スタートでドリフトを抑える
+- 役割分離（Planner / Dispatcher / Worker / Judge / Cycle Manager）
+- 機械判定可能な完了条件
+- リース中心の並列制御
+- 冪等性と回復性を優先した長時間運用
 
 ---
 
-## 役割分担（概要）
+## 主要コンポーネント
 
-- Planner: 要件を分割しタスク化する
-- Worker: 実装と検証を進める
-- Tester: テストの作成・実行を担う（クリティカルパスのE2Eを優先）
-- Judge: 判定とマージを行い品質ゲートを維持する
-- Docser: Judge承認直後に同期でドキュメント更新タスクを生成し、docs/README/運用手順の整合を保つ
+- Planner
+  - requirement から task を生成
+- Dispatcher
+  - task 割り当てと並列制御
+- Worker / Tester / Docser
+  - 実装、テスト、ドキュメント更新
+- Judge
+  - 判定と遷移制御
+- Cycle Manager
+  - stuck回復、再投入、メトリクス管理
+
+---
+
+## 最近の重要変更（2026-02-06）
+
+- Judge冪等化
+  - `runs.judged_at` / `judgement_version` を導入
+- `blockReason` 導入
+  - `awaiting_judge` / `needs_rework` / `needs_human`
+- failed/blocked の適応リトライ
+  - 失敗を `env/setup/policy/test/flaky/model` に分類
+- concurrency制御の一本化
+  - busy agent ベース
+- verifyの非破壊化
+  - verify中の `package.json` 自動編集を廃止
+- deniedCommands の二重防御
+  - verify前 + OpenCode実行前
 
 ---
 
 ## 環境構築
 
-### 前提条件
+### 前提
 
 - Node.js 20+
 - pnpm 9+
-- Docker & Docker Compose
-- PostgreSQL 16+
-- Redis 7+
+- Docker / Docker Compose
+- PostgreSQL
+- Redis
 - OpenCode CLI
 
-### インストール
+### セットアップ
 
 ```bash
-# リポジトリクローン
 git clone git@github.com:Andyyyy64/SebastianCode.git
 cd SebastianCode
-
-# 依存関係インストール
 pnpm install
-
-# 環境変数設定
 cp .env.example .env
-# .env を編集
-
-# 起動（初回もこれでOK）
 pnpm restart
 ```
 
-`pnpm restart` はコンテナ再起動とDB初期化を含むため、既存データを保持したい場合は注意する。テスト用だからそのうち起動もダッシュボードに以降なりしたい todo
-
 ---
 
-## 使い方
+## クイックスタート
 
-### 1. 要件を用意する
-
-- `templates/requirement.md` をベースに要件を作成する
-- 生成した要件ファイルを `docs/requirement.md` などに保存する
-
-### 2. タスクを生成する
-
-```bash
-pnpm --filter @sebastian-code/planner start docs/requirement.md
-```
-
-### 3. 実行・判定を回す
-
-- Dispatcher/Worker/Judge を起動し、タスクの処理と判定を継続的に回す
-- 詳細な動作フローは `docs/flow.md` を参照
+1. requirement を用意
+2. Planner で task 生成
+3. Dispatcher/Worker/Judge/Cycle Manager を起動
+4. Dashboard で `QUEUE AGE MAX` / `BLOCKED > 30M` / `RETRY EXHAUSTED` を監視
 
 ---
 
 ## ドキュメント
 
-- 全体索引: `docs/README.md`
-- 動作フロー: `docs/flow.md`
-- 運用モード: `docs/mode.md`
-- 非人間運用の思想: `docs/nonhumanoriented.md`
-- エージェント: `docs/agent/planner.md`
-- エージェント: `docs/agent/worker.md`
-- エージェント: `docs/agent/tester.md`
-- エージェント: `docs/agent/judge.md`
-- 実装タスク一覧: `docs/task.md`
+- `docs/README.md` (索引)
+- `docs/flow.md` (状態遷移)
+- `docs/mode.md` (運用モード)
+- `docs/nonhumanoriented.md` (長時間運用原則)
+- `docs/task.md` (実装状況)
+- `docs/agent/*.md` (エージェント仕様)
 
 ---
 
-最終更新: 2026/2/3
+最終更新: 2026-02-06
