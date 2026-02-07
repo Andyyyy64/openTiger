@@ -3,9 +3,9 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { createWriteStream, mkdirSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, relative, isAbsolute } from "node:path";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@sebastian-code/db";
-import { config as configTable, events, tasks } from "@sebastian-code/db/schema";
+import { artifacts, config as configTable, events, runs, tasks } from "@sebastian-code/db/schema";
 import { configToEnv, DEFAULT_CONFIG, buildConfigRecord } from "../system-config.js";
 import { getAuthInfo } from "../middleware/index.js";
 import { createRepo, getOctokit, getRepoInfo } from "@sebastian-code/vcs";
@@ -54,6 +54,10 @@ type ProcessRuntime = {
   lastCommand?: string;
   process?: ChildProcess | null;
   stopRequested?: boolean;
+  lastPayload?: StartPayload;
+  restartAttempts?: number;
+  restartWindowStartedAt?: number;
+  restartScheduled?: boolean;
 };
 
 type StartPayload = {
@@ -75,6 +79,7 @@ type ProcessDefinition = {
   group: string;
   kind: ProcessKind;
   supportsStop: boolean;
+  autoRestart?: boolean;
   buildStart: (payload: StartPayload) => Promise<StartCommand>;
 };
 
@@ -84,6 +89,19 @@ let restartProcess: ChildProcess | null = null;
 let restartStatus: RestartStatus = { status: "idle" };
 const managedProcesses = new Map<string, ProcessRuntime>();
 const processStartLocks = new Set<string>();
+const AUTO_RESTART_ENABLED = process.env.SYSTEM_PROCESS_AUTO_RESTART !== "false";
+const AUTO_RESTART_DELAY_MS = Number.parseInt(
+  process.env.SYSTEM_PROCESS_AUTO_RESTART_DELAY_MS ?? "2000",
+  10
+);
+const AUTO_RESTART_WINDOW_MS = Number.parseInt(
+  process.env.SYSTEM_PROCESS_AUTO_RESTART_WINDOW_MS ?? "300000",
+  10
+);
+const AUTO_RESTART_MAX_ATTEMPTS = Number.parseInt(
+  process.env.SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS ?? "5",
+  10
+);
 
 type GitHubContext = {
   token: string;
@@ -103,6 +121,12 @@ type OpenIssueSnapshot = {
 type OpenPrSnapshot = {
   count: number;
   linkedIssueNumbers: Set<number>;
+  openPulls: Array<{
+    number: number;
+    title: string;
+    body: string;
+    url: string;
+  }>;
 };
 
 type TaskIssueLink = {
@@ -487,6 +511,12 @@ async function fetchOpenPrCount(context: GitHubContext): Promise<OpenPrSnapshot>
   return {
     count: rows.length,
     linkedIssueNumbers,
+    openPulls: rows.map((row) => ({
+      number: row.number,
+      title: row.title ?? "",
+      body: row.body ?? "",
+      url: row.html_url,
+    })),
   };
 }
 
@@ -610,6 +640,7 @@ function pickDependencyTaskId(links: TaskIssueLink[]): string | null {
 async function buildPreflightSummary(options: {
   configRow: ConfigRow;
   autoCreateIssueTasks: boolean;
+  autoCreatePrJudgeTasks: boolean;
 }): Promise<SystemPreflightSummary> {
   const taskRows = await db
     .select({
@@ -685,6 +716,7 @@ async function buildPreflightSummary(options: {
 
   summary.github.enabled = true;
   let prLinkedIssueNumbers = new Set<number>();
+  let openPulls: Array<{ number: number; title: string; body: string; url: string }> = [];
 
   let openIssues: OpenIssueSnapshot[] = [];
   try {
@@ -696,6 +728,7 @@ async function buildPreflightSummary(options: {
     summary.github.openIssueCount = issues.length;
     summary.github.openPrCount = openPrSnapshot.count;
     prLinkedIssueNumbers = openPrSnapshot.linkedIssueNumbers;
+    openPulls = openPrSnapshot.openPulls;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     summary.github.warnings.push(`Failed to query GitHub backlog: ${message}`);
@@ -808,6 +841,108 @@ async function buildPreflightSummary(options: {
     }
   }
 
+  if (options.autoCreatePrJudgeTasks && openPulls.length > 0) {
+    const openPrRefs = openPulls.map((pull) => String(pull.number));
+    const trackedRows = await db
+      .select({
+        ref: artifacts.ref,
+      })
+      .from(artifacts)
+      .where(and(eq(artifacts.type, "pr"), inArray(artifacts.ref, openPrRefs)));
+    const trackedPrNumbers = new Set<number>();
+    for (const row of trackedRows) {
+      const parsed = Number.parseInt(row.ref ?? "", 10);
+      if (Number.isInteger(parsed) && parsed > 0) {
+        trackedPrNumbers.add(parsed);
+      }
+    }
+
+    let importedPrCount = 0;
+    for (const pull of openPulls) {
+      if (trackedPrNumbers.has(pull.number)) {
+        continue;
+      }
+
+      const [taskRow] = await db
+        .insert(tasks)
+        .values({
+          title: `[PR] Review #${pull.number}: ${pull.title || "Untitled PR"}`,
+          goal: `Review and process open PR #${pull.number}.`,
+          context: {
+            notes: "Imported from open GitHub PR backlog",
+            pr: {
+              number: pull.number,
+              url: pull.url,
+              title: pull.title,
+            },
+          },
+          allowedPaths: ["**"],
+          commands: [],
+          dependencies: [],
+          priority: 50,
+          riskLevel: "low",
+          role: "worker",
+          status: "blocked",
+          blockReason: "awaiting_judge",
+          timeboxMinutes: 30,
+        })
+        .returning({ id: tasks.id });
+
+      if (!taskRow?.id) {
+        summary.github.warnings.push(`Failed to import open PR #${pull.number} into local backlog.`);
+        continue;
+      }
+
+      const now = new Date();
+      const [runRow] = await db
+        .insert(runs)
+        .values({
+          taskId: taskRow.id,
+          agentId: "system",
+          status: "success",
+          startedAt: now,
+          finishedAt: now,
+        })
+        .returning({ id: runs.id });
+
+      if (!runRow?.id) {
+        summary.github.warnings.push(`Failed to create run for imported PR #${pull.number}.`);
+        continue;
+      }
+
+      await db.insert(artifacts).values({
+        runId: runRow.id,
+        type: "pr",
+        ref: String(pull.number),
+        url: pull.url,
+        metadata: {
+          title: pull.title,
+          imported: true,
+        },
+      });
+
+      await db.insert(events).values({
+        type: "task.created_from_open_pr",
+        entityType: "task",
+        entityId: taskRow.id,
+        agentId: "system",
+        payload: {
+          prNumber: pull.number,
+          prUrl: pull.url,
+          prTitle: pull.title,
+        },
+      });
+
+      importedPrCount += 1;
+      summary.local.blockedTaskCount += 1;
+      summary.local.pendingJudgeTaskCount += 1;
+    }
+
+    if (importedPrCount > 0) {
+      summary.github.warnings.push(`Imported ${importedPrCount} open PR(s) into judge backlog.`);
+    }
+  }
+
   return summary;
 }
 
@@ -842,6 +977,7 @@ const processDefinitions: ProcessDefinition[] = [
     group: "Core",
     kind: "service",
     supportsStop: true,
+    autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
       args: ["--filter", "@sebastian-code/dispatcher", "dev"],
@@ -855,6 +991,7 @@ const processDefinitions: ProcessDefinition[] = [
     group: "Core",
     kind: "service",
     supportsStop: true,
+    autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
       args: ["--filter", "@sebastian-code/judge", "dev"],
@@ -868,6 +1005,7 @@ const processDefinitions: ProcessDefinition[] = [
     group: "Core",
     kind: "service",
     supportsStop: true,
+    autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
       args: ["--filter", "@sebastian-code/cycle-manager", "dev"],
@@ -881,6 +1019,7 @@ const processDefinitions: ProcessDefinition[] = [
     group: "Workers",
     kind: "worker",
     supportsStop: true,
+    autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
       args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
@@ -895,6 +1034,7 @@ const processDefinitions: ProcessDefinition[] = [
     group: "Workers",
     kind: "worker",
     supportsStop: true,
+    autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
       args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
@@ -909,6 +1049,7 @@ const processDefinitions: ProcessDefinition[] = [
     group: "Workers",
     kind: "worker",
     supportsStop: true,
+    autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
       args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
@@ -923,6 +1064,7 @@ const processDefinitions: ProcessDefinition[] = [
     group: "Workers",
     kind: "worker",
     supportsStop: true,
+    autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
       args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
@@ -937,6 +1079,7 @@ const processDefinitions: ProcessDefinition[] = [
     group: "Workers",
     kind: "worker",
     supportsStop: true,
+    autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
       args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
@@ -951,6 +1094,7 @@ const processDefinitions: ProcessDefinition[] = [
     group: "Workers",
     kind: "worker",
     supportsStop: true,
+    autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
       args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
@@ -965,6 +1109,7 @@ const processDefinitions: ProcessDefinition[] = [
     group: "Workers",
     kind: "worker",
     supportsStop: true,
+    autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
       args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
@@ -1040,6 +1185,100 @@ function buildProcessInfo(
   };
 }
 
+function canAutoRestart(definition: ProcessDefinition, runtime: ProcessRuntime): boolean {
+  if (!AUTO_RESTART_ENABLED) {
+    return false;
+  }
+  if (!definition.autoRestart) {
+    return false;
+  }
+  if (runtime.stopRequested) {
+    return false;
+  }
+  return true;
+}
+
+async function scheduleProcessAutoRestart(
+  definition: ProcessDefinition,
+  runtime: ProcessRuntime
+): Promise<void> {
+  const now = Date.now();
+  const windowMs = Number.isFinite(AUTO_RESTART_WINDOW_MS) && AUTO_RESTART_WINDOW_MS > 0
+    ? AUTO_RESTART_WINDOW_MS
+    : 300000;
+  const maxAttempts = Number.isFinite(AUTO_RESTART_MAX_ATTEMPTS) && AUTO_RESTART_MAX_ATTEMPTS > 0
+    ? AUTO_RESTART_MAX_ATTEMPTS
+    : 5;
+  const delayMs = Number.isFinite(AUTO_RESTART_DELAY_MS) && AUTO_RESTART_DELAY_MS >= 0
+    ? AUTO_RESTART_DELAY_MS
+    : 2000;
+
+  const windowStart = runtime.restartWindowStartedAt ?? now;
+  const resetWindow = now - windowStart > windowMs;
+  const nextAttempts = (resetWindow ? 0 : (runtime.restartAttempts ?? 0)) + 1;
+  const nextWindowStart = resetWindow ? now : windowStart;
+
+  if (nextAttempts > maxAttempts) {
+    managedProcesses.set(definition.name, {
+      ...runtime,
+      restartAttempts: nextAttempts,
+      restartWindowStartedAt: nextWindowStart,
+      restartScheduled: false,
+      message: `Auto-restart exhausted (${maxAttempts}/${Math.round(windowMs / 1000)}s)`,
+    });
+    console.error(
+      `[System] Auto-restart exhausted for ${definition.name} (attempts=${nextAttempts})`
+    );
+    return;
+  }
+
+  managedProcesses.set(definition.name, {
+    ...runtime,
+    restartAttempts: nextAttempts,
+    restartWindowStartedAt: nextWindowStart,
+    restartScheduled: true,
+    message: `Auto-restart scheduled (${nextAttempts}/${maxAttempts})`,
+  });
+
+  setTimeout(async () => {
+    const latest = managedProcesses.get(definition.name);
+    if (!latest) {
+      return;
+    }
+    if (latest.stopRequested || latest.status === "running") {
+      managedProcesses.set(definition.name, {
+        ...latest,
+        restartScheduled: false,
+      });
+      return;
+    }
+
+    try {
+      await startManagedProcess(definition, latest.lastPayload ?? {});
+      const refreshed = managedProcesses.get(definition.name);
+      if (refreshed) {
+        managedProcesses.set(definition.name, {
+          ...refreshed,
+          restartScheduled: false,
+          message: `Auto-restarted (${nextAttempts}/${maxAttempts})`,
+        });
+      }
+      console.log(`[System] Auto-restarted process: ${definition.name}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const updated = managedProcesses.get(definition.name);
+      if (updated) {
+        managedProcesses.set(definition.name, {
+          ...updated,
+          restartScheduled: false,
+          message: `Auto-restart failed: ${message}`,
+        });
+      }
+      console.error(`[System] Auto-restart failed for ${definition.name}: ${message}`);
+    }
+  }, delayMs);
+}
+
 async function startManagedProcess(
   definition: ProcessDefinition,
   payload: StartPayload
@@ -1081,6 +1320,8 @@ async function startManagedProcess(
     lastCommand: describeCommand(command),
     process: child,
     stopRequested: false,
+    lastPayload: payload,
+    restartScheduled: false,
   };
   managedProcesses.set(definition.name, runtime);
 
@@ -1093,28 +1334,38 @@ async function startManagedProcess(
       : code === 0
         ? "completed"
         : "failed";
-    managedProcesses.set(definition.name, {
+    const nextRuntime: ProcessRuntime = {
       ...latest,
       status,
       finishedAt: new Date().toISOString(),
       exitCode: code,
       signal,
       process: null,
-    });
+    };
+    managedProcesses.set(definition.name, nextRuntime);
     logStream.end();
+
+    if (canAutoRestart(definition, nextRuntime)) {
+      void scheduleProcessAutoRestart(definition, nextRuntime);
+    }
   });
 
   child.on("error", (error) => {
     const latest = managedProcesses.get(definition.name);
     if (!latest) return;
-    managedProcesses.set(definition.name, {
+    const nextRuntime: ProcessRuntime = {
       ...latest,
       status: "failed",
       finishedAt: new Date().toISOString(),
       message: error.message,
       process: null,
-    });
+    };
+    managedProcesses.set(definition.name, nextRuntime);
     logStream.end();
+
+    if (canAutoRestart(definition, nextRuntime)) {
+      void scheduleProcessAutoRestart(definition, nextRuntime);
+    }
   });
 
   child.unref();
@@ -1224,6 +1475,17 @@ function startRestart(): RestartStatus {
 }
 
 async function ensureConfigRow() {
+  // migration履歴が崩れていても system 起動時に必要カラムを補完する
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_wait_on_quota" text DEFAULT 'true' NOT NULL`
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_quota_retry_delay_ms" text DEFAULT '30000' NOT NULL`
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`
+  );
+
   const existing = await db.select().from(configTable).limit(1);
   const current = existing[0];
   if (current) {
@@ -1377,6 +1639,7 @@ systemRoute.post("/preflight", async (c) => {
     const preflight = await buildPreflightSummary({
       configRow,
       autoCreateIssueTasks,
+      autoCreatePrJudgeTasks: true,
     });
 
     const dispatcherEnabled = parseBooleanSetting(configRow.dispatcherEnabled, true);
@@ -1395,7 +1658,7 @@ systemRoute.post("/preflight", async (c) => {
     const hasJudgeBacklog =
       preflight.github.openPrCount > 0 || preflight.local.pendingJudgeTaskCount > 0;
 
-    const startPlanner = hasRequirementContent && !hasIssueBacklog;
+    const startPlanner = hasRequirementContent && !hasIssueBacklog && !hasJudgeBacklog;
     const startExecutionAgents = startPlanner || hasIssueBacklog || hasLocalTaskBacklog;
 
     const recommendations = {
@@ -1417,7 +1680,7 @@ systemRoute.post("/preflight", async (c) => {
           ? `Judge backlog detected (openPR=${preflight.github.openPrCount}, awaitingJudge=${preflight.local.pendingJudgeTaskCount})`
           : "No judge backlog",
         startPlanner
-          ? "Planner is enabled because requirement content is present and issue backlog is empty"
+          ? "Planner is enabled because requirement content is present and issue/PR backlog is empty"
           : "Planner is skipped for this launch",
       ],
     };
@@ -1496,6 +1759,27 @@ systemRoute.post("/processes/:name/start", async (c) => {
     const rawContent = typeof rawBody?.content === "string" ? rawBody.content : undefined;
     if (rawContent !== undefined && rawContent.trim().length === 0) {
       return c.json({ error: "Requirement content is empty" }, 400);
+    }
+    if (name === "planner") {
+      const configRow = await ensureConfigRow();
+      const preflight = await buildPreflightSummary({
+        configRow,
+        autoCreateIssueTasks: false,
+        autoCreatePrJudgeTasks: false,
+      });
+      const hasJudgeBacklog =
+        preflight.github.openPrCount > 0 || preflight.local.pendingJudgeTaskCount > 0;
+      if (hasJudgeBacklog) {
+        return c.json(
+          {
+            error:
+              `Planner start blocked: pending PR/judge backlog exists ` +
+              `(openPR=${preflight.github.openPrCount}, awaitingJudge=${preflight.local.pendingJudgeTaskCount}). ` +
+              "Start judge first and clear PR backlog.",
+          },
+          409
+        );
+      }
     }
     const payload: StartPayload = {
       requirementPath:
