@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import dotenv from "dotenv";
 import { db, closeDb } from "../packages/db/src/client.ts";
 import { config as configTable } from "../packages/db/src/schema.ts";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   CONFIG_KEYS,
   DEFAULT_CONFIG,
@@ -11,6 +11,16 @@ import {
 } from "../apps/api/src/system-config.ts";
 
 async function ensureConfigRow() {
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_wait_on_quota" text DEFAULT 'true' NOT NULL`
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_quota_retry_delay_ms" text DEFAULT '30000' NOT NULL`
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`
+  );
+
   const existing = await db.select().from(configTable).limit(1);
   const current = existing[0];
   if (current) {
