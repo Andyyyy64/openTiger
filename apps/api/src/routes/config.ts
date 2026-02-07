@@ -3,7 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@sebastian-code/db";
 import { config as configTable } from "@sebastian-code/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   CONFIG_KEYS,
   DEFAULT_CONFIG,
@@ -20,6 +20,17 @@ const updateSchema = z.object({
 });
 
 async function ensureConfigRow() {
+  // migration履歴が崩れていても system_config が動くよう、必要カラムを自己修復する
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_wait_on_quota" text DEFAULT 'true' NOT NULL`
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_quota_retry_delay_ms" text DEFAULT '30000' NOT NULL`
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`
+  );
+
   const existing = await db.select().from(configTable).limit(1);
   const current = existing[0];
   if (current) {
