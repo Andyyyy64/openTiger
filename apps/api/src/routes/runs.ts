@@ -50,7 +50,8 @@ runsRoute.get("/:id", async (c) => {
 
   const runResult = await db.select().from(runs).where(eq(runs.id, id));
 
-  if (runResult.length === 0) {
+  const runData = runResult[0];
+  if (!runData) {
     return c.json({ error: "Run not found" }, 404);
   }
 
@@ -60,8 +61,36 @@ runsRoute.get("/:id", async (c) => {
     .from(artifacts)
     .where(eq(artifacts.runId, id));
 
+  // ログファイルの内容を取得
+  let logContent: string | null = null;
+  const logPath = runData.logPath;
+  if (logPath) {
+    try {
+      const { readFile, stat } = await import("node:fs/promises");
+      const stats = await stat(logPath);
+      // 1MB制限
+      if (stats.size > 1024 * 1024) {
+        // 末尾1MBを読むなどの実装も可能だが、一旦は部分読み込みで対応
+        const { open } = await import("node:fs/promises");
+        const handle = await open(logPath, "r");
+        try {
+          const buffer = Buffer.alloc(1024 * 1024);
+          const { bytesRead } = await handle.read(buffer, 0, 1024 * 1024, stats.size - 1024 * 1024);
+          logContent = "...(truncated, showing last 1MB)...\n" + buffer.toString("utf-8", 0, bytesRead);
+        } finally {
+          await handle.close();
+        }
+      } else {
+        logContent = await readFile(logPath, "utf-8");
+      }
+    } catch (e) {
+      console.warn(`[API] Failed to read log file at ${logPath}:`, e);
+      logContent = `[System] Failed to read log file: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  }
+
   return c.json({
-    run: runResult[0],
+    run: { ...runData, logContent },
     artifacts: artifactResult,
   });
 });
