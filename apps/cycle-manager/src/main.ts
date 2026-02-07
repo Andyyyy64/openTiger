@@ -4,8 +4,8 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { db } from "@sebastian-code/db";
-import { events, agents } from "@sebastian-code/db/schema";
-import { eq, desc, and, inArray, gte, isNotNull } from "drizzle-orm";
+import { events, agents, runs, artifacts, tasks } from "@sebastian-code/db/schema";
+import { eq, desc, and, inArray, gte, isNotNull, isNull } from "drizzle-orm";
 import type { CycleConfig } from "@sebastian-code/core";
 import {
   startNewCycle,
@@ -91,6 +91,7 @@ interface CycleManagerConfig {
   replanBaseBranch: string; // 差分判定に使うベースブランチ
   failedTaskRetryCooldownMs: number; // failedタスク再投入までの待機時間
   blockedTaskRetryCooldownMs: number; // blockedタスク再投入までの待機時間
+  stuckRunTimeoutMs: number; // 停滞run判定までの時間
 }
 
 // デフォルト設定
@@ -130,6 +131,10 @@ const DEFAULT_CONFIG: CycleManagerConfig = {
     process.env.BLOCKED_TASK_RETRY_COOLDOWN_MS ?? "120000",
     10
   ),
+  stuckRunTimeoutMs: parseInt(
+    process.env.STUCK_RUN_TIMEOUT_MS ?? "900000",
+    10
+  ),
 };
 
 // Cycle Managerの状態
@@ -142,6 +147,7 @@ let replanInProgress = false;
 let lastReplanAt: number | null = null;
 let warnedMissingRequirementPath = false;
 const replanDebugEnabled = process.env.REPLAN_DEBUG === "true";
+const CYCLE_ENDING_CRITICAL_ANOMALIES = new Set(["stuck_task", "cost_spike"]);
 
 interface ReplanSignature {
   signature: string;
@@ -397,6 +403,29 @@ async function shouldTriggerReplan(
     }
     return { shouldRun: false, reason: "missing_requirement_path" };
   }
+  const [pendingJudgeRun] = await db
+    .select({ runId: runs.id })
+    .from(runs)
+    .innerJoin(artifacts, eq(artifacts.runId, runs.id))
+    .innerJoin(tasks, eq(tasks.id, runs.taskId))
+    .where(
+      and(
+        eq(runs.status, "success"),
+        isNull(runs.judgedAt),
+        inArray(artifacts.type, ["pr", "worktree"]),
+        eq(tasks.status, "blocked"),
+        eq(tasks.blockReason, "awaiting_judge")
+      )
+    )
+    .limit(1);
+  if (pendingJudgeRun) {
+    return { shouldRun: false, reason: "pending_judge_runs" };
+  }
+  // Judge待ちPR/blockedタスクが残っている間は再計画しない。
+  // PR消化前の新規plan生成を防いで重複実行を避ける。
+  if (state.tasks.blocked > 0) {
+    return { shouldRun: false, reason: "blocked_tasks_present" };
+  }
   if (state.tasks.queued > 0 || state.tasks.running > 0) {
     return { shouldRun: false, reason: "tasks_in_progress" };
   }
@@ -424,7 +453,8 @@ async function shouldTriggerReplan(
   }
 
   const signature = await computeReplanSignature(config);
-  if (signature) {
+  const skipSameSignature = process.env.REPLAN_SKIP_SAME_SIGNATURE === "true";
+  if (skipSameSignature && signature) {
     // 直近の成功時と同じ署名なら差異がないので再計画しない
     const lastSignature = await getLastPlanSignature();
     if (lastSignature && lastSignature === signature.signature) {
@@ -592,11 +622,18 @@ async function runMonitorLoop(): Promise<void> {
       const criticalAnomalies = anomalies.filter(
         (a) => a.severity === "critical"
       );
-      if (criticalAnomalies.length > 0) {
+      const endingCriticalAnomalies = criticalAnomalies.filter((anomaly) =>
+        CYCLE_ENDING_CRITICAL_ANOMALIES.has(anomaly.type)
+      );
+      if (endingCriticalAnomalies.length > 0) {
         console.log("[CycleManager] Critical anomalies detected, ending cycle");
         await endCurrentCycle("critical_anomaly");
         await performFullCleanup(true);
         await startNewCycle();
+      } else if (criticalAnomalies.length > 0) {
+        console.warn(
+          "[CycleManager] Critical anomaly detected, but cycle restart skipped (non-recoverable by restart)"
+        );
       }
     }
 
@@ -658,12 +695,12 @@ async function runCleanupLoop(): Promise<void> {
     }
 
     // 停滞Runをキャンセル
-    const stuckRuns = await cancelStuckRuns();
+    const stuckRuns = await cancelStuckRuns(activeConfig.stuckRunTimeoutMs);
     if (stuckRuns > 0) {
       console.log(`[Cleanup] Cancelled ${stuckRuns} stuck runs`);
     }
 
-    // 失敗タスクをクールダウン後に再キュー（最大3回まで）
+    // 失敗タスクをクールダウン後に再キュー（既定: 無制限）
     const requeuedTasks = await requeueFailedTasksWithCooldown(
       activeConfig.failedTaskRetryCooldownMs
     );

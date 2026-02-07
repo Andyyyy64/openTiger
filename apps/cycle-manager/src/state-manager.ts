@@ -300,17 +300,20 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
   const blockedWithinSlo = blockedSloViolationCount === 0;
   details.blockedOver30mCount = blockedSloViolationCount;
 
-  const retryLimit = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "3", 10);
-  const [retryExhausted] = await db
-    .select({ count: count() })
-    .from(tasks)
-    .where(
-      and(
-        inArray(tasks.status, ["failed", "blocked"]),
-        gte(tasks.retryCount, Number.isFinite(retryLimit) ? retryLimit : 3)
-      )
-    );
-  const retryExhaustedCount = retryExhausted?.count ?? 0;
+  const retryLimit = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1", 10);
+  let retryExhaustedCount = 0;
+  if (Number.isFinite(retryLimit) && retryLimit >= 0) {
+    const [retryExhausted] = await db
+      .select({ count: count() })
+      .from(tasks)
+      .where(
+        and(
+          inArray(tasks.status, ["failed", "blocked"]),
+          gte(tasks.retryCount, retryLimit)
+        )
+      );
+    retryExhaustedCount = retryExhausted?.count ?? 0;
+  }
   const retryExhaustionWithinLimit = retryExhaustedCount === 0;
   details.retryExhaustedCount = retryExhaustedCount;
 

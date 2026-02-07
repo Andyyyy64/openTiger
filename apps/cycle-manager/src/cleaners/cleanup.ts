@@ -1,7 +1,9 @@
 import { db } from "@sebastian-code/db";
-import { tasks, runs, agents, leases } from "@sebastian-code/db/schema";
+import { tasks, runs, agents, leases, artifacts } from "@sebastian-code/db/schema";
 import { eq, inArray, and, lt, not, isNull, desc } from "drizzle-orm";
 import { recordEvent } from "../monitors/event-logger.js";
+
+const SYSTEM_ENTITY_ID = "00000000-0000-0000-0000-000000000000";
 
 // クリーンアップ結果
 interface CleanupResult {
@@ -79,8 +81,9 @@ export async function resetOfflineAgents(): Promise<number> {
     await recordEvent({
       type: "agent.offline",
       entityType: "agent",
-      entityId: agent.id,
+      entityId: SYSTEM_ENTITY_ID,
       agentId: agent.id,
+      payload: { agentId: agent.id, reason: "heartbeat_timeout" },
     });
   }
 
@@ -89,7 +92,7 @@ export async function resetOfflineAgents(): Promise<number> {
 
 // 実行中だが進行していないRunをキャンセル
 export async function cancelStuckRuns(
-  maxDurationMs: number = 60 * 60 * 1000 // デフォルト1時間
+  maxDurationMs: number = parseInt(process.env.STUCK_RUN_TIMEOUT_MS ?? "900000", 10) // デフォルト15分
 ): Promise<number> {
   const threshold = new Date(Date.now() - maxDurationMs);
 
@@ -232,14 +235,21 @@ export async function requeueFailedTasks(): Promise<number> {
   return result.length;
 }
 
-// 最大リトライ回数 (これを超えたタスクは再キューしない)
-// 運用で調整できるよう環境変数化（既定値: 3）
+// 最大リトライ回数（-1で無制限）
+// 運用で調整できるよう環境変数化（既定値: 無制限）
 const MAX_RETRY_COUNT = (() => {
-  const parsed = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "3", 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 3;
+  const parsed = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1", 10);
+  return Number.isFinite(parsed) ? parsed : -1;
 })();
 
-type FailureCategory = "env" | "setup" | "policy" | "test" | "flaky" | "model";
+type FailureCategory =
+  | "env"
+  | "setup"
+  | "policy"
+  | "test"
+  | "flaky"
+  | "model"
+  | "model_loop";
 
 type FailureClassification = {
   category: FailureCategory;
@@ -248,13 +258,29 @@ type FailureClassification = {
 };
 
 const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
-  env: 0,
-  setup: 3,
-  policy: 2,
-  test: 2,
-  flaky: 5,
-  model: 2,
+  env: 10,
+  setup: 10,
+  policy: 10,
+  test: 10,
+  flaky: 10,
+  model: 6,
+  model_loop: 2,
 };
+
+function isUnlimitedRetry(): boolean {
+  return MAX_RETRY_COUNT < 0;
+}
+
+function isRetryAllowed(retryCount: number): boolean {
+  return isUnlimitedRetry() || retryCount < MAX_RETRY_COUNT;
+}
+
+function resolveCategoryRetryLimit(category: FailureCategory): number {
+  if (isUnlimitedRetry()) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  return Math.min(CATEGORY_RETRY_LIMIT[category], MAX_RETRY_COUNT);
+}
 
 function classifyFailure(errorMessage: string | null): FailureClassification {
   const message = (errorMessage ?? "").toLowerCase();
@@ -284,7 +310,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
   if (/database_url|redis_url|connection refused|dns|env/.test(message)) {
     return {
       category: "env",
-      retryable: false,
+      retryable: true,
       reason: "environment_issue",
     };
   }
@@ -306,6 +332,18 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
       category: "flaky",
       retryable: true,
       reason: "transient_or_flaky_failure",
+    };
+  }
+
+  if (
+    /doom loop detected|excessive planning chatter detected|unsupported pseudo tool call detected: todo/.test(
+      message
+    )
+  ) {
+    return {
+      category: "model_loop",
+      retryable: true,
+      reason: "model_doom_loop",
     };
   }
 
@@ -360,6 +398,33 @@ async function hasPendingJudgeRun(taskId: string): Promise<boolean> {
   return pending.length > 0;
 }
 
+async function restoreLatestJudgeRun(taskId: string): Promise<string | null> {
+  const [latestRun] = await db
+    .select({ runId: runs.id })
+    .from(runs)
+    .innerJoin(artifacts, eq(artifacts.runId, runs.id))
+    .where(
+      and(
+        eq(runs.taskId, taskId),
+        eq(runs.status, "success"),
+        inArray(artifacts.type, ["pr", "worktree"])
+      )
+    )
+    .orderBy(desc(runs.startedAt))
+    .limit(1);
+
+  if (!latestRun?.runId) {
+    return null;
+  }
+
+  await db
+    .update(runs)
+    .set({ judgedAt: null })
+    .where(eq(runs.id, latestRun.runId));
+
+  return latestRun.runId;
+}
+
 // 失敗タスクをクールダウン後に再キュー（リトライ回数制限付き）
 export async function requeueFailedTasksWithCooldown(
   cooldownMs: number = 2 * 60 * 1000 // デフォルト2分に短縮（自己復旧を早める）
@@ -379,7 +444,7 @@ export async function requeueFailedTasksWithCooldown(
   // クールダウン経過済み＆リトライ上限未満のタスクをフィルタ
   const eligibleTasks = failedTasks.filter((task) => {
     const cooldownPassed = task.updatedAt < cutoff;
-    const retryAllowed = (task.retryCount ?? 0) < MAX_RETRY_COUNT;
+    const retryAllowed = isRetryAllowed(task.retryCount ?? 0);
     return cooldownPassed && retryAllowed;
   });
 
@@ -405,7 +470,7 @@ export async function requeueFailedTasksWithCooldown(
       .limit(1);
 
     const failure = classifyFailure(latestRun?.errorMessage ?? null);
-    const categoryRetryLimit = Math.min(CATEGORY_RETRY_LIMIT[failure.category], MAX_RETRY_COUNT);
+    const categoryRetryLimit = resolveCategoryRetryLimit(failure.category);
     const currentRetry = task.retryCount ?? 0;
     const nextRetryCount = currentRetry + 1;
 
@@ -499,7 +564,7 @@ export async function requeueBlockedTasksWithCooldown(
 
   for (const task of blockedTasks) {
     const cooldownPassed = task.updatedAt < cutoff;
-    const retryAllowed = (task.retryCount ?? 0) < MAX_RETRY_COUNT;
+    const retryAllowed = isRetryAllowed(task.retryCount ?? 0);
     if (!cooldownPassed || !retryAllowed) {
       continue;
     }
@@ -508,29 +573,18 @@ export async function requeueBlockedTasksWithCooldown(
     const nextRetryCount = (task.retryCount ?? 0) + 1;
 
     if (reason === "needs_human") {
-      // policy由来の needs_human は自動再試行対象へ戻す（manual停滞を回避）
-      const [latestRun] = await db
-        .select({
-          errorMessage: runs.errorMessage,
-        })
-        .from(runs)
-        .where(
-          and(
-            eq(runs.taskId, task.id),
-            inArray(runs.status, ["failed", "cancelled"])
-          )
-        )
-        .orderBy(desc(runs.startedAt))
-        .limit(1);
+      const hasPendingRun = await hasPendingJudgeRun(task.id);
+      let recoveredRunId: string | null = null;
+      if (!hasPendingRun) {
+        recoveredRunId = await restoreLatestJudgeRun(task.id);
+      }
 
-      const failure = classifyFailure(latestRun?.errorMessage ?? null);
-      const categoryRetryLimit = Math.min(CATEGORY_RETRY_LIMIT[failure.category], MAX_RETRY_COUNT);
-      if (failure.category === "policy" && failure.retryable && (task.retryCount ?? 0) < categoryRetryLimit) {
+      if (hasPendingRun || recoveredRunId) {
         await db
           .update(tasks)
           .set({
-            status: "queued",
-            blockReason: null,
+            status: "blocked",
+            blockReason: "awaiting_judge",
             retryCount: nextRetryCount,
             updatedAt: new Date(),
           })
@@ -541,28 +595,42 @@ export async function requeueBlockedTasksWithCooldown(
           entityType: "task",
           entityId: task.id,
           payload: {
-            reason: "needs_human_policy_retry",
-            category: failure.category,
+            reason: hasPendingRun
+              ? "needs_human_to_awaiting_judge"
+              : "needs_human_run_restored",
+            runId: recoveredRunId,
             retryCount: nextRetryCount,
           },
         });
         console.log(
-          `[Cleanup] Requeued needs_human policy task: ${task.id} (retry=${nextRetryCount}/${categoryRetryLimit})`
+          `[Cleanup] Converted needs_human task to awaiting_judge: ${task.id}`
         );
         handled++;
         continue;
       }
 
-      // needs_human は原則として自動再実行せず隔離扱い（blocked維持）
+      // judge対象runが無い needs_human は通常キューへ戻して停滞を防ぐ
+      await db
+        .update(tasks)
+        .set({
+          status: "queued",
+          blockReason: null,
+          retryCount: nextRetryCount,
+          updatedAt: new Date(),
+        })
+        .where(eq(tasks.id, task.id));
+
       await recordEvent({
-        type: "task.isolated",
+        type: "task.requeued",
         entityType: "task",
         entityId: task.id,
         payload: {
-          reason: "needs_human",
-          queue: "human_review",
+          reason: "needs_human_fallback_retry",
+          retryCount: nextRetryCount,
         },
       });
+      console.log(`[Cleanup] Requeued needs_human task: ${task.id}`);
+      handled++;
       continue;
     }
 
@@ -625,9 +693,37 @@ export async function requeueBlockedTasksWithCooldown(
       continue;
     }
 
-    if (reason === "awaiting_judge" && (await hasPendingJudgeRun(task.id))) {
-      // Judge未処理の成功Runが残っている間は再実行しない
-      continue;
+    if (reason === "awaiting_judge") {
+      if (await hasPendingJudgeRun(task.id)) {
+        // Judge未処理の成功Runが残っている間は再実行しない
+        continue;
+      }
+      const recoveredRunId = await restoreLatestJudgeRun(task.id);
+      if (recoveredRunId) {
+        await db
+          .update(tasks)
+          .set({
+            status: "blocked",
+            blockReason: "awaiting_judge",
+            retryCount: nextRetryCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
+
+        await recordEvent({
+          type: "task.requeued",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: "awaiting_judge_run_restored",
+            runId: recoveredRunId,
+            retryCount: nextRetryCount,
+          },
+        });
+        console.log(`[Cleanup] Restored awaiting_judge run for task: ${task.id}`);
+        handled++;
+        continue;
+      }
     }
 
     await db
