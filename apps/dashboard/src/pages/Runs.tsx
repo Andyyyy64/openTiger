@@ -1,12 +1,13 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { runsApi, tasksApi } from '../lib/api';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { Run } from '@sebastian-code/core';
 import type { TaskRetryInfo, TaskView } from '../lib/api';
 
 export const RunsPage: React.FC = () => {
   const [now, setNow] = React.useState(Date.now());
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -36,96 +37,104 @@ export const RunsPage: React.FC = () => {
         &gt; Execution_Values (Runs)
       </h1>
 
-      <div className="border border-[var(--color-term-border)]">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left bg-transparent">
-            <thead className="bg-[var(--color-term-border)]/10 text-xs text-zinc-500 uppercase font-mono">
-              <tr>
-                <th className="px-4 py-2 font-normal border-b border-[var(--color-term-border)]">Run ID / Agent</th>
-                <th className="px-4 py-2 font-normal border-b border-[var(--color-term-border)]">Status</th>
-                <th className="px-4 py-2 font-normal border-b border-[var(--color-term-border)]">Duration</th>
-                <th className="px-4 py-2 font-normal border-b border-[var(--color-term-border)]">Started</th>
-                <th className="px-4 py-2 font-normal border-b border-[var(--color-term-border)]">Retry</th>
-                <th className="px-4 py-2 font-normal border-b border-[var(--color-term-border)]"></th>
-              </tr>
-            </thead>
-            <tbody className="font-mono text-sm divide-y divide-[var(--color-term-border)]">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-zinc-500 animate-pulse">&gt; Loading data...</td>
-                </tr>
-              ) : error ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-red-500">&gt; ERROR LOADING DATA</td>
-                </tr>
-              ) : runs?.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-zinc-500">&gt; No records found</td>
-                </tr>
-              ) : (
-                groupedRuns.map((group) => {
-                  const task = taskById.get(group.taskId);
-                  const latestRun = group.runs[0];
-                  return (
-                    <React.Fragment key={group.taskId}>
-                      <tr className="bg-[var(--color-term-border)]/5">
-                        <td colSpan={6} className="px-4 py-2 border-y border-[var(--color-term-border)]">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <span className="text-xs text-zinc-300">
-                                task:{' '}
-                                <Link to={`/tasks/${group.taskId}`} className="text-[var(--color-term-green)] hover:underline">
-                                  {group.taskId.slice(0, 8)}
-                                </Link>
-                              </span>
-                              {task?.title ? (
-                                <div className="text-xs text-zinc-500 truncate">{task.title}</div>
-                              ) : null}
-                            </div>
-                            <div className="flex items-center gap-3 text-xs text-zinc-500 shrink-0">
-                              <span>{group.runs.length} runs</span>
-                              <span>latest: {new Date(latestRun.startedAt).toLocaleString()}</span>
-                              <span>retry: {formatRetryStatus(task?.retry, now)}</span>
-                            </div>
-                          </div>
-                        </td>
+      <div className="space-y-6">
+        {isLoading ? (
+          <div className="text-center text-zinc-500 py-12 font-mono animate-pulse">&gt; Loading execution values...</div>
+        ) : error ? (
+          <div className="text-center text-red-500 py-12 font-mono">&gt; ERROR LOADING DATA</div>
+        ) : groupedRuns.length === 0 ? (
+          <div className="text-center text-zinc-500 py-12 font-mono">&gt; No records found</div>
+        ) : (
+          groupedRuns.map((group) => {
+            // Task info
+            const task = taskById.get(group.taskId);
+            const latestRun = group.runs[0];
+            const retryStatus = formatRetryStatus(task?.retry, now);
+            const retryLabel = retryStatus !== 'pending' && retryStatus !== 'due' && retryStatus !== '--'
+              ? <span className="text-yellow-500 font-bold">{retryStatus}</span>
+              : <span className="text-zinc-500">{retryStatus}</span>;
+
+            return (
+              <section key={group.taskId} className="border border-[var(--color-term-border)] p-0">
+                {/* Task Header */}
+                <div className="bg-[var(--color-term-border)]/10 px-4 py-3 border-b border-[var(--color-term-border)] flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-1 max-w-[70%]">
+                    <div className="flex items-center gap-2 text-xs font-mono">
+                      <span className="text-zinc-500">task:</span>
+                      <Link to={`/tasks/${group.taskId}`} className="text-[var(--color-term-green)] hover:underline font-bold">
+                        {group.taskId.slice(0, 8)}
+                      </Link>
+                    </div>
+                    {task?.title && (
+                      <div className="text-sm font-bold text-[var(--color-term-fg)] truncate">
+                        {task.title}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="text-right text-xs font-mono text-zinc-500 space-y-1">
+                    <div className="flex items-center justify-end gap-4">
+                      <span>{group.runs.length} runs</span>
+                      <span className="text-zinc-600">|</span>
+                      <span>latest: {new Date(latestRun.startedAt).toLocaleString()}</span>
+                    </div>
+                    <div>
+                      retry: {retryLabel}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Runs Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left bg-transparent font-mono text-xs">
+                    <thead className="text-zinc-500 uppercase border-b border-[var(--color-term-border)] bg-[var(--color-term-bg)]">
+                      <tr>
+                        <th className="px-4 py-2 font-normal w-32">Run ID</th>
+                        <th className="px-4 py-2 font-normal w-32">Agent</th>
+                        <th className="px-4 py-2 font-normal w-24">Status</th>
+                        <th className="px-4 py-2 font-normal w-24">Duration</th>
+                        <th className="px-4 py-2 font-normal">Started</th>
+                        <th className="px-4 py-2 font-normal text-right">Action</th>
                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--color-term-border)]">
                       {group.runs.map((run) => (
-                        <tr key={run.id} className="hover:bg-[var(--color-term-green)]/5 transition-colors group">
-                          <td className="px-4 py-2 align-top">
-                            <div className="flex flex-col">
-                              <span className="text-[var(--color-term-fg)]">{run.id.slice(0, 8)}</span>
-                              <span className="text-xs text-zinc-500">@{run.agentId}</span>
-                            </div>
+                        <tr
+                          key={run.id}
+                          onClick={() => navigate(`/runs/${run.id}`)}
+                          className="hover:bg-[var(--color-term-fg)]/5 transition-colors group cursor-pointer"
+                        >
+                          <td className="px-4 py-2 align-top text-[var(--color-term-fg)]">
+                            {run.id.slice(0, 8)}
+                          </td>
+                          <td className="px-4 py-2 align-top text-zinc-400">
+                            @{run.agentId}
                           </td>
                           <td className="px-4 py-2 align-top">
-                            <span className={`text-xs uppercase ${getStatusColor(run.status)}`}>
+                            <span className={`uppercase ${getStatusColor(run.status)}`}>
                               [{run.status}]
                             </span>
                           </td>
-                          <td className="px-4 py-2 align-top text-zinc-500 text-xs">
+                          <td className="px-4 py-2 align-top text-zinc-500">
                             {run.finishedAt ? `${Math.round((new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)}s` : '--'}
                           </td>
-                          <td className="px-4 py-2 align-top text-zinc-600 text-xs">
+                          <td className="px-4 py-2 align-top text-zinc-600">
                             {new Date(run.startedAt).toLocaleString()}
                           </td>
-                          <td className="px-4 py-2 align-top text-zinc-400 text-xs">
-                            {formatRetryStatus(taskById.get(run.taskId)?.retry, now)}
-                          </td>
-                          <td className="px-4 py-2 text-right align-top">
-                            <Link to={`/runs/${run.id}`} className="text-[var(--color-term-green)] hover:underline text-xs opacity-50 group-hover:opacity-100">
+                          <td className="px-4 py-2 align-top text-right">
+                            <span className="text-[var(--color-term-green)] text-[10px] opacity-60 group-hover:opacity-100 hover:underline">
                               OPEN &gt;
-                            </Link>
+                            </span>
                           </td>
                         </tr>
                       ))}
-                    </React.Fragment>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            );
+          })
+        )}
       </div>
     </div>
   );
@@ -148,7 +157,7 @@ function formatRetryStatus(retry: TaskRetryInfo | null | undefined, nowMs: numbe
   if (!retry.autoRetry) {
     switch (retry.reason) {
       case 'needs_human':
-        return 'needs_human';
+        return 'due';
       case 'retry_exhausted':
         return 'exhausted';
       case 'non_retryable_failure':

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { agentsApi, logsApi } from '../lib/api';
@@ -7,6 +7,7 @@ const LOG_LINES = 200;
 
 export const AgentDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const logRef = useRef<HTMLDivElement>(null);
 
   const { data: agent, isLoading: isAgentLoading } = useQuery({
     queryKey: ['agents', id],
@@ -24,6 +25,13 @@ export const AgentDetailsPage: React.FC = () => {
     enabled: !!id,
     refetchInterval: 10000,
   });
+
+  // ログが更新されたときに一番下までスクロールする
+  useEffect(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, [logData]);
 
   if (isAgentLoading) {
     return <div className="p-8 text-center text-zinc-500 font-mono animate-pulse">&gt; Establishing connection...</div>;
@@ -70,7 +78,10 @@ export const AgentDetailsPage: React.FC = () => {
           </span>
         </div>
 
-        <div className="flex-1 bg-black p-4 font-mono text-xs text-zinc-300 overflow-y-auto whitespace-pre-wrap">
+        <div
+          ref={logRef}
+          className="flex-1 bg-black p-4 font-mono text-xs text-zinc-300 overflow-y-auto whitespace-pre-wrap"
+        >
           {isLogLoading && <div className="text-zinc-500 animate-pulse">&gt; Fetching logs...</div>}
           {!isLogLoading && logError && (
             <div className="text-red-500">&gt; ERR: Log stream unavailable.</div>

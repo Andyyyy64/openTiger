@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { logsApi } from '../lib/api';
 
@@ -11,6 +11,9 @@ export const LogsPage: React.FC = () => {
   const [allLimitInput, setAllLimitInput] = useState(String(DEFAULT_ALL_LIMIT));
   const [sinceMinutesInput, setSinceMinutesInput] = useState(String(DEFAULT_SINCE_MINUTES));
   const [sourceFilterInput, setSourceFilterInput] = useState('');
+
+  const cycleLogRef = useRef<HTMLDivElement>(null);
+  const allLogsRef = useRef<HTMLDivElement>(null);
 
   const cycleLines = useMemo(() => {
     const parsed = Number.parseInt(cycleLinesInput, 10);
@@ -51,6 +54,19 @@ export const LogsPage: React.FC = () => {
     queryFn: () => logsApi.all({ limit: allLimit, sinceMinutes, source: sourceFilter }),
     refetchInterval: 10000,
   });
+
+  // ログが更新されたときに一番下までスクロールする
+  useEffect(() => {
+    if (cycleLogRef.current) {
+      cycleLogRef.current.scrollTop = cycleLogRef.current.scrollHeight;
+    }
+  }, [cycleLog]);
+
+  useEffect(() => {
+    if (allLogsRef.current) {
+      allLogsRef.current.scrollTop = allLogsRef.current.scrollHeight;
+    }
+  }, [allLogs]);
 
   return (
     <div className="p-6 max-w-[1400px] mx-auto space-y-6 text-[var(--color-term-fg)]">
@@ -111,7 +127,10 @@ export const LogsPage: React.FC = () => {
             {cycleLog?.updatedAt ? `UPDATED: ${new Date(cycleLog.updatedAt).toLocaleTimeString()}` : ''}
           </span>
         </div>
-        <div className="h-56 overflow-y-auto bg-black p-3 font-mono text-xs whitespace-pre-wrap text-zinc-300">
+        <div
+          ref={cycleLogRef}
+          className="h-56 overflow-y-auto bg-black p-3 font-mono text-xs whitespace-pre-wrap text-zinc-300"
+        >
           {isCycleLoading && <div className="text-zinc-500 animate-pulse">&gt; Loading cycle-manager log...</div>}
           {!isCycleLoading && cycleError && <div className="text-red-500">&gt; Failed to read cycle-manager log</div>}
           {!isCycleLoading && !cycleError && cycleLog?.log}
@@ -129,7 +148,10 @@ export const LogsPage: React.FC = () => {
               : ''}
           </span>
         </div>
-        <div className="h-[560px] overflow-y-auto bg-black p-3 font-mono text-xs text-zinc-300">
+        <div
+          ref={allLogsRef}
+          className="h-[560px] overflow-y-auto bg-black p-3 font-mono text-xs text-zinc-300"
+        >
           {isAllLoading && <div className="text-zinc-500 animate-pulse">&gt; Aggregating logs...</div>}
           {!isAllLoading && allError && <div className="text-red-500">&gt; Failed to read aggregated logs</div>}
           {!isAllLoading && !allError && allLogs?.entries.length === 0 && (

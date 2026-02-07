@@ -182,6 +182,27 @@ const SETTINGS: SettingField[] = [
     options: MODEL_OPTIONS,
   },
   {
+    key: 'OPENCODE_WAIT_ON_QUOTA',
+    label: 'OpenCode_WaitOnQuota',
+    description: 'Wait and retry while provider quota is exhausted',
+    group: 'Models',
+    type: 'boolean',
+  },
+  {
+    key: 'OPENCODE_QUOTA_RETRY_DELAY_MS',
+    label: 'OpenCode_QuotaDelayMs',
+    description: 'Fallback wait time (ms) between quota retries',
+    group: 'Models',
+    type: 'number',
+  },
+  {
+    key: 'OPENCODE_MAX_QUOTA_WAITS',
+    label: 'OpenCode_MaxQuotaWaits',
+    description: '-1 for unlimited; otherwise max quota wait attempts',
+    group: 'Models',
+    type: 'number',
+  },
+  {
     key: 'PLANNER_MODEL',
     label: 'Planner_Model',
     description: 'Model for planner',
@@ -569,4 +590,3 @@ export const SettingsPage: React.FC = () => {
     </div>
   );
 };
-

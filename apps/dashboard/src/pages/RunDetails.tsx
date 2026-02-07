@@ -19,6 +19,14 @@ export const RunDetailsPage: React.FC = () => {
     enabled: !!id,
   });
 
+  const logRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, [data?.run?.logContent]);
+
   if (isLoading) return <div className="p-8 text-center text-zinc-500 font-mono animate-pulse">&gt; Loading run sequence...</div>;
   if (error || !data) return <div className="p-8 text-center text-red-500 font-mono">&gt; ERR: Run data inaccessible</div>;
 
@@ -66,8 +74,13 @@ export const RunDetailsPage: React.FC = () => {
             <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
               <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">System_Log_Output</span>
             </div>
-            <div className="p-4 bg-black text-xs text-zinc-300 min-h-[300px] overflow-x-auto whitespace-pre-wrap">
-              {run.logPath ? (
+            <div
+              ref={logRef}
+              className="p-4 bg-black text-xs text-zinc-300 min-h-[300px] max-h-[600px] overflow-auto whitespace-pre font-mono"
+            >
+              {run.logContent ? (
+                run.logContent
+              ) : run.logPath ? (
                 <div className="text-zinc-500 italic">// Log file archived at: {run.logPath}</div>
               ) : (
                 <div className="text-zinc-600 italic">// Buffer empty. No output recorded.</div>

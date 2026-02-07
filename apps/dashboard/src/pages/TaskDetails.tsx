@@ -1,11 +1,12 @@
 import React from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { tasksApi, runsApi } from '../lib/api';
 import type { TaskRetryInfo } from '../lib/api';
 
 export const TaskDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [now, setNow] = React.useState(Date.now());
 
   React.useEffect(() => {
@@ -121,7 +122,11 @@ export const TaskDetailsPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-[var(--color-term-border)]">
                     {runs?.map((run) => (
-                      <tr key={run.id} className="hover:bg-[var(--color-term-fg)]/5 transition-colors cursor-pointer group">
+                      <tr
+                        key={run.id}
+                        onClick={() => navigate(`/runs/${run.id}`)}
+                        className="hover:bg-[var(--color-term-fg)]/5 transition-colors cursor-pointer group"
+                      >
                         <td className="px-4 py-2 text-[var(--color-term-fg)] group-hover:text-[var(--color-term-green)]">{run.agentId}</td>
                         <td className="px-4 py-2">
                           <span className={`font-bold ${run.status === 'success' ? 'text-[var(--color-term-green)]' : run.status === 'failed' ? 'text-red-500' : 'text-blue-400'}`}>
@@ -173,7 +178,9 @@ export const TaskDetailsPage: React.FC = () => {
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">RETRY_COUNT</span>
                 <span className="text-[var(--color-term-fg)]">
-                  {task.retry?.retryCount ?? task.retryCount}/{task.retry?.retryLimit ?? '-'}
+                  {task.retry?.retryCount ?? task.retryCount}/{
+                    task.retry?.retryLimit === -1 ? '∞' : (task.retry?.retryLimit ?? '-')
+                  }
                 </span>
               </div>
             </div>
@@ -264,7 +271,7 @@ function formatRetrySummary(retry: TaskRetryInfo | null | undefined, nowMs: numb
   if (!retry.autoRetry) {
     switch (retry.reason) {
       case 'needs_human':
-        return 'manual';
+        return 'due';
       case 'retry_exhausted':
         return 'exhausted';
       case 'non_retryable_failure':

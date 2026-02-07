@@ -8,7 +8,14 @@ import { CreateTaskInput } from "@sebastian-code/core";
 
 export const tasksRoute = new Hono();
 
-type FailureCategory = "env" | "setup" | "policy" | "test" | "flaky" | "model";
+type FailureCategory =
+  | "env"
+  | "setup"
+  | "policy"
+  | "test"
+  | "flaky"
+  | "model"
+  | "model_loop";
 
 type RetryInfo = {
   autoRetry: boolean;
@@ -38,24 +45,39 @@ const BLOCKED_TASK_RETRY_COOLDOWN_MS = Number.parseInt(
   10
 );
 const MAX_RETRY_COUNT = Number.parseInt(
-  process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "3",
+  process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1",
   10
 );
 
 const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
-  env: 0,
-  setup: 3,
-  policy: 2,
-  test: 2,
-  flaky: 5,
-  model: 2,
+  env: 10,
+  setup: 10,
+  policy: 10,
+  test: 10,
+  flaky: 10,
+  model: 6,
+  model_loop: 2,
 };
 
 function normalizeRetryLimit(limit: number): number {
-  if (!Number.isFinite(limit) || limit < 0) {
-    return 3;
+  if (!Number.isFinite(limit)) {
+    return -1;
   }
   return limit;
+}
+
+function isRetryExhausted(retryCount: number, retryLimit: number): boolean {
+  if (retryLimit < 0) {
+    return false;
+  }
+  return retryCount >= retryLimit;
+}
+
+function resolveCategoryRetryLimit(category: FailureCategory, retryLimit: number): number {
+  if (retryLimit < 0) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  return Math.min(CATEGORY_RETRY_LIMIT[category], retryLimit);
 }
 
 function classifyFailure(errorMessage: string | null): {
@@ -79,7 +101,7 @@ function classifyFailure(errorMessage: string | null): {
   }
 
   if (/database_url|redis_url|connection refused|dns|env/.test(message)) {
-    return { category: "env", retryable: false };
+    return { category: "env", retryable: true };
   }
 
   if (/vitest|playwright|assert|expected|test failed|verification commands failed/.test(message)) {
@@ -92,6 +114,14 @@ function classifyFailure(errorMessage: string | null): {
     )
   ) {
     return { category: "flaky", retryable: true };
+  }
+
+  if (
+    /doom loop detected|excessive planning chatter detected|unsupported pseudo tool call detected: todo/.test(
+      message
+    )
+  ) {
+    return { category: "model_loop", retryable: true };
   }
 
   return { category: "model", retryable: true };
@@ -109,7 +139,7 @@ function buildRetryInfo(
   const retryLimit = normalizeRetryLimit(MAX_RETRY_COUNT);
   const retryCount = task.retryCount ?? 0;
 
-  if (retryCount >= retryLimit) {
+  if (isRetryExhausted(retryCount, retryLimit)) {
     return {
       autoRetry: false,
       reason: "retry_exhausted",
@@ -122,26 +152,17 @@ function buildRetryInfo(
   }
 
   if (task.status === "blocked") {
-    if (task.blockReason === "needs_human") {
-      return {
-        autoRetry: false,
-        reason: "needs_human",
-        retryAt: null,
-        retryInSeconds: null,
-        cooldownMs: null,
-        retryCount,
-        retryLimit,
-      };
-    }
-
     const retryAtMs = new Date(task.updatedAt).getTime() + BLOCKED_TASK_RETRY_COOLDOWN_MS;
     const retryInSeconds = Math.max(0, Math.ceil((retryAtMs - now) / 1000));
+    const normalizedBlockReason = task.blockReason === "needs_human"
+      ? "awaiting_judge"
+      : task.blockReason;
     return {
       autoRetry: true,
       reason:
-        task.blockReason === "awaiting_judge"
+        normalizedBlockReason === "awaiting_judge"
           ? "awaiting_judge"
-          : task.blockReason === "needs_rework"
+          : normalizedBlockReason === "needs_rework"
             ? "needs_rework"
             : retryInSeconds > 0
               ? "cooldown_pending"
@@ -155,7 +176,7 @@ function buildRetryInfo(
   }
 
   const failure = classifyFailure(latestFailureMessage ?? null);
-  const categoryRetryLimit = Math.min(CATEGORY_RETRY_LIMIT[failure.category], retryLimit);
+  const categoryRetryLimit = resolveCategoryRetryLimit(failure.category, retryLimit);
 
   if (!failure.retryable || retryCount >= categoryRetryLimit) {
     return {
@@ -165,7 +186,7 @@ function buildRetryInfo(
       retryInSeconds: null,
       cooldownMs: null,
       retryCount,
-      retryLimit: categoryRetryLimit,
+      retryLimit: retryLimit < 0 ? -1 : categoryRetryLimit,
       failureCategory: failure.category,
     };
   }
@@ -179,7 +200,7 @@ function buildRetryInfo(
     retryInSeconds,
     cooldownMs: FAILED_TASK_RETRY_COOLDOWN_MS,
     retryCount,
-    retryLimit: categoryRetryLimit,
+    retryLimit: retryLimit < 0 ? -1 : categoryRetryLimit,
     failureCategory: failure.category,
   };
 }

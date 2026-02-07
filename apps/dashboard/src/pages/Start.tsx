@@ -151,7 +151,7 @@ export const StartPage: React.FC = () => {
         warnings.push(`Issue tasks generated: ${preflight.preflight.github.generatedTaskCount}`);
       }
       if (hasRequirementContent && !recommendations.startPlanner) {
-        warnings.push('Open issue backlog detected; planner launch skipped for this run');
+        warnings.push('Open issue/PR backlog detected; planner launch skipped for this run');
       }
 
       const started: string[] = [];

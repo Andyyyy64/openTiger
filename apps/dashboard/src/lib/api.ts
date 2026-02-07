@@ -206,14 +206,14 @@ export interface GitHubRepoInfo {
 export interface TaskRetryInfo {
   autoRetry: boolean;
   reason:
-    | 'cooldown_pending'
-    | 'retry_due'
-    | 'retry_exhausted'
-    | 'needs_human'
-    | 'non_retryable_failure'
-    | 'awaiting_judge'
-    | 'needs_rework'
-    | 'unknown';
+  | 'cooldown_pending'
+  | 'retry_due'
+  | 'retry_exhausted'
+  | 'needs_human'
+  | 'non_retryable_failure'
+  | 'awaiting_judge'
+  | 'needs_rework'
+  | 'unknown';
   retryAt: string | null;
   retryInSeconds: number | null;
   cooldownMs: number | null;
@@ -236,9 +236,9 @@ export const tasksApi = {
 
 // 実行履歴関連
 export const runsApi = {
-  list: (taskId?: string) => 
+  list: (taskId?: string) =>
     fetchApi<{ runs: Run[] }>(`/runs${taskId ? `?taskId=${taskId}` : ''}`).then(res => res.runs),
-  get: (id: string) => fetchApi<{ run: Run, artifacts: Artifact[] }>(`/runs/${id}`),
+  get: (id: string) => fetchApi<{ run: Run & { logContent?: string | null }, artifacts: Artifact[] }>(`/runs/${id}`),
   stats: () => fetchApi<{ dailyTokens: number, tokenLimit: number }>('/runs/stats'),
 };
 
