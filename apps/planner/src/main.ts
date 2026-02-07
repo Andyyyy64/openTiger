@@ -370,11 +370,7 @@ function applyVerificationCommandPolicy(
   result: TaskGenerationResult,
   checkScriptAvailable: boolean
 ): TaskGenerationResult {
-  // checkスクリプトの有無に合わせて検証コマンドを揃える
-  if (checkScriptAvailable) {
-    return result;
-  }
-
+  // `dev` は常に除外し、`check` はスクリプト未定義時のみ除外する
   const tasks = result.tasks.map((task) => {
     const filtered = filterVerificationCommands(task.commands, checkScriptAvailable);
     if (filtered.length === task.commands.length) {
@@ -1126,6 +1122,76 @@ function sanitizeTaskDependencyIndexes(result: TaskGenerationResult): TaskGenera
   };
 }
 
+function reduceRedundantDependencyIndexes(result: TaskGenerationResult): TaskGenerationResult {
+  if (result.tasks.length <= 1) {
+    return result;
+  }
+
+  const tasks = result.tasks.map((task) => ({
+    ...task,
+    dependsOnIndexes: [...(task.dependsOnIndexes ?? [])],
+  }));
+
+  const canReach = (from: number, target: number, visited: Set<number>): boolean => {
+    if (from === target) {
+      return true;
+    }
+    const deps = tasks[from]?.dependsOnIndexes ?? [];
+    for (const dep of deps) {
+      if (dep === target) {
+        return true;
+      }
+      if (visited.has(dep)) {
+        continue;
+      }
+      visited.add(dep);
+      if (canReach(dep, target, visited)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  let removedEdgeCount = 0;
+
+  for (let i = 0; i < tasks.length; i += 1) {
+    const task = tasks[i];
+    if (!task) continue;
+    const deps = Array.from(new Set(task.dependsOnIndexes ?? [])).sort((a, b) => a - b);
+    if (deps.length <= 1) {
+      continue;
+    }
+
+    const reduced = deps.filter((candidate) => {
+      for (const other of deps) {
+        if (other === candidate) {
+          continue;
+        }
+        if (canReach(other, candidate, new Set([other]))) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    removedEdgeCount += deps.length - reduced.length;
+    task.dependsOnIndexes = reduced;
+  }
+
+  if (removedEdgeCount === 0) {
+    return result;
+  }
+
+  return {
+    ...result,
+    tasks,
+    warnings: [
+      ...result.warnings,
+      `依存関係の冗長辺を ${removedEdgeCount} 件削除し、並列実行性を補正しました。`,
+    ],
+  };
+}
+
 function ensureInitializationTaskForUninitializedRepo(
   result: TaskGenerationResult,
   requirement: Requirement,
@@ -1201,11 +1267,17 @@ function ensureInitializationTaskForUninitializedRepo(
 // タスクをDBに保存
 async function saveTasks(
   taskInputs: PlannedTaskInput[],
-  database: DbLike = db
+  database: DbLike = db,
+  options?: {
+    initialStateResolver?: (
+      input: PlannedTaskInput
+    ) => { status?: "queued" | "blocked"; blockReason?: string | null };
+  }
 ): Promise<string[]> {
   const savedIds: string[] = [];
 
   for (const input of taskInputs) {
+    const initialState = options?.initialStateResolver?.(input) ?? {};
     const result = await database
       .insert(tasks)
       .values({
@@ -1221,6 +1293,8 @@ async function saveTasks(
         touches: input.touches ?? [],
         dependencies: input.dependencies ?? [],
         timeboxMinutes: input.timeboxMinutes ?? 60,
+        status: initialState.status ?? "queued",
+        blockReason: initialState.blockReason ?? null,
       })
       .returning({ id: tasks.id });
 
@@ -1433,6 +1507,20 @@ async function createIssuesForTasks(params: {
     const taskId = savedIds[index];
     if (!task || !taskId) continue;
     if (task.context?.issue?.number) {
+      await db
+        .update(tasks)
+        .set({
+          status: "queued",
+          blockReason: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(tasks.id, taskId),
+            eq(tasks.status, "blocked"),
+            eq(tasks.blockReason, "issue_linking")
+          )
+        );
       continue;
     }
 
@@ -1453,11 +1541,31 @@ async function createIssuesForTasks(params: {
 
       await db
         .update(tasks)
-        .set({ context: updatedContext, updatedAt: new Date() })
+        .set({
+          context: updatedContext,
+          status: "queued",
+          blockReason: null,
+          updatedAt: new Date(),
+        })
         .where(eq(tasks.id, taskId));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(`[Planner] Failed to create issue for task ${taskId}: ${message}`);
+      // Issue連携失敗時でも実行自体は止めない（自動クローズ連携は失われる）
+      await db
+        .update(tasks)
+        .set({
+          status: "queued",
+          blockReason: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(tasks.id, taskId),
+            eq(tasks.status, "blocked"),
+            eq(tasks.blockReason, "issue_linking")
+          )
+        );
     }
   }
 }
@@ -1622,6 +1730,7 @@ async function planFromRequirement(
   }
 
   result = sanitizeTaskDependencyIndexes(result);
+  result = reduceRedundantDependencyIndexes(result);
   result = normalizeGeneratedTasks(result);
   result = applyTaskRolePolicy(result);
   result = applyVerificationCommandPolicy(result, checkScriptAvailable);
@@ -1664,6 +1773,11 @@ async function planFromRequirement(
   });
 
   const dedupeWindowMs = resolvePlanDedupeWindowMs();
+  const holdTasksForIssueLinking =
+    getRepoMode() === "git"
+    && Boolean(process.env.GITHUB_TOKEN)
+    && Boolean(process.env.GITHUB_OWNER)
+    && Boolean(process.env.GITHUB_REPO);
   if (planSignature?.signature) {
     let skippedReason: "in_progress" | "recent" | null = null;
     let savedIdsInTx: string[] = [];
@@ -1683,7 +1797,17 @@ async function planFromRequirement(
 
       // DBに保存
       console.log("\n[Saving tasks to database...]");
-      const savedIds = await saveTasks(result.tasks, database);
+      const savedIds = await saveTasks(result.tasks, database, {
+        initialStateResolver: (input) => {
+          if (
+            holdTasksForIssueLinking
+            && !input.context?.issue?.number
+          ) {
+            return { status: "blocked", blockReason: "issue_linking" };
+          }
+          return { status: "queued", blockReason: null };
+        },
+      });
       await resolveDependencies(savedIds, result.tasks, database);
 
       // Plannerの計画内容をUI側で参照できるように記録する
@@ -1709,7 +1833,11 @@ async function planFromRequirement(
       return;
     }
     if (savedIdsInTx.length === 0) {
-      console.warn("\n[Planner] Plan was not saved due to an unknown dedupe condition.");
+      if (result.tasks.length === 0) {
+        console.log("\n[Planner] 追加タスクは不要です（要件ギャップなし）。");
+      } else {
+        console.warn("\n[Planner] Plan was not saved due to an unknown dedupe condition.");
+      }
       return;
     }
 
@@ -1733,7 +1861,17 @@ async function planFromRequirement(
 
   // DBに保存
   console.log("\n[Saving tasks to database...]");
-  const savedIds = await saveTasks(result.tasks);
+  const savedIds = await saveTasks(result.tasks, db, {
+    initialStateResolver: (input) => {
+      if (
+        holdTasksForIssueLinking
+        && !input.context?.issue?.number
+      ) {
+        return { status: "blocked", blockReason: "issue_linking" };
+      }
+      return { status: "queued", blockReason: null };
+    },
+  });
   await resolveDependencies(savedIds, result.tasks);
 
   // Plannerの計画内容をUI側で参照できるように記録する
@@ -1909,7 +2047,9 @@ export async function planFromContent(
             applyVerificationCommandPolicy(
               applyTaskRolePolicy(
                 normalizeGeneratedTasks(
-                  sanitizeTaskDependencyIndexes(generateInitializationTasks(requirement))
+                  reduceRedundantDependencyIndexes(
+                    sanitizeTaskDependencyIndexes(generateInitializationTasks(requirement))
+                  )
                 )
               ),
               checkScriptAvailable
@@ -1950,6 +2090,7 @@ export async function planFromContent(
       };
     }
     result = sanitizeTaskDependencyIndexes(result);
+    result = reduceRedundantDependencyIndexes(result);
     return attachInspectionToTasks(
       attachJudgeFeedbackToTasks(
         applyDevCommandPolicy(
@@ -1975,7 +2116,9 @@ export async function planFromContent(
           applyVerificationCommandPolicy(
             applyTaskRolePolicy(
               normalizeGeneratedTasks(
-                sanitizeTaskDependencyIndexes(generateSimpleTasks(requirement))
+                reduceRedundantDependencyIndexes(
+                  sanitizeTaskDependencyIndexes(generateSimpleTasks(requirement))
+                )
               )
             ),
             checkScriptAvailable
