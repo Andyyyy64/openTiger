@@ -105,6 +105,25 @@ function extractJsonFromResponse(response: string): unknown {
   throw new Error("No valid JSON found in response");
 }
 
+function summarizeLlmExecutionFailure(stderr: string): string {
+  const lower = stderr.toLowerCase();
+  if (
+    lower.includes("quota")
+    || lower.includes("resource_exhausted")
+    || lower.includes("rate limit")
+    || lower.includes("429")
+  ) {
+    return "LLM execution failed: quota_or_rate_limit";
+  }
+  if (lower.includes("doom loop detected")) {
+    return "LLM execution failed: doom_loop_detected";
+  }
+  if (lower.includes("idle timeout") || lower.includes("timeout")) {
+    return "LLM execution failed: timeout";
+  }
+  return "LLM execution failed: runtime_error";
+}
+
 // LLMでPRをレビュー
 export async function evaluateLLM(
   prNumber: number,
@@ -144,12 +163,12 @@ export async function evaluateLLM(
 
     if (!result.success) {
       console.warn("LLM review failed:", result.stderr);
-      // LLM失敗時はデフォルトでパス（人間レビューを推奨）
+      const failureReason = summarizeLlmExecutionFailure(result.stderr);
       return {
-        pass: true,
+        pass: false,
         confidence: 0,
-        reasons: ["LLM review failed, manual review recommended"],
-        suggestions: ["Request human review"],
+        reasons: [failureReason],
+        suggestions: ["Retry judge review after cooldown"],
         codeIssues: [],
       };
     }
@@ -205,11 +224,12 @@ export async function evaluateLLM(
     };
   } catch (error) {
     console.error("LLM evaluation error:", error);
+    const message = error instanceof Error ? error.message : String(error);
     return {
-      pass: true,
+      pass: false,
       confidence: 0,
-      reasons: ["LLM evaluation encountered an error"],
-      suggestions: ["Request human review"],
+      reasons: [`LLM evaluation encountered an error: ${message}`],
+      suggestions: ["Retry judge review after cooldown"],
       codeIssues: [],
     };
   }
@@ -248,11 +268,12 @@ export async function evaluateLLMDiff(
 
     if (!result.success) {
       console.warn("LLM review failed:", result.stderr);
+      const failureReason = summarizeLlmExecutionFailure(result.stderr);
       return {
-        pass: true,
+        pass: false,
         confidence: 0,
-        reasons: ["LLM review failed, manual review recommended"],
-        suggestions: ["Request human review"],
+        reasons: [failureReason],
+        suggestions: ["Retry judge review after cooldown"],
         codeIssues: [],
       };
     }
@@ -304,11 +325,12 @@ export async function evaluateLLMDiff(
     };
   } catch (error) {
     console.error("LLM evaluation error:", error);
+    const message = error instanceof Error ? error.message : String(error);
     return {
-      pass: true,
+      pass: false,
       confidence: 0,
-      reasons: ["LLM evaluation encountered an error"],
-      suggestions: ["Request human review"],
+      reasons: [`LLM evaluation encountered an error: ${message}`],
+      suggestions: ["Retry judge review after cooldown"],
       codeIssues: [],
     };
   }

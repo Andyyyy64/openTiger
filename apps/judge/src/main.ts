@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { db } from "@sebastian-code/db";
 import { artifacts, runs, tasks, agents, events } from "@sebastian-code/db/schema";
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import {
   DEFAULT_POLICY,
   PolicySchema,
@@ -31,6 +31,33 @@ async function startHeartbeat(agentId: string) {
       console.error(`[Heartbeat] Failed to send heartbeat for ${agentId}:`, error);
     }
   }, HEARTBEAT_INTERVAL);
+}
+
+async function setJudgeAgentState(
+  agentId: string,
+  status: "idle" | "busy",
+  currentTaskId: string | null = null
+): Promise<void> {
+  await db
+    .update(agents)
+    .set({
+      status,
+      currentTaskId,
+      lastHeartbeat: new Date(),
+    })
+    .where(eq(agents.id, agentId));
+}
+
+async function safeSetJudgeAgentState(
+  agentId: string,
+  status: "idle" | "busy",
+  currentTaskId: string | null = null
+): Promise<void> {
+  try {
+    await setJudgeAgentState(agentId, status, currentTaskId);
+  } catch (error) {
+    console.error(`[Judge] Failed to update agent state (${status})`, error);
+  }
 }
 
 import {
@@ -140,6 +167,16 @@ const DEFAULT_CONFIG: JudgeConfig = {
   baseRepoRecoveryConfidence: 0.7,
   baseRepoRecoveryDiffLimit: 20000,
 };
+
+const JUDGE_AUTO_FIX_ON_FAIL = process.env.JUDGE_AUTO_FIX_ON_FAIL !== "false";
+const JUDGE_AUTO_FIX_MAX_ATTEMPTS = Number.parseInt(
+  process.env.JUDGE_AUTO_FIX_MAX_ATTEMPTS ?? "3",
+  10
+);
+const JUDGE_AWAITING_RETRY_COOLDOWN_MS = Number.parseInt(
+  process.env.JUDGE_AWAITING_RETRY_COOLDOWN_MS ?? "120000",
+  10
+);
 
 const BASE_REPO_RECOVERY_MODES = ["none", "stash", "llm"] as const;
 
@@ -353,9 +390,11 @@ async function getPendingPRs(): Promise<
     taskId: string;
     runId: string;
     startedAt: Date;
+    taskTitle: string;
     taskGoal: string;
     taskRiskLevel: "low" | "medium" | "high";
     allowedPaths: string[];
+    commands: string[];
   }>
 > {
   // 成功したrunでPRが作成されているものを取得
@@ -386,9 +425,11 @@ async function getPendingPRs(): Promise<
     taskId: string;
     runId: string;
     startedAt: Date;
+    taskTitle: string;
     taskGoal: string;
     taskRiskLevel: "low" | "medium" | "high";
     allowedPaths: string[];
+    commands: string[];
   }> = [];
   const seenTaskIds = new Set<string>();
 
@@ -417,9 +458,11 @@ async function getPendingPRs(): Promise<
       taskId: row.taskId,
       runId: row.runId,
       startedAt: row.startedAt,
+      taskTitle: task.title,
       taskGoal: task.goal,
       taskRiskLevel: (task.riskLevel as "low" | "medium" | "high") ?? "low",
       allowedPaths: task.allowedPaths ?? [],
+      commands: task.commands ?? [],
     });
     seenTaskIds.add(row.taskId);
   }
@@ -671,6 +714,165 @@ function buildJudgeFailureMessage(
   return parts.join(" | ").slice(0, 1000);
 }
 
+function hasActionableLLMFailures(summary: EvaluationSummary): boolean {
+  return !summary.llm.pass && summary.llm.codeIssues.length > 0;
+}
+
+function isNonActionableLLMFailure(summary: EvaluationSummary): boolean {
+  if (summary.llm.pass) {
+    return false;
+  }
+  if (summary.llm.codeIssues.length > 0) {
+    return false;
+  }
+  const reasonText = summary.llm.reasons.join(" ").toLowerCase();
+  if (reasonText.length === 0) {
+    return summary.llm.confidence <= 0;
+  }
+  return (
+    summary.llm.confidence <= 0
+    || reasonText.includes("quota")
+    || reasonText.includes("rate limit")
+    || reasonText.includes("resource_exhausted")
+    || reasonText.includes("llm review failed")
+    || reasonText.includes("encountered an error")
+    || reasonText.includes("manual review recommended")
+  );
+}
+
+function escapeSqlLikePattern(input: string): string {
+  return input
+    .replaceAll("\\", "\\\\")
+    .replaceAll("%", "\\%")
+    .replaceAll("_", "\\_");
+}
+
+function summarizeLLMIssuesForTask(summary: EvaluationSummary): string {
+  const issues = summary.llm.codeIssues.slice(0, 12).map((issue, index) => {
+    const location = issue.file
+      ? `${issue.file}${issue.line ? `:${issue.line}` : ""}`
+      : "unknown";
+    const suggestion = issue.suggestion ? ` | fix: ${issue.suggestion}` : "";
+    return `${index + 1}. [${issue.severity}] ${issue.category} @ ${location}: ${issue.message}${suggestion}`;
+  });
+  if (issues.length === 0) {
+    return summary.llm.reasons.join("\n");
+  }
+  return issues.join("\n");
+}
+
+async function createAutoFixTaskForPr(params: {
+  prNumber: number;
+  prUrl: string;
+  sourceTaskId: string;
+  sourceRunId: string;
+  sourceTaskTitle: string;
+  sourceTaskGoal: string;
+  allowedPaths: string[];
+  commands: string[];
+  summary: EvaluationSummary;
+  agentId: string;
+}): Promise<{ created: boolean; taskId?: string; reason: string }> {
+  if (!JUDGE_AUTO_FIX_ON_FAIL) {
+    return { created: false, reason: "auto_fix_disabled" };
+  }
+  if (params.summary.llm.pass) {
+    return { created: false, reason: "llm_pass" };
+  }
+
+  const titlePrefix = `[AutoFix] PR #${params.prNumber}`;
+  const titlePattern = `${escapeSqlLikePattern(titlePrefix)}%`;
+  const maxAttempts = Number.isFinite(JUDGE_AUTO_FIX_MAX_ATTEMPTS)
+    ? Math.max(1, JUDGE_AUTO_FIX_MAX_ATTEMPTS)
+    : 3;
+
+  const [activeTask] = await db
+    .select({ id: tasks.id, status: tasks.status })
+    .from(tasks)
+    .where(
+      and(
+        sql`${tasks.title} like ${titlePattern} escape '\\'`,
+        inArray(tasks.status, ["queued", "running", "blocked"])
+      )
+    )
+    .limit(1);
+  if (activeTask?.id) {
+    return { created: false, reason: `existing_active_autofix:${activeTask.id}` };
+  }
+
+  const [attemptRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(tasks)
+    .where(sql`${tasks.title} like ${titlePattern} escape '\\'`);
+  const attemptCount = Number(attemptRow?.count ?? 0);
+  if (attemptCount >= maxAttempts) {
+    return { created: false, reason: `autofix_attempt_limit_reached:${attemptCount}/${maxAttempts}` };
+  }
+
+  const issueFiles = Array.from(
+    new Set(
+      params.summary.llm.codeIssues
+        .map((issue) => issue.file?.trim())
+        .filter((file): file is string => Boolean(file))
+    )
+  );
+  const summarizedIssues = summarizeLLMIssuesForTask(params.summary);
+  const nextAttempt = attemptCount + 1;
+
+  const [taskRow] = await db
+    .insert(tasks)
+    .values({
+      title: `${titlePrefix} (attempt ${nextAttempt}/${maxAttempts})`,
+      goal:
+        `Fix judge-reported issues for PR #${params.prNumber} and create a follow-up PR that passes review. ` +
+        `Original review task: ${params.sourceTaskId}.`,
+      context: {
+        files: issueFiles,
+        specs:
+          "Resolve the issues listed in notes. Keep scope minimal and aligned with allowed paths. " +
+          "Do not run long-running dev/watch/start commands.",
+        notes: summarizedIssues,
+        pr: {
+          number: params.prNumber,
+          url: params.prUrl,
+          sourceTaskId: params.sourceTaskId,
+          sourceRunId: params.sourceRunId,
+        },
+      },
+      allowedPaths: params.allowedPaths.length > 0 ? params.allowedPaths : ["**"],
+      commands: params.commands,
+      dependencies: [],
+      priority: 80,
+      riskLevel: "medium",
+      role: "worker",
+      status: "queued",
+      timeboxMinutes: 60,
+    })
+    .returning({ id: tasks.id });
+
+  if (!taskRow?.id) {
+    return { created: false, reason: "autofix_task_insert_failed" };
+  }
+
+  await db.insert(events).values({
+    type: "judge.autofix_task_created",
+    entityType: "task",
+    entityId: taskRow.id,
+    agentId: params.agentId,
+    payload: {
+      prNumber: params.prNumber,
+      sourceTaskId: params.sourceTaskId,
+      sourceRunId: params.sourceRunId,
+      sourceTaskTitle: params.sourceTaskTitle,
+      sourceTaskGoal: params.sourceTaskGoal,
+      attempt: nextAttempt,
+      maxAttempts,
+    },
+  });
+
+  return { created: true, taskId: taskRow.id, reason: "created" };
+}
+
 async function requeueTaskAfterJudge(params: {
   taskId: string;
   runId: string;
@@ -709,34 +911,209 @@ async function requeueTaskAfterJudge(params: {
   });
 }
 
-async function blockTaskNeedsHumanAfterJudge(params: {
+async function scheduleTaskForJudgeRetry(params: {
   taskId: string;
   runId: string;
   agentId: string;
   reason: string;
+  restoreRunImmediately?: boolean;
 }): Promise<void> {
-  const { taskId, runId, agentId, reason } = params;
+  const { taskId, runId, agentId, reason, restoreRunImmediately = true } = params;
+  const [task] = await db
+    .select({ retryCount: tasks.retryCount })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+  const nextRetryCount = (task?.retryCount ?? 0) + 1;
 
   await db
     .update(tasks)
     .set({
       status: "blocked",
-      blockReason: "needs_human",
+      blockReason: "awaiting_judge",
+      retryCount: nextRetryCount,
       updatedAt: new Date(),
     })
     .where(eq(tasks.id, taskId));
 
+  if (restoreRunImmediately) {
+    await db
+      .update(runs)
+      .set({
+        judgedAt: null,
+      })
+      .where(eq(runs.id, runId));
+  }
+
   await db.insert(events).values({
-    type: "judge.task_blocked",
+    type: "judge.task_requeued",
     entityType: "task",
     entityId: taskId,
     agentId,
     payload: {
       runId,
-      blockReason: "needs_human",
       reason,
+      retryCount: nextRetryCount,
     },
   });
+}
+
+function isImportedPrReviewTask(goal: string, title: string): boolean {
+  return (
+    goal.startsWith("Review and process open PR #")
+    || title.startsWith("[PR] Review #")
+  );
+}
+
+async function recoverNeedsHumanJudgeBacklog(agentId: string): Promise<number> {
+  const stuckTasks = await db
+    .select({
+      id: tasks.id,
+    })
+    .from(tasks)
+    .where(and(eq(tasks.status, "blocked"), eq(tasks.blockReason, "needs_human")));
+
+  if (stuckTasks.length === 0) {
+    return 0;
+  }
+
+  let recovered = 0;
+  for (const task of stuckTasks) {
+    const [recoverableRun] = await db
+      .select({
+        runId: runs.id,
+      })
+      .from(runs)
+      .innerJoin(artifacts, eq(artifacts.runId, runs.id))
+      .where(
+        and(
+          eq(runs.taskId, task.id),
+          eq(runs.status, "success"),
+          inArray(artifacts.type, ["pr", "worktree"])
+        )
+      )
+      .orderBy(desc(runs.startedAt))
+      .limit(1);
+
+    if (!recoverableRun?.runId) {
+      continue;
+    }
+
+    await db
+      .update(runs)
+      .set({
+        judgedAt: null,
+      })
+      .where(eq(runs.id, recoverableRun.runId));
+
+    await db
+      .update(tasks)
+      .set({
+        blockReason: "awaiting_judge",
+        updatedAt: new Date(),
+      })
+      .where(eq(tasks.id, task.id));
+
+    await db.insert(events).values({
+      type: "judge.task_recovered",
+      entityType: "task",
+      entityId: task.id,
+      agentId,
+      payload: {
+        reason: "recover_needs_human_to_awaiting_judge",
+        runId: recoverableRun.runId,
+      },
+    });
+    recovered += 1;
+  }
+
+  return recovered;
+}
+
+async function recoverAwaitingJudgeBacklog(agentId: string): Promise<number> {
+  const cooldownMs = Number.isFinite(JUDGE_AWAITING_RETRY_COOLDOWN_MS)
+    && JUDGE_AWAITING_RETRY_COOLDOWN_MS > 0
+    ? JUDGE_AWAITING_RETRY_COOLDOWN_MS
+    : 120000;
+  const cutoff = new Date(Date.now() - cooldownMs);
+
+  const stuckTasks = await db
+    .select({
+      id: tasks.id,
+    })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.status, "blocked"),
+        eq(tasks.blockReason, "awaiting_judge"),
+        lte(tasks.updatedAt, cutoff)
+      )
+    );
+
+  if (stuckTasks.length === 0) {
+    return 0;
+  }
+
+  let recovered = 0;
+  for (const task of stuckTasks) {
+    const [pendingRun] = await db
+      .select({ id: runs.id })
+      .from(runs)
+      .where(
+        and(
+          eq(runs.taskId, task.id),
+          eq(runs.status, "success"),
+          isNull(runs.judgedAt)
+        )
+      )
+      .limit(1);
+
+    if (pendingRun?.id) {
+      continue;
+    }
+
+    const [recoverableRun] = await db
+      .select({
+        runId: runs.id,
+      })
+      .from(runs)
+      .innerJoin(artifacts, eq(artifacts.runId, runs.id))
+      .where(
+        and(
+          eq(runs.taskId, task.id),
+          eq(runs.status, "success"),
+          inArray(artifacts.type, ["pr", "worktree"])
+        )
+      )
+      .orderBy(desc(runs.startedAt))
+      .limit(1);
+
+    if (!recoverableRun?.runId) {
+      continue;
+    }
+
+    await db
+      .update(runs)
+      .set({
+        judgedAt: null,
+      })
+      .where(eq(runs.id, recoverableRun.runId));
+
+    await db.insert(events).values({
+      type: "judge.task_recovered",
+      entityType: "task",
+      entityId: task.id,
+      agentId,
+      payload: {
+        reason: "recover_awaiting_judge_run_restored",
+        runId: recoverableRun.runId,
+        cooldownMs,
+      },
+    });
+    recovered += 1;
+  }
+
+  return recovered;
 }
 
 async function claimRunForJudgement(runId: string): Promise<boolean> {
@@ -1043,18 +1420,30 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
 
   while (true) {
     try {
+      const recovered = await recoverNeedsHumanJudgeBacklog(config.agentId);
+      if (recovered > 0) {
+        console.log(`[Judge] Recovered ${recovered} needs_human task(s) back to awaiting_judge`);
+      }
+      const recoveredAwaiting = await recoverAwaitingJudgeBacklog(config.agentId);
+      if (recoveredAwaiting > 0) {
+        console.log(`[Judge] Recovered ${recoveredAwaiting} awaiting_judge task(s) by restoring runs`);
+      }
+
       // レビュー待ちのPRを取得
       const pendingPRs = await getPendingPRs();
 
       if (pendingPRs.length > 0) {
+        await safeSetJudgeAgentState(config.agentId, "busy");
         console.log(`\nFound ${pendingPRs.length} PRs to review`);
 
         for (const pr of pendingPRs) {
           try {
+            await safeSetJudgeAgentState(config.agentId, "busy", pr.taskId);
             if (!config.dryRun) {
               const claimed = await claimRunForJudgement(pr.runId);
               if (!claimed) {
                 console.log(`  Skip PR #${pr.prNumber}: run already judged`);
+                await safeSetJudgeAgentState(config.agentId, "busy");
                 continue;
               }
             }
@@ -1063,7 +1452,13 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
             const effectiveResult = config.mergeOnApprove
               ? result
               : { ...result, autoMerge: false };
-            let actionResult = {
+            let actionResult: {
+              commented: boolean;
+              approved: boolean;
+              merged: boolean;
+              mergeDeferred?: boolean;
+              mergeDeferredReason?: string;
+            } = {
               commented: false,
               approved: false,
               merged: false,
@@ -1071,6 +1466,7 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
 
             let actionError: unknown;
             let requeueReason: string | undefined;
+            const importedPrReviewTask = isImportedPrReviewTask(pr.taskGoal, pr.taskTitle);
 
             try {
               if (config.dryRun) {
@@ -1106,34 +1502,123 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                     console.log(`  Docser task created: ${docserResult.docserTaskId}`);
                   }
                 } else if (effectiveResult.verdict !== "approve" && config.requeueOnNonApprove) {
-                  // request_changes / needs_human は再実行キューへ戻す
-                  requeueReason = buildJudgeFailureMessage(effectiveResult);
-                  await requeueTaskAfterJudge({
-                    taskId: pr.taskId,
-                    runId: pr.runId,
-                    agentId: config.agentId,
-                    reason: requeueReason,
-                  });
-                  console.log(`  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`);
+                  // LLM FAIL時はJudge再判定ループではなく修正タスクを起票する
+                  if (!summary.llm.pass) {
+                    if (hasActionableLLMFailures(summary)) {
+                      const autoFix = await createAutoFixTaskForPr({
+                        prNumber: pr.prNumber,
+                        prUrl: pr.prUrl,
+                        sourceTaskId: pr.taskId,
+                        sourceRunId: pr.runId,
+                        sourceTaskTitle: pr.taskTitle,
+                        sourceTaskGoal: pr.taskGoal,
+                        allowedPaths: pr.allowedPaths,
+                        commands: pr.commands,
+                        summary,
+                        agentId: config.agentId,
+                      });
+
+                      if (autoFix.created) {
+                        await db
+                          .update(tasks)
+                          .set({
+                            status: "blocked",
+                            blockReason: "needs_rework",
+                            updatedAt: new Date(),
+                          })
+                          .where(eq(tasks.id, pr.taskId));
+                        console.log(
+                          `  Task ${pr.taskId} blocked as needs_rework; auto-fix task queued: ${autoFix.taskId}`
+                        );
+                      } else {
+                        requeueReason = `${buildJudgeFailureMessage(effectiveResult)} | ${autoFix.reason}`;
+                        if (importedPrReviewTask) {
+                          await scheduleTaskForJudgeRetry({
+                            taskId: pr.taskId,
+                            runId: pr.runId,
+                            agentId: config.agentId,
+                            reason: `retry_imported_pr_review:${requeueReason}`,
+                          });
+                          console.log(
+                            `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`
+                          );
+                        } else {
+                          await requeueTaskAfterJudge({
+                            taskId: pr.taskId,
+                            runId: pr.runId,
+                            agentId: config.agentId,
+                            reason: requeueReason,
+                          });
+                          console.log(
+                            `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`
+                          );
+                        }
+                      }
+                    } else {
+                      // クォータ超過や実行エラーなど、コード差分が無いLLM失敗はAutoFix対象外
+                      requeueReason = `${buildJudgeFailureMessage(effectiveResult)} | llm_non_actionable_failure`;
+                      await scheduleTaskForJudgeRetry({
+                        taskId: pr.taskId,
+                        runId: pr.runId,
+                        agentId: config.agentId,
+                        reason: importedPrReviewTask
+                          ? `retry_imported_pr_review:${requeueReason}`
+                          : requeueReason,
+                        // 直ちに同一runを再評価せず、短いクールダウン後にjudgeがrunを復元する
+                        restoreRunImmediately: false,
+                      });
+                      const marker = isNonActionableLLMFailure(summary)
+                        ? "non-actionable"
+                        : "llm-failed";
+                      console.log(
+                        `  Task ${pr.taskId} scheduled for judge retry after cooldown (${marker})`
+                      );
+                    }
+                  } else {
+                    // CI/Policy系の非approveは従来どおり再キュー
+                    requeueReason = buildJudgeFailureMessage(effectiveResult);
+                    if (importedPrReviewTask) {
+                      await scheduleTaskForJudgeRetry({
+                        taskId: pr.taskId,
+                        runId: pr.runId,
+                        agentId: config.agentId,
+                        reason: `retry_imported_pr_review:${requeueReason}`,
+                      });
+                      console.log(
+                        `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`
+                      );
+                    } else {
+                      await requeueTaskAfterJudge({
+                        taskId: pr.taskId,
+                        runId: pr.runId,
+                        agentId: config.agentId,
+                        reason: requeueReason,
+                      });
+                      console.log(
+                        `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`
+                      );
+                    }
+                  }
                 } else if (effectiveResult.verdict === "approve") {
-                  // approve でもマージ完了しなければ同一task再実行は行わず、人手対応へ退避する
-                  const blockReason = "Judge approved but merge was not completed";
-                  await blockTaskNeedsHumanAfterJudge({
+                  // approve でもマージ完了しなければ judge 再試行に戻す
+                  const retryReason = actionResult.mergeDeferred
+                    ? `Judge approved but merge deferred: ${actionResult.mergeDeferredReason ?? "pending_branch_sync"}`
+                    : "Judge approved but merge was not completed";
+                  await scheduleTaskForJudgeRetry({
                     taskId: pr.taskId,
                     runId: pr.runId,
                     agentId: config.agentId,
-                    reason: blockReason,
+                    reason: retryReason,
+                    // update-branchを投げた場合はクールダウンまで同一runを再判定しない
+                    restoreRunImmediately: !actionResult.mergeDeferred,
                   });
-                  console.warn(`  Task ${pr.taskId} moved to needs_human because merge did not complete`);
+                  console.warn(`  Task ${pr.taskId} scheduled for judge retry because merge did not complete`);
                 } else {
                   await db
                     .update(tasks)
                     .set({
                       status: "blocked",
-                      blockReason:
-                        effectiveResult.verdict === "needs_human"
-                          ? "needs_human"
-                          : "needs_rework",
+                      blockReason: "needs_rework",
                       updatedAt: new Date(),
                     })
                     .where(eq(tasks.id, pr.taskId));
@@ -1143,13 +1628,13 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
               actionError = error;
               if (!config.dryRun) {
                 requeueReason = buildJudgeFailureMessage(effectiveResult, error);
-                await requeueTaskAfterJudge({
+                await scheduleTaskForJudgeRetry({
                   taskId: pr.taskId,
                   runId: pr.runId,
                   agentId: config.agentId,
-                  reason: requeueReason,
+                  reason: `judge_action_error:${requeueReason}`,
                 });
-                console.warn(`  Task ${pr.taskId} requeued due to judge action error`);
+                console.warn(`  Task ${pr.taskId} scheduled for judge retry due to judge action error`);
               }
             }
 
@@ -1167,11 +1652,15 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
             }
           } catch (error) {
             console.error(`  Error processing PR #${pr.prNumber}:`, error);
+          } finally {
+            await safeSetJudgeAgentState(config.agentId, "busy");
           }
         }
       }
     } catch (error) {
       console.error("Judge loop error:", error);
+    } finally {
+      await safeSetJudgeAgentState(config.agentId, "idle");
     }
 
     // 次のポーリングまで待機
@@ -1195,14 +1684,17 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
       const pendingWorktrees = await getPendingWorktrees();
 
       if (pendingWorktrees.length > 0) {
+        await safeSetJudgeAgentState(config.agentId, "busy");
         console.log(`\nFound ${pendingWorktrees.length} worktrees to review`);
 
         for (const target of pendingWorktrees) {
           try {
+            await safeSetJudgeAgentState(config.agentId, "busy", target.taskId);
             if (!config.dryRun) {
               const claimed = await claimRunForJudgement(target.runId);
               if (!claimed) {
                 console.log(`  Skip worktree ${target.worktreePath}: run already judged`);
+                await safeSetJudgeAgentState(config.agentId, "busy");
                 continue;
               }
             }
@@ -1311,11 +1803,15 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
             );
           } catch (error) {
             console.error(`  Error processing worktree ${target.worktreePath}:`, error);
+          } finally {
+            await safeSetJudgeAgentState(config.agentId, "busy");
           }
         }
       }
     } catch (error) {
       console.error("Judge loop error:", error);
+    } finally {
+      await safeSetJudgeAgentState(config.agentId, "idle");
     }
 
     await new Promise((resolve) => setTimeout(resolve, config.pollIntervalMs));

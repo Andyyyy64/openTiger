@@ -2,6 +2,8 @@ import { addPRComment, mergePR, getOctokit, getRepoInfo } from "@sebastian-code/
 import type { Policy } from "@sebastian-code/core";
 import type { CIEvaluationResult, PolicyEvaluationResult, LLMEvaluationResult, CodeIssue } from "./evaluators/index.js";
 
+const ALLOW_LLM_FAIL_AUTOMERGE = process.env.JUDGE_ALLOW_LLM_FAIL_AUTOMERGE === "true";
+
 // 判定結果
 export type JudgeVerdict = "approve" | "request_changes" | "needs_human";
 
@@ -66,7 +68,8 @@ export function makeJudgement(
   );
   const canAutoMerge =
     policy.autoMerge.enabled && isRiskAllowed(taskRiskLevel, maxRiskLevel);
-  const allowLlmBypass = policy.autoMerge.level === "low" && canAutoMerge;
+  const allowLlmBypass =
+    ALLOW_LLM_FAIL_AUTOMERGE && policy.autoMerge.level === "low" && canAutoMerge;
 
   if (!summary.llm.pass) {
     reasons.push(...summary.llm.reasons);
@@ -304,10 +307,18 @@ export async function reviewAndAct(
   prNumber: number,
   result: JudgeResult,
   summary: EvaluationSummary
-): Promise<{ commented: boolean; merged: boolean; approved: boolean }> {
+): Promise<{
+  commented: boolean;
+  merged: boolean;
+  approved: boolean;
+  mergeDeferred?: boolean;
+  mergeDeferredReason?: string;
+}> {
   let commented = false;
   let merged = false;
   let approved = false;
+  let mergeDeferred = false;
+  let mergeDeferredReason: string | undefined;
   const isSelfAuthored = await isSelfAuthoredPR(prNumber);
 
   try {
@@ -329,6 +340,13 @@ export async function reviewAndAct(
           merged = await autoMergePR(prNumber);
           if (merged) {
             console.log(`PR #${prNumber} has been automatically merged`);
+          } else {
+            const sync = await trySyncPRWithBase(prNumber);
+            mergeDeferred = sync.requested;
+            mergeDeferredReason = sync.reason;
+            if (sync.requested) {
+              console.log(`Requested branch update for PR #${prNumber} before retry`);
+            }
           }
         }
         break;
@@ -349,7 +367,25 @@ export async function reviewAndAct(
     console.error(`Failed to process PR #${prNumber}:`, error);
   }
 
-  return { commented, merged, approved };
+  return { commented, merged, approved, mergeDeferred, mergeDeferredReason };
+}
+
+async function trySyncPRWithBase(
+  prNumber: number
+): Promise<{ requested: boolean; reason: string }> {
+  try {
+    const octokit = getOctokit();
+    const { owner, repo } = getRepoInfo();
+    await octokit.pulls.updateBranch({
+      owner,
+      repo,
+      pull_number: prNumber,
+    });
+    return { requested: true, reason: "update_branch_requested" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { requested: false, reason: `update_branch_failed:${message}` };
+  }
 }
 
 async function isSelfAuthoredPR(prNumber: number): Promise<boolean> {
