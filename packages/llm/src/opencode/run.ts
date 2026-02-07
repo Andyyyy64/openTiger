@@ -44,6 +44,15 @@ const DEFAULT_FALLBACK_MODEL =
   process.env.OPENCODE_FALLBACK_MODEL ?? "google/gemini-2.5-flash";
 const DEFAULT_MAX_RETRIES = parseInt(process.env.OPENCODE_MAX_RETRIES ?? "3", 10);
 const DEFAULT_RETRY_DELAY_MS = parseInt(process.env.OPENCODE_RETRY_DELAY_MS ?? "5000", 10);
+const DEFAULT_WAIT_ON_QUOTA = process.env.OPENCODE_WAIT_ON_QUOTA !== "false";
+const DEFAULT_QUOTA_RETRY_DELAY_MS = parseInt(
+  process.env.OPENCODE_QUOTA_RETRY_DELAY_MS ?? "30000",
+  10
+);
+const DEFAULT_MAX_QUOTA_WAITS = parseInt(
+  process.env.OPENCODE_MAX_QUOTA_WAITS ?? "-1",
+  10
+);
 
 const RETRYABLE_ERRORS = [
   /rate.?limit/i,
@@ -59,19 +68,24 @@ const QUOTA_EXCEEDED_ERRORS = [
   /quota exceeded/i,
   /exceeded your current quota/i,
   /generate_requests_per_model_per_day/i,
+  /resource_exhausted/i,
+  /quotafailure/i,
+  /retryinfo/i,
+  /generate_content_paid_tier_input_token_count/i,
 ];
 const ANSI_ESCAPE_REGEX = /\x1B\[[0-9;]*m/g;
 
-const DOOM_LOOP_WINDOW = 24;
+const DOOM_LOOP_WINDOW = 64;
 const DOOM_LOOP_IDENTICAL_THRESHOLD = 5;
-const DOOM_LOOP_PATTERN_MAX_LENGTH = 4;
+const DOOM_LOOP_PATTERN_MAX_LENGTH = 12;
 const DOOM_LOOP_PATTERN_REPEAT_THRESHOLD = 4;
 const DEFAULT_IDLE_TIMEOUT_SECONDS = parseInt(
-  process.env.OPENCODE_IDLE_TIMEOUT_SECONDS ?? "900",
+  process.env.OPENCODE_IDLE_TIMEOUT_SECONDS ?? "300",
   10
 );
 const IDLE_CHECK_INTERVAL_MS = 5000;
 const PROGRESS_LOG_INTERVAL_MS = 30000;
+const MAX_CONSECUTIVE_PLANNING_LINES = 10;
 
 function isRetryableError(stderr: string, exitCode: number): boolean {
   if (exitCode === 1 && !stderr) return false;
@@ -80,6 +94,26 @@ function isRetryableError(stderr: string, exitCode: number): boolean {
 
 function isQuotaExceededError(message: string): boolean {
   return QUOTA_EXCEEDED_ERRORS.some((pattern) => pattern.test(message));
+}
+
+function extractQuotaRetryDelayMs(message: string): number | undefined {
+  const retryInfoMatch = message.match(/retrydelay["']?\s*[:=]\s*["']?([0-9]+(?:\.[0-9]+)?)s["']?/i);
+  if (retryInfoMatch?.[1]) {
+    const seconds = Number.parseFloat(retryInfoMatch[1]);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.max(1000, Math.round(seconds * 1000));
+    }
+  }
+
+  const retryInMatch = message.match(/retry in\s*([0-9]+(?:\.[0-9]+)?)s/i);
+  if (retryInMatch?.[1]) {
+    const seconds = Number.parseFloat(retryInMatch[1]);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return Math.max(1000, Math.round(seconds * 1000));
+    }
+  }
+
+  return undefined;
 }
 
 function normalizeChunkLine(line: string): string {
@@ -153,6 +187,7 @@ async function executeOpenCodeOnce(
   );
   const idleTimeoutEnabled = idleTimeoutMs > 0;
   let lastOutputAt = startTime;
+  let lastVisibleProgressAt = startTime;
   const args: string[] = ["run"];
   const tempDir = await mkdtemp(join(tmpdir(), "sebastian-code-opencode-"));
   const promptPath = join(tempDir, "prompt.txt");
@@ -224,11 +259,11 @@ async function executeOpenCodeOnce(
     if (!idleTimeoutEnabled) {
       return;
     }
-    const idleMs = Date.now() - lastOutputAt;
+    const idleMs = Date.now() - lastVisibleProgressAt;
     if (idleMs >= idleTimeoutMs && !idleTimedOut) {
       idleTimedOut = true;
       process.stderr.write(
-        `\n[OpenCode] Idle timeout exceeded (${Math.round(idleTimeoutMs / 1000)}s without output)\n`
+        `\n[OpenCode] Idle timeout exceeded (${Math.round(idleTimeoutMs / 1000)}s without visible progress)\n`
       );
       terminateOpenCode("SIGTERM");
       setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
@@ -236,7 +271,7 @@ async function executeOpenCodeOnce(
   }, IDLE_CHECK_INTERVAL_MS);
   const progressTimer = setInterval(() => {
     const elapsed = Math.round((Date.now() - startTime) / 1000);
-    const idleSec = Math.round((Date.now() - lastOutputAt) / 1000);
+    const idleSec = Math.round((Date.now() - lastVisibleProgressAt) / 1000);
     process.stdout.write(
       `[OpenCode] Running... elapsed=${elapsed}s idle=${idleSec}s\n`
     );
@@ -246,6 +281,7 @@ async function executeOpenCodeOnce(
   let stderr = "";
   let doomLoopDetected = false;
   const recentChunks: string[] = [];
+  let consecutivePlanningLines = 0;
   const markDoomLoopAndTerminate = (): void => {
     if (doomLoopDetected) {
       return;
@@ -283,14 +319,48 @@ async function executeOpenCodeOnce(
     }
   };
 
+  const isPlanningLine = (line: string): boolean => {
+    const normalized = line.trim().toLowerCase();
+    return (
+      normalized.startsWith("i will ") ||
+      normalized.startsWith("i'll ") ||
+      normalized.startsWith("i am going to ") ||
+      normalized.startsWith("let me ")
+    );
+  };
+
   childProcess.stdout.on("data", (data: Buffer) => {
     const chunk = data.toString();
     stdout += chunk;
     lastOutputAt = Date.now();
+    lastVisibleProgressAt = Date.now();
     // リアルタイムでログに出力
     process.stdout.write(chunk);
     for (const line of chunk.split(/\r?\n/)) {
       pushChunkAndDetectDoomLoop(line);
+      if (/\[tool_call:\s*todo(?:read|write)\b/i.test(line)) {
+        stderr += "\n[OpenCode] Unsupported pseudo tool call detected: todo*";
+        markDoomLoopAndTerminate();
+        continue;
+      }
+      if (
+        /\[tool_call:\s*bash\b/i.test(line)
+        && /\b(?:pnpm|npm|yarn|bun)\b.*\b(?:dev|watch|start)\b/i.test(line)
+      ) {
+        stderr += "\n[OpenCode] Long-running dev/watch/start command detected in tool call";
+        markDoomLoopAndTerminate();
+        continue;
+      }
+      if (isPlanningLine(line)) {
+        consecutivePlanningLines += 1;
+        if (consecutivePlanningLines >= MAX_CONSECUTIVE_PLANNING_LINES) {
+          stderr += `\n[OpenCode] Excessive planning chatter detected (${consecutivePlanningLines} lines)`;
+          markDoomLoopAndTerminate();
+          continue;
+        }
+      } else if (line.trim().length > 0) {
+        consecutivePlanningLines = 0;
+      }
     }
   });
 
@@ -315,6 +385,7 @@ async function executeOpenCodeOnce(
             ? `${line.slice(0, MAX_ERROR_SUMMARY_LENGTH)}...`
             : line;
         process.stderr.write(`${summary}\n`);
+        lastVisibleProgressAt = Date.now();
       }
     }
   });
@@ -342,7 +413,7 @@ async function executeOpenCodeOnce(
       const tokenUsage = extractOpenCodeTokenUsage(stdout);
       const timeoutMessage = timedOut ? "\n[OpenCode] Timeout exceeded" : "";
       const idleTimeoutMessage = idleTimedOut
-        ? `\n[OpenCode] Idle timeout exceeded (${Math.round(idleTimeoutMs / 1000)}s without output)`
+        ? `\n[OpenCode] Idle timeout exceeded (${Math.round(idleTimeoutMs / 1000)}s without visible progress)`
         : "";
       const quotaMessage = quotaExceeded ? "\n[OpenCode] クォータ上限に到達しました" : "";
       const doomLoopMessage = doomLoopDetected ? "\n[OpenCode] Doom loop detected" : "";
@@ -400,13 +471,23 @@ export async function runOpenCode(
 ): Promise<OpenCodeResult> {
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
+  const waitOnQuota = DEFAULT_WAIT_ON_QUOTA;
+  const quotaRetryDelayMs = Number.isFinite(DEFAULT_QUOTA_RETRY_DELAY_MS)
+    && DEFAULT_QUOTA_RETRY_DELAY_MS > 0
+    ? DEFAULT_QUOTA_RETRY_DELAY_MS
+    : 30000;
+  const maxQuotaWaits = Number.isFinite(DEFAULT_MAX_QUOTA_WAITS)
+    ? DEFAULT_MAX_QUOTA_WAITS
+    : -1;
   let currentModel = options.model ?? DEFAULT_MODEL;
   let fallbackUsed = false;
+  let quotaWaitCount = 0;
 
   let lastResult: Omit<OpenCodeResult, "retryCount"> | null = null;
   let retryCount = 0;
+  let attempt = 0;
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  while (attempt <= maxRetries) {
     const result = await executeOpenCodeOnce({ ...options, model: currentModel });
     lastResult = result;
 
@@ -415,6 +496,17 @@ export async function runOpenCode(
     }
 
     if (isQuotaExceededError(result.stderr)) {
+      if (waitOnQuota && (maxQuotaWaits < 0 || quotaWaitCount < maxQuotaWaits)) {
+        quotaWaitCount++;
+        const detectedDelay = extractQuotaRetryDelayMs(result.stderr);
+        const waitMs = detectedDelay ?? quotaRetryDelayMs;
+        console.warn(
+          `[OpenCode] ${currentModel ?? "unknown model"} quota exceeded. ` +
+          `Waiting ${Math.round(waitMs / 1000)}s before retry (${quotaWaitCount}${maxQuotaWaits < 0 ? "" : `/${maxQuotaWaits}`}).`
+        );
+        await delay(waitMs);
+        continue;
+      }
       console.error(
         `[OpenCode] ${currentModel ?? "unknown model"} のクォータ上限に到達しました。API利用枠を確認してください。`
       );
@@ -436,6 +528,7 @@ export async function runOpenCode(
     }
 
     if (attempt < maxRetries && isRetryableError(result.stderr, result.exitCode)) {
+      attempt++;
       retryCount++;
       const backoffDelay = calculateBackoffDelay(attempt, retryDelayMs);
       console.log(`[OpenCode] Retry ${retryCount}/${maxRetries} after ${backoffDelay}ms`);
