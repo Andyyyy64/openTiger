@@ -1,6 +1,6 @@
 import { db } from "@sebastian-code/db";
 import { tasks, runs, artifacts, leases, agents } from "@sebastian-code/db/schema";
-import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import type { Task, Policy } from "@sebastian-code/core";
 import {
   DEFAULT_POLICY,
@@ -110,6 +110,44 @@ async function releaseTaskRuntimeLock(lock: TaskRuntimeLock | null): Promise<voi
   }
 }
 
+async function recoverInterruptedAgentRuns(agentId: string): Promise<number> {
+  const staleRuns = await db
+    .select({
+      runId: runs.id,
+      taskId: runs.taskId,
+    })
+    .from(runs)
+    .where(and(eq(runs.agentId, agentId), eq(runs.status, "running")));
+
+  if (staleRuns.length === 0) {
+    return 0;
+  }
+
+  for (const run of staleRuns) {
+    await db
+      .update(runs)
+      .set({
+        status: "cancelled",
+        finishedAt: new Date(),
+        errorMessage: "Agent process restarted before task completion",
+      })
+      .where(eq(runs.id, run.runId));
+
+    await db
+      .update(tasks)
+      .set({
+        status: "queued",
+        blockReason: null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(tasks.id, run.taskId), eq(tasks.status, "running")));
+
+    await db.delete(leases).where(eq(leases.taskId, run.taskId));
+  }
+
+  return staleRuns.length;
+}
+
 // ハートビートを送信する関数
 async function startHeartbeat(agentId: string) {
   return setInterval(async () => {
@@ -118,6 +156,9 @@ async function startHeartbeat(agentId: string) {
         .update(agents)
         .set({
           lastHeartbeat: new Date(),
+          // オフライン扱いからの復帰を許可する。
+          // busyを上書きしないよう、offlineの時だけidleへ戻す。
+          status: sql`CASE WHEN ${agents.status} = 'offline' THEN 'idle' ELSE ${agents.status} END`,
         })
         .where(eq(agents.id, agentId));
     } catch (error) {
@@ -351,6 +392,47 @@ export async function runWorker(
 
     if (!verifyResult.success) {
       throw new Error(verifyResult.error);
+    }
+
+    if (verifyResult.changedFiles.length === 0) {
+      console.log("\n[6/7] Skipping commit/PR...");
+      console.log("[Worker] No repository diff detected after verification. Marking task as no-op success.");
+
+      await db
+        .update(runs)
+        .set({
+          status: "success",
+          finishedAt: new Date(),
+          costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+        })
+        .where(eq(runs.id, runId));
+
+      await db
+        .update(tasks)
+        .set({
+          status: "done",
+          blockReason: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(tasks.id, taskId));
+
+      await db.delete(leases).where(eq(leases.taskId, taskId));
+
+      await db
+        .update(agents)
+        .set({ status: "idle", currentTaskId: null })
+        .where(eq(agents.id, agentId));
+
+      console.log("\n" + "=".repeat(60));
+      console.log("Task completed successfully (no-op).");
+      console.log("No repository changes were required.");
+      console.log("=".repeat(60));
+
+      return {
+        success: true,
+        taskId,
+        runId,
+      };
     }
 
     // Step 6: コミットしてプッシュ
@@ -808,6 +890,13 @@ async function main() {
     await db.delete(agents).where(eq(agents.id, agentId));
   }
 
+  const recoveredRuns = await recoverInterruptedAgentRuns(agentId);
+  if (recoveredRuns > 0) {
+    console.warn(
+      `[Recovery] Requeued ${recoveredRuns} interrupted run(s) for ${agentId}`
+    );
+  }
+
   await db.insert(agents).values({
     id: agentId,
     role: agentRole,
@@ -820,6 +909,7 @@ async function main() {
   }).onConflictDoUpdate({
     target: agents.id,
     set: {
+      status: "idle",
       lastHeartbeat: new Date(),
     },
   });

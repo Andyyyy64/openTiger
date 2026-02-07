@@ -62,10 +62,63 @@ function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
     "- Ensure all verification commands pass",
     "- Write clear, maintainable code",
     "- Add tests if applicable",
-    "- Do not run any git operations (no commit/push/checkout/branch/rebase)"
+    "- Do not run any git operations (no commit/push/checkout/branch/rebase)",
+    "- Do not run long-running dev/watch/start servers (forbidden: dev, watch, start, next dev, vite, turbo dev)",
+    "- Execute actions directly; do not emit repetitive planning chatter",
+    "- Never call todo/todoread/todowrite pseudo tools"
   );
 
   return lines.join("\n");
+}
+
+function isDoomLoopFailure(stderr: string): boolean {
+  const message = stderr.toLowerCase();
+  return (
+    message.includes("doom loop detected")
+    || message.includes("excessive planning chatter detected")
+    || message.includes("unsupported pseudo tool call detected: todo")
+  );
+}
+
+async function runOpenCodeWithGuard(params: {
+  repoPath: string;
+  instructionsPath?: string;
+  task: string;
+  model: string;
+  timeoutSeconds: number;
+  env: Record<string, string>;
+}): Promise<OpenCodeResult> {
+  const hardTimeoutMs = (params.timeoutSeconds + 30) * 1000;
+  let hardTimeoutHandle: NodeJS.Timeout | undefined;
+  const hardTimeoutResult = new Promise<OpenCodeResult>((resolve) => {
+    hardTimeoutHandle = setTimeout(() => {
+      resolve({
+        success: false,
+        exitCode: -1,
+        stdout: "",
+        stderr: `[OpenCode] Hard timeout guard exceeded (${hardTimeoutMs}ms)`,
+        durationMs: hardTimeoutMs,
+        retryCount: 0,
+      });
+    }, hardTimeoutMs);
+  });
+
+  return Promise.race([
+    runOpenCode({
+      workdir: params.repoPath,
+      instructionsPath: params.instructionsPath,
+      task: params.task,
+      model: params.model,
+      timeoutSeconds: params.timeoutSeconds,
+      env: params.env,
+      inheritEnv: false,
+    }),
+    hardTimeoutResult,
+  ]).finally(() => {
+    if (hardTimeoutHandle) {
+      clearTimeout(hardTimeoutHandle);
+    }
+  });
 }
 
 function matchDeniedCommand(command: string, deniedCommands: string[]): string | undefined {
@@ -140,38 +193,63 @@ export async function executeTask(
 
   // OpenCodeを実行
   const taskEnv = await buildOpenCodeEnv(repoPath);
-  const requestedTimeoutSeconds = Math.max(task.timeboxMinutes * 60, 60);
-  const hardTimeoutMs = (requestedTimeoutSeconds + 30) * 1000;
-  let hardTimeoutHandle: NodeJS.Timeout | undefined;
-  const hardTimeoutResult = new Promise<OpenCodeResult>((resolve) => {
-    hardTimeoutHandle = setTimeout(() => {
-      resolve({
-        success: false,
-        exitCode: -1,
-        stdout: "",
-        stderr: `[OpenCode] Hard timeout guard exceeded (${hardTimeoutMs}ms)`,
-        durationMs: hardTimeoutMs,
-        retryCount: 0,
-      });
-    }, hardTimeoutMs);
+  const timeoutCapSeconds = Number.parseInt(
+    process.env.OPENCODE_TASK_TIMEOUT_CAP_SECONDS ?? "1800",
+    10
+  );
+  const safeTimeoutCapSeconds =
+    Number.isFinite(timeoutCapSeconds) && timeoutCapSeconds > 0 ? timeoutCapSeconds : 1800;
+  const requestedTimeoutSeconds = Math.max(
+    Math.min(task.timeboxMinutes * 60, safeTimeoutCapSeconds),
+    60
+  );
+  let openCodeResult = await runOpenCodeWithGuard({
+    repoPath,
+    instructionsPath,
+    task: prompt,
+    model: workerModel,
+    timeoutSeconds: requestedTimeoutSeconds,
+    env: taskEnv,
   });
 
-  const openCodeResult = await Promise.race([
-    runOpenCode({
-      workdir: repoPath,
+  const enableImmediateRecovery =
+    process.env.WORKER_IMMEDIATE_DOOM_RECOVERY !== "false";
+  if (!openCodeResult.success && enableImmediateRecovery && isDoomLoopFailure(openCodeResult.stderr)) {
+    console.warn("[OpenCode] Doom loop detected. Retrying once in immediate recovery mode...");
+    const recoveryTimeoutRaw = Number.parseInt(
+      process.env.OPENCODE_RECOVERY_TIMEOUT_SECONDS ?? "420",
+      10
+    );
+    const recoveryTimeoutSeconds = Number.isFinite(recoveryTimeoutRaw) && recoveryTimeoutRaw > 0
+      ? Math.min(requestedTimeoutSeconds, recoveryTimeoutRaw)
+      : Math.min(requestedTimeoutSeconds, 420);
+    const recoveryModel =
+      process.env.WORKER_RECOVERY_MODEL
+      ?? process.env.WORKER_MODEL
+      ?? workerModel;
+    const recoveryPrompt = `${prompt}
+
+## Recovery Mode
+The previous attempt failed due to a doom loop.
+Do not output plan chatter. Read only minimal required files and then make edits.
+Never call todo/todoread/todowrite pseudo tools.`;
+    const recovered = await runOpenCodeWithGuard({
+      repoPath,
       instructionsPath,
-      task: prompt,
-      model: workerModel, // Workerは速度重視のモデルで実装を進める
-      timeoutSeconds: requestedTimeoutSeconds,
+      task: recoveryPrompt,
+      model: recoveryModel,
+      timeoutSeconds: recoveryTimeoutSeconds,
       env: taskEnv,
-      inheritEnv: false,
-    }),
-    hardTimeoutResult,
-  ]).finally(() => {
-    if (hardTimeoutHandle) {
-      clearTimeout(hardTimeoutHandle);
+    });
+    if (recovered.success) {
+      openCodeResult = recovered;
+    } else {
+      openCodeResult = {
+        ...recovered,
+        stderr: `${recovered.stderr}\n[OpenCode] Immediate recovery retry also failed.`,
+      };
     }
-  });
+  }
 
   if (!openCodeResult.success) {
     console.error("OpenCode execution failed");

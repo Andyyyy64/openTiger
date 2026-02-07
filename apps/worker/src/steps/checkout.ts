@@ -41,6 +41,15 @@ export interface CheckoutResult {
   error?: string;
 }
 
+async function removeDirWithRetry(path: string): Promise<void> {
+  await rm(path, {
+    recursive: true,
+    force: true,
+    maxRetries: 5,
+    retryDelay: 200,
+  });
+}
+
 // リポジトリをチェックアウト
 export async function checkoutRepository(
   options: CheckoutOptions
@@ -105,7 +114,7 @@ export async function checkoutRepository(
           baseRepoPath: localRepoPath,
           worktreePath,
         });
-        await rm(worktreePath, { recursive: true, force: true });
+        await removeDirWithRetry(worktreePath);
       }
 
       await mkdir(join(localWorktreeRoot), { recursive: true });
@@ -144,7 +153,7 @@ export async function checkoutRepository(
     // 既存のディレクトリがある場合はクリーンアップ
     if (existsSync(repoPath)) {
       console.log(`Cleaning existing directory: ${repoPath}`);
-      await rm(repoPath, { recursive: true, force: true });
+      await removeDirWithRetry(repoPath);
     }
 
     // 作業ディレクトリを作成
