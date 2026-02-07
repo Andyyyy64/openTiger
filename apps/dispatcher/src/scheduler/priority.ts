@@ -1,6 +1,6 @@
 import { db } from "@sebastian-code/db";
-import { tasks, leases, runs } from "@sebastian-code/db/schema";
-import { eq, and, inArray, gt } from "drizzle-orm";
+import { tasks, leases, runs, artifacts } from "@sebastian-code/db/schema";
+import { eq, and, inArray, gt, count, isNull } from "drizzle-orm";
 
 // タスク選択結果
 export interface AvailableTask {
@@ -20,6 +20,8 @@ export interface AvailableTask {
 }
 
 const DEFAULT_RETRY_DELAY_MS = 5 * 60 * 1000;
+let lastObservedJudgeBacklog = -1;
+let lastObservedPendingJudgeRun = false;
 
 function getRetryDelayMs(): number {
   const raw = process.env.DISPATCH_RETRY_DELAY_MS ?? String(DEFAULT_RETRY_DELAY_MS);
@@ -34,6 +36,49 @@ function getRetryDelayMs(): number {
 
 // 利用可能なタスクを優先度順で取得
 export async function getAvailableTasks(): Promise<AvailableTask[]> {
+  // PR/Judge待ちが残っている間は新規タスクを配布しない。
+  // これにより「PR消化 -> Issue/Planner」の順序を担保する。
+  const [awaitingJudgeTasks] = await db
+    .select({ count: count() })
+    .from(tasks)
+    .where(and(eq(tasks.status, "blocked"), eq(tasks.blockReason, "awaiting_judge")));
+  const [pendingJudgeRun] = await db
+    .select({ runId: runs.id })
+    .from(runs)
+    .innerJoin(artifacts, eq(artifacts.runId, runs.id))
+    .innerJoin(tasks, eq(tasks.id, runs.taskId))
+    .where(
+      and(
+        eq(runs.status, "success"),
+        isNull(runs.judgedAt),
+        inArray(artifacts.type, ["pr", "worktree"]),
+        eq(tasks.status, "blocked"),
+        eq(tasks.blockReason, "awaiting_judge")
+      )
+    )
+    .limit(1);
+  const judgeBacklogCount = awaitingJudgeTasks?.count ?? 0;
+  const hasPendingJudgeRun = Boolean(pendingJudgeRun?.runId);
+
+  if (judgeBacklogCount > 0 || hasPendingJudgeRun) {
+    if (
+      lastObservedJudgeBacklog !== judgeBacklogCount
+      || lastObservedPendingJudgeRun !== hasPendingJudgeRun
+    ) {
+      console.log(
+        `[Priority] Dispatch paused: awaiting_judge backlog=${judgeBacklogCount}, pending_judge_run=${hasPendingJudgeRun}`
+      );
+    }
+    lastObservedJudgeBacklog = judgeBacklogCount;
+    lastObservedPendingJudgeRun = hasPendingJudgeRun;
+    return [];
+  }
+  if (lastObservedJudgeBacklog > 0 || lastObservedPendingJudgeRun) {
+    console.log("[Priority] Dispatch resumed: awaiting_judge backlog cleared");
+  }
+  lastObservedJudgeBacklog = 0;
+  lastObservedPendingJudgeRun = false;
+
   // queuedステータスのタスクを取得
   const queuedTasks = await db
     .select()
@@ -54,7 +99,11 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     const queuedIds = queuedTasks.map((task) => task.id);
     const cutoff = new Date(Date.now() - retryDelayMs);
     const recentFailures = await db
-      .select({ taskId: runs.taskId })
+      .select({
+        taskId: runs.taskId,
+        status: runs.status,
+        errorMessage: runs.errorMessage,
+      })
       .from(runs)
       .where(
         and(
@@ -65,6 +114,19 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
       );
 
     for (const run of recentFailures) {
+      // エージェント再起動時の自動回復キャンセルは即時再配布を許可する
+      const message = (run.errorMessage ?? "").toLowerCase();
+
+      const isAgentRestartRecoveryCancel =
+        run.status === "cancelled"
+        && message.includes("agent process restarted before task completion");
+      const isWorkspaceCleanupRace =
+        message.includes("enotempty")
+        || message.includes("directory not empty");
+
+      if (isAgentRestartRecoveryCancel || isWorkspaceCleanupRace) {
+        continue;
+      }
       cooldownBlockedIds.add(run.taskId);
     }
   }

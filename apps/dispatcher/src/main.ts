@@ -16,6 +16,7 @@ import type { Job } from "bullmq";
 
 import {
   cleanupExpiredLeases,
+  cleanupDanglingLeases,
   recoverOrphanedRunningTasks,
   acquireLease,
   releaseLease,
@@ -257,6 +258,11 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
       const expiredCount = await cleanupExpiredLeases();
       if (expiredCount > 0) {
         console.log(`[Cleanup] Released ${expiredCount} expired leases`);
+      }
+
+      const danglingCount = await cleanupDanglingLeases();
+      if (danglingCount > 0) {
+        console.log(`[Cleanup] Released ${danglingCount} dangling leases`);
       }
 
       // オフラインエージェントのリースを回収

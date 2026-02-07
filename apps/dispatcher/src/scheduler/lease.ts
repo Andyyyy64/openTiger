@@ -126,6 +126,48 @@ export async function cleanupExpiredLeases(): Promise<number> {
   return expiredLeases.length;
 }
 
+// queuedタスクに残留したダングリングleaseを回収する
+// 例: worker再起動などでrun未生成のままleaseだけ残るケース
+export async function cleanupDanglingLeases(): Promise<number> {
+  const allLeases = await db
+    .select({ id: leases.id, taskId: leases.taskId })
+    .from(leases);
+
+  if (allLeases.length === 0) {
+    return 0;
+  }
+
+  let reclaimed = 0;
+  for (const lease of allLeases) {
+    const [task] = await db
+      .select({ status: tasks.status })
+      .from(tasks)
+      .where(eq(tasks.id, lease.taskId));
+    if (!task) {
+      await db.delete(leases).where(eq(leases.id, lease.id));
+      reclaimed += 1;
+      continue;
+    }
+
+    if (task.status !== "queued") {
+      continue;
+    }
+
+    const activeRun = await db
+      .select({ id: runs.id })
+      .from(runs)
+      .where(and(eq(runs.taskId, lease.taskId), eq(runs.status, "running")))
+      .limit(1);
+
+    if (activeRun.length === 0) {
+      await db.delete(leases).where(eq(leases.id, lease.id));
+      reclaimed += 1;
+    }
+  }
+
+  return reclaimed;
+}
+
 // running のまま固着したタスクを回復する
 // 例: run は failed/cancelled なのに task.status=running, lease だけ残っているケース
 export async function recoverOrphanedRunningTasks(

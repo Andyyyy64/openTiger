@@ -5,6 +5,7 @@ export {
   releaseLease,
   extendLease,
   cleanupExpiredLeases,
+  cleanupDanglingLeases,
   recoverOrphanedRunningTasks,
   getAgentLeases,
   getAllActiveLeases,
