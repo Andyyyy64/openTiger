@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "sebastian-code Policy",
+  "title": "openTiger Policy",
   "description": "エージェントの行動制約を定義するポリシー",
   "type": "object",
   "properties": {

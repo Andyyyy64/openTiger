@@ -4,12 +4,12 @@ import { createWriteStream, mkdirSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, relative, isAbsolute } from "node:path";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@sebastian-code/db";
-import { artifacts, config as configTable, events, runs, tasks } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { artifacts, config as configTable, events, runs, tasks } from "@openTiger/db/schema";
 import { configToEnv, DEFAULT_CONFIG, buildConfigRecord } from "../system-config.js";
 import { getAuthInfo } from "../middleware/index.js";
-import { createRepo, getOctokit, getRepoInfo } from "@sebastian-code/vcs";
-import { obliterateAllQueues } from "@sebastian-code/queue";
+import { createRepo, getOctokit, getRepoInfo } from "@openTiger/vcs";
+import { obliterateAllQueues } from "@openTiger/queue";
 
 type RestartStatus = {
   status: "idle" | "running" | "completed" | "failed";
@@ -171,11 +171,11 @@ function resolveRepoRoot(): string {
 }
 
 function resolveLogDir(): string {
-  if (process.env.SEBASTIAN_LOG_DIR) {
-    return process.env.SEBASTIAN_LOG_DIR;
+  if (process.env.OPENTIGER_LOG_DIR) {
+    return process.env.OPENTIGER_LOG_DIR;
   }
-  if (process.env.SEBASTIAN_RAW_LOG_DIR) {
-    return process.env.SEBASTIAN_RAW_LOG_DIR;
+  if (process.env.OPENTIGER_RAW_LOG_DIR) {
+    return process.env.OPENTIGER_RAW_LOG_DIR;
   }
   return join(resolveRepoRoot(), "raw-logs");
 }
@@ -191,7 +191,7 @@ function canControlSystem(method: string): boolean {
     return true;
   }
   // 開発環境でUIから試せるようにするための最低限の安全弁
-  return process.env.SEBASTIAN_ALLOW_INSECURE_SYSTEM_CONTROL === "true";
+  return process.env.OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL === "true";
 }
 
 function isSubPath(baseDir: string, targetDir: string): boolean {
@@ -946,30 +946,65 @@ async function buildPreflightSummary(options: {
   return summary;
 }
 
-const processDefinitions: ProcessDefinition[] = [
-  {
-    name: "planner",
-    label: "Planner",
-    description: "requirementsからタスクを生成",
-    group: "Planner",
-    kind: "planner",
-    supportsStop: true,
-    buildStart: async (payload) => {
-      const requirementPath = await resolveRequirementPath(
-        payload.requirementPath,
-        "requirement.md",
-        { allowMissing: Boolean(payload.content) }
-      );
-      if (payload.content) {
-        await writeRequirementFile(requirementPath, payload.content);
-      }
-      return {
+const MAX_WORKER_PROCESSES = 10;
+const MAX_TESTER_PROCESSES = 10;
+const MAX_DOCSER_PROCESSES = 10;
+const MAX_JUDGE_PROCESSES = 4;
+const MAX_PLANNER_PROCESSES = 2;
+
+function buildPlannerDefinitions(): ProcessDefinition[] {
+  return Array.from({ length: MAX_PLANNER_PROCESSES }, (_, i) => i + 1).map((index) => {
+    const name = index === 1 ? "planner" : `planner-${index}`;
+    return {
+      name,
+      label: index === 1 ? "Planner" : `Planner #${index}`,
+      description: "requirementsからタスクを生成",
+      group: "Planner",
+      kind: "planner",
+      supportsStop: true,
+      buildStart: async (payload) => {
+        const requirementPath = await resolveRequirementPath(
+          payload.requirementPath,
+          "requirement.md",
+          { allowMissing: Boolean(payload.content) }
+        );
+        if (payload.content) {
+          await writeRequirementFile(requirementPath, payload.content);
+        }
+        return {
+          command: "pnpm",
+          args: ["--filter", "@openTiger/planner", "dev", requirementPath],
+          cwd: resolveRepoRoot(),
+          env: { AGENT_ID: `planner-${index}` },
+        };
+      },
+    } as ProcessDefinition;
+  });
+}
+
+function buildJudgeDefinitions(): ProcessDefinition[] {
+  return Array.from({ length: MAX_JUDGE_PROCESSES }, (_, i) => i + 1).map((index) => {
+    const name = index === 1 ? "judge" : `judge-${index}`;
+    return {
+      name,
+      label: index === 1 ? "Judge" : `Judge #${index}`,
+      description: "レビュー判定の常駐プロセス",
+      group: "Core",
+      kind: "service",
+      supportsStop: true,
+      autoRestart: true,
+      buildStart: async () => ({
         command: "pnpm",
-        args: ["--filter", "@sebastian-code/planner", "dev", requirementPath],
+        args: ["--filter", "@openTiger/judge", "dev"],
         cwd: resolveRepoRoot(),
-      };
-    },
-  },
+        env: { AGENT_ID: `judge-${index}` },
+      }),
+    } as ProcessDefinition;
+  });
+}
+
+const processDefinitions: ProcessDefinition[] = [
+  ...buildPlannerDefinitions(),
   {
     name: "dispatcher",
     label: "Dispatcher",
@@ -980,24 +1015,11 @@ const processDefinitions: ProcessDefinition[] = [
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@sebastian-code/dispatcher", "dev"],
+      args: ["--filter", "@openTiger/dispatcher", "dev"],
       cwd: resolveRepoRoot(),
     }),
   },
-  {
-    name: "judge",
-    label: "Judge",
-    description: "レビュー判定の常駐プロセス",
-    group: "Core",
-    kind: "service",
-    supportsStop: true,
-    autoRestart: true,
-    buildStart: async () => ({
-      command: "pnpm",
-      args: ["--filter", "@sebastian-code/judge", "dev"],
-      cwd: resolveRepoRoot(),
-    }),
-  },
+  ...buildJudgeDefinitions(),
   {
     name: "cycle-manager",
     label: "Cycle Manager",
@@ -1008,115 +1030,55 @@ const processDefinitions: ProcessDefinition[] = [
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@sebastian-code/cycle-manager", "dev"],
+      args: ["--filter", "@openTiger/cycle-manager", "dev"],
       cwd: resolveRepoRoot(),
     }),
   },
-  {
-    name: "worker-1",
-    label: "Worker #1",
+  ...Array.from({ length: MAX_WORKER_PROCESSES }, (_, i) => i + 1).map((index) => ({
+    name: `worker-${index}`,
+    label: `Worker #${index}`,
     description: "実装ワーカー",
     group: "Workers",
-    kind: "worker",
+    kind: "worker" as const,
     supportsStop: true,
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
+      args: ["--filter", "@openTiger/worker", "dev:runtime"],
       cwd: resolveRepoRoot(),
-      env: { WORKER_INDEX: "1", AGENT_ROLE: "worker" },
+      env: { WORKER_INDEX: String(index), AGENT_ROLE: "worker" },
     }),
-  },
-  {
-    name: "worker-2",
-    label: "Worker #2",
-    description: "実装ワーカー",
-    group: "Workers",
-    kind: "worker",
-    supportsStop: true,
-    autoRestart: true,
-    buildStart: async () => ({
-      command: "pnpm",
-      args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
-      cwd: resolveRepoRoot(),
-      env: { WORKER_INDEX: "2", AGENT_ROLE: "worker" },
-    }),
-  },
-  {
-    name: "worker-3",
-    label: "Worker #3",
-    description: "実装ワーカー",
-    group: "Workers",
-    kind: "worker",
-    supportsStop: true,
-    autoRestart: true,
-    buildStart: async () => ({
-      command: "pnpm",
-      args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
-      cwd: resolveRepoRoot(),
-      env: { WORKER_INDEX: "3", AGENT_ROLE: "worker" },
-    }),
-  },
-  {
-    name: "worker-4",
-    label: "Worker #4",
-    description: "実装ワーカー",
-    group: "Workers",
-    kind: "worker",
-    supportsStop: true,
-    autoRestart: true,
-    buildStart: async () => ({
-      command: "pnpm",
-      args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
-      cwd: resolveRepoRoot(),
-      env: { WORKER_INDEX: "4", AGENT_ROLE: "worker" },
-    }),
-  },
-  {
-    name: "tester-1",
-    label: "Tester #1",
+  })),
+  ...Array.from({ length: MAX_TESTER_PROCESSES }, (_, i) => i + 1).map((index) => ({
+    name: `tester-${index}`,
+    label: `Tester #${index}`,
     description: "テスト専用ワーカー",
     group: "Workers",
-    kind: "worker",
+    kind: "worker" as const,
     supportsStop: true,
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
+      args: ["--filter", "@openTiger/worker", "dev:runtime"],
       cwd: resolveRepoRoot(),
-      env: { WORKER_INDEX: "1", AGENT_ROLE: "tester" },
+      env: { WORKER_INDEX: String(index), AGENT_ROLE: "tester" },
     }),
-  },
-  {
-    name: "tester-2",
-    label: "Tester #2",
-    description: "テスト専用ワーカー",
-    group: "Workers",
-    kind: "worker",
-    supportsStop: true,
-    autoRestart: true,
-    buildStart: async () => ({
-      command: "pnpm",
-      args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
-      cwd: resolveRepoRoot(),
-      env: { WORKER_INDEX: "2", AGENT_ROLE: "tester" },
-    }),
-  },
-  {
-    name: "docser-1",
-    label: "Docser",
+  })),
+  ...Array.from({ length: MAX_DOCSER_PROCESSES }, (_, i) => i + 1).map((index) => ({
+    name: `docser-${index}`,
+    label: index === 1 ? "Docser" : `Docser #${index}`,
     description: "ドキュメント更新ワーカー",
     group: "Workers",
-    kind: "worker",
+    kind: "worker" as const,
     supportsStop: true,
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@sebastian-code/worker", "dev:runtime"],
+      args: ["--filter", "@openTiger/worker", "dev:runtime"],
       cwd: resolveRepoRoot(),
-      env: { WORKER_INDEX: "1", AGENT_ROLE: "docser" },
+      env: { WORKER_INDEX: String(index), AGENT_ROLE: "docser" },
     }),
-  },
+  })),
   {
     name: "db-up",
     label: "Database Start",
@@ -1303,7 +1265,7 @@ async function startManagedProcess(
       ...process.env,
       ...configEnv,
       ...command.env,
-      SEBASTIAN_LOG_DIR: logDir,
+      OPENTIGER_LOG_DIR: logDir,
     },
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],
@@ -1485,6 +1447,12 @@ async function ensureConfigRow() {
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`
   );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_count" text DEFAULT '1' NOT NULL`
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_count" text DEFAULT '1' NOT NULL`
+  );
 
   const existing = await db.select().from(configTable).limit(1);
   const current = existing[0];
@@ -1648,6 +1616,8 @@ systemRoute.post("/preflight", async (c) => {
     const workerCount = parseCountSetting(configRow.workerCount, 1);
     const testerCount = parseCountSetting(configRow.testerCount, 1);
     const docserCount = parseCountSetting(configRow.docserCount, 1);
+    const judgeCount = parseCountSetting(configRow.judgeCount, 1);
+    const plannerCount = parseCountSetting(configRow.plannerCount, 1);
 
     const hasIssueBacklog = preflight.github.issueTaskBacklogCount > 0;
     const hasLocalTaskBacklog =
@@ -1666,6 +1636,11 @@ systemRoute.post("/preflight", async (c) => {
       startDispatcher: dispatcherEnabled && startExecutionAgents,
       // 実行系エージェントが動くサイクルではJudgeを常駐させる。
       startJudge: judgeEnabled && (hasJudgeBacklog || startExecutionAgents),
+      plannerCount: startPlanner ? plannerCount : 0,
+      judgeCount:
+        judgeEnabled && (hasJudgeBacklog || startExecutionAgents)
+          ? judgeCount
+          : 0,
       startCycleManager:
         cycleManagerEnabled
         && (startExecutionAgents || hasJudgeBacklog || preflight.local.blockedTaskCount > 0),
@@ -1725,7 +1700,7 @@ systemRoute.post("/processes/:name/start", async (c) => {
   }
 
   const existing = managedProcesses.get(name);
-  const shouldRejectDuplicateStart = name === "planner";
+  const shouldRejectDuplicateStart = definition.kind === "planner";
   if (shouldRejectDuplicateStart) {
     // Plannerは重複起動すると同一要件から複数回計画が保存されやすいので、起動要求を排他する
     if (existing?.status === "running") {
@@ -1760,7 +1735,7 @@ systemRoute.post("/processes/:name/start", async (c) => {
     if (rawContent !== undefined && rawContent.trim().length === 0) {
       return c.json({ error: "Requirement content is empty" }, 400);
     }
-    if (name === "planner") {
+    if (definition.kind === "planner") {
       const configRow = await ensureConfigRow();
       const preflight = await buildPreflightSummary({
         configRow,

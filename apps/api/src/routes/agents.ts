@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@sebastian-code/db";
-import { agents } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { agents } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
 
 export const agentsRoute = new Hono();

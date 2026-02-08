@@ -153,9 +153,9 @@ export interface CheckPayload extends WebhookPayload {
   };
 }
 
-// イベントがsebastian-code関連かどうかを判定
-export function isSebastianCodeRelatedEvent(payload: WebhookPayload): boolean {
-  // sebastian-code が作成したPRかチェック（ブランチ名で判定）
+// イベントがopenTiger関連かどうかを判定
+export function isOpenTigerRelatedEvent(payload: WebhookPayload): boolean {
+  // openTiger が作成したPRかチェック（ブランチ名で判定）
   if ("pull_request" in payload) {
     const pr = (payload as PullRequestPayload).pull_request;
     if (pr.head.ref.startsWith("agent/")) {
@@ -163,10 +163,10 @@ export function isSebastianCodeRelatedEvent(payload: WebhookPayload): boolean {
     }
   }
 
-  // sebastian-code ラベルが付いているIssueかチェック
+  // openTiger ラベルが付いているIssueかチェック
   if ("issue" in payload) {
     const issue = (payload as IssuePayload).issue;
-    if (issue.labels.some((l) => l.name === "sebastian-code" || l.name === "auto-task")) {
+    if (issue.labels.some((l) => l.name === "openTiger" || l.name === "auto-task")) {
       return true;
     }
   }

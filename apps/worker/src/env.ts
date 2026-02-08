@@ -1,12 +1,12 @@
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "dotenv";
-import { db } from "@sebastian-code/db";
-import { config as configTable } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { config as configTable } from "@openTiger/db/schema";
 
 const STRIP_ENV_PREFIXES = [
   "H1VE_",
-  "SEBASTIAN_",
+  "OPENTIGER_",
   "REPLAN_",
   "PLANNER_",
   "WORKER_",
@@ -34,7 +34,7 @@ const STRIP_ENV_KEYS = new Set([
   "DAILY_TOKEN_LIMIT",
   "HOURLY_TOKEN_LIMIT",
   "TASK_TOKEN_LIMIT",
-  "SEBASTIAN_LOG_DIR",
+  "OPENTIGER_LOG_DIR",
   "H1VE_LOG_DIR",
   "LOG_LEVEL",
   "LOG_FORMAT",

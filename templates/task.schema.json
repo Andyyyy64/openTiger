@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "sebastian-code Task",
+  "title": "openTiger Task",
   "description": "エージェントが実行するタスクの定義",
   "type": "object",
   "required": ["title", "goal", "allowedPaths", "commands"],

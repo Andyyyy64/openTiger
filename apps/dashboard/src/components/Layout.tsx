@@ -28,7 +28,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Top Status Bar like a window title or terminal header */}
       <header className="h-10 border-b border-[var(--color-term-border)] flex items-center justify-between px-4 bg-[var(--color-term-bg)] shrink-0 select-none">
         <div className="flex items-center gap-4">
-          <span className="font-bold text-[var(--color-term-green)]">root@sebastian-code:~/dashboard</span>
+          <span className="font-bold text-[var(--color-term-green)]">root@openTiger:~/dashboard</span>
         </div>
         <div className="flex items-center gap-6 text-sm">
           <div className="flex items-center gap-2">
@@ -76,7 +76,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           <div className="px-4">
             <div className="border-t border-[var(--color-term-border)] pt-4 text-[10px] text-zinc-600">
-              <p>SEBASTIANCODE v0.1.0</p>
+              <p>OPENTIGER v0.1.0</p>
             </div>
           </div>
         </aside>

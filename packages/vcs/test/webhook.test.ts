@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   verifyGitHubWebhookSignature,
-  isSebastianCodeRelatedEvent,
+  isOpenTigerRelatedEvent,
   type PullRequestPayload,
   type IssuePayload,
   type WebhookPayload,
@@ -75,7 +75,7 @@ describe("verifyGitHubWebhookSignature", () => {
   });
 });
 
-describe("isSebastianCodeRelatedEvent", () => {
+describe("isOpenTigerRelatedEvent", () => {
   describe("Pull Request events", () => {
     it("agent/で始まるブランチのPRを検出する", () => {
       const payload: PullRequestPayload = {
@@ -96,12 +96,12 @@ describe("isSebastianCodeRelatedEvent", () => {
             sha: "def456",
           },
           user: {
-            login: "sebastian-code-bot",
+            login: "openTiger-bot",
           },
         },
       };
 
-      expect(isSebastianCodeRelatedEvent(payload)).toBe(true);
+      expect(isOpenTigerRelatedEvent(payload)).toBe(true);
     });
 
     it("通常のブランチのPRは検出しない", () => {
@@ -128,12 +128,12 @@ describe("isSebastianCodeRelatedEvent", () => {
         },
       };
 
-      expect(isSebastianCodeRelatedEvent(payload)).toBe(false);
+      expect(isOpenTigerRelatedEvent(payload)).toBe(false);
     });
   });
 
   describe("Issue events", () => {
-    it("sebastian-codeラベル付きのIssueを検出する", () => {
+    it("openTigerラベル付きのIssueを検出する", () => {
       const payload: IssuePayload = {
         action: "opened",
         issue: {
@@ -141,14 +141,14 @@ describe("isSebastianCodeRelatedEvent", () => {
           title: "Implement new feature",
           body: "Feature description",
           state: "open",
-          labels: [{ name: "sebastian-code" }, { name: "enhancement" }],
+          labels: [{ name: "openTiger" }, { name: "enhancement" }],
           user: {
             login: "developer",
           },
         },
       };
 
-      expect(isSebastianCodeRelatedEvent(payload)).toBe(true);
+      expect(isOpenTigerRelatedEvent(payload)).toBe(true);
     });
 
     it("auto-taskラベル付きのIssueを検出する", () => {
@@ -166,7 +166,7 @@ describe("isSebastianCodeRelatedEvent", () => {
         },
       };
 
-      expect(isSebastianCodeRelatedEvent(payload)).toBe(true);
+      expect(isOpenTigerRelatedEvent(payload)).toBe(true);
     });
 
     it("関連ラベルなしのIssueは検出しない", () => {
@@ -184,7 +184,7 @@ describe("isSebastianCodeRelatedEvent", () => {
         },
       };
 
-      expect(isSebastianCodeRelatedEvent(payload)).toBe(false);
+      expect(isOpenTigerRelatedEvent(payload)).toBe(false);
     });
 
     it("ラベルなしのIssueは検出しない", () => {
@@ -202,7 +202,7 @@ describe("isSebastianCodeRelatedEvent", () => {
         },
       };
 
-      expect(isSebastianCodeRelatedEvent(payload)).toBe(false);
+      expect(isOpenTigerRelatedEvent(payload)).toBe(false);
     });
   });
 
@@ -216,7 +216,7 @@ describe("isSebastianCodeRelatedEvent", () => {
         },
       };
 
-      expect(isSebastianCodeRelatedEvent(payload)).toBe(false);
+      expect(isOpenTigerRelatedEvent(payload)).toBe(false);
     });
   });
 });

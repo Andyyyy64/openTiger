@@ -1,5 +1,5 @@
-import { db } from "@sebastian-code/db";
-import { tasks, leases, runs, artifacts } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { tasks, leases, runs, artifacts } from "@openTiger/db/schema";
 import { eq, and, inArray, gt, count, isNull } from "drizzle-orm";
 
 // タスク選択結果

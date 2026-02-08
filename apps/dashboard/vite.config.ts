@@ -2,11 +2,11 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-// sebastian-codeダッシュボードのポートを固定して衝突を避ける
-const dashboardPort = Number.parseInt(process.env.SEBASTIAN_DASHBOARD_PORT ?? '5190', 10)
+// openTigerダッシュボードのポートを固定して衝突を避ける
+const dashboardPort = Number.parseInt(process.env.OPENTIGER_DASHBOARD_PORT ?? '5190', 10)
 // ダッシュボードが参照するAPIポートを環境変数で揃える
 const apiPort = Number.parseInt(
-  process.env.SEBASTIAN_API_PORT ?? process.env.API_PORT ?? '4301',
+  process.env.OPENTIGER_API_PORT ?? process.env.API_PORT ?? '4301',
   10,
 )
 

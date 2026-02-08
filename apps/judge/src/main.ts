@@ -1,8 +1,8 @@
 import { createWriteStream, mkdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
-import { db } from "@sebastian-code/db";
-import { artifacts, runs, tasks, agents, events } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { artifacts, runs, tasks, agents, events } from "@openTiger/db/schema";
 import { and, desc, eq, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import {
   DEFAULT_POLICY,
@@ -11,7 +11,7 @@ import {
   getRepoMode,
   getLocalRepoPath,
   applyRepoModePolicyOverrides,
-} from "@sebastian-code/core";
+} from "@openTiger/core";
 import "dotenv/config";
 
 // ハートビートの間隔（ミリ秒）
@@ -72,6 +72,7 @@ import {
   evaluateLocalPolicy,
   getLocalDiffStats,
   getLocalDiffText,
+  type LLMEvaluationResult,
 } from "./evaluators/index.js";
 import {
   checkoutBranch,
@@ -89,7 +90,9 @@ import {
   isMergeInProgress,
   abortMerge,
   cleanUntracked,
-} from "@sebastian-code/vcs";
+  getOctokit,
+  getRepoInfo,
+} from "@openTiger/vcs";
 
 import {
   makeJudgement,
@@ -100,7 +103,7 @@ import {
 import { createDocserTaskForLocal, createDocserTaskForPR } from "./docser.js";
 
 function setupProcessLogging(logName: string): string | undefined {
-  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
+  const logDir = process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
 
   try {
     mkdirSync(logDir, { recursive: true });
@@ -175,6 +178,18 @@ const JUDGE_AUTO_FIX_MAX_ATTEMPTS = Number.parseInt(
 );
 const JUDGE_AWAITING_RETRY_COOLDOWN_MS = Number.parseInt(
   process.env.JUDGE_AWAITING_RETRY_COOLDOWN_MS ?? "120000",
+  10
+);
+const JUDGE_PR_MERGEABLE_PRECHECK_RETRIES = Number.parseInt(
+  process.env.JUDGE_PR_MERGEABLE_PRECHECK_RETRIES ?? "3",
+  10
+);
+const JUDGE_PR_MERGEABLE_PRECHECK_DELAY_MS = Number.parseInt(
+  process.env.JUDGE_PR_MERGEABLE_PRECHECK_DELAY_MS ?? "1000",
+  10
+);
+const JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES = Number.parseInt(
+  process.env.JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES ?? "2",
   10
 );
 
@@ -255,6 +270,122 @@ function resolveBaseRepoRecoveryRules(
     requireNoErrors: defaults.requireNoErrors,
     requireNoWarnings: defaults.requireNoWarnings,
   };
+}
+
+interface PRMergeabilitySnapshot {
+  mergeable: boolean | null;
+  mergeableState: string;
+}
+
+interface PRMergeabilityPrecheck {
+  shouldSkipLLM: boolean;
+  llmFallback?: LLMEvaluationResult;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function createLLMFailureResult(reason: string, suggestions: string[]): LLMEvaluationResult {
+  return {
+    pass: false,
+    confidence: 0,
+    reasons: [reason],
+    suggestions,
+    codeIssues: [],
+  };
+}
+
+function isMergeConflictState(snapshot: PRMergeabilitySnapshot): boolean {
+  if (snapshot.mergeable === true) {
+    return false;
+  }
+  return snapshot.mergeableState === "dirty";
+}
+
+async function getPRMergeabilitySnapshot(prNumber: number): Promise<PRMergeabilitySnapshot> {
+  const octokit = getOctokit();
+  const { owner, repo } = getRepoInfo();
+  const maxRetries = Number.isFinite(JUDGE_PR_MERGEABLE_PRECHECK_RETRIES)
+    ? Math.max(1, JUDGE_PR_MERGEABLE_PRECHECK_RETRIES)
+    : 3;
+  const retryDelayMs = Number.isFinite(JUDGE_PR_MERGEABLE_PRECHECK_DELAY_MS)
+    ? Math.max(0, JUDGE_PR_MERGEABLE_PRECHECK_DELAY_MS)
+    : 1000;
+
+  let mergeable: boolean | null = null;
+  let mergeableState = "unknown";
+
+  for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+    const response = await octokit.pulls.get({
+      owner,
+      repo,
+      pull_number: prNumber,
+    });
+    mergeable = response.data.mergeable;
+    mergeableState = response.data.mergeable_state ?? "unknown";
+
+    if (mergeable !== null || attempt === maxRetries) {
+      break;
+    }
+    await sleep(retryDelayMs);
+  }
+
+  return { mergeable, mergeableState };
+}
+
+async function tryUpdatePRBranch(
+  prNumber: number
+): Promise<{ requested: boolean; reason: string }> {
+  try {
+    const octokit = getOctokit();
+    const { owner, repo } = getRepoInfo();
+    await octokit.pulls.updateBranch({
+      owner,
+      repo,
+      pull_number: prNumber,
+    });
+    return { requested: true, reason: "update_branch_requested" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { requested: false, reason: `update_branch_failed:${message}` };
+  }
+}
+
+async function precheckPRMergeability(prNumber: number): Promise<PRMergeabilityPrecheck> {
+  try {
+    const snapshot = await getPRMergeabilitySnapshot(prNumber);
+
+    if (isMergeConflictState(snapshot)) {
+      return {
+        shouldSkipLLM: true,
+        llmFallback: createLLMFailureResult("LLM skipped: pr_merge_conflict_detected", [
+          "Resolve merge conflicts with base branch before running LLM review.",
+        ]),
+      };
+    }
+
+    if (snapshot.mergeableState === "behind") {
+      const sync = await tryUpdatePRBranch(prNumber);
+      return {
+        shouldSkipLLM: true,
+        llmFallback: createLLMFailureResult(
+          `LLM skipped: pr_base_behind (${sync.reason})`,
+          ["Wait for branch sync and retry judge review."]
+        ),
+      };
+    }
+
+    return { shouldSkipLLM: false };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      shouldSkipLLM: true,
+      llmFallback: createLLMFailureResult(`LLM skipped: mergeability_precheck_failed (${message})`, [
+        "Retry judge review after precheck error cooldown.",
+      ]),
+    };
+  }
 }
 
 async function recordJudgeReview(
@@ -597,15 +728,24 @@ async function judgeSinglePR(
   // 3. LLM評価
   let llmResult;
   if (config.useLlm && ciResult.pass && policyResult.pass) {
-    console.log("  - Running LLM code review...");
-    llmResult = await evaluateLLM(pr.prNumber, {
-      taskGoal: pr.taskGoal,
-      workdir: config.workdir,
-      instructionsPath: config.instructionsPath,
-    });
-    console.log(
-      `    LLM: ${llmResult.pass ? "PASS" : "FAIL"} (confidence: ${Math.round(llmResult.confidence * 100)}%)`
-    );
+    const precheck = await precheckPRMergeability(pr.prNumber);
+    if (precheck.shouldSkipLLM) {
+      llmResult = precheck.llmFallback ?? createLLMFailureResult(
+        "LLM skipped: mergeability_precheck_blocked",
+        ["Retry judge review after mergeability precheck."]
+      );
+      console.log(`    LLM: SKIPPED (${llmResult.reasons.join("; ")})`);
+    } else {
+      console.log("  - Running LLM code review...");
+      llmResult = await evaluateLLM(pr.prNumber, {
+        taskGoal: pr.taskGoal,
+        workdir: config.workdir,
+        instructionsPath: config.instructionsPath,
+      });
+      console.log(
+        `    LLM: ${llmResult.pass ? "PASS" : "FAIL"} (confidence: ${Math.round(llmResult.confidence * 100)}%)`
+      );
+    }
   } else {
     llmResult = evaluateSimple();
     console.log("    LLM: SKIPPED");
@@ -718,6 +858,13 @@ function hasActionableLLMFailures(summary: EvaluationSummary): boolean {
   return !summary.llm.pass && summary.llm.codeIssues.length > 0;
 }
 
+function isDoomLoopFailure(summary: EvaluationSummary): boolean {
+  if (summary.llm.pass) {
+    return false;
+  }
+  return summary.llm.reasons.some((reason) => reason.toLowerCase().includes("doom_loop_detected"));
+}
+
 function isNonActionableLLMFailure(summary: EvaluationSummary): boolean {
   if (summary.llm.pass) {
     return false;
@@ -734,6 +881,9 @@ function isNonActionableLLMFailure(summary: EvaluationSummary): boolean {
     || reasonText.includes("quota")
     || reasonText.includes("rate limit")
     || reasonText.includes("resource_exhausted")
+    || reasonText.includes("pr_merge_conflict_detected")
+    || reasonText.includes("pr_base_behind")
+    || reasonText.includes("mergeability_precheck_failed")
     || reasonText.includes("llm review failed")
     || reasonText.includes("encountered an error")
     || reasonText.includes("manual review recommended")
@@ -759,6 +909,37 @@ function summarizeLLMIssuesForTask(summary: EvaluationSummary): string {
     return summary.llm.reasons.join("\n");
   }
   return issues.join("\n");
+}
+
+function isMergeConflictReasonText(text: string | undefined): boolean {
+  if (!text) {
+    return false;
+  }
+  const lower = text.toLowerCase();
+  return (
+    lower.includes("not mergeable")
+    || lower.includes("merge conflict")
+    || lower.includes("conflict")
+    || lower.includes("pr_merge_conflict_detected")
+    || lower.includes("mergeable_state")
+    || lower.includes("dirty")
+    || lower.includes("update_branch_failed")
+  );
+}
+
+function hasMergeConflictSignals(params: {
+  summary: EvaluationSummary;
+  mergeDeferredReason?: string;
+}): boolean {
+  if (isMergeConflictReasonText(params.mergeDeferredReason)) {
+    return true;
+  }
+  if (params.summary.llm.reasons.some((reason) => isMergeConflictReasonText(reason))) {
+    return true;
+  }
+  return params.summary.llm.suggestions.some((suggestion) =>
+    isMergeConflictReasonText(suggestion)
+  );
 }
 
 async function createAutoFixTaskForPr(params: {
@@ -873,6 +1054,119 @@ async function createAutoFixTaskForPr(params: {
   return { created: true, taskId: taskRow.id, reason: "created" };
 }
 
+async function createConflictAutoFixTaskForPr(params: {
+  prNumber: number;
+  prUrl: string;
+  sourceTaskId: string;
+  sourceRunId: string;
+  sourceTaskTitle: string;
+  sourceTaskGoal: string;
+  allowedPaths: string[];
+  commands: string[];
+  summary: EvaluationSummary;
+  agentId: string;
+  mergeDeferredReason?: string;
+}): Promise<{ created: boolean; taskId?: string; reason: string }> {
+  if (!JUDGE_AUTO_FIX_ON_FAIL) {
+    return { created: false, reason: "auto_fix_disabled" };
+  }
+
+  const titlePrefix = `[AutoFix-Conflict] PR #${params.prNumber}`;
+  const titlePattern = `${escapeSqlLikePattern(titlePrefix)}%`;
+  const maxAttempts = Number.isFinite(JUDGE_AUTO_FIX_MAX_ATTEMPTS)
+    ? Math.max(1, JUDGE_AUTO_FIX_MAX_ATTEMPTS)
+    : 3;
+
+  const [activeTask] = await db
+    .select({ id: tasks.id, status: tasks.status })
+    .from(tasks)
+    .where(
+      and(
+        sql`${tasks.title} like ${titlePattern} escape '\\'`,
+        inArray(tasks.status, ["queued", "running", "blocked"])
+      )
+    )
+    .limit(1);
+  if (activeTask?.id) {
+    return { created: false, reason: `existing_active_conflict_autofix:${activeTask.id}` };
+  }
+
+  const [attemptRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(tasks)
+    .where(sql`${tasks.title} like ${titlePattern} escape '\\'`);
+  const attemptCount = Number(attemptRow?.count ?? 0);
+  if (attemptCount >= maxAttempts) {
+    return { created: false, reason: `conflict_autofix_attempt_limit_reached:${attemptCount}/${maxAttempts}` };
+  }
+
+  const reasonLine = params.mergeDeferredReason
+    ? `merge_reason: ${params.mergeDeferredReason}`
+    : "merge_reason: unknown";
+  const llmReasonLines = params.summary.llm.reasons.length > 0
+    ? params.summary.llm.reasons.map((reason) => `- ${reason}`).join("\n")
+    : "- (none)";
+  const nextAttempt = attemptCount + 1;
+
+  const [taskRow] = await db
+    .insert(tasks)
+    .values({
+      title: `${titlePrefix} (attempt ${nextAttempt}/${maxAttempts})`,
+      goal:
+        `Resolve merge conflicts for PR #${params.prNumber} and make it mergeable without human intervention. ` +
+        `Original review task: ${params.sourceTaskId}.`,
+      context: {
+        files: [],
+        specs:
+          "Resolve base-branch conflicts for the target PR. Prefer updating the existing PR branch. " +
+          "If not feasible, create a replacement PR that contains equivalent changes and references the original PR.",
+        notes:
+          `${reasonLine}\n` +
+          "Judge/LLM reasons:\n" +
+          `${llmReasonLines}\n` +
+          "Do not run long-running dev/watch/start commands.",
+        pr: {
+          number: params.prNumber,
+          url: params.prUrl,
+          sourceTaskId: params.sourceTaskId,
+          sourceRunId: params.sourceRunId,
+        },
+      },
+      allowedPaths: params.allowedPaths.length > 0 ? params.allowedPaths : ["**"],
+      commands: params.commands,
+      dependencies: [],
+      priority: 90,
+      riskLevel: "medium",
+      role: "worker",
+      status: "queued",
+      timeboxMinutes: 60,
+    })
+    .returning({ id: tasks.id });
+
+  if (!taskRow?.id) {
+    return { created: false, reason: "conflict_autofix_task_insert_failed" };
+  }
+
+  await db.insert(events).values({
+    type: "judge.conflict_autofix_task_created",
+    entityType: "task",
+    entityId: taskRow.id,
+    agentId: params.agentId,
+    payload: {
+      prNumber: params.prNumber,
+      sourceTaskId: params.sourceTaskId,
+      sourceRunId: params.sourceRunId,
+      sourceTaskTitle: params.sourceTaskTitle,
+      sourceTaskGoal: params.sourceTaskGoal,
+      attempt: nextAttempt,
+      maxAttempts,
+      mergeDeferredReason: params.mergeDeferredReason,
+    },
+  });
+
+  return { created: true, taskId: taskRow.id, reason: "created" };
+}
+
 async function requeueTaskAfterJudge(params: {
   taskId: string;
   runId: string;
@@ -909,6 +1203,16 @@ async function requeueTaskAfterJudge(params: {
       retryCount: nextRetryCount,
     },
   });
+}
+
+async function getTaskRetryCount(taskId: string): Promise<number> {
+  const [task] = await db
+    .select({ retryCount: tasks.retryCount })
+    .from(tasks)
+    .where(eq(tasks.id, taskId))
+    .limit(1);
+
+  return task?.retryCount ?? 0;
 }
 
 async function scheduleTaskForJudgeRetry(params: {
@@ -1162,7 +1466,7 @@ async function recoverDirtyBaseRepo(options: {
     : fullDiff;
 
   // ベースの変更を退避してマージ処理を止めない
-  const stashMessage = `sebastian-code base repo auto stash ${new Date().toISOString()}`;
+  const stashMessage = `openTiger base repo auto stash ${new Date().toISOString()}`;
   const stashResult = await stashChanges(options.baseRepoPath, stashMessage);
   if (!stashResult.success) {
     return {
@@ -1409,7 +1713,7 @@ async function mergeLocalBranch(target: {
 // レビューループ
 async function runJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log("=".repeat(60));
-  console.log("sebastian-code Judge started");
+  console.log("openTiger Judge started");
   console.log("=".repeat(60));
   console.log(`Poll interval: ${config.pollIntervalMs}ms`);
   console.log(`Use LLM: ${config.useLlm}`);
@@ -1555,24 +1859,75 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                         }
                       }
                     } else {
-                      // クォータ超過や実行エラーなど、コード差分が無いLLM失敗はAutoFix対象外
-                      requeueReason = `${buildJudgeFailureMessage(effectiveResult)} | llm_non_actionable_failure`;
-                      await scheduleTaskForJudgeRetry({
-                        taskId: pr.taskId,
-                        runId: pr.runId,
-                        agentId: config.agentId,
-                        reason: importedPrReviewTask
-                          ? `retry_imported_pr_review:${requeueReason}`
-                          : requeueReason,
-                        // 直ちに同一runを再評価せず、短いクールダウン後にjudgeがrunを復元する
-                        restoreRunImmediately: false,
-                      });
-                      const marker = isNonActionableLLMFailure(summary)
-                        ? "non-actionable"
-                        : "llm-failed";
-                      console.log(
-                        `  Task ${pr.taskId} scheduled for judge retry after cooldown (${marker})`
-                      );
+                      const doomLoopThreshold = Number.isFinite(JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES)
+                        ? Math.max(1, JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES)
+                        : 2;
+                      const isDoomLoop = isDoomLoopFailure(summary);
+                      const currentRetryCount = await getTaskRetryCount(pr.taskId);
+                      const shouldTripCircuitBreaker = isDoomLoop
+                        && currentRetryCount >= doomLoopThreshold;
+
+                      if (shouldTripCircuitBreaker) {
+                        const autoFix = await createAutoFixTaskForPr({
+                          prNumber: pr.prNumber,
+                          prUrl: pr.prUrl,
+                          sourceTaskId: pr.taskId,
+                          sourceRunId: pr.runId,
+                          sourceTaskTitle: pr.taskTitle,
+                          sourceTaskGoal: pr.taskGoal,
+                          allowedPaths: pr.allowedPaths,
+                          commands: pr.commands,
+                          summary,
+                          agentId: config.agentId,
+                        });
+
+                        if (autoFix.created) {
+                          await db
+                            .update(tasks)
+                            .set({
+                              status: "blocked",
+                              blockReason: "needs_rework",
+                              updatedAt: new Date(),
+                            })
+                            .where(eq(tasks.id, pr.taskId));
+                          console.log(
+                            `  Task ${pr.taskId} hit doom-loop circuit breaker; auto-fix task queued: ${autoFix.taskId}`
+                          );
+                        } else {
+                          requeueReason = `${buildJudgeFailureMessage(effectiveResult)} | doom_loop_circuit_breaker_failed:${autoFix.reason}`;
+                          await scheduleTaskForJudgeRetry({
+                            taskId: pr.taskId,
+                            runId: pr.runId,
+                            agentId: config.agentId,
+                            reason: importedPrReviewTask
+                              ? `retry_imported_pr_review:${requeueReason}`
+                              : requeueReason,
+                            restoreRunImmediately: false,
+                          });
+                          console.log(
+                            `  Task ${pr.taskId} doom-loop breaker fallback to judge retry (${autoFix.reason})`
+                          );
+                        }
+                      } else {
+                        // クォータ超過や実行エラーなど、コード差分が無いLLM失敗はクールダウン後に再判定
+                        requeueReason = `${buildJudgeFailureMessage(effectiveResult)} | llm_non_actionable_failure`;
+                        await scheduleTaskForJudgeRetry({
+                          taskId: pr.taskId,
+                          runId: pr.runId,
+                          agentId: config.agentId,
+                          reason: importedPrReviewTask
+                            ? `retry_imported_pr_review:${requeueReason}`
+                            : requeueReason,
+                          // 直ちに同一runを再評価せず、短いクールダウン後にjudgeがrunを復元する
+                          restoreRunImmediately: false,
+                        });
+                        const marker = isNonActionableLLMFailure(summary)
+                          ? "non-actionable"
+                          : "llm-failed";
+                        console.log(
+                          `  Task ${pr.taskId} scheduled for judge retry after cooldown (${marker})`
+                        );
+                      }
                     }
                   } else {
                     // CI/Policy系の非approveは従来どおり再キュー
@@ -1600,19 +1955,71 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                     }
                   }
                 } else if (effectiveResult.verdict === "approve") {
-                  // approve でもマージ完了しなければ judge 再試行に戻す
-                  const retryReason = actionResult.mergeDeferred
-                    ? `Judge approved but merge deferred: ${actionResult.mergeDeferredReason ?? "pending_branch_sync"}`
-                    : "Judge approved but merge was not completed";
-                  await scheduleTaskForJudgeRetry({
-                    taskId: pr.taskId,
-                    runId: pr.runId,
-                    agentId: config.agentId,
-                    reason: retryReason,
-                    // update-branchを投げた場合はクールダウンまで同一runを再判定しない
-                    restoreRunImmediately: !actionResult.mergeDeferred,
+                  // approve でもマージ完了しなければ、競合系はAutoFixへ、それ以外はjudge再試行に戻す
+                  let handledByConflictAutoFix = false;
+                  const conflictSignals = hasMergeConflictSignals({
+                    summary,
+                    mergeDeferredReason: actionResult.mergeDeferredReason,
                   });
-                  console.warn(`  Task ${pr.taskId} scheduled for judge retry because merge did not complete`);
+                  if (conflictSignals && !actionResult.mergeDeferred) {
+                    const conflictAutoFix = await createConflictAutoFixTaskForPr({
+                      prNumber: pr.prNumber,
+                      prUrl: pr.prUrl,
+                      sourceTaskId: pr.taskId,
+                      sourceRunId: pr.runId,
+                      sourceTaskTitle: pr.taskTitle,
+                      sourceTaskGoal: pr.taskGoal,
+                      allowedPaths: pr.allowedPaths,
+                      commands: pr.commands,
+                      summary,
+                      agentId: config.agentId,
+                      mergeDeferredReason: actionResult.mergeDeferredReason,
+                    });
+
+                    if (conflictAutoFix.created) {
+                      await db
+                        .update(tasks)
+                        .set({
+                          status: "blocked",
+                          blockReason: "needs_rework",
+                          updatedAt: new Date(),
+                        })
+                        .where(eq(tasks.id, pr.taskId));
+                      console.warn(
+                        `  Task ${pr.taskId} blocked as needs_rework; conflict auto-fix task queued: ${conflictAutoFix.taskId}`
+                      );
+                      handledByConflictAutoFix = true;
+                    } else {
+                      const fallbackReason =
+                        `Judge approved but merge conflict auto-fix was not queued (${conflictAutoFix.reason})`;
+                      await scheduleTaskForJudgeRetry({
+                        taskId: pr.taskId,
+                        runId: pr.runId,
+                        agentId: config.agentId,
+                        reason: fallbackReason,
+                        restoreRunImmediately: false,
+                      });
+                      console.warn(
+                        `  Task ${pr.taskId} scheduled for judge retry (conflict autofix fallback: ${conflictAutoFix.reason})`
+                      );
+                    }
+                    // レビュー記録は継続して残す
+                  }
+
+                  if (!handledByConflictAutoFix) {
+                    const retryReason = actionResult.mergeDeferred
+                      ? `Judge approved but merge deferred: ${actionResult.mergeDeferredReason ?? "pending_branch_sync"}`
+                      : `Judge approved but merge was not completed${actionResult.mergeDeferredReason ? ` (${actionResult.mergeDeferredReason})` : ""}`;
+                    await scheduleTaskForJudgeRetry({
+                      taskId: pr.taskId,
+                      runId: pr.runId,
+                      agentId: config.agentId,
+                      reason: retryReason,
+                      // update-branchを投げた場合はクールダウンまで同一runを再判定しない
+                      restoreRunImmediately: !actionResult.mergeDeferred,
+                    });
+                    console.warn(`  Task ${pr.taskId} scheduled for judge retry because merge did not complete`);
+                  }
                 } else {
                   await db
                     .update(tasks)
@@ -1670,7 +2077,7 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
 
 async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log("=".repeat(60));
-  console.log("sebastian-code Judge (local mode) started");
+  console.log("openTiger Judge (local mode) started");
   console.log("=".repeat(60));
   console.log(`Poll interval: ${config.pollIntervalMs}ms`);
   console.log(`Use LLM: ${config.useLlm}`);
@@ -1824,7 +2231,7 @@ async function reviewSinglePR(
   config: JudgeConfig
 ): Promise<void> {
   console.log("=".repeat(60));
-  console.log(`sebastian-code Judge - Reviewing PR #${prNumber}`);
+  console.log(`openTiger Judge - Reviewing PR #${prNumber}`);
   console.log("=".repeat(60));
 
   // CI評価
@@ -1906,12 +2313,12 @@ async function reviewSinglePR(
 // ヘルプを表示
 function showHelp(): void {
   console.log(`
-sebastian-code Judge - Automated PR review and merge
+openTiger Judge - Automated PR review and merge
 
 Usage:
-  pnpm --filter @sebastian-code/judge start              # Start polling mode
-  pnpm --filter @sebastian-code/judge start <PR#>        # Review single PR
-  pnpm --filter @sebastian-code/judge start --help       # Show this help
+  pnpm --filter @openTiger/judge start              # Start polling mode
+  pnpm --filter @openTiger/judge start <PR#>        # Review single PR
+  pnpm --filter @openTiger/judge start --help       # Show this help
 
 Options:
   --help          Show this help message
@@ -1930,7 +2337,7 @@ Environment Variables:
   JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT=20000 Diff size limit for DB storage
 
 Example:
-  pnpm --filter @sebastian-code/judge start 42
+  pnpm --filter @openTiger/judge start 42
 `);
 }
 

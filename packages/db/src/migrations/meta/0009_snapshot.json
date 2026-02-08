@@ -1,6 +1,6 @@
 {
-  "id": "e945a79c-c15d-489c-a432-0e708f9af55b",
-  "prevId": "640d9a3f-9505-42bd-a9e2-79110eb2350d",
+  "id": "7cb4a370-3a0a-4833-a168-c5f66918a2f6",
+  "prevId": "d6b46e52-7652-4a56-8710-dfd991962120",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -227,12 +227,33 @@
           "notNull": true,
           "default": "'1'"
         },
+        "judge_count": {
+          "name": "judge_count",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'1'"
+        },
+        "planner_count": {
+          "name": "planner_count",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'1'"
+        },
         "repo_mode": {
           "name": "repo_mode",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'git'"
+        },
+        "repo_url": {
+          "name": "repo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
         },
         "local_repo_path": {
           "name": "local_repo_path",
@@ -282,6 +303,27 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'google/gemini-3-flash-preview'"
+        },
+        "opencode_wait_on_quota": {
+          "name": "opencode_wait_on_quota",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'true'"
+        },
+        "opencode_quota_retry_delay_ms": {
+          "name": "opencode_quota_retry_delay_ms",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'30000'"
+        },
+        "opencode_max_quota_waits": {
+          "name": "opencode_max_quota_waits",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'-1'"
         },
         "planner_model": {
           "name": "planner_model",
@@ -355,6 +397,62 @@
         },
         "replan_repo_url": {
           "name": "replan_repo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "github_token": {
+          "name": "github_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "github_owner": {
+          "name": "github_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "github_repo": {
+          "name": "github_repo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "anthropic_api_key": {
+          "name": "anthropic_api_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "gemini_api_key": {
+          "name": "gemini_api_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "openai_api_key": {
+          "name": "openai_api_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "xai_api_key": {
+          "name": "xai_api_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "deepseek_api_key": {
+          "name": "deepseek_api_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -643,6 +741,19 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "judged_at": {
+          "name": "judged_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "judgement_version": {
+          "name": "judgement_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         }
       },
       "indexes": {},
@@ -735,6 +846,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'queued'"
+        },
+        "block_reason": {
+          "name": "block_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "target_area": {
           "name": "target_area",

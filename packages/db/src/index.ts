@@ -1,3 +1,3 @@
-// @sebastian-code/db パッケージのエントリポイント
+// @openTiger/db パッケージのエントリポイント
 export * from "./client.js";
 export * from "./schema.js";

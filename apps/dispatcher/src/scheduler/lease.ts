@@ -1,5 +1,5 @@
-import { db } from "@sebastian-code/db";
-import { leases, tasks, agents, runs } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { leases, tasks, agents, runs } from "@openTiger/db/schema";
 import { eq, lt, and } from "drizzle-orm";
 
 // リースのデフォルト期限（分）
@@ -10,6 +10,37 @@ export interface LeaseResult {
   success: boolean;
   leaseId?: string;
   error?: string;
+}
+
+async function markAgentIdleIfNoActiveWork(agentId: string): Promise<void> {
+  const [activeLease] = await db
+    .select({ id: leases.id })
+    .from(leases)
+    .where(eq(leases.agentId, agentId))
+    .limit(1);
+
+  if (activeLease) {
+    return;
+  }
+
+  const [activeRun] = await db
+    .select({ id: runs.id })
+    .from(runs)
+    .where(and(eq(runs.agentId, agentId), eq(runs.status, "running")))
+    .limit(1);
+
+  if (activeRun) {
+    return;
+  }
+
+  await db
+    .update(agents)
+    .set({
+      status: "idle",
+      currentTaskId: null,
+      lastHeartbeat: new Date(),
+    })
+    .where(eq(agents.id, agentId));
 }
 
 // リースを取得
@@ -67,7 +98,15 @@ export async function acquireLease(
 
 // リースを解放
 export async function releaseLease(taskId: string): Promise<boolean> {
-  const result = await db.delete(leases).where(eq(leases.taskId, taskId));
+  const [lease] = await db
+    .select({ agentId: leases.agentId })
+    .from(leases)
+    .where(eq(leases.taskId, taskId))
+    .limit(1);
+  await db.delete(leases).where(eq(leases.taskId, taskId));
+  if (lease?.agentId) {
+    await markAgentIdleIfNoActiveWork(lease.agentId);
+  }
   return true;
 }
 
@@ -118,6 +157,8 @@ export async function cleanupExpiredLeases(): Promise<number> {
         updatedAt: new Date(),
       })
       .where(eq(tasks.id, lease.taskId));
+
+    await markAgentIdleIfNoActiveWork(lease.agentId);
   }
 
   // 期限切れリースを削除
@@ -130,7 +171,7 @@ export async function cleanupExpiredLeases(): Promise<number> {
 // 例: worker再起動などでrun未生成のままleaseだけ残るケース
 export async function cleanupDanglingLeases(): Promise<number> {
   const allLeases = await db
-    .select({ id: leases.id, taskId: leases.taskId })
+    .select({ id: leases.id, taskId: leases.taskId, agentId: leases.agentId })
     .from(leases);
 
   if (allLeases.length === 0) {
@@ -146,6 +187,7 @@ export async function cleanupDanglingLeases(): Promise<number> {
     if (!task) {
       await db.delete(leases).where(eq(leases.id, lease.id));
       reclaimed += 1;
+      await markAgentIdleIfNoActiveWork(lease.agentId);
       continue;
     }
 
@@ -162,6 +204,7 @@ export async function cleanupDanglingLeases(): Promise<number> {
     if (activeRun.length === 0) {
       await db.delete(leases).where(eq(leases.id, lease.id));
       reclaimed += 1;
+      await markAgentIdleIfNoActiveWork(lease.agentId);
     }
   }
 
@@ -195,7 +238,14 @@ export async function recoverOrphanedRunningTasks(
       continue;
     }
 
+    const taskLeases = await db
+      .select({ id: leases.id, agentId: leases.agentId })
+      .from(leases)
+      .where(eq(leases.taskId, task.id));
     await db.delete(leases).where(eq(leases.taskId, task.id));
+    for (const lease of taskLeases) {
+      await markAgentIdleIfNoActiveWork(lease.agentId);
+    }
     await db
       .update(tasks)
       .set({

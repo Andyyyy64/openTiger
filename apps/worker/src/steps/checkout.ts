@@ -12,13 +12,13 @@ import {
   resetHard,
   cleanUntracked,
   removeWorktree,
-} from "@sebastian-code/vcs";
+} from "@openTiger/vcs";
 import {
   getRepoMode,
   getLocalRepoPath,
   getLocalWorktreeRoot,
   type RepoMode,
-} from "@sebastian-code/core";
+} from "@openTiger/core";
 
 export interface CheckoutOptions {
   repoUrl: string;

@@ -15,6 +15,12 @@ async function ensureConfigRow() {
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`
   );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_count" text DEFAULT '1' NOT NULL`
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_count" text DEFAULT '1' NOT NULL`
+  );
 
   const existing = await db.select().from(configTable).limit(1);
   const current = existing[0];
@@ -67,7 +73,7 @@ function replaceConfigLines(
     if (replaced.length > 0 && replaced[replaced.length - 1] !== "") {
       replaced.push("");
     }
-    replaced.push("# --- sebastian-code config (synced from DB) ---");
+    replaced.push("# --- openTiger config (synced from DB) ---");
     for (const key of missingKeys) {
       replaced.push(`${key}=${encodeEnvValue(values[key] ?? "")}`);
       updatedKeys.push(key);
@@ -81,7 +87,7 @@ function replaceConfigLines(
 }
 
 async function main(): Promise<void> {
-  const envPath = process.env.SEBASTIAN_ENV_PATH ?? resolve(process.cwd(), ".env");
+  const envPath = process.env.OPENTIGER_ENV_PATH ?? resolve(process.cwd(), ".env");
   const configRow = await ensureConfigRow();
   const snapshot = rowToConfig(configRow);
 

@@ -1,5 +1,5 @@
-import { runOpenCode } from "@sebastian-code/llm";
-import type { CreateTaskInput } from "@sebastian-code/core";
+import { runOpenCode } from "@openTiger/llm";
+import type { CreateTaskInput } from "@openTiger/core";
 import { PLANNER_OPENCODE_CONFIG_PATH } from "../opencode-config.js";
 
 // GitHub Issue情報

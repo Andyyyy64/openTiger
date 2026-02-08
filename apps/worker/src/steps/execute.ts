@@ -1,5 +1,5 @@
-import type { Task, Policy } from "@sebastian-code/core";
-import { runOpenCode, type OpenCodeResult } from "@sebastian-code/llm";
+import type { Task, Policy } from "@openTiger/core";
+import { runOpenCode, type OpenCodeResult } from "@openTiger/llm";
 import { buildOpenCodeEnv } from "../env.js";
 
 export interface ExecuteOptions {

@@ -1,6 +1,6 @@
-import { stageChanges, commit, push } from "@sebastian-code/vcs";
-import { getRepoMode } from "@sebastian-code/core";
-import type { Task } from "@sebastian-code/core";
+import { stageChanges, commit, push } from "@openTiger/vcs";
+import { getRepoMode } from "@openTiger/core";
+import type { Task } from "@openTiger/core";
 
 export interface CommitOptions {
   repoPath: string;
@@ -25,7 +25,7 @@ function isNonFastForwardPush(stderr: string, stdout: string): boolean {
 // コミットメッセージを生成
 function generateCommitMessage(task: Task, changedFiles: string[]): string {
   const lines: string[] = [
-    `[sebastian-code] ${task.title}`,
+    `[openTiger] ${task.title}`,
     "",
     `Task ID: ${task.id}`,
     "",

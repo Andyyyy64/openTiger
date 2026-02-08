@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { configApi, systemApi, type SystemProcess } from '../lib/api';
 
-const MAX_WORKERS = 4;
-const MAX_TESTERS = 2;
-const MAX_DOCSERS = 1;
+const MAX_WORKERS = 10;
+const MAX_TESTERS = 10;
+const MAX_DOCSERS = 10;
+const MAX_JUDGES = 4;
+const MAX_PLANNERS = 2;
 
 const STATUS_LABELS: Record<SystemProcess['status'], string> = {
   idle: 'IDLE',
@@ -120,8 +122,16 @@ export const StartPage: React.FC = () => {
       const workerCount = parseCount(settings.WORKER_COUNT, 1, MAX_WORKERS, 'Worker');
       const testerCount = parseCount(settings.TESTER_COUNT, 1, MAX_TESTERS, 'Tester');
       const docserCount = parseCount(settings.DOCSER_COUNT, 1, MAX_DOCSERS, 'Docser');
+      const judgeCount = parseCount(settings.JUDGE_COUNT, 1, MAX_JUDGES, 'Judge');
+      const plannerCount = parseCount(settings.PLANNER_COUNT, 1, MAX_PLANNERS, 'Planner');
 
-      const warnings = [workerCount.warning, testerCount.warning, docserCount.warning].filter(
+      const warnings = [
+        workerCount.warning,
+        testerCount.warning,
+        docserCount.warning,
+        judgeCount.warning,
+        plannerCount.warning,
+      ].filter(
         (value): value is string => typeof value === 'string'
       );
 
@@ -167,14 +177,26 @@ export const StartPage: React.FC = () => {
         }
       };
 
-      if (recommendations.startPlanner) {
-        await startProcess('planner', { requirementPath, content });
+      const plannerStartCount = Math.min(
+        plannerCount.count,
+        recommendations.plannerCount ?? (recommendations.startPlanner ? 1 : 0)
+      );
+      for (let i = 1; i <= plannerStartCount; i += 1) {
+        const plannerName = i === 1 ? 'planner' : `planner-${i}`;
+        await startProcess(plannerName, { requirementPath, content });
       }
       if (recommendations.startDispatcher) {
         await startProcess('dispatcher');
       }
-      if (recommendations.startJudge) {
-        await startProcess('judge');
+      const judgeStartCount = Math.min(
+        judgeCount.count,
+        recommendations.judgeCount ?? (recommendations.startJudge ? 1 : 0)
+      );
+      if (judgeStartCount > 0) {
+        for (let i = 1; i <= judgeStartCount; i += 1) {
+          const judgeName = i === 1 ? 'judge' : `judge-${i}`;
+          await startProcess(judgeName);
+        }
       } else if (parseBoolean(settings.JUDGE_ENABLED, true) && preflight.preflight.github.openPrCount > 0) {
         warnings.push('Open PR backlog exists but judge was not recommended');
       }
@@ -234,6 +256,8 @@ export const StartPage: React.FC = () => {
     isGitMode && (!repoUrl && (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO));
   const workerCount = parseCount(configValues.WORKER_COUNT, 1, MAX_WORKERS, 'Worker').count;
   const testerCount = parseCount(configValues.TESTER_COUNT, 1, MAX_TESTERS, 'Tester').count;
+  const judgeCount = parseCount(configValues.JUDGE_COUNT, 1, MAX_JUDGES, 'Judge').count;
+  const plannerCount = parseCount(configValues.PLANNER_COUNT, 1, MAX_PLANNERS, 'Planner').count;
 
   const runningWorkers = processes?.filter(
     (process) => process.name.startsWith('worker-') && process.status === 'running'
@@ -245,8 +269,15 @@ export const StartPage: React.FC = () => {
     (process) => process.name === 'docser-1' && process.status === 'running'
   );
 
+  const runningJudges = processes?.filter(
+    (process) => (process.name === 'judge' || process.name.startsWith('judge-')) && process.status === 'running'
+  ).length ?? 0;
+  const runningPlanners = processes?.filter(
+    (process) => (process.name === 'planner' || process.name.startsWith('planner-')) && process.status === 'running'
+  ).length ?? 0;
+
   const dispatcherStatus = processes?.find((process) => process.name === 'dispatcher')?.status ?? 'idle';
-  const judgeStatus = processes?.find((process) => process.name === 'judge')?.status ?? 'idle';
+  const judgeStatus = runningJudges > 0 ? 'running' : 'idle';
   const cycleStatus = processes?.find((process) => process.name === 'cycle-manager')?.status ?? 'idle';
 
   const isContentEmpty = content.trim().length === 0;
@@ -277,8 +308,15 @@ export const StartPage: React.FC = () => {
               <div className="text-zinc-500">Dispatcher</div>
               <div className={STATUS_COLORS[dispatcherStatus]}>{STATUS_LABELS[dispatcherStatus]}</div>
 
+              <div className="text-zinc-500">Planner</div>
+              <div className={STATUS_COLORS[runningPlanners > 0 ? 'running' : 'idle']}>
+                {runningPlanners > 0 ? 'RUNNING' : 'IDLE'} ({runningPlanners}/{plannerCount})
+              </div>
+
               <div className="text-zinc-500">Judge</div>
-              <div className={STATUS_COLORS[judgeStatus]}>{STATUS_LABELS[judgeStatus]}</div>
+              <div className={STATUS_COLORS[judgeStatus]}>
+                {STATUS_LABELS[judgeStatus]} ({runningJudges}/{judgeCount})
+              </div>
 
               <div className="text-zinc-500">CycleManager</div>
               <div className={STATUS_COLORS[cycleStatus]}>{STATUS_LABELS[cycleStatus]}</div>

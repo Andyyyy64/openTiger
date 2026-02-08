@@ -1,5 +1,5 @@
-import { addPRComment, mergePR, getOctokit, getRepoInfo } from "@sebastian-code/vcs";
-import type { Policy } from "@sebastian-code/core";
+import { addPRComment, mergePR, getOctokit, getRepoInfo } from "@openTiger/vcs";
+import type { Policy } from "@openTiger/core";
 import type { CIEvaluationResult, PolicyEvaluationResult, LLMEvaluationResult, CodeIssue } from "./evaluators/index.js";
 
 const ALLOW_LLM_FAIL_AUTOMERGE = process.env.JUDGE_ALLOW_LLM_FAIL_AUTOMERGE === "true";
@@ -249,7 +249,7 @@ export function generateReviewComment(
 
   // フッター
   comment += "\n---\n";
-  comment += "_Reviewed by sebastian-code Judge_\n";
+  comment += "_Reviewed by openTiger Judge_\n";
 
   return comment;
 }

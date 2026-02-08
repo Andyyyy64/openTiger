@@ -20,6 +20,12 @@ async function ensureConfigRow() {
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`
   );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_count" text DEFAULT '1' NOT NULL`
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_count" text DEFAULT '1' NOT NULL`
+  );
 
   const existing = await db.select().from(configTable).limit(1);
   const current = existing[0];
@@ -38,7 +44,7 @@ async function ensureConfigRow() {
 }
 
 async function main(): Promise<void> {
-  const envPath = process.env.SEBASTIAN_ENV_PATH ?? resolve(process.cwd(), ".env");
+  const envPath = process.env.OPENTIGER_ENV_PATH ?? resolve(process.cwd(), ".env");
   dotenv.config({ path: envPath });
 
   const updates: Record<string, string> = {};

@@ -189,7 +189,7 @@ async function executeOpenCodeOnce(
   let lastOutputAt = startTime;
   let lastVisibleProgressAt = startTime;
   const args: string[] = ["run"];
-  const tempDir = await mkdtemp(join(tmpdir(), "sebastian-code-opencode-"));
+  const tempDir = await mkdtemp(join(tmpdir(), "openTiger-opencode-"));
   const promptPath = join(tempDir, "prompt.txt");
 
   // プロンプトをファイルで渡してCLIの引数制限やパース問題を避ける

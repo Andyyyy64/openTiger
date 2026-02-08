@@ -213,7 +213,7 @@ export function createOpenCodeDockerOptions(
   env?: Record<string, string>
 ): DockerExecOptions {
   return {
-    image: "sebastian-code/worker:latest",
+    image: "openTiger/worker:latest",
     workdir: "/workspace",
     mounts: [
       {

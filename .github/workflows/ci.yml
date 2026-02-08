@@ -96,6 +96,6 @@ jobs:
           context: .
           file: ops/docker/worker.Dockerfile
           push: false
-          tags: sebastian-code/worker:latest
+          tags: openTiger/worker:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

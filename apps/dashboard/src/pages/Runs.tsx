@@ -2,7 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { runsApi, tasksApi } from '../lib/api';
 import { Link, useNavigate } from 'react-router-dom';
-import type { Run } from '@sebastian-code/core';
+import type { Run } from '@openTiger/core';
 import type { TaskRetryInfo, TaskView } from '../lib/api';
 
 export const RunsPage: React.FC = () => {

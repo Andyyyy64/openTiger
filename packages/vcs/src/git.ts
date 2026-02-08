@@ -99,9 +99,9 @@ export async function ensureInitialCommit(
   return execGit(
     [
       "-c",
-      "user.name=sebastian-code",
+      "user.name=openTiger",
       "-c",
-      "user.email=worker@sebastian-code.ai",
+      "user.email=worker@openTiger.ai",
       "commit",
       "-m",
       message,
@@ -285,9 +285,9 @@ export async function commitAllowEmpty(
   return execGit(
     [
       "-c",
-      "user.name=sebastian-code",
+      "user.name=openTiger",
       "-c",
-      "user.email=worker@sebastian-code.ai",
+      "user.email=worker@openTiger.ai",
       "commit",
       "--allow-empty",
       "-m",

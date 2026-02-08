@@ -1,4 +1,4 @@
-import { createBranch, getCurrentBranch } from "@sebastian-code/vcs";
+import { createBranch, getCurrentBranch } from "@openTiger/vcs";
 
 export interface BranchOptions {
   repoPath: string;

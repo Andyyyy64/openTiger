@@ -1,5 +1,5 @@
-import { db } from "@sebastian-code/db";
-import { tasks, runs, agents, leases, artifacts } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { tasks, runs, agents, leases, artifacts } from "@openTiger/db/schema";
 import { eq, inArray, and, lt, not, isNull, desc } from "drizzle-orm";
 import { recordEvent } from "../monitors/event-logger.js";
 

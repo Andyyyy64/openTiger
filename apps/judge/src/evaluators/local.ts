@@ -1,7 +1,7 @@
-import type { Policy } from "@sebastian-code/core";
+import type { Policy } from "@openTiger/core";
 import type { CIEvaluationResult } from "./ci.js";
 import type { PolicyEvaluationResult, PolicyViolation } from "./policy.js";
-import { getDiffBetweenRefs, getDiffStatsBetweenRefs } from "@sebastian-code/vcs";
+import { getDiffBetweenRefs, getDiffStatsBetweenRefs } from "@openTiger/vcs";
 
 export interface LocalDiffStats {
   additions: number;

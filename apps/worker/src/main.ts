@@ -1,20 +1,20 @@
-import { db } from "@sebastian-code/db";
-import { tasks, runs, artifacts, leases, agents } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { tasks, runs, artifacts, leases, agents } from "@openTiger/db/schema";
 import { and, desc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
-import type { Task, Policy } from "@sebastian-code/core";
+import type { Task, Policy } from "@openTiger/core";
 import {
   DEFAULT_POLICY,
   getRepoMode,
   getLocalRepoPath,
   getLocalWorktreeRoot,
   applyRepoModePolicyOverrides,
-} from "@sebastian-code/core";
+} from "@openTiger/core";
 import "dotenv/config";
 import {
   createTaskWorker,
   getTaskQueueName,
   type TaskJobData,
-} from "@sebastian-code/queue";
+} from "@openTiger/queue";
 import type { Job } from "bullmq";
 import { createWriteStream } from "node:fs";
 import { mkdirSync } from "node:fs";
@@ -46,7 +46,7 @@ interface TaskRuntimeLock {
 }
 
 function resolveTaskLockDir(): string {
-  return process.env.SEBASTIAN_TASK_LOCK_DIR ?? "/tmp/sebastian-code-task-locks";
+  return process.env.OPENTIGER_TASK_LOCK_DIR ?? "/tmp/openTiger-task-locks";
 }
 
 function isPidAlive(pid: number): boolean {
@@ -237,7 +237,7 @@ export async function runWorker(
   }
 
   const runId = runRecord.id;
-  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
+  const logDir = process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
   const taskLogPath = buildTaskLogPath(logDir, taskId, runId, agentId);
   setTaskLogPath(taskLogPath);
   await db
@@ -601,7 +601,7 @@ export async function runWorker(
   } finally {
     setTaskLogPath();
     if (repoMode === "local" && worktreeBasePath && worktreePath) {
-      const { removeWorktree } = await import("@sebastian-code/vcs");
+      const { removeWorktree } = await import("@openTiger/vcs");
       await removeWorktree({
         baseRepoPath: worktreeBasePath,
         worktreePath,
@@ -790,7 +790,7 @@ function setTaskLogPath(logPath?: string): void {
 }
 
 function setupProcessLogging(agentId: string): string | undefined {
-  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
+  const logDir = process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
 
   try {
     mkdirSync(logDir, { recursive: true });
@@ -846,7 +846,7 @@ async function main() {
   const agentRole = process.env.AGENT_ROLE ?? "worker";
   const agentId = process.env.AGENT_ID
     ?? (workerIndex ? `${agentRole}-${workerIndex}` : `${agentRole}-${Date.now()}`);
-  const workspacePath = process.env.WORKSPACE_PATH ?? `/tmp/sebastian-code-workspace/${agentId}`;
+  const workspacePath = process.env.WORKSPACE_PATH ?? `/tmp/openTiger-workspace/${agentId}`;
   const repoUrl = process.env.REPO_URL ?? "";
   const baseBranch = process.env.BASE_BRANCH ?? "main";
   const repoMode = getRepoMode();
@@ -1003,7 +1003,18 @@ async function main() {
         .limit(1);
 
       if (activeRuns.length === 0) {
-        // 実行中Runが無いのにロック取得できない場合は状態不整合として復旧する
+        // ロック競合直後は、別ワーカーがrun作成前の可能性がある。
+        // 直近更新なら誤回復を避けて今回ジョブは静かにスキップする。
+        const updatedAtMs = taskData.updatedAt?.getTime?.() ?? 0;
+        const recentlyUpdated = Date.now() - updatedAtMs < 2 * 60 * 1000;
+        if (taskData.status === "running" && recentlyUpdated) {
+          console.warn(
+            `[Queue] Task ${job.data.taskId} lock conflict during startup window. Skipping this duplicate job.`
+          );
+          return;
+        }
+
+        // 実行中Runが無く、更新も古い場合は状態不整合として復旧する
         await db.delete(leases).where(eq(leases.taskId, job.data.taskId));
         await db
           .update(tasks)
@@ -1044,6 +1055,10 @@ async function main() {
 
   worker.on("failed", (job: Job<TaskJobData> | undefined, err: Error) => {
     console.error(`[Queue] Job ${job?.id} failed:`, err);
+  });
+
+  worker.on("error", (err: Error) => {
+    console.error(`[Queue] Worker runtime error for ${agentId}:`, err);
   });
 
   console.log(`${agentLabel} is ready and waiting for tasks from queue.`);

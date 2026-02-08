@@ -4,12 +4,12 @@ import { createHash } from "node:crypto";
 import { createWriteStream, mkdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { tmpdir } from "node:os";
-import { db, closeDb } from "@sebastian-code/db";
-import { tasks, agents, events } from "@sebastian-code/db/schema";
+import { db, closeDb } from "@openTiger/db";
+import { tasks, agents, events } from "@openTiger/db/schema";
 import { eq, desc, inArray, and, sql, gte } from "drizzle-orm";
 import dotenv from "dotenv";
-import { getRepoMode, getLocalRepoPath } from "@sebastian-code/core";
-import { createIssue } from "@sebastian-code/vcs";
+import { getRepoMode, getLocalRepoPath } from "@openTiger/core";
+import { createIssue } from "@openTiger/vcs";
 
 // ハートビートの間隔（ミリ秒）
 const HEARTBEAT_INTERVAL = 30000; // 30秒
@@ -46,7 +46,7 @@ import { inspectCodebase, formatInspectionNotes } from "./inspection.js";
 import type { CodebaseInspection } from "./inspection.js";
 
 function setupProcessLogging(logName: string): string | undefined {
-  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
+  const logDir = process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
 
   try {
     mkdirSync(logDir, { recursive: true });
@@ -1577,7 +1577,7 @@ async function planFromRequirement(
   agentId: string
 ): Promise<void> {
   console.log("=".repeat(60));
-  console.log("sebastian-code Planner - Task Generation");
+  console.log("openTiger Planner - Task Generation");
   console.log("=".repeat(60));
   console.log(`Requirement file: ${requirementPath}`);
   console.log(`Use LLM: ${config.useLlm}`);
@@ -1915,7 +1915,7 @@ async function preparePlannerWorkdir(config: PlannerConfig): Promise<{
   }
 
   console.log(`[Planner] Using remote repo: ${config.repoUrl}`);
-  const tempDir = await mkdtemp(join(tmpdir(), "sebastian-code-planner-"));
+  const tempDir = await mkdtemp(join(tmpdir(), "openTiger-planner-"));
   const repoDir = join(tempDir, "repo");
   const token = process.env.GITHUB_TOKEN;
   const cloneResult = await gitCloneRepo(config.repoUrl, repoDir, token, config.baseBranch);
@@ -2136,11 +2136,11 @@ export async function planFromContent(
 // ヘルプを表示
 function showHelp(): void {
   console.log(`
-sebastian-code Planner - Generate tasks from requirements
+openTiger Planner - Generate tasks from requirements
 
 Usage:
-  pnpm --filter @sebastian-code/planner start <requirement.md>
-  pnpm --filter @sebastian-code/planner start --help
+  pnpm --filter @openTiger/planner start <requirement.md>
+  pnpm --filter @openTiger/planner start --help
 
 Options:
   --help          Show this help message
@@ -2156,7 +2156,7 @@ Environment Variables:
   PLANNER_INSPECT_TIMEOUT=180  LLM inspection timeout in seconds
 
 Example:
-  pnpm --filter @sebastian-code/planner start docs/requirements/feature-x.md
+  pnpm --filter @openTiger/planner start docs/requirements/feature-x.md
 `);
 }
 

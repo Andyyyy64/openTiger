@@ -18,7 +18,7 @@ import { systemRoute } from "./routes/system.js";
 import { authMiddleware, rateLimitMiddleware } from "./middleware/index.js";
 
 function setupProcessLogging(logName: string): string | undefined {
-  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
+  const logDir = process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
 
   try {
     mkdirSync(logDir, { recursive: true });
@@ -52,7 +52,7 @@ function setupProcessLogging(logName: string): string | undefined {
   return logPath;
 }
 
-setupProcessLogging(process.env.SEBASTIAN_LOG_NAME ?? "api");
+setupProcessLogging(process.env.OPENTIGER_LOG_NAME ?? "api");
 
 const app = new Hono();
 
@@ -77,7 +77,7 @@ app.route("/system", systemRoute);
 // ルートパス
 app.get("/", (c) => {
   return c.json({
-    name: "sebastian-code",
+    name: "openTiger",
     version: "0.1.0",
     description: "AI Agent Orchestration System",
   });
@@ -85,11 +85,11 @@ app.get("/", (c) => {
 
 // 作業対象のAPIと衝突しないよう、ポートは環境変数で切り替える
 const port = parseInt(
-  process.env.SEBASTIAN_API_PORT ?? process.env.API_PORT ?? "4301",
+  process.env.OPENTIGER_API_PORT ?? process.env.API_PORT ?? "4301",
   10,
 );
 
-console.log(`sebastian-code API server starting on port ${port}`);
+console.log(`openTiger API server starting on port ${port}`);
 
 serve({
   fetch: app.fetch,

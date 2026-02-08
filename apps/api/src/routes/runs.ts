@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@sebastian-code/db";
-import { runs, artifacts } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { runs, artifacts } from "@openTiger/db/schema";
 import { eq, sql, gte } from "drizzle-orm";
 
 export const runsRoute = new Hono();

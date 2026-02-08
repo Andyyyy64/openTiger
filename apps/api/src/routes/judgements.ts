@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import { db } from "@sebastian-code/db";
-import { artifacts, events, runs } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { artifacts, events, runs } from "@openTiger/db/schema";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { getDiffBetweenRefs, getOctokit, getRepoInfo } from "@sebastian-code/vcs";
+import { getDiffBetweenRefs, getOctokit, getRepoInfo } from "@openTiger/vcs";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -183,7 +183,7 @@ judgementsRoute.get("/:id/diff", async (c) => {
       .limit(1);
 
     if (runRecord?.taskId && runRecord.agentId && branchArtifact?.ref) {
-      const workspaceRoot = process.env.WORKSPACE_PATH ?? "/tmp/sebastian-code-workspace";
+      const workspaceRoot = process.env.WORKSPACE_PATH ?? "/tmp/openTiger-workspace";
       const repoPath = join(workspaceRoot, runRecord.agentId, runRecord.taskId);
       if (existsSync(repoPath)) {
         const baseCandidates = uniqueStrings([

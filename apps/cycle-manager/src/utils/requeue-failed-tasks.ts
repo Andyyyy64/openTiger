@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 失敗タスクを即座に再キューするユーティリティ
-import { db } from "@sebastian-code/db";
-import { tasks, events } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { tasks, events } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
 import "dotenv/config";
 

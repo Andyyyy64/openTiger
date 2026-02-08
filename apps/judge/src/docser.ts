@@ -1,7 +1,7 @@
 import { access, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { db } from "@sebastian-code/db";
-import { events, tasks } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { events, tasks } from "@openTiger/db/schema";
 import { and, eq } from "drizzle-orm";
 import { getLocalDiffStats, getPRDiffStats } from "./evaluators/index.js";
 

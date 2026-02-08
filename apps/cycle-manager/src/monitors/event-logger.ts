@@ -1,5 +1,5 @@
-import { db } from "@sebastian-code/db";
-import { events, runs } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { events, runs } from "@openTiger/db/schema";
 import { eq, and, gte, lte, sql, count, sum } from "drizzle-orm";
 
 // イベント記録用の入力型

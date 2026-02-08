@@ -1,7 +1,7 @@
-import { db } from "@sebastian-code/db";
-import { runs, tasks, agents, leases } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { runs, tasks, agents, leases } from "@openTiger/db/schema";
 import { eq, and, gte, lt, count, sql } from "drizzle-orm";
-import type { AnomalyAlert } from "@sebastian-code/core";
+import type { AnomalyAlert } from "@openTiger/core";
 import { recordEvent } from "./event-logger.js";
 import { getLastHourCost, getTodayCost } from "./cost-tracker.js";
 

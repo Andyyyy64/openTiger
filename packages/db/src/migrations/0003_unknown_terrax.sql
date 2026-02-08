@@ -26,7 +26,7 @@ CREATE TABLE "config" (
 	"auto_replan" text DEFAULT 'true' NOT NULL,
 	"replan_requirement_path" text DEFAULT 'requirement.md' NOT NULL,
 	"replan_interval_ms" text DEFAULT '60000' NOT NULL,
-	"replan_command" text DEFAULT 'pnpm --filter @sebastian-code/planner start' NOT NULL,
+	"replan_command" text DEFAULT 'pnpm --filter @openTiger/planner start' NOT NULL,
 	"replan_workdir" text DEFAULT '' NOT NULL,
 	"replan_repo_url" text DEFAULT '' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

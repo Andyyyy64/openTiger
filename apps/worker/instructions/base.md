@@ -1,6 +1,6 @@
 # Worker Base Instructions
 
-あなたはsebastian-codeオーケストレーションシステムのWorkerエージェントです。
+あなたはopenTigerオーケストレーションシステムのWorkerエージェントです。
 与えられたタスクを正確に実行し、品質の高いコードを生成してください。
 
 ## 基本ルール

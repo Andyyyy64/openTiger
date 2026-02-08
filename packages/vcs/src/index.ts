@@ -1,4 +1,4 @@
-// @sebastian-code/vcs パッケージのエントリポイント
+// @openTiger/vcs パッケージのエントリポイント
 export * from "./client.js";
 export * from "./pr.js";
 export * from "./issue.js";

@@ -1,4 +1,4 @@
-import { config as configTable } from "@sebastian-code/db/schema";
+import { config as configTable } from "@openTiger/db/schema";
 
 type ConfigColumn = keyof Omit<
   typeof configTable.$inferSelect,
@@ -22,6 +22,8 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "WORKER_COUNT", column: "workerCount", defaultValue: "1" },
   { key: "TESTER_COUNT", column: "testerCount", defaultValue: "1" },
   { key: "DOCSER_COUNT", column: "docserCount", defaultValue: "1" },
+  { key: "JUDGE_COUNT", column: "judgeCount", defaultValue: "1" },
+  { key: "PLANNER_COUNT", column: "plannerCount", defaultValue: "1" },
   { key: "REPO_MODE", column: "repoMode", defaultValue: "git" },
   { key: "REPO_URL", column: "repoUrl", defaultValue: "" },
   { key: "LOCAL_REPO_PATH", column: "localRepoPath", defaultValue: "" },
@@ -42,7 +44,7 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "AUTO_REPLAN", column: "autoReplan", defaultValue: "true" },
   { key: "REPLAN_REQUIREMENT_PATH", column: "replanRequirementPath", defaultValue: "requirement.md" },
   { key: "REPLAN_INTERVAL_MS", column: "replanIntervalMs", defaultValue: "60000" },
-  { key: "REPLAN_COMMAND", column: "replanCommand", defaultValue: "pnpm --filter @sebastian-code/planner start" },
+  { key: "REPLAN_COMMAND", column: "replanCommand", defaultValue: "pnpm --filter @openTiger/planner start" },
   { key: "REPLAN_WORKDIR", column: "replanWorkdir", defaultValue: "" },
   { key: "REPLAN_REPO_URL", column: "replanRepoUrl", defaultValue: "" },
   { key: "GITHUB_TOKEN", column: "githubToken", defaultValue: "" },

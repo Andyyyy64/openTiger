@@ -1,5 +1,5 @@
-import type { Policy } from "@sebastian-code/core";
-import { getOctokit, getRepoInfo } from "@sebastian-code/vcs";
+import type { Policy } from "@openTiger/core";
+import { getOctokit, getRepoInfo } from "@openTiger/vcs";
 
 // ポリシー評価結果
 export interface PolicyEvaluationResult {

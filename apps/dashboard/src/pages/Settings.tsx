@@ -116,6 +116,20 @@ const SETTINGS: SettingField[] = [
     type: 'number',
   },
   {
+    key: 'JUDGE_COUNT',
+    label: 'Judge_Count',
+    description: 'Number of judge nodes',
+    group: 'Workers',
+    type: 'number',
+  },
+  {
+    key: 'PLANNER_COUNT',
+    label: 'Planner_Count',
+    description: 'Number of planner nodes',
+    group: 'Workers',
+    type: 'number',
+  },
+  {
     key: 'REPO_MODE',
     label: 'Repo_Mode',
     description: 'git or local mode',

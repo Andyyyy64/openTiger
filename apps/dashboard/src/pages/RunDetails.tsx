@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { runsApi, judgementsApi, type JudgementEvent } from '../lib/api';
-import type { Artifact } from '@sebastian-code/core';
+import type { Artifact } from '@openTiger/core';
 
 export const RunDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();

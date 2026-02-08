@@ -1,12 +1,12 @@
-import { db } from "@sebastian-code/db";
-import { cycles, tasks, runs, agents, leases } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { cycles, tasks, runs, agents, leases } from "@openTiger/db/schema";
 import { eq, and, gte, lte, sql, count, sum } from "drizzle-orm";
 import type {
   CycleConfig,
   CycleStats,
   StateSnapshot,
   CycleTriggerType,
-} from "@sebastian-code/core";
+} from "@openTiger/core";
 
 // サイクル制御の状態
 interface CycleState {

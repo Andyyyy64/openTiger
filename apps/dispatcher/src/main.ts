@@ -1,9 +1,9 @@
 import { createWriteStream, mkdirSync } from "node:fs";
 import { join, resolve, relative, isAbsolute } from "node:path";
-import { db } from "@sebastian-code/db";
-import { tasks, agents, runs } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { tasks, agents, runs } from "@openTiger/db/schema";
 import { and, eq } from "drizzle-orm";
-import { getRepoMode, getLocalRepoPath, getLocalWorktreeRoot } from "@sebastian-code/core";
+import { getRepoMode, getLocalRepoPath, getLocalWorktreeRoot } from "@openTiger/core";
 import {
   createTaskQueue,
   enqueueTask,
@@ -11,7 +11,7 @@ import {
   getQueueStats,
   type TaskJobData,
   getTaskQueueName,
-} from "@sebastian-code/queue";
+} from "@openTiger/queue";
 import type { Job } from "bullmq";
 
 import {
@@ -32,7 +32,7 @@ import {
 } from "./scheduler/index.js";
 
 function setupProcessLogging(logName: string): string | undefined {
-  const logDir = process.env.SEBASTIAN_LOG_DIR ?? "/tmp/sebastian-code-logs";
+  const logDir = process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
 
   try {
     mkdirSync(logDir, { recursive: true });
@@ -87,7 +87,7 @@ const DEFAULT_CONFIG: DispatcherConfig = {
   repoMode: getRepoMode(),
   repoUrl: process.env.REPO_URL ?? "",
   baseBranch: process.env.BASE_BRANCH ?? "main",
-  workspacePath: process.env.WORKSPACE_PATH ?? "/tmp/sebastian-code-workspace",
+  workspacePath: process.env.WORKSPACE_PATH ?? "/tmp/openTiger-workspace",
   localRepoPath: getLocalRepoPath(),
   localWorktreeRoot: getLocalWorktreeRoot(),
 };
@@ -105,7 +105,7 @@ function resolveWorkspacePath(config: DispatcherConfig): string {
   const baseDir = resolve(process.cwd());
 
   if (config.launchMode === "process") {
-    const fallbackPath = resolve(baseDir, ".sebastian-code-workspace");
+    const fallbackPath = resolve(baseDir, ".openTiger-workspace");
     if (!envPath) {
       return fallbackPath;
     }
@@ -120,7 +120,7 @@ function resolveWorkspacePath(config: DispatcherConfig): string {
     return fallbackPath;
   }
 
-  return envPath ? resolve(envPath) : "/tmp/sebastian-code-workspace";
+  return envPath ? resolve(envPath) : "/tmp/openTiger-workspace";
 }
 
 function resolveLocalWorktreeRoot(config: DispatcherConfig): string | undefined {
@@ -143,7 +143,7 @@ function resolveLocalWorktreeRoot(config: DispatcherConfig): string | undefined 
     return fallbackPath;
   }
 
-  return envPath ? resolve(envPath) : "/tmp/sebastian-code-worktree";
+  return envPath ? resolve(envPath) : "/tmp/openTiger-worktree";
 }
 
 // ディスパッチャーの状態
@@ -242,7 +242,7 @@ async function dispatchTask(
 // ディスパッチループ
 async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
   console.log("=".repeat(60));
-  console.log("sebastian-code Dispatcher started");
+  console.log("openTiger Dispatcher started");
   console.log("=".repeat(60));
   console.log(`Poll interval: ${config.pollIntervalMs}ms`);
   console.log(`Max concurrent workers: ${config.maxConcurrentWorkers}`);
@@ -393,7 +393,7 @@ function setupSignalHandlers(): void {
 
 // メイン処理
 async function main(): Promise<void> {
-  setupProcessLogging(process.env.SEBASTIAN_LOG_NAME ?? "dispatcher");
+  setupProcessLogging(process.env.OPENTIGER_LOG_NAME ?? "dispatcher");
   const config = { ...DEFAULT_CONFIG };
   config.workspacePath = resolveWorkspacePath(config);
   config.localWorktreeRoot = resolveLocalWorktreeRoot(config);

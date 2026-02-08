@@ -1,5 +1,5 @@
-import { runOpenCode } from "@sebastian-code/llm";
-import { getOctokit, getRepoInfo } from "@sebastian-code/vcs";
+import { runOpenCode } from "@openTiger/llm";
+import { getOctokit, getRepoInfo } from "@openTiger/vcs";
 
 // LLM評価結果
 export interface LLMEvaluationResult {

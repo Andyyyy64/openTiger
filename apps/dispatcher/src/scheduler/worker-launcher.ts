@@ -1,7 +1,7 @@
 import { spawn, ChildProcess } from "node:child_process";
 import { join } from "node:path";
-import { db } from "@sebastian-code/db";
-import { agents } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { agents } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
 
 // Worker起動モード
@@ -64,7 +64,7 @@ async function launchAsProcess(
 
   try {
     console.log(`[Dispatcher] Launching worker process for task ${config.taskId}...`);
-    const workerProcess = spawn("pnpm", ["--filter", "@sebastian-code/worker", "start"], {
+    const workerProcess = spawn("pnpm", ["--filter", "@openTiger/worker", "start"], {
       env,
       stdio: ["ignore", "pipe", "pipe"],
       detached: false,
@@ -115,8 +115,8 @@ async function launchAsProcess(
 async function launchAsDocker(
   config: WorkerLaunchConfig
 ): Promise<LaunchResult> {
-  const image = config.dockerImage ?? "sebastian-worker:latest";
-  const network = config.dockerNetwork ?? "sebastian_default";
+  const image = config.dockerImage ?? "opentiger-worker:latest";
+  const network = config.dockerNetwork ?? "opentiger_default";
 
   const envArgs: string[] = [];
   const allEnv = {
@@ -147,7 +147,7 @@ async function launchAsDocker(
     "run",
     "--rm",
     "--name",
-    `sebastian-worker-${config.agentId}`,
+    `opentiger-worker-${config.agentId}`,
     "--network",
     network,
     ...envArgs,
@@ -189,10 +189,10 @@ async function launchAsDocker(
     setTimeout(() => {
       if (dockerProcess.exitCode === null) {
         activeWorkers.set(config.taskId, {
-          containerId: `sebastian-worker-${config.agentId}`,
+          containerId: `opentiger-worker-${config.agentId}`,
           agentId: config.agentId,
         });
-        resolve({ success: true, containerId: `sebastian-worker-${config.agentId}` });
+        resolve({ success: true, containerId: `opentiger-worker-${config.agentId}` });
       } else {
         resolve({ success: false, error: "Container exited immediately" });
       }
@@ -205,7 +205,7 @@ export async function launchWorker(
   config: WorkerLaunchConfig
 ): Promise<LaunchResult> {
   // エージェントをbusy状態に更新
-  await updateAgentStatus(config.agentId, "busy");
+  await updateAgentStatus(config.agentId, "busy", config.taskId);
 
   if (config.mode === "docker") {
     return launchAsDocker(config);
@@ -259,12 +259,14 @@ export function getActiveWorkers(): Map<
 // エージェントステータスを更新
 async function updateAgentStatus(
   agentId: string,
-  status: "idle" | "busy" | "offline"
+  status: "idle" | "busy" | "offline",
+  currentTaskId: string | null = null
 ): Promise<void> {
   await db
     .update(agents)
     .set({
       status,
+      currentTaskId,
       lastHeartbeat: new Date(),
     })
     .where(eq(agents.id, agentId));

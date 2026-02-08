@@ -10,8 +10,8 @@ import {
   refExists,
   getChangedFilesFromRoot,
   getDiffStatsFromRoot,
-} from "@sebastian-code/vcs";
-import type { Policy } from "@sebastian-code/core";
+} from "@openTiger/vcs";
+import type { Policy } from "@openTiger/core";
 import { minimatch } from "minimatch";
 import { buildTaskEnv } from "../env.js";
 
@@ -220,7 +220,7 @@ function normalizeVerificationCommand(command: string): string {
   let normalized = command;
 
   if (isE2ECommand(normalized)) {
-    const e2ePort = process.env.SEBASTIAN_E2E_PORT ?? "5174";
+    const e2ePort = process.env.OPENTIGER_E2E_PORT ?? "5174";
     // PlaywrightのwebServer待機先とViteのポートを一致させる
     normalized = withEnvPrefix(normalized, "VITE_PORT", e2ePort);
     normalized = withEnvPrefix(

@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { db } from "@sebastian-code/db";
-import { config as configTable } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { config as configTable } from "@openTiger/db/schema";
 import { eq, sql } from "drizzle-orm";
 import {
   CONFIG_KEYS,
@@ -29,6 +29,12 @@ async function ensureConfigRow() {
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_count" text DEFAULT '1' NOT NULL`
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_count" text DEFAULT '1' NOT NULL`
   );
 
   const existing = await db.select().from(configTable).limit(1);

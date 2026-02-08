@@ -1,7 +1,7 @@
-import { db } from "@sebastian-code/db";
-import { cycles, tasks, runs, agents } from "@sebastian-code/db/schema";
+import { db } from "@openTiger/db";
+import { cycles, tasks, runs, agents } from "@openTiger/db/schema";
 import { eq, count, sql, and, gte, lte, inArray, lt } from "drizzle-orm";
-import type { CycleStats, StateSnapshot } from "@sebastian-code/core";
+import type { CycleStats, StateSnapshot } from "@openTiger/core";
 
 // システム状態のスナップショット
 export interface SystemState {

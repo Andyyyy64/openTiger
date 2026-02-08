@@ -1,8 +1,8 @@
-import type { Task, Run, Agent, CreateTaskInput, Artifact } from '@sebastian-code/core';
+import type { Task, Run, Agent, CreateTaskInput, Artifact } from '@openTiger/core';
 
 /**
  * Dashboard API Client
- * @sebastian-code/api へのリクエストをラップする
+ * @openTiger/api へのリクエストをラップする
  */
 
 const API_BASE_URL = '/api';
@@ -182,6 +182,8 @@ export interface SystemPreflightSummary {
     startPlanner: boolean;
     startDispatcher: boolean;
     startJudge: boolean;
+    plannerCount: number;
+    judgeCount: number;
     startCycleManager: boolean;
     workerCount: number;
     testerCount: number;

@@ -1,6 +1,6 @@
-import { db } from "@sebastian-code/db";
-import { agents, leases, tasks } from "@sebastian-code/db/schema";
-import { eq, lt, and } from "drizzle-orm";
+import { db } from "@openTiger/db";
+import { agents, leases, tasks } from "@openTiger/db/schema";
+import { eq, lt, and, inArray } from "drizzle-orm";
 
 // ハートビート設定
 const HEARTBEAT_TIMEOUT_SECONDS = 60; // 60秒以上応答がなければオフライン
@@ -220,10 +220,11 @@ export async function getAgentStats() {
 
 // 現在busy状態のエージェント数を取得（同時実行上限の算出に利用）
 export async function getBusyAgentCount(): Promise<number> {
+  const executableRoles = ["worker", "tester", "docser"];
   const result = await db
     .select({ id: agents.id })
     .from(agents)
-    .where(eq(agents.status, "busy"));
+    .where(and(eq(agents.status, "busy"), inArray(agents.role, executableRoles)));
 
   return result.length;
 }
