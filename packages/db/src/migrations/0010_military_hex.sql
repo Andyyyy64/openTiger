@@ -1,0 +1,1 @@
+ALTER TABLE "config" ALTER COLUMN "replan_command" SET DEFAULT 'pnpm --filter @openTiger/planner run start:fresh';
