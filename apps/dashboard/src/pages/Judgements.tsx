@@ -2,6 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { judgementsApi, type JudgementEvent } from '../lib/api';
+import { getCiStatusColor } from '../ui/status';
 
 export const JudgementsPage: React.FC = () => {
   const { data: judgements, isLoading, error } = useQuery({
@@ -89,7 +90,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
         </div>
 
         <div className="flex gap-4 text-xs">
-          <div className={`${getStatusColor(ciStatus)}`}>
+          <div className={`${getCiStatusColor(ciStatus)}`}>
             CI:{ciStatus.toUpperCase()}
           </div>
           <div className={policyPass ? 'text-term-tiger' : 'text-red-500'}>
@@ -216,17 +217,3 @@ const getVerdictColor = (verdict: string) => {
 function normalizeLegacyVerdict(verdict: string): string {
   return verdict === 'needs_human' ? 'request_changes' : verdict;
 }
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'success':
-      return 'text-term-tiger';
-    case 'failure':
-    case 'error':
-      return 'text-red-500';
-    case 'pending':
-      return 'text-yellow-500';
-    default:
-      return 'text-zinc-500';
-  }
-};

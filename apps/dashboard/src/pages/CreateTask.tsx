@@ -13,7 +13,7 @@ export const CreateTaskPage: React.FC = () => {
     goal: '',
     priority: 10,
     riskLevel: 'low' as 'low' | 'medium' | 'high',
-    role: 'worker' as 'worker' | 'tester',
+    role: 'worker' as 'worker' | 'tester' | 'docser',
     timeboxMinutes: 60,
     allowedPaths: [''],
     commands: [''],
@@ -168,10 +168,11 @@ export const CreateTaskPage: React.FC = () => {
               <select
                 className="w-full bg-black border border-b border-term-border px-2 py-1 text-sm font-mono focus:border-term-tiger focus:outline-none"
                 value={formData.role}
-                onChange={e => setFormData({ ...formData, role: e.target.value as 'worker' | 'tester' })}
+                onChange={e => setFormData({ ...formData, role: e.target.value as 'worker' | 'tester' | 'docser' })}
               >
                 <option value="worker">WORKER</option>
                 <option value="tester">TESTER</option>
+                <option value="docser">DOCSER</option>
               </select>
             </div>
             <div className="space-y-1">
@@ -255,4 +256,3 @@ export const CreateTaskPage: React.FC = () => {
     </div>
   );
 };
-

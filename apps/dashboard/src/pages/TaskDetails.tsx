@@ -2,7 +2,12 @@ import React from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { tasksApi, runsApi } from '../lib/api';
-import type { TaskRetryInfo } from '../lib/api';
+import {
+  getRunStatusColor,
+  getTaskRiskColor,
+  getTaskStatusColor,
+  formatTaskRetryStatus,
+} from '../ui/status';
 
 export const TaskDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -38,7 +43,7 @@ export const TaskDetailsPage: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-start mb-8 gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <span className={`text-xs font-bold ${getStatusColor(task.status)}`}>
+            <span className={`text-xs font-bold ${getTaskStatusColor(task.status)}`}>
               [{task.status.toUpperCase()}]
             </span>
             <span className="text-zinc-500 text-xs">ID: {task.id}</span>
@@ -129,9 +134,9 @@ export const TaskDetailsPage: React.FC = () => {
                       >
                         <td className="px-4 py-2 text-term-fg group-hover:text-term-tiger">{run.agentId}</td>
                         <td className="px-4 py-2">
-                          <span className={`font-bold ${run.status === 'success' ? 'text-term-tiger' : run.status === 'failed' ? 'text-red-500' : 'text-blue-400'}`}>
-                            [{run.status.toUpperCase()}]
-                          </span>
+                            <span className={`font-bold ${getRunStatusColor(run.status)}`}>
+                              [{run.status.toUpperCase()}]
+                            </span>
                         </td>
                         <td className="px-4 py-2 text-zinc-400">
                           {run.finishedAt ? `${Math.round((new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)}s` : '-'}
@@ -157,7 +162,7 @@ export const TaskDetailsPage: React.FC = () => {
             <div className="p-4 space-y-3 text-xs">
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">RISK_LEVEL</span>
-                <span className={`font-bold ${getRiskColor(task.riskLevel)}`}>{task.riskLevel.toUpperCase()}</span>
+                <span className={`font-bold ${getTaskRiskColor(task.riskLevel)}`}>{task.riskLevel.toUpperCase()}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">PRIORITY</span>
@@ -173,7 +178,7 @@ export const TaskDetailsPage: React.FC = () => {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">RETRY</span>
-                <span className="text-term-fg">{formatRetrySummary(task.retry, now)}</span>
+                <span className="text-term-fg">{formatTaskRetryStatus(task.retry, now)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">RETRY_COUNT</span>
@@ -244,55 +249,3 @@ export const TaskDetailsPage: React.FC = () => {
     </div>
   );
 };
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'done': return 'text-term-tiger';
-    case 'running': return 'text-blue-400 animate-pulse';
-    case 'failed': return 'text-red-500';
-    case 'blocked': return 'text-yellow-500';
-    default: return 'text-zinc-500';
-  }
-};
-
-const getRiskColor = (risk: string) => {
-  switch (risk) {
-    case 'high': return 'text-red-500 font-bold';
-    case 'medium': return 'text-yellow-500';
-    default: return 'text-term-tiger';
-  }
-};
-
-function formatRetrySummary(retry: TaskRetryInfo | null | undefined, nowMs: number): string {
-  if (!retry) {
-    return '--';
-  }
-
-  if (!retry.autoRetry) {
-    switch (retry.reason) {
-      case 'retry_exhausted':
-        return 'exhausted';
-      case 'non_retryable_failure':
-        return retry.failureCategory ? `no-retry(${retry.failureCategory})` : 'no-retry';
-      default:
-        return 'no-auto-retry';
-    }
-  }
-
-  if (!retry.retryAt) {
-    return 'pending';
-  }
-
-  const retryAtMs = new Date(retry.retryAt).getTime();
-  const seconds = Math.max(0, Math.ceil((retryAtMs - nowMs) / 1000));
-  if (retry.reason === 'quota_wait') {
-    return seconds > 0 ? `quota ${seconds}s` : 'quota due';
-  }
-  if (retry.reason === 'awaiting_judge') {
-    return seconds > 0 ? `judge ${seconds}s` : 'judge due';
-  }
-  if (retry.reason === 'needs_rework') {
-    return seconds > 0 ? `rework ${seconds}s` : 'rework due';
-  }
-  return seconds > 0 ? `${seconds}s` : 'due';
-}

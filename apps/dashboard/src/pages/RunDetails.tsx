@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { runsApi, judgementsApi, type JudgementEvent } from '../lib/api';
 import type { Artifact } from '@openTiger/core';
+import { getRunStatusColor } from '../ui/status';
 
 export const RunDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -41,7 +42,7 @@ export const RunDetailsPage: React.FC = () => {
       <div className="flex flex-wrap justify-between items-start mb-8 gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <span className={`text-xs font-bold ${getStatusColor(run.status)}`}>
+            <span className={`text-xs font-bold ${getRunStatusColor(run.status)}`}>
               [{run.status.toUpperCase()}]
             </span>
             <span className="text-zinc-500 text-xs">ID: {run.id}</span>
@@ -156,15 +157,6 @@ export const RunDetailsPage: React.FC = () => {
       </div>
     </div>
   );
-};
-
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'success': return 'text-term-tiger';
-    case 'failed': return 'text-red-500';
-    case 'running': return 'text-blue-400 animate-pulse';
-    default: return 'text-zinc-500';
-  }
 };
 
 const JudgeReviewItem = ({ review }: { review: JudgementEvent }) => {

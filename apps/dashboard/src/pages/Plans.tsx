@@ -2,6 +2,7 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { plansApi, type PlanSnapshot } from '../lib/api';
+import { getTaskStatusColor } from '../ui/status';
 
 export const PlansPage: React.FC = () => {
   const { data: plans, isLoading, error } = useQuery({
@@ -71,7 +72,7 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
             </div>
           </div>
           <div>
-            <div className="text-zinc-500 mb-1">ESTIAMTE</div>
+            <div className="text-zinc-500 mb-1">ESTIMATE</div>
             <div>{plan.summary?.totalEstimatedMinutes ?? 0}m</div>
           </div>
         </div>
@@ -107,7 +108,7 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
             {plan.tasks.map((task) => (
               <tr key={task.id} className="hover:bg-term-fg/5 transition-colors group">
                 <td className="px-4 py-2 align-top">
-                  <span className={`${getStatusColor(task.status)}`}>
+                  <span className={`${getTaskStatusColor(task.status)}`}>
                     [{task.status.toUpperCase()}]
                   </span>
                 </td>
@@ -141,21 +142,6 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
   );
 };
 
-const getStatusColor = (status: string) => {
-  switch (status) {
-    case 'done':
-      return 'text-term-tiger';
-    case 'running':
-      return 'text-blue-400 animate-pulse';
-    case 'failed':
-      return 'text-red-500';
-    case 'blocked':
-      return 'text-yellow-500';
-    default:
-      return 'text-zinc-500';
-  }
-};
-
 const renderRisk = (risk: string) => {
   const label = risk.toUpperCase();
   switch (risk) {
@@ -167,4 +153,3 @@ const renderRisk = (risk: string) => {
       return <span className="text-zinc-500">{label}</span>;
   }
 };
-
