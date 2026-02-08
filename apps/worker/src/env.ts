@@ -63,6 +63,9 @@ const OPEN_CODE_ENV_KEYS = new Set([
   "OPENCODE_FALLBACK_MODEL",
   "OPENCODE_MAX_RETRIES",
   "OPENCODE_RETRY_DELAY_MS",
+  "OPENCODE_WAIT_ON_QUOTA",
+  "OPENCODE_QUOTA_RETRY_DELAY_MS",
+  "OPENCODE_MAX_QUOTA_WAITS",
   "OPENCODE_CONFIG",
 ]);
 
@@ -151,6 +154,9 @@ async function loadConfigFromDb(): Promise<Record<string, string>> {
       XAI_API_KEY: row.xaiApiKey ?? "",
       DEEPSEEK_API_KEY: row.deepseekApiKey ?? "",
       OPENCODE_MODEL: row.opencodeModel ?? "",
+      OPENCODE_WAIT_ON_QUOTA: row.opencodeWaitOnQuota ?? "",
+      OPENCODE_QUOTA_RETRY_DELAY_MS: row.opencodeQuotaRetryDelayMs ?? "",
+      OPENCODE_MAX_QUOTA_WAITS: row.opencodeMaxQuotaWaits ?? "",
       GITHUB_TOKEN: row.githubToken ?? "",
     };
   } catch (error) {
@@ -191,6 +197,15 @@ export async function buildOpenCodeEnv(
     if (configPath) {
       env.OPENCODE_CONFIG = configPath;
     }
+  }
+
+  // Quota待機はWorkerプロセス内でsleepせず、タスクをblockedで手放して後段で再試行する。
+  // 明示的に無効化したい場合のみ環境変数でオフにできる。
+  const handoffQuotaWait =
+    (process.env.WORKER_QUOTA_HANDOFF_TO_QUEUE ?? "true").toLowerCase() !== "false";
+  if (handoffQuotaWait) {
+    env.OPENCODE_WAIT_ON_QUOTA = "true";
+    env.OPENCODE_MAX_QUOTA_WAITS = "0";
   }
 
   return env;

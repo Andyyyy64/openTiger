@@ -324,6 +324,20 @@ function sanitizeRetryHint(message: string): string {
     .trim();
 }
 
+const QUOTA_FAILURE_PATTERNS = [
+  /quota exceeded/i,
+  /resource has been exhausted/i,
+  /resource_exhausted/i,
+  /quota limit reached/i,
+  /generate_requests_per_model_per_day/i,
+  /generate_content_paid_tier_input_token_count/i,
+  /retryinfo/i,
+];
+
+function isQuotaFailure(message: string): boolean {
+  return QUOTA_FAILURE_PATTERNS.some((pattern) => pattern.test(message));
+}
+
 function isNoCommitsBetweenError(message: string): boolean {
   const normalized = message.toLowerCase();
   return normalized.includes("no commits between");
@@ -779,9 +793,17 @@ export async function runWorker(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    const quotaFailure = isQuotaFailure(errorMessage);
+    const nextTaskStatus: "failed" | "blocked" = quotaFailure ? "blocked" : "failed";
+    const nextBlockReason = quotaFailure ? "quota_wait" : null;
 
     console.error("\n" + "=".repeat(60));
     console.error("Task failed:", errorMessage);
+    if (quotaFailure) {
+      console.warn(
+        `[Worker] Quota failure detected. Parking task ${taskId} as blocked(quota_wait) for cooldown retry.`
+      );
+    }
     console.error("=".repeat(60));
 
     // 失敗を記録
@@ -798,8 +820,8 @@ export async function runWorker(
     await db
       .update(tasks)
       .set({
-        status: "failed",
-        blockReason: null,
+        status: nextTaskStatus,
+        blockReason: nextBlockReason,
         updatedAt: new Date(),
       })
       .where(eq(tasks.id, taskId));
