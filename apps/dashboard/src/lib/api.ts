@@ -211,9 +211,9 @@ export interface TaskRetryInfo {
   | 'cooldown_pending'
   | 'retry_due'
   | 'retry_exhausted'
-  | 'needs_human'
   | 'non_retryable_failure'
   | 'awaiting_judge'
+  | 'quota_wait'
   | 'needs_rework'
   | 'unknown';
   retryAt: string | null;
@@ -221,7 +221,7 @@ export interface TaskRetryInfo {
   cooldownMs: number | null;
   retryCount: number;
   retryLimit: number;
-  failureCategory?: 'env' | 'setup' | 'policy' | 'test' | 'flaky' | 'model';
+  failureCategory?: 'env' | 'setup' | 'policy' | 'test' | 'flaky' | 'model' | 'model_loop';
 }
 
 export type TaskView = Task & { retry?: TaskRetryInfo | null };

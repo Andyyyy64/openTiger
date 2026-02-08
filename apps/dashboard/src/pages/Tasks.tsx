@@ -120,8 +120,6 @@ function formatRetryStatus(retry: TaskRetryInfo | null | undefined, nowMs: numbe
 
   if (!retry.autoRetry) {
     switch (retry.reason) {
-      case 'needs_human':
-        return 'due';
       case 'retry_exhausted':
         return 'exhausted';
       case 'non_retryable_failure':
@@ -137,5 +135,8 @@ function formatRetryStatus(retry: TaskRetryInfo | null | undefined, nowMs: numbe
 
   const retryAtMs = new Date(retry.retryAt).getTime();
   const seconds = Math.max(0, Math.ceil((retryAtMs - nowMs) / 1000));
+  if (retry.reason === 'quota_wait') {
+    return seconds > 0 ? `quota ${seconds}s` : 'quota due';
+  }
   return seconds > 0 ? `${seconds}s` : 'due';
 }

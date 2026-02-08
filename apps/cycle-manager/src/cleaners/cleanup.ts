@@ -235,15 +235,13 @@ export async function requeueFailedTasks(): Promise<number> {
   return result.length;
 }
 
-type BlockReason = "awaiting_judge" | "needs_rework" | "needs_human";
+type BlockReason = "awaiting_judge" | "needs_rework" | "quota_wait";
 
 // 最大リトライ回数（-1でカテゴリ上限のみ適用）
 const MAX_RETRY_COUNT = (() => {
   const parsed = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1", 10);
   return Number.isFinite(parsed) ? parsed : -1;
 })();
-
-const REQUEUE_NEEDS_HUMAN = process.env.REQUEUE_NEEDS_HUMAN === "true";
 
 type FailureCategory =
   | "env"
@@ -260,7 +258,7 @@ type FailureClassification = {
   category: FailureCategory;
   retryable: boolean;
   reason: string;
-  blockReason: Extract<BlockReason, "needs_rework" | "needs_human">;
+  blockReason: Extract<BlockReason, "needs_rework">;
 };
 
 const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
@@ -300,7 +298,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
       category: "permission",
       retryable: false,
       reason: "external_directory_permission_prompt",
-      blockReason: "needs_human",
+      blockReason: "needs_rework",
     };
   }
 
@@ -311,7 +309,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
       category: "noop",
       retryable: false,
       reason: "no_actionable_changes",
-      blockReason: "needs_human",
+      blockReason: "needs_rework",
     };
   }
 
@@ -344,7 +342,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
       category: "env",
       retryable: true,
       reason: "environment_issue",
-      blockReason: "needs_human",
+      blockReason: "needs_rework",
     };
   }
 
@@ -379,7 +377,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
       category: "model_loop",
       retryable: true,
       reason: "model_doom_loop",
-      blockReason: "needs_human",
+      blockReason: "needs_rework",
     };
   }
 
@@ -392,7 +390,15 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
 }
 
 function normalizeBlockReason(reason: string | null): BlockReason | null {
-  if (reason === "awaiting_judge" || reason === "needs_rework" || reason === "needs_human") {
+  if (reason === "needs_human") {
+    // legacy互換: needs_humanはawaiting_judgeとして回収する
+    return "awaiting_judge";
+  }
+  if (
+    reason === "awaiting_judge"
+    || reason === "needs_rework"
+    || reason === "quota_wait"
+  ) {
     return reason;
   }
   return null;
@@ -404,6 +410,7 @@ function normalizeContext(
   files?: string[];
   specs?: string;
   notes?: string;
+  pr?: { number: number; url?: string; title?: string };
   issue?: { number: number; url?: string; title?: string };
 } {
   if (!context || typeof context !== "object" || Array.isArray(context)) {
@@ -413,8 +420,30 @@ function normalizeContext(
     files?: string[];
     specs?: string;
     notes?: string;
+    pr?: { number: number; url?: string; title?: string };
     issue?: { number: number; url?: string; title?: string };
   };
+}
+
+function isPrReviewTask(params: {
+  title: string;
+  goal: string;
+  context: unknown;
+}): boolean {
+  if (params.goal.startsWith("Review and process open PR #")) {
+    return true;
+  }
+  if (params.title.includes("[PR] Review #")) {
+    return true;
+  }
+  const context = normalizeContext(params.context);
+  if (typeof context.pr?.number === "number") {
+    return true;
+  }
+  if (typeof context.issue?.number === "number" && params.title.includes("[PR]")) {
+    return true;
+  }
+  return context.notes?.includes("Imported from open GitHub PR backlog") === true;
 }
 
 function normalizeFailureSignature(errorMessage: string | null): string {
@@ -510,7 +539,14 @@ export async function requeueFailedTasksWithCooldown(
 
   // 失敗したタスクを取得
   const failedTasks = await db
-    .select({ id: tasks.id, updatedAt: tasks.updatedAt, retryCount: tasks.retryCount })
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      goal: tasks.goal,
+      context: tasks.context,
+      updatedAt: tasks.updatedAt,
+      retryCount: tasks.retryCount,
+    })
     .from(tasks)
     .where(eq(tasks.status, "failed"));
 
@@ -530,6 +566,45 @@ export async function requeueFailedTasksWithCooldown(
   let requeued = 0;
 
   for (const task of eligibleTasks) {
+    if (
+      isPrReviewTask({
+        title: task.title,
+        goal: task.goal,
+        context: task.context,
+      })
+    ) {
+      const hasPendingRun = await hasPendingJudgeRun(task.id);
+      let recoveredRunId: string | null = null;
+      if (!hasPendingRun) {
+        recoveredRunId = await restoreLatestJudgeRun(task.id);
+      }
+
+      await db
+        .update(tasks)
+        .set({
+          status: "blocked",
+          blockReason: "awaiting_judge",
+          retryCount: (task.retryCount ?? 0) + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(tasks.id, task.id));
+
+      await recordEvent({
+        type: "task.requeued",
+        entityType: "task",
+        entityId: task.id,
+        payload: {
+          reason: hasPendingRun
+            ? "pr_review_failed_to_awaiting_judge"
+            : "pr_review_failed_run_restored",
+          runId: recoveredRunId,
+        },
+      });
+      console.log(`[Cleanup] Routed failed PR-review task back to awaiting_judge: ${task.id}`);
+      requeued++;
+      continue;
+    }
+
     const [latestRun] = await db
       .select({
         errorMessage: runs.errorMessage,
@@ -560,8 +635,8 @@ export async function requeueFailedTasksWithCooldown(
       || currentRetry >= categoryRetryLimit
       || repeatedFailure
     ) {
-      const blockReason: Extract<BlockReason, "needs_rework" | "needs_human"> = repeatedFailure
-        ? "needs_human"
+      const blockReason: Extract<BlockReason, "needs_rework"> = repeatedFailure
+        ? "needs_rework"
         : failure.blockReason;
       const blockDetailReason = repeatedFailure ? "repeated_same_failure_signature" : failure.reason;
       await db
@@ -664,14 +739,20 @@ export async function requeueBlockedTasksWithCooldown(
     const reason = normalizeBlockReason(task.blockReason);
     const nextRetryCount = (task.retryCount ?? 0) + 1;
 
-    if (reason === "needs_human") {
-      const hasPendingRun = await hasPendingJudgeRun(task.id);
-      let recoveredRunId: string | null = null;
-      if (!hasPendingRun) {
-        recoveredRunId = await restoreLatestJudgeRun(task.id);
-      }
+    if (reason === "needs_rework") {
+      if (
+        isPrReviewTask({
+          title: task.title,
+          goal: task.goal,
+          context: task.context,
+        })
+      ) {
+        const hasPendingRun = await hasPendingJudgeRun(task.id);
+        let recoveredRunId: string | null = null;
+        if (!hasPendingRun) {
+          recoveredRunId = await restoreLatestJudgeRun(task.id);
+        }
 
-      if (hasPendingRun || recoveredRunId) {
         await db
           .update(tasks)
           .set({
@@ -688,50 +769,19 @@ export async function requeueBlockedTasksWithCooldown(
           entityId: task.id,
           payload: {
             reason: hasPendingRun
-              ? "needs_human_to_awaiting_judge"
-              : "needs_human_run_restored",
+              ? "pr_review_needs_rework_to_awaiting_judge"
+              : "pr_review_needs_rework_run_restored",
             runId: recoveredRunId,
             retryCount: nextRetryCount,
           },
         });
         console.log(
-          `[Cleanup] Converted needs_human task to awaiting_judge: ${task.id}`
+          `[Cleanup] Routed blocked PR-review task back to awaiting_judge: ${task.id}`
         );
         handled++;
         continue;
       }
 
-      if (!REQUEUE_NEEDS_HUMAN) {
-        // 明示設定がない限り needs_human は手動介入待ちのまま維持する
-        continue;
-      }
-
-      // 明示設定時のみ needs_human を通常キューへ戻す
-      await db
-        .update(tasks)
-        .set({
-          status: "queued",
-          blockReason: null,
-          retryCount: nextRetryCount,
-          updatedAt: new Date(),
-        })
-        .where(eq(tasks.id, task.id));
-
-      await recordEvent({
-        type: "task.requeued",
-        entityType: "task",
-        entityId: task.id,
-        payload: {
-          reason: "needs_human_fallback_retry",
-          retryCount: nextRetryCount,
-        },
-      });
-      console.log(`[Cleanup] Requeued needs_human task: ${task.id}`);
-      handled++;
-      continue;
-    }
-
-    if (reason === "needs_rework") {
       // needs_rework は親タスクをfailed化し、分割した再作業タスクを自動生成する
       const context = normalizeContext(task.context);
       const notes = context.notes
@@ -840,6 +890,8 @@ export async function requeueBlockedTasksWithCooldown(
       payload: {
         reason: reason === "awaiting_judge"
           ? "awaiting_judge_timeout_retry"
+          : reason === "quota_wait"
+            ? "quota_wait_retry"
           : "blocked_cooldown_retry",
         retryCount: nextRetryCount,
       },

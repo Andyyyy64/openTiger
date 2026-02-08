@@ -23,9 +23,9 @@ type RetryInfo = {
     | "cooldown_pending"
     | "retry_due"
     | "retry_exhausted"
-    | "needs_human"
     | "non_retryable_failure"
     | "awaiting_judge"
+    | "quota_wait"
     | "needs_rework"
     | "unknown";
   retryAt: string | null;
@@ -154,6 +154,7 @@ function buildRetryInfo(
   if (task.status === "blocked") {
     const retryAtMs = new Date(task.updatedAt).getTime() + BLOCKED_TASK_RETRY_COOLDOWN_MS;
     const retryInSeconds = Math.max(0, Math.ceil((retryAtMs - now) / 1000));
+    // legacy互換: needs_human は awaiting_judge 扱いに統一
     const normalizedBlockReason = task.blockReason === "needs_human"
       ? "awaiting_judge"
       : task.blockReason;
@@ -162,6 +163,8 @@ function buildRetryInfo(
       reason:
         normalizedBlockReason === "awaiting_judge"
           ? "awaiting_judge"
+          : normalizedBlockReason === "quota_wait"
+            ? "quota_wait"
           : normalizedBlockReason === "needs_rework"
             ? "needs_rework"
             : retryInSeconds > 0

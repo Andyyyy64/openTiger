@@ -42,7 +42,7 @@ export const JudgementsPage: React.FC = () => {
 
 const JudgementCard = ({ event }: { event: JudgementEvent }) => {
   const payload = event.payload ?? {};
-  const verdict = payload.verdict ?? 'unknown';
+  const verdict = normalizeLegacyVerdict(payload.verdict ?? 'unknown');
   const actions = payload.actions ?? {};
   const ciStatus = payload.summary?.ci?.status ?? (payload.summary?.ci?.pass ? 'success' : 'unknown');
   const policyPass = payload.summary?.policy?.pass;
@@ -208,12 +208,14 @@ const getVerdictColor = (verdict: string) => {
       return 'text-term-tiger';
     case 'request_changes':
       return 'text-red-500';
-    case 'needs_human':
-      return 'text-yellow-500';
     default:
       return 'text-zinc-500';
   }
 };
+
+function normalizeLegacyVerdict(verdict: string): string {
+  return verdict === 'needs_human' ? 'request_changes' : verdict;
+}
 
 const getStatusColor = (status: string) => {
   switch (status) {

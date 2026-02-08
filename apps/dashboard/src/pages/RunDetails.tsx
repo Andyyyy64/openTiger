@@ -169,7 +169,7 @@ const getStatusColor = (status: string) => {
 
 const JudgeReviewItem = ({ review }: { review: JudgementEvent }) => {
   const payload = review.payload ?? {};
-  const verdict = payload.verdict ?? 'unknown';
+  const verdict = normalizeLegacyVerdict(payload.verdict ?? 'unknown');
   const merged = payload.actions?.merged ?? false;
   const ciStatus = payload.summary?.ci?.status ?? (payload.summary?.ci?.pass ? 'success' : 'unknown');
 
@@ -203,10 +203,11 @@ const getVerdictColor = (verdict: string) => {
       return 'text-term-tiger';
     case 'request_changes':
       return 'text-red-500';
-    case 'needs_human':
-      return 'text-yellow-500';
     default:
       return 'text-zinc-500';
   }
 };
 
+function normalizeLegacyVerdict(verdict: string): string {
+  return verdict === 'needs_human' ? 'request_changes' : verdict;
+}
