@@ -1,6 +1,7 @@
 import { db } from "@openTiger/db";
 import { runs, tasks } from "@openTiger/db/schema";
 import { eq, and, gte, lte, sql, count, sum, avg } from "drizzle-orm";
+import { SYSTEM_ENTITY_ID } from "@openTiger/core";
 import { recordEvent } from "./event-logger.js";
 
 // コスト追跡設定
@@ -216,7 +217,7 @@ export async function recordCostAlert(
   await recordEvent({
     type: `cost.${alertType}`,
     entityType: "system",
-    entityId: "00000000-0000-0000-0000-000000000000",
+    entityId: SYSTEM_ENTITY_ID,
     payload: details,
   });
 

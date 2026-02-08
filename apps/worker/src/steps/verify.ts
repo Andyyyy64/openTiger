@@ -30,6 +30,7 @@ export interface VerifyOptions {
 export interface CommandResult {
   command: string;
   success: boolean;
+  outcome: "passed" | "failed" | "skipped";
   stdout: string;
   stderr: string;
   durationMs: number;
@@ -75,6 +76,7 @@ const ENV_EXAMPLE_PATHS = ["**/.env.example"];
 const GENERATED_EXTENSIONS = [".js", ".d.ts", ".d.ts.map"];
 const DEV_COMMAND_WARMUP_MS = 8000;
 const DEV_PORT_IN_USE_PATTERNS = [/Port\s+\d+\s+is already in use/i, /EADDRINUSE/i];
+const SHELL_CONTROL_PATTERN = /&&|\|\||[|;&<>`$()]/;
 const VERIFICATION_SCRIPT_CANDIDATES = [
   "lint",
   "build",
@@ -84,6 +86,108 @@ const VERIFICATION_SCRIPT_CANDIDATES = [
   "dev",
 ] as const;
 
+type ParsedCommand = {
+  executable: string;
+  args: string[];
+  env: Record<string, string>;
+};
+
+function tokenizeCommand(command: string): string[] | null {
+  const tokens: string[] = [];
+  let current = "";
+  let quote: "'" | '"' | null = null;
+  let escaped = false;
+
+  for (const char of command) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      if (quote === "'") {
+        current += char;
+      } else {
+        escaped = true;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (current.length > 0) {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (escaped || quote) {
+    return null;
+  }
+
+  if (current.length > 0) {
+    tokens.push(current);
+  }
+
+  return tokens;
+}
+
+function parseCommand(command: string): ParsedCommand | null {
+  const trimmed = command.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (SHELL_CONTROL_PATTERN.test(trimmed)) {
+    return null;
+  }
+
+  const tokens = tokenizeCommand(trimmed);
+  if (!tokens || tokens.length === 0) {
+    return null;
+  }
+
+  const env: Record<string, string> = {};
+  let index = 0;
+  while (index < tokens.length) {
+    const token = tokens[index];
+    if (!token || !/^[A-Za-z_][A-Za-z0-9_]*=.*/.test(token)) {
+      break;
+    }
+    const eqIndex = token.indexOf("=");
+    env[token.slice(0, eqIndex)] = token.slice(eqIndex + 1);
+    index += 1;
+  }
+
+  const executable = tokens[index];
+  if (!executable) {
+    return null;
+  }
+
+  return {
+    executable,
+    args: tokens.slice(index + 1),
+    env,
+  };
+}
+
 // コマンドを実行
 async function runCommand(
   command: string,
@@ -91,11 +195,25 @@ async function runCommand(
   timeoutMs = 300000
 ): Promise<CommandResult> {
   const startTime = Date.now();
-  const env = await buildTaskEnv(cwd);
+  const baseEnv = await buildTaskEnv(cwd);
+  const parsed = parseCommand(command);
+  if (!parsed) {
+    return {
+      command,
+      success: false,
+      outcome: "failed",
+      stdout: "",
+      stderr: "Unsupported command format. Shell operators are not allowed.",
+      durationMs: Date.now() - startTime,
+    };
+  }
+  const env = {
+    ...baseEnv,
+    ...parsed.env,
+  };
 
   return new Promise((resolve) => {
-    // シェル経由で実行
-    const process = spawn("sh", ["-c", command], {
+    const process = spawn(parsed.executable, parsed.args, {
       cwd,
       timeout: timeoutMs,
       env,
@@ -113,9 +231,11 @@ async function runCommand(
     });
 
     process.on("close", (code) => {
+      const success = code === 0;
       resolve({
         command,
-        success: code === 0,
+        success,
+        outcome: success ? "passed" : "failed",
         stdout,
         stderr,
         durationMs: Date.now() - startTime,
@@ -126,6 +246,7 @@ async function runCommand(
       resolve({
         command,
         success: false,
+        outcome: "failed",
         stdout,
         stderr: error.message,
         durationMs: Date.now() - startTime,
@@ -345,10 +466,25 @@ async function runDevCommandOnce(
   let stdout = "";
   let stderr = "";
   let timedOut = false;
-  const env = await buildTaskEnv(cwd);
+  const baseEnv = await buildTaskEnv(cwd);
+  const parsed = parseCommand(command);
+  if (!parsed) {
+    return {
+      command,
+      success: false,
+      outcome: "failed",
+      stdout,
+      stderr: "Unsupported command format. Shell operators are not allowed.",
+      durationMs: Date.now() - startTime,
+    };
+  }
+  const env = {
+    ...baseEnv,
+    ...parsed.env,
+  };
 
   return new Promise((resolve) => {
-    const child = spawn("sh", ["-c", command], {
+    const child = spawn(parsed.executable, parsed.args, {
       cwd,
       detached: true,
       env,
@@ -388,6 +524,7 @@ async function runDevCommandOnce(
       resolve({
         command,
         success,
+        outcome: success ? "passed" : "failed",
         stdout: timedOut
           ? `${stdout}\n[dev-check] warmup completed, process terminated`
           : stdout,
@@ -401,6 +538,7 @@ async function runDevCommandOnce(
       resolve({
         command,
         success: false,
+        outcome: "failed",
         stdout,
         stderr: error.message,
         durationMs: Date.now() - startTime,
@@ -673,6 +811,7 @@ export async function verifyChanges(
       commandResults.push({
         command,
         success: false,
+        outcome: "failed",
         stdout: "",
         stderr: message,
         durationMs: 0,
@@ -684,28 +823,32 @@ export async function verifyChanges(
     // Exclude from verification commands if check script doesn't exist
     if (isCheckCommand(command) && !checkScriptAvailable) {
       const notice = `Skipped: ${command} (check script not found)`;
-      console.warn(`  WARN: ${notice}`);
+      console.error(`  ✗ ${notice}`);
       commandResults.push({
         command,
-        success: true,
+        success: false,
+        outcome: "skipped",
         stdout: notice,
         stderr: "",
         durationMs: 0,
       });
-      continue;
+      allPassed = false;
+      break;
     }
 
     if (isUnsafeRuntimeCommand(command) && !isE2ECommand(command)) {
       const notice = `Skipped: ${command} (runtime/watch command is not allowed in verification)`;
-      console.warn(`  WARN: ${notice}`);
+      console.error(`  ✗ ${notice}`);
       commandResults.push({
         command,
-        success: true,
+        success: false,
+        outcome: "skipped",
         stdout: notice,
         stderr: "",
         durationMs: 0,
       });
-      continue;
+      allPassed = false;
+      break;
     }
 
     const normalizedCommand = normalizeVerificationCommand(command);
@@ -716,15 +859,17 @@ export async function verifyChanges(
     const scriptName = resolveRunScript(normalizedCommand);
     if (scriptName && !isFilteredCommand(normalizedCommand) && !rootScripts[scriptName]) {
       const notice = `Skipped: ${normalizedCommand} (script not found: ${scriptName})`;
-      console.warn(`  WARN: ${notice}`);
+      console.error(`  ✗ ${notice}`);
       commandResults.push({
         command: normalizedCommand,
-        success: true,
+        success: false,
+        outcome: "skipped",
         stdout: notice,
         stderr: "",
         durationMs: 0,
       });
-      continue;
+      allPassed = false;
+      break;
     }
     console.log(`Running: ${normalizedCommand}`);
     const result = isDevCommand(normalizedCommand)
@@ -735,7 +880,11 @@ export async function verifyChanges(
     if (result.success) {
       console.log(`  ✓ Passed (${Math.round(result.durationMs / 1000)}s)`);
     } else {
-      console.error(`  ✗ Failed`);
+      if (result.outcome === "skipped") {
+        console.error(`  ✗ Skipped (treated as failure)`);
+      } else {
+        console.error(`  ✗ Failed`);
+      }
       console.error(`  stderr: ${result.stderr.slice(0, 500)}`);
       allPassed = false;
       break; // 最初の失敗で停止

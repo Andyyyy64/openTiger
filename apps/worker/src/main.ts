@@ -343,6 +343,55 @@ function isNoCommitsBetweenError(message: string): boolean {
   return normalized.includes("no commits between");
 }
 
+interface FinalizeTaskStateOptions {
+  runId: string;
+  taskId: string;
+  agentId: string;
+  runStatus: "success" | "failed";
+  taskStatus: "done" | "blocked" | "failed";
+  blockReason: string | null;
+  costTokens?: number | null;
+  errorMessage?: string | null;
+}
+
+async function finalizeTaskState(options: FinalizeTaskStateOptions): Promise<void> {
+  const finishedAt = new Date();
+  const updatedAt = new Date();
+  const runUpdate: Partial<typeof runs.$inferInsert> = {
+    status: options.runStatus,
+    finishedAt,
+  };
+  if (options.costTokens !== undefined) {
+    runUpdate.costTokens = options.costTokens;
+  }
+  if (options.errorMessage !== undefined) {
+    runUpdate.errorMessage = options.errorMessage;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(runs)
+      .set(runUpdate)
+      .where(eq(runs.id, options.runId));
+
+    await tx
+      .update(tasks)
+      .set({
+        status: options.taskStatus,
+        blockReason: options.blockReason,
+        updatedAt,
+      })
+      .where(eq(tasks.id, options.taskId));
+
+    await tx.delete(leases).where(eq(leases.taskId, options.taskId));
+
+    await tx
+      .update(agents)
+      .set({ status: "idle", currentTaskId: null })
+      .where(eq(agents.id, options.agentId));
+  });
+}
+
 // Worker main processing
 export async function runWorker(
   taskData: Task,
@@ -557,30 +606,15 @@ export async function runWorker(
       console.log("\n[6/7] Skipping commit/PR...");
       console.log("[Worker] No repository diff detected after verification. Marking task as no-op success.");
 
-      await db
-        .update(runs)
-        .set({
-          status: "success",
-          finishedAt: new Date(),
-          costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
-        })
-        .where(eq(runs.id, runId));
-
-      await db
-        .update(tasks)
-        .set({
-          status: "done",
-          blockReason: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(tasks.id, taskId));
-
-      await db.delete(leases).where(eq(leases.taskId, taskId));
-
-      await db
-        .update(agents)
-        .set({ status: "idle", currentTaskId: null })
-        .where(eq(agents.id, agentId));
+      await finalizeTaskState({
+        runId,
+        taskId,
+        agentId,
+        runStatus: "success",
+        taskStatus: "done",
+        blockReason: null,
+        costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+      });
 
       console.log("\n" + "=".repeat(60));
       console.log("Task completed successfully (no-op).");
@@ -611,30 +645,15 @@ export async function runWorker(
       console.log("\n[7/7] Skipping PR...");
       console.log("[Worker] Commit step produced no new commit. Marking task as no-op success.");
 
-      await db
-        .update(runs)
-        .set({
-          status: "success",
-          finishedAt: new Date(),
-          costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
-        })
-        .where(eq(runs.id, runId));
-
-      await db
-        .update(tasks)
-        .set({
-          status: "done",
-          blockReason: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(tasks.id, taskId));
-
-      await db.delete(leases).where(eq(leases.taskId, taskId));
-
-      await db
-        .update(agents)
-        .set({ status: "idle", currentTaskId: null })
-        .where(eq(agents.id, agentId));
+      await finalizeTaskState({
+        runId,
+        taskId,
+        agentId,
+        runStatus: "success",
+        taskStatus: "done",
+        blockReason: null,
+        costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+      });
 
       console.log("\n" + "=".repeat(60));
       console.log("Task completed successfully (no-op after commit check).");
@@ -686,31 +705,16 @@ export async function runWorker(
       if (isNoCommitsBetweenError(prResult.error ?? "")) {
         console.warn("[Worker] No commits between base/head at PR creation. Treating as no-op success.");
 
-        await db
-          .update(runs)
-          .set({
-            status: "success",
-            finishedAt: new Date(),
-            costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
-            errorMessage: "No commits between branches; PR creation skipped as no-op.",
-          })
-          .where(eq(runs.id, runId));
-
-        await db
-          .update(tasks)
-          .set({
-            status: "done",
-            blockReason: null,
-            updatedAt: new Date(),
-          })
-          .where(eq(tasks.id, taskId));
-
-        await db.delete(leases).where(eq(leases.taskId, taskId));
-
-        await db
-          .update(agents)
-          .set({ status: "idle", currentTaskId: null })
-          .where(eq(agents.id, agentId));
+        await finalizeTaskState({
+          runId,
+          taskId,
+          agentId,
+          runStatus: "success",
+          taskStatus: "done",
+          blockReason: null,
+          costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+          errorMessage: "No commits between branches; PR creation skipped as no-op.",
+        });
 
         return {
           success: true,
@@ -745,36 +749,18 @@ export async function runWorker(
       });
     }
 
-    // Record execution success
-    await db
-      .update(runs)
-      .set({
-        status: "success",
-        finishedAt: new Date(),
-        costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
-      })
-      .where(eq(runs.id, runId));
-
     // Set to await automatic Judge review if PR exists
     const needsReview = repoMode === "local" || Boolean(prResult.pr);
     const nextStatus = needsReview ? "blocked" : "done";
-    await db
-      .update(tasks)
-      .set({
-        status: nextStatus,
-        blockReason: needsReview ? "awaiting_judge" : null,
-        updatedAt: new Date(),
-      })
-      .where(eq(tasks.id, taskId));
-
-    // Release lease
-    await db.delete(leases).where(eq(leases.taskId, taskId));
-
-    // Return agent to idle
-    await db
-      .update(agents)
-      .set({ status: "idle", currentTaskId: null })
-      .where(eq(agents.id, agentId));
+    await finalizeTaskState({
+      runId,
+      taskId,
+      agentId,
+      runStatus: "success",
+      taskStatus: nextStatus,
+      blockReason: needsReview ? "awaiting_judge" : null,
+      costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+    });
 
     console.log("\n" + "=".repeat(60));
     console.log("Task completed successfully!");
@@ -806,34 +792,15 @@ export async function runWorker(
     }
     console.error("=".repeat(60));
 
-    // 失敗を記録
-    await db
-      .update(runs)
-      .set({
-        status: "failed",
-        finishedAt: new Date(),
-        errorMessage,
-      })
-      .where(eq(runs.id, runId));
-
-    // Update task to failed
-    await db
-      .update(tasks)
-      .set({
-        status: nextTaskStatus,
-        blockReason: nextBlockReason,
-        updatedAt: new Date(),
-      })
-      .where(eq(tasks.id, taskId));
-
-    // Release lease
-    await db.delete(leases).where(eq(leases.taskId, taskId));
-
-    // Return agent to idle
-    await db
-      .update(agents)
-      .set({ status: "idle", currentTaskId: null })
-      .where(eq(agents.id, agentId));
+    await finalizeTaskState({
+      runId,
+      taskId,
+      agentId,
+      runStatus: "failed",
+      taskStatus: nextTaskStatus,
+      blockReason: nextBlockReason,
+      errorMessage,
+    });
 
     return {
       success: false,

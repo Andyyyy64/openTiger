@@ -1,9 +1,8 @@
 import { db } from "@openTiger/db";
 import { tasks, runs, agents, leases, artifacts } from "@openTiger/db/schema";
 import { eq, inArray, and, lt, not, isNull, desc } from "drizzle-orm";
+import { SYSTEM_ENTITY_ID } from "@openTiger/core";
 import { recordEvent } from "../monitors/event-logger.js";
-
-const SYSTEM_ENTITY_ID = "00000000-0000-0000-0000-000000000000";
 
 // クリーンアップ結果
 interface CleanupResult {
@@ -209,7 +208,7 @@ export async function performFullCleanup(
   await recordEvent({
     type: "cycle.cleanup",
     entityType: "cycle",
-    entityId: "00000000-0000-0000-0000-000000000000",
+    entityId: SYSTEM_ENTITY_ID,
     payload: { ...result },
   });
 

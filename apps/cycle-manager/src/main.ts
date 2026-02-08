@@ -1,12 +1,12 @@
-import { createWriteStream, mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 import { db } from "@openTiger/db";
 import { events, agents, runs, artifacts, tasks } from "@openTiger/db/schema";
 import { eq, desc, and, inArray, gte, isNotNull, isNull } from "drizzle-orm";
-import type { CycleConfig } from "@openTiger/core";
+import { SYSTEM_ENTITY_ID, type CycleConfig } from "@openTiger/core";
+import { setupProcessLogging } from "@openTiger/core/process-logging";
 import {
   startNewCycle,
   endCurrentCycle,
@@ -39,41 +39,6 @@ import {
   performHealthCheck,
 } from "./state-manager.js";
 import type { SystemState } from "./state-manager.js";
-
-function setupProcessLogging(logName: string): string | undefined {
-  const logDir = process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
-
-  try {
-    mkdirSync(logDir, { recursive: true });
-  } catch (error) {
-    console.error(`[Logger] Failed to create log dir: ${logDir}`, error);
-    return;
-  }
-
-  const logPath = join(logDir, `${logName}.log`);
-  const stream = createWriteStream(logPath, { flags: "a" });
-
-  // ターミナルが流れても追跡できるようにログをファイルに残す
-  const stdoutWrite = process.stdout.write.bind(process.stdout);
-  const stderrWrite = process.stderr.write.bind(process.stderr);
-
-  process.stdout.write = ((chunk, encoding, callback) => {
-    stream.write(chunk);
-    return stdoutWrite(chunk, encoding as never, callback as never);
-  }) as typeof process.stdout.write;
-
-  process.stderr.write = ((chunk, encoding, callback) => {
-    stream.write(chunk);
-    return stderrWrite(chunk, encoding as never, callback as never);
-  }) as typeof process.stderr.write;
-
-  process.on("exit", () => {
-    stream.end();
-  });
-
-  console.log(`[Logger] Cycle Manager logs are written to ${logPath}`);
-  return logPath;
-}
 
 // Cycle Manager設定
 interface CycleManagerConfig {
@@ -148,6 +113,7 @@ let lastReplanAt: number | null = null;
 let warnedMissingRequirementPath = false;
 const replanDebugEnabled = process.env.REPLAN_DEBUG === "true";
 const CYCLE_ENDING_CRITICAL_ANOMALIES = new Set(["stuck_task", "cost_spike"]);
+const SHELL_CONTROL_PATTERN = /&&|\|\||[|;&<>`$()]/;
 
 interface ReplanSignature {
   signature: string;
@@ -465,9 +431,98 @@ async function shouldTriggerReplan(
   return { shouldRun: true, signature };
 }
 
-function buildReplanCommand(config: CycleManagerConfig): string {
+type ParsedCommand = {
+  executable: string;
+  args: string[];
+};
+
+function tokenizeCommand(command: string): string[] | null {
+  const tokens: string[] = [];
+  let current = "";
+  let quote: "'" | '"' | null = null;
+  let escaped = false;
+
+  for (const char of command) {
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      if (quote === "'") {
+        current += char;
+      } else {
+        escaped = true;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (current.length > 0) {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (escaped || quote) {
+    return null;
+  }
+
+  if (current.length > 0) {
+    tokens.push(current);
+  }
+
+  return tokens;
+}
+
+function parseCommand(command: string): ParsedCommand | null {
+  const trimmed = command.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (SHELL_CONTROL_PATTERN.test(trimmed)) {
+    return null;
+  }
+  const tokens = tokenizeCommand(trimmed);
+  if (!tokens || tokens.length === 0) {
+    return null;
+  }
+  const [executable, ...args] = tokens;
+  if (!executable) {
+    return null;
+  }
+  return { executable, args };
+}
+
+function buildReplanCommand(config: CycleManagerConfig): ParsedCommand | null {
+  const parsed = parseCommand(config.replanCommand);
+  if (!parsed) {
+    return null;
+  }
   const requirementPath = resolve(config.replanRequirementPath ?? "");
-  return `${config.replanCommand} "${requirementPath}"`;
+  return {
+    executable: parsed.executable,
+    args: [...parsed.args, requirementPath],
+  };
 }
 
 function buildPlannerReplanEnv(config: CycleManagerConfig): Record<string, string> {
@@ -507,11 +562,24 @@ async function triggerReplan(
   }
 
   const command = buildReplanCommand(config);
+  if (!command) {
+    await recordEvent({
+      type: "planner.replan_failed",
+      entityType: "system",
+      entityId: SYSTEM_ENTITY_ID,
+      payload: {
+        error: "Invalid REPLAN_COMMAND. Shell operators are not allowed.",
+      },
+    });
+    return;
+  }
   const plannerEnv = buildPlannerReplanEnv(config);
   replanInProgress = true;
   lastReplanAt = Date.now();
 
-  console.log(`[CycleManager] Triggering planner: ${command}`);
+  console.log(
+    `[CycleManager] Triggering planner: ${[command.executable, ...command.args].join(" ")}`
+  );
   if (plannerEnv.PLANNER_REPO_URL) {
     console.log(
       `[CycleManager] Replan planner env: REPO_MODE=${plannerEnv.REPO_MODE}, PLANNER_USE_REMOTE=${plannerEnv.PLANNER_USE_REMOTE}, PLANNER_REPO_URL=${plannerEnv.PLANNER_REPO_URL}`
@@ -520,7 +588,7 @@ async function triggerReplan(
   await recordEvent({
     type: "planner.replan_triggered",
     entityType: "system",
-    entityId: "00000000-0000-0000-0000-000000000000",
+    entityId: SYSTEM_ENTITY_ID,
     payload: {
       reason: "tasks_empty",
       requirementPath: resolve(config.replanRequirementPath),
@@ -531,7 +599,7 @@ async function triggerReplan(
     },
   });
 
-  const child = spawn("sh", ["-c", command], {
+  const child = spawn(command.executable, command.args, {
     cwd: config.replanWorkdir,
     env: plannerEnv,
   });
@@ -553,7 +621,7 @@ async function triggerReplan(
     void recordEvent({
       type: "planner.replan_finished",
       entityType: "system",
-      entityId: "00000000-0000-0000-0000-000000000000",
+      entityId: SYSTEM_ENTITY_ID,
       payload: {
         exitCode,
         signature: signature?.signature,
@@ -569,7 +637,7 @@ async function triggerReplan(
     void recordEvent({
       type: "planner.replan_failed",
       entityType: "system",
-      entityId: "00000000-0000-0000-0000-000000000000",
+      entityId: SYSTEM_ENTITY_ID,
       payload: {
         error: error.message,
       },
@@ -645,7 +713,7 @@ async function runMonitorLoop(): Promise<void> {
       await recordEvent({
         type: "cost.limit_exceeded",
         entityType: "system",
-        entityId: "00000000-0000-0000-0000-000000000000",
+        entityId: SYSTEM_ENTITY_ID,
         payload: costStatus,
       });
     }
@@ -664,7 +732,7 @@ async function runMonitorLoop(): Promise<void> {
         await recordEvent({
           type: "planner.replan_skipped",
           entityType: "system",
-          entityId: "00000000-0000-0000-0000-000000000000",
+          entityId: SYSTEM_ENTITY_ID,
           payload: {
             reason: "no_diff",
             signature: replanDecision.signature?.signature,
@@ -825,7 +893,9 @@ async function handleCommand(command: string): Promise<void> {
 
 // メイン処理
 async function main(): Promise<void> {
-  setupProcessLogging(process.env.OPENTIGER_LOG_NAME ?? "cycle-manager");
+  setupProcessLogging(process.env.OPENTIGER_LOG_NAME ?? "cycle-manager", {
+    label: "Cycle Manager",
+  });
   console.log("=".repeat(60));
   console.log("openTiger Cycle Manager");
   console.log("=".repeat(60));

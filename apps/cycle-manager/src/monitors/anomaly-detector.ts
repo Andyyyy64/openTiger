@@ -1,7 +1,7 @@
 import { db } from "@openTiger/db";
 import { runs, tasks, agents, leases } from "@openTiger/db/schema";
 import { eq, and, gte, lt, count, sql } from "drizzle-orm";
-import type { AnomalyAlert } from "@openTiger/core";
+import { SYSTEM_ENTITY_ID, type AnomalyAlert } from "@openTiger/core";
 import { recordEvent } from "./event-logger.js";
 import { getLastHourCost, getTodayCost } from "./cost-tracker.js";
 
@@ -41,9 +41,6 @@ export function getDetectedAnomalies(): AnomalyAlert[] {
 export function clearAnomalies(): void {
   detectedAnomalies = [];
 }
-
-// システムエンティティ用の固定UUID
-const SYSTEM_ENTITY_ID = "00000000-0000-0000-0000-000000000000";
 
 // 異常を記録
 async function reportAnomaly(alert: AnomalyAlert): Promise<void> {

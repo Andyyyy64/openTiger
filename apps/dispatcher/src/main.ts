@@ -1,9 +1,9 @@
-import { createWriteStream, mkdirSync } from "node:fs";
 import { join, resolve, relative, isAbsolute } from "node:path";
 import { db } from "@openTiger/db";
 import { tasks, agents, runs } from "@openTiger/db/schema";
 import { and, eq } from "drizzle-orm";
 import { getRepoMode, getLocalRepoPath, getLocalWorktreeRoot } from "@openTiger/core";
+import { setupProcessLogging } from "@openTiger/core/process-logging";
 import {
   createTaskQueue,
   enqueueTask,
@@ -30,41 +30,6 @@ import {
   getAvailableAgents,
   type LaunchMode,
 } from "./scheduler/index.js";
-
-function setupProcessLogging(logName: string): string | undefined {
-  const logDir = process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
-
-  try {
-    mkdirSync(logDir, { recursive: true });
-  } catch (error) {
-    console.error(`[Logger] Failed to create log dir: ${logDir}`, error);
-    return;
-  }
-
-  const logPath = join(logDir, `${logName}.log`);
-  const stream = createWriteStream(logPath, { flags: "a" });
-
-  // ターミナルが流れても追跡できるようにログをファイルに残す
-  const stdoutWrite = process.stdout.write.bind(process.stdout);
-  const stderrWrite = process.stderr.write.bind(process.stderr);
-
-  process.stdout.write = ((chunk, encoding, callback) => {
-    stream.write(chunk);
-    return stdoutWrite(chunk, encoding as never, callback as never);
-  }) as typeof process.stdout.write;
-
-  process.stderr.write = ((chunk, encoding, callback) => {
-    stream.write(chunk);
-    return stderrWrite(chunk, encoding as never, callback as never);
-  }) as typeof process.stderr.write;
-
-  process.on("exit", () => {
-    stream.end();
-  });
-
-  console.log(`[Logger] Dispatcher logs are written to ${logPath}`);
-  return logPath;
-}
 
 // ディスパッチャー設定
 interface DispatcherConfig {
@@ -412,7 +377,7 @@ function setupSignalHandlers(): void {
 
 // メイン処理
 async function main(): Promise<void> {
-  setupProcessLogging(process.env.OPENTIGER_LOG_NAME ?? "dispatcher");
+  setupProcessLogging(process.env.OPENTIGER_LOG_NAME ?? "dispatcher", { label: "Dispatcher" });
   const config = { ...DEFAULT_CONFIG };
   config.workspacePath = resolveWorkspacePath(config);
   config.localWorktreeRoot = resolveLocalWorktreeRoot(config);
