@@ -182,25 +182,43 @@ export async function fetchLatest(cwd: string): Promise<GitResult> {
   return execGit(["fetch", "origin"], cwd);
 }
 
+export async function fetchRefspecs(
+  cwd: string,
+  refspecs: string[]
+): Promise<GitResult> {
+  if (refspecs.length === 0) {
+    return {
+      success: true,
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+    };
+  }
+  return execGit(["fetch", "origin", ...refspecs], cwd);
+}
+
 // ブランチを作成してチェックアウト
 export async function createBranch(
   cwd: string,
   branchName: string,
-  baseBranch = "main"
+  baseRef = "main"
 ): Promise<GitResult> {
-  // まずベースブランチに切り替えを試みる
-  const checkoutResult = await execGit(["checkout", baseBranch], cwd);
-  
-  if (checkoutResult.success) {
-    // ベースブランチが存在する場合、最新を取得
-    await execGit(["pull", "origin", baseBranch], cwd);
-  } else {
-    // ベースブランチが存在しない（空のリポジトリなど）場合、
-    // 現在のブランチ（通常は空のHEAD）から新しいブランチを作成する
-    console.warn(`Base branch ${baseBranch} not found, creating ${branchName} from current HEAD`);
+  // 指定したベース参照（branch/ref）からブランチ作成を優先
+  const fromRefResult = await execGit(["checkout", "-B", branchName, baseRef], cwd);
+  if (fromRefResult.success) {
+    return fromRefResult;
+  }
+  if (baseRef.startsWith("origin/") || baseRef.startsWith("refs/")) {
+    return fromRefResult;
   }
 
-  // 既存ブランチがあっても再実行できるように -B で作成/リセットする
+  // 互換性のため main/branch 起点の従来フローにフォールバック
+  const checkoutResult = await execGit(["checkout", baseRef], cwd);
+  if (checkoutResult.success) {
+    await execGit(["pull", "origin", baseRef], cwd);
+  } else {
+    console.warn(`Base ref ${baseRef} not found, creating ${branchName} from current HEAD`);
+  }
   return execGit(["checkout", "-B", branchName], cwd);
 }
 
