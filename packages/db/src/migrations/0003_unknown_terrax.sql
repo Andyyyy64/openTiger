@@ -33,6 +33,6 @@ CREATE TABLE "config" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "tasks" ADD COLUMN "target_area" text;--> statement-breakpoint
-ALTER TABLE "tasks" ADD COLUMN "touches" text[] DEFAULT '{}' NOT NULL;--> statement-breakpoint
-ALTER TABLE "tasks" ADD COLUMN "retry_count" integer DEFAULT 0 NOT NULL;
+ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "target_area" text;--> statement-breakpoint
+ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "touches" text[] DEFAULT '{}' NOT NULL;--> statement-breakpoint
+ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "retry_count" integer DEFAULT 0 NOT NULL;

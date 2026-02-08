@@ -8,11 +8,11 @@ export const PolicySchema = z.object({
   // 変更を禁止するパス（glob）
   deniedPaths: z.array(z.string()).default([]),
 
-  // 変更行数の上限（初期構築でも余裕をもたせる）
-  maxLinesChanged: z.number().int().positive().default(5000),
+  // 変更行数の上限
+  maxLinesChanged: z.number().int().positive().default(500),
 
   // 変更ファイル数の上限
-  maxFilesChanged: z.number().int().positive().default(100),
+  maxFilesChanged: z.number().int().positive().default(20),
 
   // 禁止コマンド（正規表現）
   deniedCommands: z.array(z.string()).default([

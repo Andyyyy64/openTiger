@@ -1,4 +1,4 @@
-ALTER TABLE "config" ADD COLUMN "github_token" text DEFAULT '' NOT NULL;--> statement-breakpoint
-ALTER TABLE "config" ADD COLUMN "github_owner" text DEFAULT '' NOT NULL;--> statement-breakpoint
-ALTER TABLE "config" ADD COLUMN "github_repo" text DEFAULT '' NOT NULL;--> statement-breakpoint
-ALTER TABLE "config" ADD COLUMN "repo_url" text DEFAULT '' NOT NULL;
+ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "github_token" text DEFAULT '' NOT NULL;--> statement-breakpoint
+ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "github_owner" text DEFAULT '' NOT NULL;--> statement-breakpoint
+ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "github_repo" text DEFAULT '' NOT NULL;--> statement-breakpoint
+ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "repo_url" text DEFAULT '' NOT NULL;

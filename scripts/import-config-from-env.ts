@@ -2,46 +2,13 @@ import { resolve } from "node:path";
 import dotenv from "dotenv";
 import { db, closeDb } from "../packages/db/src/client.ts";
 import { config as configTable } from "../packages/db/src/schema.ts";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   CONFIG_KEYS,
-  DEFAULT_CONFIG,
   buildConfigRecord,
   rowToConfig,
 } from "../apps/api/src/system-config.ts";
-
-async function ensureConfigRow() {
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_wait_on_quota" text DEFAULT 'true' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_quota_retry_delay_ms" text DEFAULT '30000' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_count" text DEFAULT '1' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_count" text DEFAULT '1' NOT NULL`
-  );
-
-  const existing = await db.select().from(configTable).limit(1);
-  const current = existing[0];
-  if (current) {
-    return current;
-  }
-  const created = await db
-    .insert(configTable)
-    .values(buildConfigRecord(DEFAULT_CONFIG, { includeDefaults: true }))
-    .returning();
-  const row = created[0];
-  if (!row) {
-    throw new Error("Failed to create config");
-  }
-  return row;
-}
+import { ensureConfigRow } from "../apps/api/src/config-store.ts";
 
 async function main(): Promise<void> {
   const envPath = process.env.OPENTIGER_ENV_PATH ?? resolve(process.cwd(), ".env");

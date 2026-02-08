@@ -1,6 +1,6 @@
 # openTiger
 
-![openTiger](assets/avator.png)
+![openTiger](assets/avatar.png)
 
 **Never-stalling autonomous development orchestration.**
 

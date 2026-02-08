@@ -35,8 +35,8 @@ describe("PolicySchema", () => {
     if (result.success) {
       expect(result.data.allowedPaths).toEqual(["**/*"]);
       expect(result.data.deniedPaths).toEqual([]);
-      expect(result.data.maxLinesChanged).toBe(5000);
-      expect(result.data.maxFilesChanged).toBe(100);
+      expect(result.data.maxLinesChanged).toBe(500);
+      expect(result.data.maxFilesChanged).toBe(20);
       expect(result.data.autoMerge.enabled).toBe(false);
       expect(result.data.autoMerge.maxRiskLevel).toBe("low");
       expect(result.data.tokenLimits.perTask).toBe(1000000);
@@ -56,7 +56,7 @@ describe("PolicySchema", () => {
       expect(result.data.allowedPaths).toEqual(["src/api/**"]);
       expect(result.data.maxLinesChanged).toBe(200);
       // デフォルトが適用される
-      expect(result.data.maxFilesChanged).toBe(100);
+      expect(result.data.maxFilesChanged).toBe(20);
       expect(result.data.autoMerge.enabled).toBe(false);
     }
   });
@@ -104,8 +104,8 @@ describe("DEFAULT_POLICY", () => {
   it("デフォルトポリシーが正しく定義されている", () => {
     expect(DEFAULT_POLICY.allowedPaths).toEqual(["**/*"]);
     expect(DEFAULT_POLICY.deniedPaths).toEqual([]);
-    expect(DEFAULT_POLICY.maxLinesChanged).toBe(5000);
-    expect(DEFAULT_POLICY.maxFilesChanged).toBe(100);
+    expect(DEFAULT_POLICY.maxLinesChanged).toBe(500);
+    expect(DEFAULT_POLICY.maxFilesChanged).toBe(20);
   });
 
   it("デフォルトの禁止コマンドが設定されている", () => {
