@@ -20,10 +20,10 @@ export const TasksPage: React.FC = () => {
   return (
     <div className="p-6 text-[var(--color-term-fg)]">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
           &gt; Task_Scheduler
         </h1>
-        <Link to="/tasks/new" className="border border-[var(--color-term-green)] text-[var(--color-term-green)] px-4 py-2 text-sm uppercase hover:bg-[var(--color-term-green)] hover:text-black transition-colors">
+        <Link to="/tasks/new" className="border border-[var(--color-term-tiger)] text-[var(--color-term-tiger)] px-4 py-2 text-sm uppercase hover:bg-[var(--color-term-tiger)] hover:text-black transition-colors">
           [+ New Task]
         </Link>
       </div>
@@ -57,9 +57,9 @@ export const TasksPage: React.FC = () => {
                 </tr>
               ) : (
                 tasks?.map((task: TaskView) => (
-                  <tr key={task.id} className="hover:bg-[var(--color-term-green)]/5 transition-colors group">
+                  <tr key={task.id} className="hover:bg-[var(--color-term-tiger)]/5 transition-colors group">
                     <td className="px-4 py-2 align-top">
-                      <Link to={`/tasks/${task.id}`} className="font-bold text-[var(--color-term-fg)] hover:text-[var(--color-term-green)] block">
+                      <Link to={`/tasks/${task.id}`} className="font-bold text-[var(--color-term-fg)] hover:text-[var(--color-term-tiger)] block">
                         {task.title}
                       </Link>
                       <div className="text-xs text-zinc-600 truncate max-w-xs">{task.goal}</div>
@@ -97,7 +97,7 @@ export const TasksPage: React.FC = () => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'done': return 'text-[var(--color-term-green)]';
+    case 'done': return 'text-[var(--color-term-tiger)]';
     case 'running': return 'text-blue-400 animate-pulse';
     case 'failed': return 'text-red-500';
     case 'blocked': return 'text-yellow-500';
@@ -109,7 +109,7 @@ const getRiskColor = (risk: string) => {
   switch (risk) {
     case 'high': return 'text-red-500 font-bold';
     case 'medium': return 'text-yellow-500';
-    default: return 'text-[var(--color-term-green)]';
+    default: return 'text-[var(--color-term-tiger)]';
   }
 };
 

@@ -43,7 +43,7 @@ export const AgentDetailsPage: React.FC = () => {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6 text-[var(--color-term-fg)]">
-      <Link to="/agents" className="inline-block text-xs font-mono text-zinc-500 hover:text-[var(--color-term-green)] mb-2 group">
+      <Link to="/agents" className="inline-block text-xs font-mono text-zinc-500 hover:text-[var(--color-term-tiger)] mb-2 group">
         &lt; cd ..
       </Link>
 
@@ -55,7 +55,7 @@ export const AgentDetailsPage: React.FC = () => {
             </h1>
             <div className="flex gap-4 mt-1 text-xs font-mono text-zinc-500">
               <span>ROLE: {agent.role.toUpperCase()}</span>
-              <span>STATUS: <span className={agent.status === 'idle' ? 'text-zinc-500' : 'text-[var(--color-term-green)]'}>{agent.status.toUpperCase()}</span></span>
+              <span>STATUS: <span className={agent.status === 'idle' ? 'text-zinc-500' : 'text-[var(--color-term-tiger)]'}>{agent.status.toUpperCase()}</span></span>
             </div>
           </div>
 
@@ -90,7 +90,7 @@ export const AgentDetailsPage: React.FC = () => {
           {!isLogLoading && !logError && !logData?.log && (
             <div className="text-zinc-600 italic">// Console output is empty.</div>
           )}
-          <div className="mt-2 w-2 h-4 bg-[var(--color-term-green)] animate-[pulse_1s_infinite]"></div>
+          <div className="mt-2 w-2 h-4 bg-[var(--color-term-tiger)] animate-[pulse_1s_infinite]"></div>
         </div>
       </section>
     </div>

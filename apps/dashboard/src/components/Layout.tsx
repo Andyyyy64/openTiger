@@ -24,17 +24,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isHealthy = health?.status === 'ok' && !isHealthError;
 
   return (
-    <div className="flex flex-col h-screen font-mono text-[var(--color-term-fg)] bg-[var(--color-term-bg)] overflow-hidden">
+    <div className="flex flex-col h-screen font-pixel text-[var(--color-term-fg)] bg-[var(--color-term-bg)] overflow-hidden">
       {/* Top Status Bar like a window title or terminal header */}
       <header className="h-10 border-b border-[var(--color-term-border)] flex items-center justify-between px-4 bg-[var(--color-term-bg)] shrink-0 select-none">
         <div className="flex items-center gap-4">
-          <span className="font-bold text-[var(--color-term-green)]">root@openTiger:~/dashboard</span>
+          <span className="font-bold text-[var(--color-term-tiger)] font-pixel text-lg">root@openTiger:~/dashboard</span>
         </div>
         <div className="flex items-center gap-6 text-sm">
           <div className="flex items-center gap-2">
             <span className="text-zinc-500">[STATUS]</span>
             {isHealthy ? (
-              <span className="text-[var(--color-term-green)]">ONLINE</span>
+              <span className="text-[var(--color-term-tiger)]">ONLINE</span>
             ) : (
               <span className="text-red-500 animate-pulse">OFFLINE</span>
             )}
@@ -56,7 +56,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="px-4 mb-4 text-xs text-zinc-500 select-none">
             EXPLORER
           </div>
-          <nav className="flex-1 overflow-y-auto font-mono text-sm">
+          <nav className="flex-1 overflow-y-auto font-pixel text-sm">
             <div className="px-2 space-y-px">
               <NavItem to="/" label="overview" />
               <NavItem to="/start" label="start" />
@@ -105,8 +105,8 @@ const NavItem = ({ to, label }: { to: string, label: string }) => (
     to={to}
     className={({ isActive }) =>
       `block px-3 py-1.5 transition-colors duration-0 ${isActive
-        ? 'bg-[var(--color-term-green)] text-black font-bold'
-        : 'text-zinc-400 hover:text-[var(--color-term-green)] hover:translate-x-1'
+        ? 'bg-[var(--color-term-tiger)] text-black font-bold'
+        : 'text-zinc-400 hover:text-[var(--color-term-tiger)] hover:translate-x-1'
       }`
     }
   >

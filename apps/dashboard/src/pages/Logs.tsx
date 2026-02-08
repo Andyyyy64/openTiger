@@ -72,7 +72,7 @@ export const LogsPage: React.FC = () => {
     <div className="p-6 max-w-[1400px] mx-auto space-y-6 text-[var(--color-term-fg)]">
       <section className="border border-[var(--color-term-border)] p-0">
         <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
-          <h1 className="text-lg font-bold uppercase tracking-wider text-[var(--color-term-green)]">
+          <h1 className="text-lg font-bold uppercase tracking-wider text-[var(--color-term-tiger)] font-pixel">
             &gt; Logs_Console
           </h1>
         </div>

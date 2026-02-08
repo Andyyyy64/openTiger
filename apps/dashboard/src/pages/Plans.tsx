@@ -12,7 +12,7 @@ export const PlansPage: React.FC = () => {
   return (
     <div className="p-6 text-[var(--color-term-fg)]">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
           &gt; Active_Plans
         </h1>
         <span className="text-xs text-zinc-500">
@@ -57,7 +57,7 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
             plan@{plan.agentId ?? 'planner'}
           </h2>
           {plan.requirement?.goal && (
-            <div className="text-zinc-400 text-sm font-mono border-l-2 border-[var(--color-term-green)] pl-2 mt-2">
+            <div className="text-zinc-400 text-sm font-mono border-l-2 border-[var(--color-term-tiger)] pl-2 mt-2">
               "{plan.requirement.goal}"
             </div>
           )}
@@ -66,7 +66,7 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
         <div className="flex flex-wrap gap-6 text-xs font-mono">
           <div>
             <div className="text-zinc-500 mb-1">TASKS</div>
-            <div className="text-[var(--color-term-green)]">
+            <div className="text-[var(--color-term-tiger)]">
               {plan.summary?.totalTasks ?? plan.taskIds.length} OK
             </div>
           </div>
@@ -144,7 +144,7 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'done':
-      return 'text-[var(--color-term-green)]';
+      return 'text-[var(--color-term-tiger)]';
     case 'running':
       return 'text-blue-400 animate-pulse';
     case 'failed':

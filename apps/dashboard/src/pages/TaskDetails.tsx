@@ -31,7 +31,7 @@ export const TaskDetailsPage: React.FC = () => {
 
   return (
     <div className="p-6 max-w-5xl mx-auto text-[var(--color-term-fg)] font-mono">
-      <Link to="/tasks" className="inline-block text-xs text-zinc-500 hover:text-[var(--color-term-green)] mb-6 group">
+      <Link to="/tasks" className="inline-block text-xs text-zinc-500 hover:text-[var(--color-term-tiger)] mb-6 group">
         &lt; cd ..
       </Link>
 
@@ -43,7 +43,7 @@ export const TaskDetailsPage: React.FC = () => {
             </span>
             <span className="text-zinc-500 text-xs">ID: {task.id}</span>
           </div>
-          <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+          <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
             &gt; Task: {task.title}
           </h1>
         </div>
@@ -51,7 +51,7 @@ export const TaskDetailsPage: React.FC = () => {
           <button className="text-zinc-400 hover:text-[var(--color-term-fg)] border border-zinc-700 hover:border-[var(--color-term-fg)] px-4 py-1 text-xs font-bold uppercase transition-all">
             [ EDIT_CONFIG ]
           </button>
-          <button className="text-[var(--color-term-green)] border border-[var(--color-term-green)] hover:bg-[var(--color-term-green)] hover:text-black px-4 py-1 text-xs font-bold uppercase transition-all">
+          <button className="text-[var(--color-term-tiger)] border border-[var(--color-term-tiger)] hover:bg-[var(--color-term-tiger)] hover:text-black px-4 py-1 text-xs font-bold uppercase transition-all">
             [ EXECUTE_RUN ]
           </button>
         </div>
@@ -127,9 +127,9 @@ export const TaskDetailsPage: React.FC = () => {
                         onClick={() => navigate(`/runs/${run.id}`)}
                         className="hover:bg-[var(--color-term-fg)]/5 transition-colors cursor-pointer group"
                       >
-                        <td className="px-4 py-2 text-[var(--color-term-fg)] group-hover:text-[var(--color-term-green)]">{run.agentId}</td>
+                        <td className="px-4 py-2 text-[var(--color-term-fg)] group-hover:text-[var(--color-term-tiger)]">{run.agentId}</td>
                         <td className="px-4 py-2">
-                          <span className={`font-bold ${run.status === 'success' ? 'text-[var(--color-term-green)]' : run.status === 'failed' ? 'text-red-500' : 'text-blue-400'}`}>
+                          <span className={`font-bold ${run.status === 'success' ? 'text-[var(--color-term-tiger)]' : run.status === 'failed' ? 'text-red-500' : 'text-blue-400'}`}>
                             [{run.status.toUpperCase()}]
                           </span>
                         </td>
@@ -228,7 +228,7 @@ export const TaskDetailsPage: React.FC = () => {
                     <Link
                       key={dependencyId}
                       to={`/tasks/${dependencyId}`}
-                      className="block text-xs font-mono text-[var(--color-term-fg)] hover:text-[var(--color-term-green)] hover:underline break-all"
+                      className="block text-xs font-mono text-[var(--color-term-fg)] hover:text-[var(--color-term-tiger)] hover:underline break-all"
                     >
                       &gt; {dependencyId}
                     </Link>
@@ -247,7 +247,7 @@ export const TaskDetailsPage: React.FC = () => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'done': return 'text-[var(--color-term-green)]';
+    case 'done': return 'text-[var(--color-term-tiger)]';
     case 'running': return 'text-blue-400 animate-pulse';
     case 'failed': return 'text-red-500';
     case 'blocked': return 'text-yellow-500';
@@ -259,7 +259,7 @@ const getRiskColor = (risk: string) => {
   switch (risk) {
     case 'high': return 'text-red-500 font-bold';
     case 'medium': return 'text-yellow-500';
-    default: return 'text-[var(--color-term-green)]';
+    default: return 'text-[var(--color-term-tiger)]';
   }
 };
 

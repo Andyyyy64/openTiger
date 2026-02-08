@@ -33,7 +33,7 @@ export const RunsPage: React.FC = () => {
 
   return (
     <div className="p-6 text-[var(--color-term-fg)]">
-      <h1 className="text-xl font-bold mb-8 uppercase tracking-widest text-[var(--color-term-green)]">
+      <h1 className="text-xl font-bold mb-8 uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
         &gt; Execution_Values (Runs)
       </h1>
 
@@ -61,7 +61,7 @@ export const RunsPage: React.FC = () => {
                   <div className="space-y-1 max-w-[70%]">
                     <div className="flex items-center gap-2 text-xs font-mono">
                       <span className="text-zinc-500">task:</span>
-                      <Link to={`/tasks/${group.taskId}`} className="text-[var(--color-term-green)] hover:underline font-bold">
+                      <Link to={`/tasks/${group.taskId}`} className="text-[var(--color-term-tiger)] hover:underline font-bold">
                         {group.taskId.slice(0, 8)}
                       </Link>
                     </div>
@@ -122,7 +122,7 @@ export const RunsPage: React.FC = () => {
                             {new Date(run.startedAt).toLocaleString()}
                           </td>
                           <td className="px-4 py-2 align-top text-right">
-                            <span className="text-[var(--color-term-green)] text-[10px] opacity-60 group-hover:opacity-100 hover:underline">
+                            <span className="text-[var(--color-term-tiger)] text-[10px] opacity-60 group-hover:opacity-100 hover:underline">
                               OPEN &gt;
                             </span>
                           </td>
@@ -142,7 +142,7 @@ export const RunsPage: React.FC = () => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'success': return 'text-[var(--color-term-green)]';
+    case 'success': return 'text-[var(--color-term-tiger)]';
     case 'failed': return 'text-red-500';
     case 'running': return 'text-blue-400 animate-pulse';
     default: return 'text-zinc-500';

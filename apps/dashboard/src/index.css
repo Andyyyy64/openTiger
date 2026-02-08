@@ -2,12 +2,21 @@
 
 @theme {
   --font-mono: 'Fira Code', monospace;
+  --font-pixel: 'Geist Pixel', monospace;
 
   --color-term-bg: #050505;
   --color-term-fg: #e5e5e5;
-  --color-term-green: #22c55e;
+  --color-term-tiger: #f59e0b; /* Amber 500 */
   --color-term-border: #262626;
-  --color-term-accent: #22c55e;
+  --color-term-accent: #f59e0b;
+}
+
+@font-face {
+  font-family: 'Geist Pixel';
+  src: url('/src/assets/fonts/GeistPixel-Square.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
 }
 
 :root {
@@ -45,7 +54,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-term-green);
+  background: var(--color-term-tiger);
 }
 
 /* Terminal Utilities */
@@ -53,12 +62,12 @@ body {
   border: 1px solid var(--color-term-border);
 }
 
-.term-text-green {
-  color: var(--color-term-green);
+.term-text-tiger {
+  color: var(--color-term-tiger);
 }
 
 .term-glow {
-  text-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
 }
 
 @keyframes cursor-blink {
@@ -77,5 +86,5 @@ body {
   content: '▋';
   margin-left: 2px;
   animation: cursor-blink 1s step-end infinite;
-  color: var(--color-term-green);
+  color: var(--color-term-tiger);
 }

@@ -12,7 +12,7 @@ export const JudgementsPage: React.FC = () => {
   return (
     <div className="p-6 text-[var(--color-term-fg)]">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
           &gt; Judge_Audit_Log
         </h1>
         <span className="text-xs text-zinc-500">
@@ -73,7 +73,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
 
           <div className="flex items-center gap-2 text-zinc-400">
             <span>TASK:</span>
-            <Link to={`/tasks/${event.taskId}`} className="text-[var(--color-term-green)] hover:underline">
+            <Link to={`/tasks/${event.taskId}`} className="text-[var(--color-term-tiger)] hover:underline">
               {event.taskId.slice(0, 8)}
             </Link>
           </div>
@@ -92,10 +92,10 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
           <div className={`${getStatusColor(ciStatus)}`}>
             CI:{ciStatus.toUpperCase()}
           </div>
-          <div className={policyPass ? 'text-[var(--color-term-green)]' : 'text-red-500'}>
+          <div className={policyPass ? 'text-[var(--color-term-tiger)]' : 'text-red-500'}>
             POLICY:{policyPass ? 'PASS' : 'FAIL'}
           </div>
-          <div className={llmPass ? 'text-[var(--color-term-green)]' : 'text-yellow-500'}>
+          <div className={llmPass ? 'text-[var(--color-term-tiger)]' : 'text-yellow-500'}>
             LLM:{llmPass ? 'PASS' : 'REV'}
           </div>
         </div>
@@ -129,7 +129,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
             {payload.mergeResult && (
               <>
                 <span className="text-zinc-500">LOCAL_MERGE</span>
-                <span className={payload.mergeResult.success ? 'text-[var(--color-term-green)]' : 'text-red-500'}>
+                <span className={payload.mergeResult.success ? 'text-[var(--color-term-tiger)]' : 'text-red-500'}>
                   {payload.mergeResult.success ? 'SUCCESS' : 'FAILED'}
                 </span>
               </>
@@ -205,7 +205,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
 const getVerdictColor = (verdict: string) => {
   switch (verdict) {
     case 'approve':
-      return 'text-[var(--color-term-green)]';
+      return 'text-[var(--color-term-tiger)]';
     case 'request_changes':
       return 'text-red-500';
     case 'needs_human':
@@ -218,7 +218,7 @@ const getVerdictColor = (verdict: string) => {
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'success':
-      return 'text-[var(--color-term-green)]';
+      return 'text-[var(--color-term-tiger)]';
     case 'failure':
     case 'error':
       return 'text-red-500';

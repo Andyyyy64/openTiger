@@ -33,7 +33,7 @@ export const OverviewPage: React.FC = () => {
 
   return (
     <div className="p-6 text-[var(--color-term-fg)]">
-      <h1 className="text-xl font-bold mb-8 uppercase tracking-widest text-[var(--color-term-green)]">
+      <h1 className="text-xl font-bold mb-8 uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
         &gt; System_Overview_
       </h1>
 
@@ -84,7 +84,7 @@ export const OverviewPage: React.FC = () => {
             <h2 className="text-sm font-bold uppercase tracking-wider">Recent Activity Log</h2>
             <span className="text-xs text-zinc-500">tail -f runs.log</span>
           </div>
-          <div className="p-4 space-y-2 font-mono text-sm max-h-[300px] overflow-y-auto">
+          <div className="p-4 space-y-2 font-pixel text-sm max-h-[300px] overflow-y-auto">
             {runs?.slice(0, 5).map(run => (
               <div key={run.id} className="flex items-start gap-3 pb-2 border-b border-zinc-800 last:border-0 last:pb-0">
                 <span className="text-zinc-500 text-xs whitespace-nowrap">
@@ -92,8 +92,8 @@ export const OverviewPage: React.FC = () => {
                 </span>
                 <div className="flex-1">
                   <div className="flex justify-between">
-                    <span>Agent <span className="text-[var(--color-term-green)]">{run.agentId}</span> started run</span>
-                    <span className={`text-xs uppercase ${run.status === 'success' ? 'text-[var(--color-term-green)]' : 'text-red-500'}`}>
+                    <span>Agent <span className="text-[var(--color-term-tiger)]">{run.agentId}</span> started run</span>
+                    <span className={`text-xs uppercase ${run.status === 'success' ? 'text-[var(--color-term-tiger)]' : 'text-red-500'}`}>
                       [{run.status}]
                     </span>
                   </div>
@@ -110,7 +110,7 @@ export const OverviewPage: React.FC = () => {
             <h2 className="text-sm font-bold uppercase tracking-wider">Process List (Tasks)</h2>
             <span className="text-xs text-zinc-500">top</span>
           </div>
-          <div className="p-4 space-y-1 font-mono text-sm">
+          <div className="p-4 space-y-1 font-pixel text-sm">
             <div className="flex text-xs text-zinc-500 mb-2 border-b border-zinc-800 pb-1">
               <span className="w-20">PID</span>
               <span className="flex-1">COMMAND/TITLE</span>
@@ -120,7 +120,7 @@ export const OverviewPage: React.FC = () => {
               <div key={task.id} className="flex items-center text-xs">
                 <span className="w-20 text-blue-400">{task.id.slice(0, 8)}</span>
                 <span className="flex-1 truncate pr-4 text-zinc-300">{task.title}</span>
-                <span className="w-20 text-right text-[var(--color-term-green)] animate-pulse">RUNNING</span>
+                <span className="w-20 text-right text-[var(--color-term-tiger)] animate-pulse">RUNNING</span>
               </div>
             ))}
             {tasks?.filter(t => t.status === 'running').length === 0 && (
@@ -148,7 +148,7 @@ const StatCard = ({
     <div className="flex justify-between items-start mb-2">
       <h3 className="text-zinc-500 text-xs font-bold uppercase">{title}</h3>
     </div>
-    <p className={`text-3xl font-mono mb-1 ${alert ? 'text-red-500' : 'text-[var(--color-term-green)]'}`}>{value}</p>
-    <p className="text-zinc-600 text-xs font-mono">{subValue}</p>
+    <p className={`text-3xl font-pixel mb-1 ${alert ? 'text-red-500' : 'text-[var(--color-term-tiger)]'}`}>{value}</p>
+    <p className="text-zinc-600 text-xs font-pixel">{subValue}</p>
   </div>
 );

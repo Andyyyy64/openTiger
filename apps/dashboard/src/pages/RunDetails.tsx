@@ -34,7 +34,7 @@ export const RunDetailsPage: React.FC = () => {
 
   return (
     <div className="p-6 max-w-5xl mx-auto text-[var(--color-term-fg)] font-mono">
-      <Link to="/runs" className="inline-block text-xs text-zinc-500 hover:text-[var(--color-term-green)] mb-6 group">
+      <Link to="/runs" className="inline-block text-xs text-zinc-500 hover:text-[var(--color-term-tiger)] mb-6 group">
         &lt; cd ..
       </Link>
 
@@ -46,7 +46,7 @@ export const RunDetailsPage: React.FC = () => {
             </span>
             <span className="text-zinc-500 text-xs">ID: {run.id}</span>
           </div>
-          <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+          <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
             &gt; Exec_Trace@{run.agentId}
           </h1>
           <p className="text-zinc-500 text-xs mt-1">
@@ -128,7 +128,7 @@ export const RunDetailsPage: React.FC = () => {
                       - {artifact.type.toUpperCase()}
                     </span>
                     {artifact.url && (
-                      <a href={artifact.url} target="_blank" rel="noreferrer" className="text-xs text-[var(--color-term-green)] hover:underline">
+                      <a href={artifact.url} target="_blank" rel="noreferrer" className="text-xs text-[var(--color-term-tiger)] hover:underline">
                         [OPEN]
                       </a>
                     )}
@@ -160,7 +160,7 @@ export const RunDetailsPage: React.FC = () => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'success': return 'text-[var(--color-term-green)]';
+    case 'success': return 'text-[var(--color-term-tiger)]';
     case 'failed': return 'text-red-500';
     case 'running': return 'text-blue-400 animate-pulse';
     default: return 'text-zinc-500';
@@ -200,7 +200,7 @@ const JudgeReviewItem = ({ review }: { review: JudgementEvent }) => {
 const getVerdictColor = (verdict: string) => {
   switch (verdict) {
     case 'approve':
-      return 'text-[var(--color-term-green)]';
+      return 'text-[var(--color-term-tiger)]';
     case 'request_changes':
       return 'text-red-500';
     case 'needs_human':

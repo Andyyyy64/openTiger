@@ -92,12 +92,12 @@ export const CreateTaskPage: React.FC = () => {
 
   return (
     <div className="p-6 max-w-4xl mx-auto text-[var(--color-term-fg)]">
-      <Link to="/tasks" className="inline-block text-xs font-mono text-zinc-500 hover:text-[var(--color-term-green)] mb-6 group">
+      <Link to="/tasks" className="inline-block text-xs font-mono text-zinc-500 hover:text-[var(--color-term-tiger)] mb-6 group">
         &lt; cd ..
       </Link>
 
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-green)]">
+        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
           &gt; Task_Initialization_Wizard
         </h1>
         <div className="text-xs text-zinc-500 font-mono">
@@ -116,7 +116,7 @@ export const CreateTaskPage: React.FC = () => {
               <input
                 type="text"
                 required
-                className="w-full bg-black border border-[var(--color-term-border)] px-3 py-2 text-sm text-[var(--color-term-fg)] font-mono focus:border-[var(--color-term-green)] focus:outline-none"
+                className="w-full bg-black border border-[var(--color-term-border)] px-3 py-2 text-sm text-[var(--color-term-fg)] font-mono focus:border-[var(--color-term-tiger)] focus:outline-none"
                 placeholder="e.g. Implement user authentication logic"
                 value={formData.title}
                 onChange={e => setFormData({ ...formData, title: e.target.value })}
@@ -128,7 +128,7 @@ export const CreateTaskPage: React.FC = () => {
               <textarea
                 required
                 rows={6}
-                className="w-full bg-black border border-[var(--color-term-border)] px-3 py-2 text-sm text-[var(--color-term-fg)] font-mono focus:border-[var(--color-term-green)] focus:outline-none"
+                className="w-full bg-black border border-[var(--color-term-border)] px-3 py-2 text-sm text-[var(--color-term-fg)] font-mono focus:border-[var(--color-term-tiger)] focus:outline-none"
                 placeholder="Define the objective and success conditions..."
                 value={formData.goal}
                 onChange={e => setFormData({ ...formData, goal: e.target.value })}
@@ -146,7 +146,7 @@ export const CreateTaskPage: React.FC = () => {
               <label className="block text-xs font-bold text-zinc-500 uppercase">Priority_Level</label>
               <input
                 type="number"
-                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-green)] focus:outline-none"
+                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-tiger)] focus:outline-none"
                 value={formData.priority}
                 onChange={e => setFormData({ ...formData, priority: parseInt(e.target.value) })}
               />
@@ -154,7 +154,7 @@ export const CreateTaskPage: React.FC = () => {
             <div className="space-y-1">
               <label className="block text-xs font-bold text-zinc-500 uppercase">Risk_Assessment</label>
               <select
-                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-green)] focus:outline-none"
+                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-tiger)] focus:outline-none"
                 value={formData.riskLevel}
                 onChange={e => setFormData({ ...formData, riskLevel: e.target.value as 'low' | 'medium' | 'high' })}
               >
@@ -166,7 +166,7 @@ export const CreateTaskPage: React.FC = () => {
             <div className="space-y-1">
               <label className="block text-xs font-bold text-zinc-500 uppercase">Assigned_Role</label>
               <select
-                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-green)] focus:outline-none"
+                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-tiger)] focus:outline-none"
                 value={formData.role}
                 onChange={e => setFormData({ ...formData, role: e.target.value as 'worker' | 'tester' })}
               >
@@ -178,7 +178,7 @@ export const CreateTaskPage: React.FC = () => {
               <label className="block text-xs font-bold text-zinc-500 uppercase">Timebox (Min)</label>
               <input
                 type="number"
-                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-green)] focus:outline-none"
+                className="w-full bg-black border border-b border-[var(--color-term-border)] px-2 py-1 text-sm font-mono focus:border-[var(--color-term-tiger)] focus:outline-none"
                 value={formData.timeboxMinutes}
                 onChange={e => setFormData({ ...formData, timeboxMinutes: parseInt(e.target.value) })}
               />
@@ -190,14 +190,14 @@ export const CreateTaskPage: React.FC = () => {
           <div className="border border-[var(--color-term-border)]">
             <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between items-center">
               <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider">Scope: Allowed_Paths</label>
-              <button type="button" onClick={() => addArrayItem('allowedPaths')} className="text-[var(--color-term-green)] text-xs hover:underline">[ ADD ]</button>
+              <button type="button" onClick={() => addArrayItem('allowedPaths')} className="text-[var(--color-term-tiger)] text-xs hover:underline">[ ADD ]</button>
             </div>
             <div className="p-4 space-y-2">
               {formData.allowedPaths.map((path, i) => (
                 <div key={i} className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 bg-black border border-[var(--color-term-border)] px-2 py-1 text-xs font-mono text-zinc-300 focus:border-[var(--color-term-green)] focus:outline-none"
+                    className="flex-1 bg-black border border-[var(--color-term-border)] px-2 py-1 text-xs font-mono text-zinc-300 focus:border-[var(--color-term-tiger)] focus:outline-none"
                     placeholder="src/**/*.ts"
                     value={path}
                     onChange={e => handleArrayChange('allowedPaths', i, e.target.value)}
@@ -213,7 +213,7 @@ export const CreateTaskPage: React.FC = () => {
           <div className="border border-[var(--color-term-border)]">
             <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between items-center">
               <label className="text-sm font-bold text-zinc-500 uppercase tracking-wider">Verification: Commands</label>
-              <button type="button" onClick={() => addArrayItem('commands')} className="text-[var(--color-term-green)] text-xs hover:underline">[ ADD ]</button>
+              <button type="button" onClick={() => addArrayItem('commands')} className="text-[var(--color-term-tiger)] text-xs hover:underline">[ ADD ]</button>
             </div>
             <div className="p-4 space-y-2">
               {formData.commands.map((cmd, i) => (
@@ -221,7 +221,7 @@ export const CreateTaskPage: React.FC = () => {
                   <div className="flex items-center text-zinc-600 select-none">$</div>
                   <input
                     type="text"
-                    className="flex-1 bg-black border border-[var(--color-term-border)] px-2 py-1 text-xs font-mono text-yellow-500 focus:border-[var(--color-term-green)] focus:outline-none"
+                    className="flex-1 bg-black border border-[var(--color-term-border)] px-2 py-1 text-xs font-mono text-yellow-500 focus:border-[var(--color-term-tiger)] focus:outline-none"
                     placeholder="npm test"
                     value={cmd}
                     onChange={e => handleArrayChange('commands', i, e.target.value)}
@@ -246,7 +246,7 @@ export const CreateTaskPage: React.FC = () => {
           <button
             type="submit"
             disabled={mutation.isPending}
-            className="text-[var(--color-term-green)] border border-[var(--color-term-green)] hover:bg-[var(--color-term-green)] hover:text-black px-6 py-2 text-sm font-bold font-mono uppercase transition-all disabled:opacity-50"
+            className="text-[var(--color-term-tiger)] border border-[var(--color-term-tiger)] hover:bg-[var(--color-term-tiger)] hover:text-black px-6 py-2 text-sm font-bold font-mono uppercase transition-all disabled:opacity-50"
           >
             {mutation.isPending ? '> INITIATING...' : '> EXECUTE_CREATE'}
           </button>
