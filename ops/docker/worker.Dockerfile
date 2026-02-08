@@ -1,4 +1,4 @@
-# sebastian-code Worker用Dockerfile
+# openTiger Worker用Dockerfile
 # サンドボックス環境でOpenCodeを使用してタスクを実行
 
 # ==============================
@@ -74,7 +74,7 @@ COPY packages/policies packages/policies
 COPY packages/db/drizzle.config.ts packages/db/
 
 # ビルド
-RUN pnpm build --filter=@sebastian-code/worker...
+RUN pnpm build --filter=@openTiger/worker...
 
 # ==============================
 # 実行ステージ
@@ -82,22 +82,22 @@ RUN pnpm build --filter=@sebastian-code/worker...
 FROM base AS runner
 
 # セキュリティ: 非rootユーザーで実行
-RUN addgroup --system --gid 1001 sebastian-code && \
-    adduser --system --uid 1001 --ingroup sebastian-code worker
+RUN addgroup --system --gid 1001 opentiger && \
+    adduser --system --uid 1001 --ingroup opentiger worker
 
 # Workerの作業ディレクトリを作成
-RUN mkdir -p /workspace && chown worker:sebastian-code /workspace
+RUN mkdir -p /workspace && chown worker:opentiger /workspace
 
 # ビルド済みアプリケーションをコピー
-COPY --from=builder --chown=worker:sebastian-code /app/node_modules ./node_modules
-COPY --from=builder --chown=worker:sebastian-code /app/packages ./packages
-COPY --from=builder --chown=worker:sebastian-code /app/apps/worker ./apps/worker
-COPY --from=builder --chown=worker:sebastian-code /app/package.json ./
-COPY --from=builder --chown=worker:sebastian-code /app/pnpm-workspace.yaml ./
+COPY --from=builder --chown=worker:opentiger /app/node_modules ./node_modules
+COPY --from=builder --chown=worker:opentiger /app/packages ./packages
+COPY --from=builder --chown=worker:opentiger /app/apps/worker ./apps/worker
+COPY --from=builder --chown=worker:opentiger /app/package.json ./
+COPY --from=builder --chown=worker:opentiger /app/pnpm-workspace.yaml ./
 
 # Gitの設定（コミット用）
-RUN git config --system user.name "sebastian-code-worker" && \
-    git config --system user.email "worker@sebastian-code.ai"
+RUN git config --system user.name "opentiger-worker" && \
+    git config --system user.email "worker@opentiger.ai"
 
 # 非rootユーザーに切り替え
 USER worker
@@ -108,8 +108,8 @@ ENV WORKSPACE_PATH=/workspace
 ENV LOG_FORMAT=json
 
 # ネットワーク制限のためのラベル（docker-compose/k8sで使用）
-LABEL sebastian-code.network.policy="restricted"
-LABEL sebastian-code.network.allowed="api.github.com,github.com,generativelanguage.googleapis.com,opencode.ai"
+LABEL opentiger.network.policy="restricted"
+LABEL opentiger.network.allowed="api.github.com,github.com,generativelanguage.googleapis.com,opencode.ai"
 
 # ヘルスチェック
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
