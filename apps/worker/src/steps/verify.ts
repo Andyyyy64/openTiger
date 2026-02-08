@@ -76,7 +76,7 @@ const ENV_EXAMPLE_PATHS = ["**/.env.example"];
 const GENERATED_EXTENSIONS = [".js", ".d.ts", ".d.ts.map"];
 const DEV_COMMAND_WARMUP_MS = 8000;
 const DEV_PORT_IN_USE_PATTERNS = [/Port\s+\d+\s+is already in use/i, /EADDRINUSE/i];
-const SHELL_CONTROL_PATTERN = /&&|\|\||[|;&<>`$()]/;
+const SHELL_CONTROL_PATTERN = /&&|\|\||[|;&<>`]/;
 const VERIFICATION_SCRIPT_CANDIDATES = [
   "lint",
   "build",

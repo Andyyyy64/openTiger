@@ -35,11 +35,18 @@ cleanupTimer.unref();
 const redisUrl = process.env.REDIS_URL?.trim();
 type RedisClient = import("ioredis").Redis;
 let redisClient: RedisClient | null = null;
-let redisDisabled = false;
 let redisErrorLogged = false;
+let redisRetryAfterMs = 0;
+const redisReconnectDelayMs = Number.parseInt(
+  process.env.API_RATE_LIMIT_REDIS_RECONNECT_DELAY_MS ?? "30000",
+  10
+);
 
 async function getRedisClient(): Promise<RedisClient | null> {
-  if (!redisUrl || redisDisabled) {
+  if (!redisUrl) {
+    return null;
+  }
+  if (Date.now() < redisRetryAfterMs) {
     return null;
   }
   if (redisClient) {
@@ -95,6 +102,8 @@ async function incrementRateLimit(
     }
     const ttlMs = await redis.pttl(redisKey);
     const now = Date.now();
+    redisRetryAfterMs = 0;
+    redisErrorLogged = false;
     return {
       count,
       resetAt: now + Math.max(ttlMs, 0),
@@ -105,7 +114,15 @@ async function incrementRateLimit(
       console.warn("[RateLimit] Redis operation failed, falling back to in-memory store:", message);
       redisErrorLogged = true;
     }
-    redisDisabled = true;
+    redisRetryAfterMs = Date.now() + (
+      Number.isFinite(redisReconnectDelayMs) && redisReconnectDelayMs > 0
+        ? redisReconnectDelayMs
+        : 30000
+    );
+    if (redisClient) {
+      redisClient.disconnect();
+      redisClient = null;
+    }
     return incrementMemoryRateLimit(key, windowMs);
   }
 }

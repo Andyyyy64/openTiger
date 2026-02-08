@@ -113,7 +113,7 @@ let lastReplanAt: number | null = null;
 let warnedMissingRequirementPath = false;
 const replanDebugEnabled = process.env.REPLAN_DEBUG === "true";
 const CYCLE_ENDING_CRITICAL_ANOMALIES = new Set(["stuck_task", "cost_spike"]);
-const SHELL_CONTROL_PATTERN = /&&|\|\||[|;&<>`$()]/;
+const SHELL_CONTROL_PATTERN = /&&|\|\||[|;&<>`]/;
 
 interface ReplanSignature {
   signature: string;
@@ -662,9 +662,12 @@ async function runMonitorLoop(): Promise<void> {
 
       await recordEvent({
         type: "cycle.end_triggered",
-        entityType: "cycle",
-        entityId: state.cycleId ?? "unknown",
-        payload: { triggerType },
+        entityType: state.cycleId ? "cycle" : "system",
+        entityId: state.cycleId ?? SYSTEM_ENTITY_ID,
+        payload: {
+          triggerType,
+          usedSystemEntityFallback: !state.cycleId,
+        },
       });
 
       // サイクル終了処理

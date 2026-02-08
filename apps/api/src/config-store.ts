@@ -74,30 +74,33 @@ function createLegacyNormalizationPatch(
 
 export async function ensureConfigRow(): Promise<typeof configTable.$inferSelect> {
   await ensureConfigColumns();
+  return await db.transaction(async (tx) => {
+    // Ensure singleton row creation remains safe under concurrent boot requests.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(703614, 1)`);
 
-  const existing = await db.select().from(configTable).limit(1);
-  const current = existing[0];
-  if (current) {
-    const patch = createLegacyNormalizationPatch(current);
-    if (!patch) {
-      return current;
+    const existing = await tx.select().from(configTable).limit(1);
+    const current = existing[0];
+    if (current) {
+      const patch = createLegacyNormalizationPatch(current);
+      if (!patch) {
+        return current;
+      }
+      const [updated] = await tx
+        .update(configTable)
+        .set(patch)
+        .where(eq(configTable.id, current.id))
+        .returning();
+      return updated ?? current;
     }
-    const [updated] = await db
-      .update(configTable)
-      .set(patch)
-      .where(eq(configTable.id, current.id))
+
+    const created = await tx
+      .insert(configTable)
+      .values(buildConfigRecord(DEFAULT_CONFIG, { includeDefaults: true }))
       .returning();
-    return updated ?? current;
-  }
-
-  const created = await db
-    .insert(configTable)
-    .values(buildConfigRecord(DEFAULT_CONFIG, { includeDefaults: true }))
-    .returning();
-  const row = created[0];
-  if (!row) {
-    throw new Error("Failed to create config");
-  }
-  return row;
+    const row = created[0];
+    if (!row) {
+      throw new Error("Failed to create config");
+    }
+    return row;
+  });
 }
-

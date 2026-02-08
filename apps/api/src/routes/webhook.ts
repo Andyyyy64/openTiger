@@ -2,9 +2,19 @@ import { Hono } from "hono";
 import { db } from "@openTiger/db";
 import { tasks, events } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 
 export const webhookRoute = new Hono();
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function normalizeWebhookEntityId(deliveryId: string | undefined): string {
+  if (deliveryId && UUID_PATTERN.test(deliveryId)) {
+    return deliveryId;
+  }
+  return randomUUID();
+}
 
 // Verify webhook signature
 function verifyWebhookSignature(
@@ -55,11 +65,12 @@ async function recordWebhookEvent(
     .values({
       type: `webhook.${eventType}${action ? `.${action}` : ""}`,
       entityType: "webhook",
-      entityId: deliveryId ?? "unknown",
+      entityId: normalizeWebhookEntityId(deliveryId),
       payload: {
         action,
         sender: payload.sender,
         repository: payload.repository,
+        deliveryId,
       },
     })
     .returning();

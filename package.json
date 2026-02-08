@@ -35,7 +35,7 @@
     "db:push": "pnpm --filter @openTiger/db push",
     "db:studio": "pnpm --filter @openTiger/db studio",
     "requeue": "pnpm --filter @openTiger/cycle-manager exec tsx src/utils/requeue-failed-tasks.ts",
-    "restart": "pnpm build && docker compose down -v && docker compose up -d --wait postgres redis && pnpm db:push && pnpm dev:full"
+    "line": "tsx scripts/check-lint-count.ts"
   },
   "devDependencies": {
     "@types/node": "^20.17.14",

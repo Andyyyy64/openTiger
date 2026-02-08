@@ -1406,6 +1406,10 @@ function startRestart(): RestartStatus {
 }
 
 systemRoute.get("/restart", (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
   return c.json(restartStatus);
 });
 
@@ -1609,6 +1613,10 @@ systemRoute.post("/preflight", async (c) => {
 });
 
 systemRoute.get("/processes", (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
   const processes = listProcessDefinitions().map((definition) =>
     buildProcessInfo(definition, managedProcesses.get(definition.name))
   );
@@ -1616,6 +1624,10 @@ systemRoute.get("/processes", (c) => {
 });
 
 systemRoute.get("/processes/:name", (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
   const name = c.req.param("name");
   const definition = resolveProcessDefinition(name);
   if (!definition) {
