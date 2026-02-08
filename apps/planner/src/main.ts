@@ -156,7 +156,7 @@ const DEFAULT_CONFIG: PlannerConfig = {
     if (plannerRepoUrl) {
       return plannerRepoUrl;
     }
-    const useRemote = parseBoolean(process.env.PLANNER_USE_REMOTE, false);
+  const useRemote = parseBoolean(process.env.PLANNER_USE_REMOTE, true);
     return useRemote ? process.env.REPO_URL : undefined;
   })(),
   baseBranch: process.env.BASE_BRANCH ?? "main",

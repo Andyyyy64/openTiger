@@ -39,7 +39,7 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "PLANNER_MODEL", column: "plannerModel", defaultValue: "google/gemini-3-pro-preview" },
   { key: "JUDGE_MODEL", column: "judgeModel", defaultValue: "google/gemini-3-pro-preview" },
   { key: "WORKER_MODEL", column: "workerModel", defaultValue: "google/gemini-3-flash-preview" },
-  { key: "PLANNER_USE_REMOTE", column: "plannerUseRemote", defaultValue: "false" },
+  { key: "PLANNER_USE_REMOTE", column: "plannerUseRemote", defaultValue: "true" },
   { key: "PLANNER_REPO_URL", column: "plannerRepoUrl", defaultValue: "" },
   { key: "AUTO_REPLAN", column: "autoReplan", defaultValue: "true" },
   { key: "REPLAN_REQUIREMENT_PATH", column: "replanRequirementPath", defaultValue: "requirement.md" },
