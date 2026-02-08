@@ -20,7 +20,6 @@
   ],
   "autoMerge": {
     "enabled": true,
-    "level": "low",
     "maxRiskLevel": "medium",
     "requiredChecks": ["test", "lint", "typecheck"]
   },

@@ -61,11 +61,7 @@ export function makeJudgement(
 
   // LLM評価
   suggestions.push(...summary.llm.suggestions);
-  // 自動マージレベルに応じてLLMの扱いを調整する
-  const maxRiskLevel = resolveAutoMergeMaxRisk(
-    policy.autoMerge.level,
-    policy.autoMerge.maxRiskLevel
-  );
+  const maxRiskLevel = policy.autoMerge.maxRiskLevel;
   const canAutoMerge =
     policy.autoMerge.enabled && isRiskAllowed(taskRiskLevel, maxRiskLevel);
   const allowLlmBypass =
@@ -107,7 +103,6 @@ export function makeJudgement(
     };
   }
 
-  // 自動マージの判定（levelがある場合はそちらを優先する）
   const shouldRequireHuman =
     taskRiskLevel === "high" && maxRiskLevel === "low";
 
@@ -129,25 +124,6 @@ export function makeJudgement(
     riskLevel: taskRiskLevel,
     confidence: summary.llm.confidence,
   };
-}
-
-function resolveAutoMergeMaxRisk(
-  level: "low" | "medium" | "high" | undefined,
-  fallback: "low" | "medium" | "high"
-): "low" | "medium" | "high" {
-  if (!level) {
-    return fallback;
-  }
-
-  // lowは緩め（highまで許可）、highは厳しめ（lowのみ許可）
-  switch (level) {
-    case "low":
-      return "high";
-    case "medium":
-      return "medium";
-    case "high":
-      return "low";
-  }
 }
 
 function isRiskAllowed(

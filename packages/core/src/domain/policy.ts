@@ -25,8 +25,6 @@ export const PolicySchema = z.object({
   autoMerge: z
     .object({
       enabled: z.boolean().default(false),
-      // 自動マージ判定の厳しさ（lowほど緩く、highほど厳しい）
-      level: z.enum(["low", "medium", "high"]).default("medium"),
       // 自動マージを許可するリスクレベル
       maxRiskLevel: z.enum(["low", "medium", "high"]).default("low"),
       // 必須のCIチェック名

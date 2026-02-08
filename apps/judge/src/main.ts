@@ -277,7 +277,7 @@ const BASE_REPO_RECOVERY_RULES: Record<BaseRepoRecoveryLevel, BaseRepoRecoveryRu
 };
 
 function resolveBaseRepoRecoveryLevel(policy: Policy): BaseRepoRecoveryLevel {
-  return policy.baseRepoRecovery?.level ?? policy.autoMerge.level ?? "medium";
+  return policy.baseRepoRecovery?.level ?? "medium";
 }
 
 function resolveBaseRepoRecoveryRules(
@@ -515,27 +515,6 @@ async function loadPolicyConfig(): Promise<Policy> {
   }
 }
 
-function adjustPolicyForAutoMerge(policy: Policy): Policy {
-  const level = policy.autoMerge.level ?? "medium";
-  const scale = (() => {
-    switch (level) {
-      case "low":
-        // 自動マージを優先するため許容幅を広げる
-        return { lines: 15, files: 10 };
-      case "high":
-        return { lines: 0.5, files: 0.5 };
-      default:
-        return { lines: 1, files: 1 };
-    }
-  })();
-
-  return {
-    ...policy,
-    maxLinesChanged: Math.max(1, Math.round(policy.maxLinesChanged * scale.lines)),
-    maxFilesChanged: Math.max(1, Math.round(policy.maxFilesChanged * scale.files)),
-  };
-}
-
 // レビュー待ちのPRを取得
 async function getPendingPRs(): Promise<
   Array<{
@@ -727,7 +706,7 @@ async function judgeSinglePR(
   config: JudgeConfig
 ): Promise<{ result: JudgeResult; summary: EvaluationSummary }> {
   console.log(`\n[Evaluating PR #${pr.prNumber}]`);
-  const evaluationPolicy = adjustPolicyForAutoMerge(config.policy);
+  const evaluationPolicy = config.policy;
 
   // 1. CI評価
   console.log("  - Checking CI status...");
@@ -809,7 +788,7 @@ async function judgeSingleWorktree(
   config: JudgeConfig
 ): Promise<{ result: JudgeResult; summary: EvaluationSummary; diffFiles: string[] }> {
   console.log(`\n[Evaluating Worktree ${target.worktreePath}]`);
-  const evaluationPolicy = adjustPolicyForAutoMerge(config.policy);
+  const evaluationPolicy = config.policy;
 
   const ciResult = evaluateLocalCI();
 

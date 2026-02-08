@@ -42,12 +42,6 @@
           "description": "自動マージを有効にするか",
           "default": false
         },
-        "level": {
-          "type": "string",
-          "enum": ["low", "medium", "high"],
-          "description": "自動マージ判定の厳しさ（lowほど緩く、highほど厳しい）",
-          "default": "medium"
-        },
         "maxRiskLevel": {
           "type": "string",
           "enum": ["low", "medium", "high"],
