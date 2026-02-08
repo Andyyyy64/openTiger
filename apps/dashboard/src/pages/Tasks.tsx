@@ -138,5 +138,11 @@ function formatRetryStatus(retry: TaskRetryInfo | null | undefined, nowMs: numbe
   if (retry.reason === 'quota_wait') {
     return seconds > 0 ? `quota ${seconds}s` : 'quota due';
   }
+  if (retry.reason === 'awaiting_judge') {
+    return seconds > 0 ? `judge ${seconds}s` : 'judge due';
+  }
+  if (retry.reason === 'needs_rework') {
+    return seconds > 0 ? `rework ${seconds}s` : 'rework due';
+  }
   return seconds > 0 ? `${seconds}s` : 'due';
 }

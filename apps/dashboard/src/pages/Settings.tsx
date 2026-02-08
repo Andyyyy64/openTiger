@@ -7,8 +7,6 @@ import { configApi, systemApi } from '../lib/api';
 // ========================================
 
 const REPO_MODE_OPTIONS = ['git', 'local'] as const;
-const JUDGE_MODE_OPTIONS = ['git', 'local', 'auto'] as const;
-
 // Supported OpenCode models (provider/model format)
 // Reference: https://opencode.ai/docs/providers
 const MODEL_OPTIONS = [
@@ -48,28 +46,28 @@ const SETTINGS: SettingField[] = [
   {
     key: 'MAX_CONCURRENT_WORKERS',
     label: 'Parallel_Workers',
-    description: 'Max concurrent worker processes',
+    description: 'Max concurrent worker processes (-1 for unlimited)',
     group: 'Limits',
     type: 'number',
   },
   {
     key: 'DAILY_TOKEN_LIMIT',
     label: 'Daily_Token_Max',
-    description: 'Max tokens per day',
+    description: 'Max tokens per day (-1 for unlimited)',
     group: 'Limits',
     type: 'number',
   },
   {
     key: 'HOURLY_TOKEN_LIMIT',
     label: 'Hourly_Token_Max',
-    description: 'Max tokens per hour',
+    description: 'Max tokens per hour (-1 for unlimited)',
     group: 'Limits',
     type: 'number',
   },
   {
     key: 'TASK_TOKEN_LIMIT',
     label: 'Task_Token_Max',
-    description: 'Max tokens per single task',
+    description: 'Max tokens per single task (-1 for unlimited)',
     group: 'Limits',
     type: 'number',
   },
@@ -157,28 +155,6 @@ const SETTINGS: SettingField[] = [
     description: 'Destination for worktrees',
     group: 'Repo',
     type: 'text',
-  },
-  {
-    key: 'JUDGE_MODE',
-    label: 'Judge_Mode',
-    description: 'git/local/auto switch',
-    group: 'Judge',
-    type: 'select',
-    options: JUDGE_MODE_OPTIONS,
-  },
-  {
-    key: 'LOCAL_POLICY_MAX_LINES',
-    label: 'Local_Policy_MaxLines',
-    description: 'Max lines for local check',
-    group: 'Judge',
-    type: 'number',
-  },
-  {
-    key: 'LOCAL_POLICY_MAX_FILES',
-    label: 'Local_Policy_MaxFiles',
-    description: 'Max files for local check',
-    group: 'Judge',
-    type: 'number',
   },
   {
     key: 'BASE_BRANCH',
@@ -356,6 +332,95 @@ const SETTINGS: SettingField[] = [
   },
 ];
 
+const GROUP_DISPLAY_ORDER = [
+  'Models',
+  'API_Keys',
+  'GitHub',
+  'Repo',
+  'Runtime',
+  'Workers',
+  'Planner',
+  'Limits',
+] as const;
+
+const FIELD_DISPLAY_ORDER_BY_GROUP: Record<string, readonly string[]> = {
+  Models: [
+    'OPENCODE_MODEL',
+    'WORKER_MODEL',
+    'JUDGE_MODEL',
+    'PLANNER_MODEL',
+    'OPENCODE_WAIT_ON_QUOTA',
+    'OPENCODE_QUOTA_RETRY_DELAY_MS',
+    'OPENCODE_MAX_QUOTA_WAITS',
+  ],
+  API_Keys: [
+    'GEMINI_API_KEY',
+    'OPENAI_API_KEY',
+    'ANTHROPIC_API_KEY',
+    'DEEPSEEK_API_KEY',
+    'XAI_API_KEY',
+  ],
+  GitHub: [
+    'GITHUB_TOKEN',
+    'GITHUB_OWNER',
+    'GITHUB_REPO',
+  ],
+  Repo: [
+    'REPO_MODE',
+    'REPO_URL',
+    'BASE_BRANCH',
+    'LOCAL_REPO_PATH',
+    'LOCAL_WORKTREE_ROOT',
+  ],
+  Runtime: [
+    'DISPATCHER_ENABLED',
+    'JUDGE_ENABLED',
+    'CYCLE_MANAGER_ENABLED',
+  ],
+  Workers: [
+    'WORKER_COUNT',
+    'TESTER_COUNT',
+    'DOCSER_COUNT',
+    'JUDGE_COUNT',
+    'PLANNER_COUNT',
+  ],
+  Planner: [
+    'AUTO_REPLAN',
+    'REPLAN_REQUIREMENT_PATH',
+    'REPLAN_INTERVAL_MS',
+    'REPLAN_COMMAND',
+    'REPLAN_WORKDIR',
+    'REPLAN_REPO_URL',
+    'PLANNER_USE_REMOTE',
+    'PLANNER_REPO_URL',
+  ],
+  Limits: [
+    'MAX_CONCURRENT_WORKERS',
+    'DAILY_TOKEN_LIMIT',
+    'HOURLY_TOKEN_LIMIT',
+    'TASK_TOKEN_LIMIT',
+  ],
+};
+
+const GROUP_ORDER_INDEX = new Map<string, number>(
+  GROUP_DISPLAY_ORDER.map((group, index) => [group, index])
+);
+const SETTING_KEY_INDEX = new Map<string, number>(
+  SETTINGS.map((field, index) => [field.key, index])
+);
+
+function sortFieldsInGroup(group: string, fields: SettingField[]): SettingField[] {
+  const customOrder = FIELD_DISPLAY_ORDER_BY_GROUP[group] ?? [];
+  const customIndex = new Map(customOrder.map((key, index) => [key, index]));
+  return [...fields].sort((a, b) => {
+    const aCustom = customIndex.get(a.key);
+    const bCustom = customIndex.get(b.key);
+    if (aCustom !== undefined || bCustom !== undefined) {
+      return (aCustom ?? Number.MAX_SAFE_INTEGER) - (bCustom ?? Number.MAX_SAFE_INTEGER);
+    }
+    return (SETTING_KEY_INDEX.get(a.key) ?? 0) - (SETTING_KEY_INDEX.get(b.key) ?? 0);
+  });
+}
 
 export const SettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -410,7 +475,16 @@ export const SettingsPage: React.FC = () => {
       }
       entries.get(field.group)?.push(field);
     }
-    return Array.from(entries.entries());
+    return Array.from(entries.entries())
+      .sort((a, b) => {
+        const aRank = GROUP_ORDER_INDEX.get(a[0]) ?? Number.MAX_SAFE_INTEGER;
+        const bRank = GROUP_ORDER_INDEX.get(b[0]) ?? Number.MAX_SAFE_INTEGER;
+        if (aRank !== bRank) {
+          return aRank - bRank;
+        }
+        return a[0].localeCompare(b[0]);
+      })
+      .map(([group, fields]) => [group, sortFieldsInGroup(group, fields)] as [string, SettingField[]]);
   }, []);
 
   const handleSave = () => {

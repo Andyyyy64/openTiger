@@ -50,23 +50,36 @@ export const RunsPage: React.FC = () => {
             const task = taskById.get(group.taskId);
             const latestRun = group.runs[0];
             const retryStatus = formatRetryStatus(task?.retry, now);
-            const isRetryWaiting = retryStatus === 'pending' || /^\d+s$/.test(retryStatus);
-            const retryLabel = retryStatus !== 'pending' && retryStatus !== 'due' && retryStatus !== '--'
+            const hasQuotaRetryInfo = Boolean(
+              task?.retry?.autoRetry
+              && task.retry.reason === 'quota_wait'
+            );
+            const latestRunQuotaFailure = Boolean(
+              latestRun
+              && latestRun.status === 'failed'
+              && isQuotaErrorMessage(latestRun.errorMessage)
+            );
+            const isQuotaWaiting = hasQuotaRetryInfo || latestRunQuotaFailure;
+            const effectiveRetryStatus = isQuotaWaiting
+              ? formatQuotaWaitStatus(task?.retry, now)
+              : retryStatus;
+            const isRetryWaiting = isWaitingRetryStatus(effectiveRetryStatus);
+            const retryLabel = effectiveRetryStatus !== 'pending' && effectiveRetryStatus !== 'due' && effectiveRetryStatus !== '--'
               ? (
                 <span className={isRetryWaiting ? 'text-term-tiger font-bold animate-pulse' : 'text-term-tiger font-bold'}>
-                  {retryStatus}
+                  {effectiveRetryStatus}
                 </span>
               )
               : (
                 <span className={isRetryWaiting ? 'text-term-tiger animate-pulse' : 'text-zinc-500'}>
-                  {retryStatus}
+                  {effectiveRetryStatus}
                 </span>
               );
 
             return (
               <section
                 key={group.taskId}
-                className={`border p-0 ${isRetryWaiting ? 'border-term-tiger/60 animate-pulse' : 'border-term-border'}`}
+                className={`border p-0 ${isQuotaWaiting ? 'border-yellow-500/70 shadow-[0_0_0_1px_rgba(250,204,21,0.2)]' : isRetryWaiting ? 'border-term-tiger/60 animate-pulse' : 'border-term-border'}`}
               >
                 {/* Task Header */}
                 <div className="bg-term-border/10 px-4 py-3 border-b border-term-border flex flex-wrap items-start justify-between gap-4">
@@ -96,6 +109,17 @@ export const RunsPage: React.FC = () => {
                   </div>
                 </div>
 
+                {isQuotaWaiting && (
+                  <div className="px-4 py-2 border-b border-yellow-500/40 bg-yellow-500/5 text-xs font-mono flex items-center justify-between gap-4">
+                    <span className="text-yellow-400 font-bold uppercase tracking-wider">[WAITING_QUOTA]</span>
+                    <span className="text-yellow-300">
+                      {effectiveRetryStatus === 'quota due'
+                        ? 'retrying now'
+                        : `next retry: ${effectiveRetryStatus}`}
+                    </span>
+                  </div>
+                )}
+
                 {/* Runs Table */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left bg-transparent font-mono text-xs">
@@ -111,34 +135,46 @@ export const RunsPage: React.FC = () => {
                     </thead>
                     <tbody className="divide-y divide-term-border">
                       {group.runs.map((run) => (
-                        <tr
-                          key={run.id}
-                          onClick={() => navigate(`/runs/${run.id}`)}
-                          className="hover:bg-term-fg/5 transition-colors group cursor-pointer"
-                        >
-                          <td className="px-4 py-2 align-top text-term-fg">
-                            {run.id.slice(0, 8)}
-                          </td>
-                          <td className="px-4 py-2 align-top text-zinc-400">
-                            @{run.agentId}
-                          </td>
-                          <td className="px-4 py-2 align-top">
-                            <span className={`uppercase ${getStatusColor(run.status)}`}>
-                              [{run.status}]
-                            </span>
-                          </td>
-                          <td className="px-4 py-2 align-top text-zinc-500">
-                            {run.finishedAt ? `${Math.round((new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)}s` : '--'}
-                          </td>
-                          <td className="px-4 py-2 align-top text-zinc-600">
-                            {new Date(run.startedAt).toLocaleString()}
-                          </td>
-                          <td className="px-4 py-2 align-top text-right">
-                            <span className="text-term-tiger text-[10px] opacity-60 group-hover:opacity-100 hover:underline">
-                              OPEN &gt;
-                            </span>
-                          </td>
-                        </tr>
+                        (() => {
+                          const isLatestRun = run.id === latestRun.id;
+                          const showQuotaWaitStatus = isLatestRun && isQuotaWaiting && run.status === 'failed';
+                          return (
+                            <tr
+                              key={run.id}
+                              onClick={() => navigate(`/runs/${run.id}`)}
+                              className="hover:bg-term-fg/5 transition-colors group cursor-pointer"
+                            >
+                              <td className="px-4 py-2 align-top text-term-fg">
+                                {run.id.slice(0, 8)}
+                              </td>
+                              <td className="px-4 py-2 align-top text-zinc-400">
+                                @{run.agentId}
+                              </td>
+                              <td className="px-4 py-2 align-top">
+                                {showQuotaWaitStatus ? (
+                                  <span className="uppercase text-yellow-400 animate-pulse font-bold">
+                                    [quota_wait]
+                                  </span>
+                                ) : (
+                                  <span className={`uppercase ${getStatusColor(run.status)}`}>
+                                    [{run.status}]
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-2 align-top text-zinc-500">
+                                {run.finishedAt ? `${Math.round((new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)}s` : '--'}
+                              </td>
+                              <td className="px-4 py-2 align-top text-zinc-600">
+                                {new Date(run.startedAt).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-2 align-top text-right">
+                                <span className="text-term-tiger text-[10px] opacity-60 group-hover:opacity-100 hover:underline">
+                                  OPEN &gt;
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })()
                       ))}
                     </tbody>
                   </table>
@@ -186,7 +222,42 @@ function formatRetryStatus(retry: TaskRetryInfo | null | undefined, nowMs: numbe
   if (retry.reason === 'quota_wait') {
     return seconds > 0 ? `quota ${seconds}s` : 'quota due';
   }
+  if (retry.reason === 'awaiting_judge') {
+    return seconds > 0 ? `judge ${seconds}s` : 'judge due';
+  }
+  if (retry.reason === 'needs_rework') {
+    return seconds > 0 ? `rework ${seconds}s` : 'rework due';
+  }
   return seconds > 0 ? `${seconds}s` : 'due';
+}
+
+function formatQuotaWaitStatus(retry: TaskRetryInfo | null | undefined, nowMs: number): string {
+  if (!retry || !retry.autoRetry) {
+    return 'quota pending';
+  }
+
+  if (!retry.retryAt) {
+    return 'quota pending';
+  }
+
+  const retryAtMs = new Date(retry.retryAt).getTime();
+  const seconds = Math.max(0, Math.ceil((retryAtMs - nowMs) / 1000));
+  return seconds > 0 ? `quota ${seconds}s` : 'quota due';
+}
+
+function isWaitingRetryStatus(status: string): boolean {
+  return status === 'pending'
+    || status === 'quota pending'
+    || status === 'quota due'
+    || /^\d+s$/.test(status)
+    || /^quota \d+s$/.test(status);
+}
+
+function isQuotaErrorMessage(errorMessage: string | null | undefined): boolean {
+  const normalized = (errorMessage ?? '').toLowerCase();
+  return normalized.includes('quota')
+    || normalized.includes('resource_exhausted')
+    || normalized.includes('429');
 }
 
 function groupRunsByTask(runs: Run[]): Array<{ taskId: string; runs: Run[] }> {

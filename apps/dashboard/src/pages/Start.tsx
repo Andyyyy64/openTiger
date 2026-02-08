@@ -2,11 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { configApi, systemApi, type SystemProcess } from '../lib/api';
 
-const MAX_WORKERS = 10;
-const MAX_TESTERS = 10;
-const MAX_DOCSERS = 10;
-const MAX_JUDGES = 4;
-const MAX_PLANNERS = 2;
+const MAX_PLANNERS = 1;
 
 const STATUS_LABELS: Record<SystemProcess['status'], string> = {
   idle: 'IDLE',
@@ -38,13 +34,17 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
 function parseCount(
   value: string | undefined,
   fallback: number,
-  max: number,
-  label: string
+  label: string,
+  max?: number
 ): { count: number; warning?: string } {
   const parsed = value ? parseInt(value, 10) : NaN;
   const normalized = Number.isFinite(parsed) ? parsed : fallback;
-  const clamped = Math.max(0, Math.min(normalized, max));
-  if (normalized > max) {
+  const base = Math.max(0, normalized);
+  if (typeof max !== 'number') {
+    return { count: base };
+  }
+  const clamped = Math.min(base, max);
+  if (base > max) {
     return { count: clamped, warning: `${label} max limit ${max}` };
   }
   return { count: clamped };
@@ -119,11 +119,11 @@ export const StartPage: React.FC = () => {
         throw new Error('GitHub repo is not configured');
       }
 
-      const workerCount = parseCount(settings.WORKER_COUNT, 1, MAX_WORKERS, 'Worker');
-      const testerCount = parseCount(settings.TESTER_COUNT, 1, MAX_TESTERS, 'Tester');
-      const docserCount = parseCount(settings.DOCSER_COUNT, 1, MAX_DOCSERS, 'Docser');
-      const judgeCount = parseCount(settings.JUDGE_COUNT, 1, MAX_JUDGES, 'Judge');
-      const plannerCount = parseCount(settings.PLANNER_COUNT, 1, MAX_PLANNERS, 'Planner');
+      const workerCount = parseCount(settings.WORKER_COUNT, 1, 'Worker');
+      const testerCount = parseCount(settings.TESTER_COUNT, 1, 'Tester');
+      const docserCount = parseCount(settings.DOCSER_COUNT, 1, 'Docser');
+      const judgeCount = parseCount(settings.JUDGE_COUNT, 1, 'Judge');
+      const plannerCount = parseCount(settings.PLANNER_COUNT, 1, 'Planner', MAX_PLANNERS);
 
       const warnings = [
         workerCount.warning,
@@ -210,7 +210,7 @@ export const StartPage: React.FC = () => {
 
       for (let i = 1; i <= workerStartCount; i += 1) await startProcess(`worker-${i}`);
       for (let i = 1; i <= testerStartCount; i += 1) await startProcess(`tester-${i}`);
-      if (docserStartCount > 0) await startProcess('docser-1');
+      for (let i = 1; i <= docserStartCount; i += 1) await startProcess(`docser-${i}`);
 
       return { started, errors, warnings };
     },
@@ -254,10 +254,11 @@ export const StartPage: React.FC = () => {
   const repoUrl = configValues.REPO_URL?.trim();
   const isRepoMissing =
     isGitMode && (!repoUrl && (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO));
-  const workerCount = parseCount(configValues.WORKER_COUNT, 1, MAX_WORKERS, 'Worker').count;
-  const testerCount = parseCount(configValues.TESTER_COUNT, 1, MAX_TESTERS, 'Tester').count;
-  const judgeCount = parseCount(configValues.JUDGE_COUNT, 1, MAX_JUDGES, 'Judge').count;
-  const plannerCount = parseCount(configValues.PLANNER_COUNT, 1, MAX_PLANNERS, 'Planner').count;
+  const workerCount = parseCount(configValues.WORKER_COUNT, 1, 'Worker').count;
+  const testerCount = parseCount(configValues.TESTER_COUNT, 1, 'Tester').count;
+  const docserCount = parseCount(configValues.DOCSER_COUNT, 1, 'Docser').count;
+  const judgeCount = parseCount(configValues.JUDGE_COUNT, 1, 'Judge').count;
+  const plannerCount = parseCount(configValues.PLANNER_COUNT, 1, 'Planner', MAX_PLANNERS).count;
 
   const runningWorkers = processes?.filter(
     (process) => process.name.startsWith('worker-') && process.status === 'running'
@@ -265,9 +266,9 @@ export const StartPage: React.FC = () => {
   const runningTesters = processes?.filter(
     (process) => process.name.startsWith('tester-') && process.status === 'running'
   ).length ?? 0;
-  const runningDocser = processes?.find(
-    (process) => process.name === 'docser-1' && process.status === 'running'
-  );
+  const runningDocsers = processes?.filter(
+    (process) => process.name.startsWith('docser-') && process.status === 'running'
+  ).length ?? 0;
 
   const runningJudges = processes?.filter(
     (process) => (process.name === 'judge' || process.name.startsWith('judge-')) && process.status === 'running'
@@ -328,7 +329,10 @@ export const StartPage: React.FC = () => {
                 <span>{runningWorkers} / {workerCount}</span>
               </div>
               <div className="w-full bg-zinc-900 h-1 mb-3">
-                <div className="h-full bg-term-tiger" style={{ width: `${(runningWorkers / workerCount) * 100}%` }}></div>
+                <div
+                  className="h-full bg-term-tiger"
+                  style={{ width: `${workerCount > 0 ? (runningWorkers / workerCount) * 100 : 0}%` }}
+                ></div>
               </div>
 
               <div className="flex justify-between mb-1">
@@ -336,12 +340,15 @@ export const StartPage: React.FC = () => {
                 <span>{runningTesters} / {testerCount}</span>
               </div>
               <div className="w-full bg-zinc-900 h-1 mb-3">
-                <div className="h-full bg-term-tiger" style={{ width: `${(runningTesters / testerCount) * 100}%` }}></div>
+                <div
+                  className="h-full bg-term-tiger"
+                  style={{ width: `${testerCount > 0 ? (runningTesters / testerCount) * 100 : 0}%` }}
+                ></div>
               </div>
 
               <div className="flex justify-between mb-1">
                 <span className="text-zinc-500">Docs</span>
-                <span>{runningDocser ? 'ONLINE' : 'OFFLINE'}</span>
+                <span>{runningDocsers} / {docserCount}</span>
               </div>
             </div>
           </div>
