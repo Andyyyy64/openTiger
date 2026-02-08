@@ -957,65 +957,186 @@ async function buildPreflightSummary(options: {
   return summary;
 }
 
-const MAX_WORKER_PROCESSES = 10;
-const MAX_TESTER_PROCESSES = 10;
-const MAX_DOCSER_PROCESSES = 10;
-const MAX_JUDGE_PROCESSES = 4;
-const MAX_PLANNER_PROCESSES = 2;
+const MAX_PLANNER_PROCESSES = 1;
+const AGENT_LIVENESS_WINDOW_MS = Number.parseInt(
+  process.env.SYSTEM_AGENT_LIVENESS_WINDOW_MS ?? "120000",
+  10
+);
 
-function buildPlannerDefinitions(): ProcessDefinition[] {
-  return Array.from({ length: MAX_PLANNER_PROCESSES }, (_, i) => i + 1).map((index) => {
-    const name = index === 1 ? "planner" : `planner-${index}`;
-    return {
-      name,
-      label: index === 1 ? "Planner" : `Planner #${index}`,
-      description: "requirementsからタスクを生成",
-      group: "Planner",
-      kind: "planner",
-      supportsStop: true,
-      buildStart: async (payload) => {
-        const requirementPath = await resolveRequirementPath(
-          payload.requirementPath,
-          "requirement.md",
-          { allowMissing: Boolean(payload.content) }
-        );
-        if (payload.content) {
-          await writeRequirementFile(requirementPath, payload.content);
-        }
-        return {
-          command: "pnpm",
-          args: ["--filter", "@openTiger/planner", "run", "start:fresh", requirementPath],
-          cwd: resolveRepoRoot(),
-          env: { AGENT_ID: `planner-${index}` },
-        };
-      },
-    } as ProcessDefinition;
-  });
+function resolveBoundAgentId(processName: string): string | null {
+  if (processName === "planner") {
+    return "planner-1";
+  }
+  if (processName === "judge") {
+    return "judge-1";
+  }
+  if (/^(judge|worker|tester|docser)-\d+$/.test(processName)) {
+    return processName;
+  }
+  return null;
 }
 
-function buildJudgeDefinitions(): ProcessDefinition[] {
-  return Array.from({ length: MAX_JUDGE_PROCESSES }, (_, i) => i + 1).map((index) => {
-    const name = index === 1 ? "judge" : `judge-${index}`;
-    return {
-      name,
-      label: index === 1 ? "Judge" : `Judge #${index}`,
-      description: "レビュー判定の常駐プロセス",
-      group: "Core",
-      kind: "service",
-      supportsStop: true,
-      autoRestart: true,
-      buildStart: async () => ({
+async function detectLiveBoundAgent(processName: string): Promise<{
+  alive: boolean;
+  agentId?: string;
+  lastHeartbeat?: string;
+}> {
+  const agentId = resolveBoundAgentId(processName);
+  if (!agentId) {
+    return { alive: false };
+  }
+
+  const [agent] = await db
+    .select({
+      id: agents.id,
+      status: agents.status,
+      lastHeartbeat: agents.lastHeartbeat,
+    })
+    .from(agents)
+    .where(eq(agents.id, agentId))
+    .limit(1);
+
+  if (!agent?.lastHeartbeat) {
+    return { alive: false, agentId };
+  }
+
+  const livenessWindowMs = Number.isFinite(AGENT_LIVENESS_WINDOW_MS)
+    && AGENT_LIVENESS_WINDOW_MS > 0
+    ? AGENT_LIVENESS_WINDOW_MS
+    : 120000;
+  const alive =
+    agent.status !== "offline"
+    && agent.lastHeartbeat.getTime() >= Date.now() - livenessWindowMs;
+
+  return {
+    alive,
+    agentId,
+    lastHeartbeat: agent.lastHeartbeat.toISOString(),
+  };
+}
+
+function parseIndexedProcessName(
+  name: string,
+  prefix: string,
+  options: { allowBaseName?: boolean } = {}
+): number | null {
+  const allowBaseName = options.allowBaseName ?? false;
+  if (allowBaseName && name === prefix) {
+    return 1;
+  }
+  const match = name.match(new RegExp(`^${prefix}-(\\d+)$`));
+  if (!match?.[1]) {
+    return null;
+  }
+  const index = Number.parseInt(match[1], 10);
+  if (!Number.isFinite(index) || index <= 0) {
+    return null;
+  }
+  return index;
+}
+
+function buildPlannerDefinition(index: number): ProcessDefinition {
+  return {
+    name: "planner",
+    label: "Planner",
+    description: "requirementsからタスクを生成",
+    group: "Planner",
+    kind: "planner",
+    supportsStop: true,
+    buildStart: async (payload) => {
+      const requirementPath = await resolveRequirementPath(
+        payload.requirementPath,
+        "requirement.md",
+        { allowMissing: Boolean(payload.content) }
+      );
+      if (payload.content) {
+        await writeRequirementFile(requirementPath, payload.content);
+      }
+      return {
         command: "pnpm",
-        args: ["--filter", "@openTiger/judge", "start"],
+        args: ["--filter", "@openTiger/planner", "run", "start:fresh", requirementPath],
         cwd: resolveRepoRoot(),
-        env: { AGENT_ID: `judge-${index}` },
-      }),
-    } as ProcessDefinition;
-  });
+        env: { AGENT_ID: `planner-${index}` },
+      };
+    },
+  };
+}
+
+function buildJudgeDefinition(index: number): ProcessDefinition {
+  const name = index === 1 ? "judge" : `judge-${index}`;
+  return {
+    name,
+    label: index === 1 ? "Judge" : `Judge #${index}`,
+    description: "レビュー判定の常駐プロセス",
+    group: "Core",
+    kind: "service",
+    supportsStop: true,
+    autoRestart: true,
+    buildStart: async () => ({
+      command: "pnpm",
+      args: ["--filter", "@openTiger/judge", "start"],
+      cwd: resolveRepoRoot(),
+      env: { AGENT_ID: `judge-${index}` },
+    }),
+  };
+}
+
+function buildWorkerRoleDefinition(
+  role: "worker" | "tester" | "docser",
+  index: number
+): ProcessDefinition {
+  const name = `${role}-${index}`;
+  const label = role === "docser"
+    ? (index === 1 ? "Docser" : `Docser #${index}`)
+    : `${role === "worker" ? "Worker" : "Tester"} #${index}`;
+  const description = role === "worker"
+    ? "実装ワーカー"
+    : role === "tester"
+      ? "テスト専用ワーカー"
+      : "ドキュメント更新ワーカー";
+  return {
+    name,
+    label,
+    description,
+    group: "Workers",
+    kind: "worker",
+    supportsStop: true,
+    autoRestart: true,
+    buildStart: async () => ({
+      command: "pnpm",
+      args: ["--filter", "@openTiger/worker", "start"],
+      cwd: resolveRepoRoot(),
+      env: { WORKER_INDEX: String(index), AGENT_ROLE: role },
+    }),
+  };
+}
+
+function resolveDynamicProcessDefinition(name: string): ProcessDefinition | undefined {
+  const judgeIndex = parseIndexedProcessName(name, "judge", { allowBaseName: true });
+  if (judgeIndex !== null) {
+    return buildJudgeDefinition(judgeIndex);
+  }
+
+  const workerIndex = parseIndexedProcessName(name, "worker");
+  if (workerIndex !== null) {
+    return buildWorkerRoleDefinition("worker", workerIndex);
+  }
+
+  const testerIndex = parseIndexedProcessName(name, "tester");
+  if (testerIndex !== null) {
+    return buildWorkerRoleDefinition("tester", testerIndex);
+  }
+
+  const docserIndex = parseIndexedProcessName(name, "docser");
+  if (docserIndex !== null) {
+    return buildWorkerRoleDefinition("docser", docserIndex);
+  }
+
+  return undefined;
 }
 
 const processDefinitions: ProcessDefinition[] = [
-  ...buildPlannerDefinitions(),
+  buildPlannerDefinition(MAX_PLANNER_PROCESSES),
   {
     name: "dispatcher",
     label: "Dispatcher",
@@ -1030,7 +1151,6 @@ const processDefinitions: ProcessDefinition[] = [
       cwd: resolveRepoRoot(),
     }),
   },
-  ...buildJudgeDefinitions(),
   {
     name: "cycle-manager",
     label: "Cycle Manager",
@@ -1045,51 +1165,6 @@ const processDefinitions: ProcessDefinition[] = [
       cwd: resolveRepoRoot(),
     }),
   },
-  ...Array.from({ length: MAX_WORKER_PROCESSES }, (_, i) => i + 1).map((index) => ({
-    name: `worker-${index}`,
-    label: `Worker #${index}`,
-    description: "実装ワーカー",
-    group: "Workers",
-    kind: "worker" as const,
-    supportsStop: true,
-    autoRestart: true,
-    buildStart: async () => ({
-      command: "pnpm",
-      args: ["--filter", "@openTiger/worker", "start"],
-      cwd: resolveRepoRoot(),
-      env: { WORKER_INDEX: String(index), AGENT_ROLE: "worker" },
-    }),
-  })),
-  ...Array.from({ length: MAX_TESTER_PROCESSES }, (_, i) => i + 1).map((index) => ({
-    name: `tester-${index}`,
-    label: `Tester #${index}`,
-    description: "テスト専用ワーカー",
-    group: "Workers",
-    kind: "worker" as const,
-    supportsStop: true,
-    autoRestart: true,
-    buildStart: async () => ({
-      command: "pnpm",
-      args: ["--filter", "@openTiger/worker", "start"],
-      cwd: resolveRepoRoot(),
-      env: { WORKER_INDEX: String(index), AGENT_ROLE: "tester" },
-    }),
-  })),
-  ...Array.from({ length: MAX_DOCSER_PROCESSES }, (_, i) => i + 1).map((index) => ({
-    name: `docser-${index}`,
-    label: index === 1 ? "Docser" : `Docser #${index}`,
-    description: "ドキュメント更新ワーカー",
-    group: "Workers",
-    kind: "worker" as const,
-    supportsStop: true,
-    autoRestart: true,
-    buildStart: async () => ({
-      command: "pnpm",
-      args: ["--filter", "@openTiger/worker", "start"],
-      cwd: resolveRepoRoot(),
-      env: { WORKER_INDEX: String(index), AGENT_ROLE: "docser" },
-    }),
-  })),
   {
     name: "db-up",
     label: "Database Start",
@@ -1134,6 +1209,29 @@ const processDefinitions: ProcessDefinition[] = [
 const processDefinitionMap = new Map(
   processDefinitions.map((definition) => [definition.name, definition])
 );
+
+function resolveProcessDefinition(name: string): ProcessDefinition | undefined {
+  return processDefinitionMap.get(name) ?? resolveDynamicProcessDefinition(name);
+}
+
+function listProcessDefinitions(): ProcessDefinition[] {
+  const definitions = new Map<string, ProcessDefinition>();
+  for (const definition of processDefinitions) {
+    definitions.set(definition.name, definition);
+  }
+
+  for (const processName of managedProcesses.keys()) {
+    if (definitions.has(processName)) {
+      continue;
+    }
+    const dynamic = resolveDynamicProcessDefinition(processName);
+    if (dynamic) {
+      definitions.set(dynamic.name, dynamic);
+    }
+  }
+
+  return Array.from(definitions.values());
+}
 
 function buildProcessInfo(
   definition: ProcessDefinition,
@@ -1539,13 +1637,42 @@ async function ensureConfigRow() {
       "pnpm --filter @openTiger/planner start",
       "pnpm --filter @sebastian-code/planner start",
     ]);
-    if (legacyReplanCommands.has((current.replanCommand ?? "").trim())) {
+    const shouldNormalizeReplanCommand = legacyReplanCommands.has(
+      (current.replanCommand ?? "").trim()
+    );
+    const shouldNormalizeMaxConcurrentWorkers = (current.maxConcurrentWorkers ?? "").trim() === "10";
+    const shouldNormalizeDailyTokenLimit = (current.dailyTokenLimit ?? "").trim() === "50000000";
+    const shouldNormalizeHourlyTokenLimit = (current.hourlyTokenLimit ?? "").trim() === "5000000";
+    const shouldNormalizeTaskTokenLimit = (current.taskTokenLimit ?? "").trim() === "1000000";
+
+    if (
+      shouldNormalizeReplanCommand
+      || shouldNormalizeMaxConcurrentWorkers
+      || shouldNormalizeDailyTokenLimit
+      || shouldNormalizeHourlyTokenLimit
+      || shouldNormalizeTaskTokenLimit
+    ) {
+      const patch: Partial<typeof configTable.$inferInsert> = {
+        updatedAt: new Date(),
+      };
+      if (shouldNormalizeReplanCommand) {
+        patch.replanCommand = DEFAULT_REPLAN_COMMAND;
+      }
+      if (shouldNormalizeMaxConcurrentWorkers) {
+        patch.maxConcurrentWorkers = "-1";
+      }
+      if (shouldNormalizeDailyTokenLimit) {
+        patch.dailyTokenLimit = "-1";
+      }
+      if (shouldNormalizeHourlyTokenLimit) {
+        patch.hourlyTokenLimit = "-1";
+      }
+      if (shouldNormalizeTaskTokenLimit) {
+        patch.taskTokenLimit = "-1";
+      }
       const [updated] = await db
         .update(configTable)
-        .set({
-          replanCommand: DEFAULT_REPLAN_COMMAND,
-          updatedAt: new Date(),
-        })
+        .set(patch)
         .where(eq(configTable.id, current.id))
         .returning();
       return updated ?? current;
@@ -1710,7 +1837,7 @@ systemRoute.post("/preflight", async (c) => {
     const testerCount = parseCountSetting(configRow.testerCount, 1);
     const docserCount = parseCountSetting(configRow.docserCount, 1);
     const judgeCount = parseCountSetting(configRow.judgeCount, 1);
-    const plannerCount = parseCountSetting(configRow.plannerCount, 1);
+    const plannerCount = Math.min(1, parseCountSetting(configRow.plannerCount, 1));
 
     const hasIssueBacklog = preflight.github.issueTaskBacklogCount > 0;
     const hasLocalTaskBacklog =
@@ -1747,6 +1874,9 @@ systemRoute.post("/preflight", async (c) => {
         hasJudgeBacklog
           ? `Judge backlog detected (openPR=${preflight.github.openPrCount}, awaitingJudge=${preflight.local.pendingJudgeTaskCount})`
           : "No judge backlog",
+        parseCountSetting(configRow.plannerCount, 1) > 1
+          ? "Planner count is capped at 1"
+          : "Planner count is within limit",
         startPlanner
           ? "Planner is enabled because requirement content is present and issue/PR backlog is empty"
           : "Planner is skipped for this launch",
@@ -1764,7 +1894,7 @@ systemRoute.post("/preflight", async (c) => {
 });
 
 systemRoute.get("/processes", (c) => {
-  const processes = processDefinitions.map((definition) =>
+  const processes = listProcessDefinitions().map((definition) =>
     buildProcessInfo(definition, managedProcesses.get(definition.name))
   );
   return c.json({ processes });
@@ -1772,11 +1902,11 @@ systemRoute.get("/processes", (c) => {
 
 systemRoute.get("/processes/:name", (c) => {
   const name = c.req.param("name");
-  const definition = processDefinitionMap.get(name);
+  const definition = resolveProcessDefinition(name);
   if (!definition) {
     return c.json({ error: "Process not found" }, 404);
   }
-  const info = buildProcessInfo(definition, managedProcesses.get(name));
+  const info = buildProcessInfo(definition, managedProcesses.get(definition.name));
   return c.json({ process: info });
 });
 
@@ -1787,12 +1917,37 @@ systemRoute.post("/processes/:name/start", async (c) => {
   }
 
   const name = c.req.param("name");
-  const definition = processDefinitionMap.get(name);
+  const definition = resolveProcessDefinition(name);
   if (!definition) {
     return c.json({ error: "Process not found" }, 404);
   }
 
-  const existing = managedProcesses.get(name);
+  const discoveredAgent = await detectLiveBoundAgent(name);
+  if (discoveredAgent.alive) {
+    const existingRuntime = managedProcesses.get(definition.name);
+    const runtime: ProcessRuntime = {
+      ...(existingRuntime ?? { status: "running" as const }),
+      status: "running",
+      finishedAt: undefined,
+      exitCode: null,
+      signal: null,
+      stopRequested: false,
+      message:
+        `Detected existing live agent ${discoveredAgent.agentId}` +
+        (discoveredAgent.lastHeartbeat
+          ? ` (heartbeat=${discoveredAgent.lastHeartbeat})`
+          : ""),
+    };
+    managedProcesses.set(definition.name, runtime);
+    return c.json({
+      process: buildProcessInfo(definition, runtime),
+      alreadyRunning: true,
+      discovered: true,
+    });
+  }
+
+  const runtimeKey = definition.name;
+  const existing = managedProcesses.get(runtimeKey);
   const shouldRejectDuplicateStart = definition.kind === "planner";
   if (shouldRejectDuplicateStart) {
     // Planner tends to save multiple plans from the same requirement when started multiple times, so exclude duplicate start requests
@@ -1805,16 +1960,16 @@ systemRoute.post("/processes/:name/start", async (c) => {
         409
       );
     }
-    if (processStartLocks.has(name)) {
+    if (processStartLocks.has(runtimeKey)) {
       return c.json(
         {
           error: "Planner start already in progress",
-          process: buildProcessInfo(definition, managedProcesses.get(name)),
+          process: buildProcessInfo(definition, managedProcesses.get(runtimeKey)),
         },
         409
       );
     }
-    processStartLocks.add(name);
+    processStartLocks.add(runtimeKey);
   } else if (existing?.status === "running") {
     return c.json({
       process: buildProcessInfo(definition, existing),
@@ -1863,7 +2018,7 @@ systemRoute.post("/processes/:name/start", async (c) => {
     return c.json({ error: message }, 400);
   } finally {
     if (shouldRejectDuplicateStart) {
-      processStartLocks.delete(name);
+      processStartLocks.delete(runtimeKey);
     }
   }
 });
@@ -1875,7 +2030,7 @@ systemRoute.post("/processes/:name/stop", (c) => {
   }
 
   const name = c.req.param("name");
-  const definition = processDefinitionMap.get(name);
+  const definition = resolveProcessDefinition(name);
   if (!definition) {
     return c.json({ error: "Process not found" }, 404);
   }
@@ -1897,7 +2052,7 @@ systemRoute.post("/processes/stop-all", async (c) => {
   const stopped: string[] = [];
   const skipped: string[] = [];
 
-  for (const definition of processDefinitions) {
+  for (const definition of listProcessDefinitions()) {
     // Only stop processes other than ui and server
     // ui and server are started by pnpm run up and are not managed by system.ts
     if (definition.name === "ui" || definition.name === "server" || definition.name === "dashboard" || definition.name === "api") {
