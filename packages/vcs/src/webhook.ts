@@ -10,7 +10,7 @@ export function verifyGitHubWebhookSignature(
     return false;
   }
 
-  // sha256=... の形式から署名部分を抽出
+  // Extract signature part from sha256=... format
   const parts = signature.split("=");
   if (parts.length !== 2 || parts[0] !== "sha256") {
     return false;
@@ -26,7 +26,7 @@ export function verifyGitHubWebhookSignature(
   hmac.update(typeof payload === "string" ? payload : payload.toString("utf8"));
   const expectedSignature = hmac.digest("hex");
 
-  // タイミング攻撃を防ぐため、一定時間比較を使用
+  // Use constant-time comparison to prevent timing attacks
   try {
     return timingSafeEqual(
       Buffer.from(signatureHex, "hex"),
@@ -37,7 +37,7 @@ export function verifyGitHubWebhookSignature(
   }
 }
 
-// Webhookイベントタイプ
+// Webhook event type
 export type GitHubEventType =
   | "ping"
   | "push"
@@ -153,9 +153,9 @@ export interface CheckPayload extends WebhookPayload {
   };
 }
 
-// イベントがopenTiger関連かどうかを判定
+// Determine if event is openTiger-related
 export function isOpenTigerRelatedEvent(payload: WebhookPayload): boolean {
-  // openTiger が作成したPRかチェック（ブランチ名で判定）
+  // Check if PR was created by openTiger (determined by branch name)
   if ("pull_request" in payload) {
     const pr = (payload as PullRequestPayload).pull_request;
     if (pr.head.ref.startsWith("agent/")) {
@@ -163,7 +163,7 @@ export function isOpenTigerRelatedEvent(payload: WebhookPayload): boolean {
     }
   }
 
-  // openTiger ラベルが付いているIssueかチェック
+  // Check if Issue has openTiger label
   if ("issue" in payload) {
     const issue = (payload as IssuePayload).issue;
     if (issue.labels.some((l) => l.name === "openTiger" || l.name === "auto-task")) {

@@ -5,7 +5,15 @@ import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, relative, isAbsolute } from "node:path";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@openTiger/db";
-import { artifacts, config as configTable, events, runs, tasks } from "@openTiger/db/schema";
+import {
+  artifacts,
+  config as configTable,
+  events,
+  runs,
+  tasks,
+  leases,
+  agents,
+} from "@openTiger/db/schema";
 import { configToEnv, DEFAULT_CONFIG, buildConfigRecord } from "../system-config.js";
 import { getAuthInfo } from "../middleware/index.js";
 import { createRepo, getOctokit, getRepoInfo } from "@openTiger/vcs";
@@ -99,7 +107,7 @@ const AUTO_RESTART_WINDOW_MS = Number.parseInt(
   10
 );
 const AUTO_RESTART_MAX_ATTEMPTS = Number.parseInt(
-  process.env.SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS ?? "5",
+  process.env.SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS ?? "-1",
   10
 );
 
@@ -184,13 +192,13 @@ function canControlSystem(method: string): boolean {
   if (method === "api-key" || method === "bearer") {
     return true;
   }
-  // 認証が無効な環境ではUIからの操作を許可する
+  // Allow UI operations when authentication is disabled
   const hasApiSecret = Boolean(process.env.API_SECRET?.trim());
   const hasApiKeys = Boolean(process.env.API_KEYS?.trim());
   if (!hasApiSecret && !hasApiKeys) {
     return true;
   }
-  // 開発環境でUIから試せるようにするための最低限の安全弁
+  // Minimal safety valve to allow testing from UI in development environment
   return process.env.OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL === "true";
 }
 
@@ -205,7 +213,7 @@ function isSubPath(baseDir: string, targetDir: string): boolean {
 function resolvePathInRepo(rawPath: string): string {
   const baseDir = resolveRepoRoot();
   const resolved = resolve(baseDir, rawPath);
-  // リポジトリ外のファイル操作を避ける
+  // Prevent file operations outside the repository
   if (!isSubPath(baseDir, resolved)) {
     throw new Error("Path must be within repository");
   }
@@ -217,7 +225,7 @@ async function resolveRequirementPath(
   fallback?: string,
   options: { allowMissing?: boolean } = {}
 ): Promise<string> {
-  // UIからの入力と環境変数を統一的に扱う
+  // Handle UI input and environment variables uniformly
   const candidate = input?.trim()
     || process.env.REQUIREMENT_PATH
     || process.env.REPLAN_REQUIREMENT_PATH
@@ -236,7 +244,7 @@ async function resolveRequirementPath(
 }
 
 async function writeRequirementFile(path: string, content: string): Promise<void> {
-  // Plannerに渡す要件ファイルを保存する
+  // Save requirement file to pass to Planner
   await mkdir(dirname(path), { recursive: true });
   const normalized = content.endsWith("\n") ? content : `${content}\n`;
   await writeFile(path, normalized, "utf-8");
@@ -452,7 +460,7 @@ async function resolveIssueTaskCommands(): Promise<string[]> {
       return ["pnpm run typecheck"];
     }
   } catch {
-    // 取得できない場合は安全側のデフォルトへフォールバック
+    // Fallback to safe default if unable to retrieve
   }
   return ["pnpm -r --if-present test"];
 }
@@ -541,7 +549,7 @@ function parseLinkedIssueNumbersFromPr(title: string, body: string): number[] {
     }
   }
 
-  // 1行に複数 closing keyword が来るケースを拾う
+  // Handle cases where multiple closing keywords appear on one line
   for (const match of `${title}\n${body}`.matchAll(
     /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b([^\n]+)/gi
   )) {
@@ -973,7 +981,7 @@ function buildPlannerDefinitions(): ProcessDefinition[] {
         }
         return {
           command: "pnpm",
-          args: ["--filter", "@openTiger/planner", "dev", requirementPath],
+          args: ["--filter", "@openTiger/planner", "run", "start:fresh", requirementPath],
           cwd: resolveRepoRoot(),
           env: { AGENT_ID: `planner-${index}` },
         };
@@ -995,7 +1003,7 @@ function buildJudgeDefinitions(): ProcessDefinition[] {
       autoRestart: true,
       buildStart: async () => ({
         command: "pnpm",
-        args: ["--filter", "@openTiger/judge", "dev"],
+        args: ["--filter", "@openTiger/judge", "start"],
         cwd: resolveRepoRoot(),
         env: { AGENT_ID: `judge-${index}` },
       }),
@@ -1015,7 +1023,7 @@ const processDefinitions: ProcessDefinition[] = [
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@openTiger/dispatcher", "dev"],
+      args: ["--filter", "@openTiger/dispatcher", "start"],
       cwd: resolveRepoRoot(),
     }),
   },
@@ -1030,7 +1038,7 @@ const processDefinitions: ProcessDefinition[] = [
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@openTiger/cycle-manager", "dev"],
+      args: ["--filter", "@openTiger/cycle-manager", "run", "start:fresh"],
       cwd: resolveRepoRoot(),
     }),
   },
@@ -1044,7 +1052,7 @@ const processDefinitions: ProcessDefinition[] = [
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@openTiger/worker", "dev:runtime"],
+      args: ["--filter", "@openTiger/worker", "start"],
       cwd: resolveRepoRoot(),
       env: { WORKER_INDEX: String(index), AGENT_ROLE: "worker" },
     }),
@@ -1059,7 +1067,7 @@ const processDefinitions: ProcessDefinition[] = [
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@openTiger/worker", "dev:runtime"],
+      args: ["--filter", "@openTiger/worker", "start"],
       cwd: resolveRepoRoot(),
       env: { WORKER_INDEX: String(index), AGENT_ROLE: "tester" },
     }),
@@ -1074,7 +1082,7 @@ const processDefinitions: ProcessDefinition[] = [
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@openTiger/worker", "dev:runtime"],
+      args: ["--filter", "@openTiger/worker", "start"],
       cwd: resolveRepoRoot(),
       env: { WORKER_INDEX: String(index), AGENT_ROLE: "docser" },
     }),
@@ -1168,19 +1176,22 @@ async function scheduleProcessAutoRestart(
   const windowMs = Number.isFinite(AUTO_RESTART_WINDOW_MS) && AUTO_RESTART_WINDOW_MS > 0
     ? AUTO_RESTART_WINDOW_MS
     : 300000;
-  const maxAttempts = Number.isFinite(AUTO_RESTART_MAX_ATTEMPTS) && AUTO_RESTART_MAX_ATTEMPTS > 0
-    ? AUTO_RESTART_MAX_ATTEMPTS
-    : 5;
   const delayMs = Number.isFinite(AUTO_RESTART_DELAY_MS) && AUTO_RESTART_DELAY_MS >= 0
     ? AUTO_RESTART_DELAY_MS
     : 2000;
+  const hasMaxAttempts = Number.isFinite(AUTO_RESTART_MAX_ATTEMPTS)
+    && AUTO_RESTART_MAX_ATTEMPTS > 0;
+  const maxAttempts = hasMaxAttempts ? AUTO_RESTART_MAX_ATTEMPTS : Number.POSITIVE_INFINITY;
 
   const windowStart = runtime.restartWindowStartedAt ?? now;
   const resetWindow = now - windowStart > windowMs;
   const nextAttempts = (resetWindow ? 0 : (runtime.restartAttempts ?? 0)) + 1;
   const nextWindowStart = resetWindow ? now : windowStart;
+  const cappedAttemptsForBackoff = Math.max(1, Math.min(nextAttempts, 6));
+  const nextDelayMs = Math.min(60000, delayMs * (2 ** (cappedAttemptsForBackoff - 1)));
+  const attemptLabel = hasMaxAttempts ? `${nextAttempts}/${maxAttempts}` : `${nextAttempts}/∞`;
 
-  if (nextAttempts > maxAttempts) {
+  if (hasMaxAttempts && nextAttempts > maxAttempts) {
     managedProcesses.set(definition.name, {
       ...runtime,
       restartAttempts: nextAttempts,
@@ -1199,7 +1210,7 @@ async function scheduleProcessAutoRestart(
     restartAttempts: nextAttempts,
     restartWindowStartedAt: nextWindowStart,
     restartScheduled: true,
-    message: `Auto-restart scheduled (${nextAttempts}/${maxAttempts})`,
+    message: `Auto-restart scheduled (${attemptLabel}, delay=${nextDelayMs}ms)`,
   });
 
   setTimeout(async () => {
@@ -1222,7 +1233,7 @@ async function scheduleProcessAutoRestart(
         managedProcesses.set(definition.name, {
           ...refreshed,
           restartScheduled: false,
-          message: `Auto-restarted (${nextAttempts}/${maxAttempts})`,
+          message: `Auto-restarted (${attemptLabel})`,
         });
       }
       console.log(`[System] Auto-restarted process: ${definition.name}`);
@@ -1238,7 +1249,7 @@ async function scheduleProcessAutoRestart(
       }
       console.error(`[System] Auto-restart failed for ${definition.name}: ${message}`);
     }
-  }, delayMs);
+  }, nextDelayMs);
 }
 
 async function startManagedProcess(
@@ -1270,7 +1281,7 @@ async function startManagedProcess(
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  // ログをファイルに流し込んで追跡できるようにする
+  // Stream logs to file for tracking
   child.stdout?.pipe(logStream);
   child.stderr?.pipe(logStream);
 
@@ -1284,10 +1295,12 @@ async function startManagedProcess(
     stopRequested: false,
     lastPayload: payload,
     restartScheduled: false,
+    restartAttempts: existing?.restartAttempts,
+    restartWindowStartedAt: existing?.restartWindowStartedAt,
   };
   managedProcesses.set(definition.name, runtime);
 
-  // プロセス終了時に状態を更新する
+  // Update state when process exits
   child.on("exit", (code, signal) => {
     const latest = managedProcesses.get(definition.name);
     if (!latest) return;
@@ -1358,25 +1371,25 @@ function stopManagedProcess(
       return;
     }
 
-    // detachedで起動したプロセスは新しいプロセスグループになるため、
-    // グループごと停止して pnpm/tsx 配下の子プロセスが残るのを避ける
+    // Processes started with detached become a new process group,
+    // so kill the entire group to prevent pnpm/tsx child processes from lingering
     if (process.platform !== "win32") {
       try {
         process.kill(-pid, signal);
         return;
       } catch {
-        // フォールバックとして単体PIDを停止する
+        // Fallback: kill individual PID
       }
     }
 
     try {
       process.kill(pid, signal);
     } catch {
-      // 既に終了しているケースは無視する
+      // Ignore if already terminated
     }
   }
 
-  // 停止要求は先に反映し、終了はイベントで確定する
+  // Reflect stop request first, termination is confirmed by event
   killRuntime("SIGTERM");
   setTimeout(() => {
     killRuntime("SIGKILL");
@@ -1398,7 +1411,7 @@ function startRestart(): RestartStatus {
     detached: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  // ログをファイルに流し込んで追跡できるようにする
+  // Stream logs to file for tracking
   child.stdout?.pipe(logStream);
   child.stderr?.pipe(logStream);
 
@@ -1437,7 +1450,7 @@ function startRestart(): RestartStatus {
 }
 
 async function ensureConfigRow() {
-  // migration履歴が崩れていても system 起動時に必要カラムを補完する
+  // Complement required columns at system startup even if migration history is corrupted
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_wait_on_quota" text DEFAULT 'true' NOT NULL`
   );
@@ -1556,7 +1569,7 @@ systemRoute.post("/github/repo", async (c) => {
       description,
       private: isPrivate,
     });
-    // 作成後の設定はDBに保存してUIの状態を合わせる
+    // Save post-creation configuration to DB to sync with UI state
     await db
       .update(configTable)
       .set({
@@ -1573,7 +1586,7 @@ systemRoute.post("/github/repo", async (c) => {
       ? Number((error as { status?: number }).status)
       : undefined;
     const message = error instanceof Error ? error.message : "Failed to create repo";
-    // 権限不足はUIに理由を返して設定を促す
+    // Return reason to UI for insufficient permissions and prompt configuration
     if (status === 403 && message.includes("Resource not accessible")) {
       return c.json(
         {
@@ -1634,7 +1647,7 @@ systemRoute.post("/preflight", async (c) => {
     const recommendations = {
       startPlanner,
       startDispatcher: dispatcherEnabled && startExecutionAgents,
-      // 実行系エージェントが動くサイクルではJudgeを常駐させる。
+      // Keep Judge running in cycles where execution agents are active
       startJudge: judgeEnabled && (hasJudgeBacklog || startExecutionAgents),
       plannerCount: startPlanner ? plannerCount : 0,
       judgeCount:
@@ -1702,7 +1715,7 @@ systemRoute.post("/processes/:name/start", async (c) => {
   const existing = managedProcesses.get(name);
   const shouldRejectDuplicateStart = definition.kind === "planner";
   if (shouldRejectDuplicateStart) {
-    // Plannerは重複起動すると同一要件から複数回計画が保存されやすいので、起動要求を排他する
+    // Planner tends to save multiple plans from the same requirement when started multiple times, so exclude duplicate start requests
     if (existing?.status === "running") {
       return c.json(
         {
@@ -1795,7 +1808,7 @@ systemRoute.post("/processes/:name/stop", (c) => {
   return c.json({ process: info });
 });
 
-systemRoute.post("/processes/stop-all", (c) => {
+systemRoute.post("/processes/stop-all", async (c) => {
   const auth = getAuthInfo(c);
   if (!canControlSystem(auth.method)) {
     return c.json({ error: "Admin access required" }, 403);
@@ -1805,8 +1818,8 @@ systemRoute.post("/processes/stop-all", (c) => {
   const skipped: string[] = [];
 
   for (const definition of processDefinitions) {
-    // uiとserver以外のプロセスのみ停止対象とする
-    // uiとserverはpnpm run upで起動されるプロセスで、system.tsでは管理されていない
+    // Only stop processes other than ui and server
+    // ui and server are started by pnpm run up and are not managed by system.ts
     if (definition.name === "ui" || definition.name === "server" || definition.name === "dashboard" || definition.name === "api") {
       continue;
     }
@@ -1825,9 +1838,67 @@ systemRoute.post("/processes/stop-all", (c) => {
     }
   }
 
+  let cancelledRuns = 0;
+  let requeuedTasks = 0;
+  try {
+    const runningRows = await db
+      .select({
+        runId: runs.id,
+        taskId: runs.taskId,
+      })
+      .from(runs)
+      .where(eq(runs.status, "running"));
+
+    if (runningRows.length > 0) {
+      const runningRunIds = runningRows.map((row) => row.runId);
+      const runningTaskIds = Array.from(new Set(runningRows.map((row) => row.taskId)));
+
+      cancelledRuns = runningRunIds.length;
+      requeuedTasks = runningTaskIds.length;
+
+      await db
+        .update(runs)
+        .set({
+          status: "cancelled",
+          finishedAt: new Date(),
+          errorMessage: "System stop-all requested",
+        })
+        .where(inArray(runs.id, runningRunIds));
+
+      await db
+        .update(tasks)
+        .set({
+          status: "queued",
+          blockReason: null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(tasks.status, "running"), inArray(tasks.id, runningTaskIds)));
+
+      await db.delete(leases).where(inArray(leases.taskId, runningTaskIds));
+    }
+
+    await db
+      .update(agents)
+      .set({
+        status: "offline",
+        currentTaskId: null,
+        lastHeartbeat: new Date(),
+      })
+      .where(
+        inArray(
+          agents.role,
+          ["planner", "judge", "worker", "tester", "docser", "dispatcher", "cycle-manager"]
+        )
+      );
+  } catch (error) {
+    console.error("[System] stop-all cleanup failed:", error);
+  }
+
   return c.json({
     stopped,
     skipped,
+    cancelledRuns,
+    requeuedTasks,
     message: `Stopped ${stopped.length} process(es)`,
   });
 });
@@ -1839,11 +1910,11 @@ systemRoute.post("/cleanup", async (c) => {
   }
 
   try {
-    // Redisのキューを全削除してジョブの残骸を消す
+    // Delete all Redis queues to remove job remnants
     const queuesCleaned = await obliterateAllQueues();
     console.log(`[Cleanup] Obliterated ${queuesCleaned} queues`);
 
-    // 稼働中のプロセスがあってもDBのみをリセットできるようにする
+    // Allow DB-only reset even if processes are running
     await db.execute(sql`
       UPDATE agents
       SET current_task_id = NULL,

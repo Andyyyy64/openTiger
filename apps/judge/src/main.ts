@@ -115,7 +115,7 @@ function setupProcessLogging(logName: string): string | undefined {
   const logPath = join(logDir, `${logName}.log`);
   const stream = createWriteStream(logPath, { flags: "a" });
 
-  // ターミナルが流れても追跡できるようにログをファイルに残す
+  // Save logs to file so they can be tracked even if terminal output is lost
   const stdoutWrite = process.stdout.write.bind(process.stdout);
   const stderrWrite = process.stderr.write.bind(process.stderr);
 
@@ -192,6 +192,11 @@ const JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES = Number.parseInt(
   process.env.JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES ?? "2",
   10
 );
+const JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES = Number.parseInt(
+  process.env.JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES ?? "2",
+  10
+);
+const JUDGE_RECOVER_NEEDS_HUMAN = process.env.JUDGE_RECOVER_NEEDS_HUMAN === "true";
 
 const BASE_REPO_RECOVERY_MODES = ["none", "stash", "llm"] as const;
 
@@ -528,7 +533,7 @@ async function getPendingPRs(): Promise<
     commands: string[];
   }>
 > {
-  // 成功したrunでPRが作成されているものを取得
+  // Get successful runs that have PRs created
   const result = await db
     .select({
       prNumber: artifacts.ref,
@@ -549,7 +554,7 @@ async function getPendingPRs(): Promise<
     )
     .orderBy(desc(runs.startedAt));
 
-  // タスク情報を取得
+  // Get task information
   const pendingPRs: Array<{
     prNumber: number;
     prUrl: string;
@@ -571,7 +576,7 @@ async function getPendingPRs(): Promise<
     const prNumber = parseInt(row.prNumber, 10);
     if (isNaN(prNumber)) continue;
 
-    // タスク情報を取得
+    // Get task information
     const taskResult = await db
       .select()
       .from(tasks)
@@ -580,7 +585,7 @@ async function getPendingPRs(): Promise<
     const task = taskResult[0];
     if (!task) continue;
 
-    // Judge待ち（blocked）以外はレビュー対象にしない
+    // Only review tasks waiting for Judge (blocked)
     if (task.status !== "blocked") continue;
 
     pendingPRs.push({
@@ -669,7 +674,7 @@ async function getPendingWorktrees(): Promise<
 
     const task = taskResult[0];
     if (!task) continue;
-    // Judge待ち（blocked）以外はレビュー対象にしない
+    // Only review tasks waiting for Judge (blocked)
     if (task.status !== "blocked") continue;
 
     pendingWorktrees.push({
@@ -1465,7 +1470,7 @@ async function recoverDirtyBaseRepo(options: {
     ? `${fullDiff.slice(0, options.recoveryRules.diffLimit)}\n... (truncated)`
     : fullDiff;
 
-  // ベースの変更を退避してマージ処理を止めない
+  // Stash base changes to prevent merge process from stopping
   const stashMessage = `openTiger base repo auto stash ${new Date().toISOString()}`;
   const stashResult = await stashChanges(options.baseRepoPath, stashMessage);
   if (!stashResult.success) {
@@ -1563,7 +1568,7 @@ async function recoverDirtyBaseRepo(options: {
     return { success: true };
   }
 
-  // 復帰が妥当と判断された場合のみコミットしてベースをクリーンに保つ
+  // Only commit if recovery is deemed valid to keep base clean
   const stageResult = await stageAll(options.baseRepoPath);
   if (!stageResult.success) {
     await checkoutBranch(options.baseRepoPath, options.baseBranch);
@@ -1651,7 +1656,7 @@ async function mergeLocalBranch(target: {
 
     const afterRecover = await getChangedFiles(target.baseRepoPath);
     if (afterRecover.length > 0) {
-      // ローカル作業用のベースは未追跡ファイルを掃除してから再判定する
+      // Clean untracked files from local working base before re-evaluating
       const cleanResult = await cleanUntracked(target.baseRepoPath);
       if (!cleanResult.success) {
         return {
@@ -1720,13 +1725,23 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log(`Dry run: ${config.dryRun}`);
   console.log(`Merge on approve: ${config.mergeOnApprove}`);
   console.log(`Requeue on non-approve: ${config.requeueOnNonApprove}`);
+  console.log(
+    `Non-approve circuit breaker retries: ${
+      Number.isFinite(JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
+        ? Math.max(1, JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
+        : 2
+    }`
+  );
+  console.log(`Recover needs_human backlog: ${JUDGE_RECOVER_NEEDS_HUMAN}`);
   console.log("=".repeat(60));
 
   while (true) {
     try {
-      const recovered = await recoverNeedsHumanJudgeBacklog(config.agentId);
-      if (recovered > 0) {
-        console.log(`[Judge] Recovered ${recovered} needs_human task(s) back to awaiting_judge`);
+      if (JUDGE_RECOVER_NEEDS_HUMAN) {
+        const recovered = await recoverNeedsHumanJudgeBacklog(config.agentId);
+        if (recovered > 0) {
+          console.log(`[Judge] Recovered ${recovered} needs_human task(s) back to awaiting_judge`);
+        }
       }
       const recoveredAwaiting = await recoverAwaitingJudgeBacklog(config.agentId);
       if (recoveredAwaiting > 0) {
@@ -1782,7 +1797,7 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                   `  Actions: commented=${actionResult.commented}, approved=${actionResult.approved}, merged=${actionResult.merged}`
                 );
 
-                // マージ済みならタスク完了
+                // If merged, task is complete
                 if (actionResult.merged) {
                   await db
                     .update(tasks)
@@ -1806,7 +1821,7 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                     console.log(`  Docser task created: ${docserResult.docserTaskId}`);
                   }
                 } else if (effectiveResult.verdict !== "approve" && config.requeueOnNonApprove) {
-                  // LLM FAIL時はJudge再判定ループではなく修正タスクを起票する
+                  // On LLM FAIL, create a fix task instead of entering Judge re-evaluation loop
                   if (!summary.llm.pass) {
                     if (hasActionableLLMFailures(summary)) {
                       const autoFix = await createAutoFixTaskForPr({
@@ -1909,7 +1924,7 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           );
                         }
                       } else {
-                        // クォータ超過や実行エラーなど、コード差分が無いLLM失敗はクールダウン後に再判定
+                        // LLM failures without code diffs (quota exceeded, execution errors) are re-evaluated after cooldown
                         requeueReason = `${buildJudgeFailureMessage(effectiveResult)} | llm_non_actionable_failure`;
                         await scheduleTaskForJudgeRetry({
                           taskId: pr.taskId,
@@ -1918,7 +1933,7 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           reason: importedPrReviewTask
                             ? `retry_imported_pr_review:${requeueReason}`
                             : requeueReason,
-                          // 直ちに同一runを再評価せず、短いクールダウン後にjudgeがrunを復元する
+                          // Don't immediately re-evaluate the same run; Judge will restore the run after a short cooldown
                           restoreRunImmediately: false,
                         });
                         const marker = isNonActionableLLMFailure(summary)
@@ -1931,31 +1946,92 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                     }
                   } else {
                     // CI/Policy系の非approveは従来どおり再キュー
-                    requeueReason = buildJudgeFailureMessage(effectiveResult);
-                    if (importedPrReviewTask) {
-                      await scheduleTaskForJudgeRetry({
-                        taskId: pr.taskId,
-                        runId: pr.runId,
-                        agentId: config.agentId,
-                        reason: `retry_imported_pr_review:${requeueReason}`,
-                      });
-                      console.log(
-                        `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`
+                    if (effectiveResult.verdict === "needs_human") {
+                      await db
+                        .update(tasks)
+                        .set({
+                          status: "blocked",
+                          blockReason: "needs_human",
+                          updatedAt: new Date(),
+                        })
+                        .where(eq(tasks.id, pr.taskId));
+                      console.warn(
+                        `  Task ${pr.taskId} blocked as needs_human (non-approve verdict)`
                       );
                     } else {
-                      await requeueTaskAfterJudge({
-                        taskId: pr.taskId,
-                        runId: pr.runId,
-                        agentId: config.agentId,
-                        reason: requeueReason,
-                      });
-                      console.log(
-                        `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`
-                      );
+                      const retryThreshold = Number.isFinite(JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
+                        ? Math.max(1, JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
+                        : 2;
+                      const currentRetryCount = await getTaskRetryCount(pr.taskId);
+                      const shouldEscalate = currentRetryCount >= retryThreshold;
+
+                      if (shouldEscalate) {
+                        const autoFix = await createAutoFixTaskForPr({
+                          prNumber: pr.prNumber,
+                          prUrl: pr.prUrl,
+                          sourceTaskId: pr.taskId,
+                          sourceRunId: pr.runId,
+                          sourceTaskTitle: pr.taskTitle,
+                          sourceTaskGoal: pr.taskGoal,
+                          allowedPaths: pr.allowedPaths,
+                          commands: pr.commands,
+                          summary,
+                          agentId: config.agentId,
+                        });
+
+                        if (autoFix.created) {
+                          await db
+                            .update(tasks)
+                            .set({
+                              status: "blocked",
+                              blockReason: "needs_rework",
+                              updatedAt: new Date(),
+                            })
+                            .where(eq(tasks.id, pr.taskId));
+                          console.log(
+                            `  Task ${pr.taskId} hit non-approve circuit breaker; auto-fix task queued: ${autoFix.taskId}`
+                          );
+                        } else {
+                          await db
+                            .update(tasks)
+                            .set({
+                              status: "blocked",
+                              blockReason: "needs_human",
+                              updatedAt: new Date(),
+                            })
+                            .where(eq(tasks.id, pr.taskId));
+                          console.warn(
+                            `  Task ${pr.taskId} blocked as needs_human; non-approve circuit breaker fallback (${autoFix.reason})`
+                          );
+                        }
+                      } else {
+                        requeueReason = buildJudgeFailureMessage(effectiveResult);
+                        if (importedPrReviewTask) {
+                          await scheduleTaskForJudgeRetry({
+                            taskId: pr.taskId,
+                            runId: pr.runId,
+                            agentId: config.agentId,
+                            reason: `retry_imported_pr_review:${requeueReason}`,
+                          });
+                          console.log(
+                            `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`
+                          );
+                        } else {
+                          await requeueTaskAfterJudge({
+                            taskId: pr.taskId,
+                            runId: pr.runId,
+                            agentId: config.agentId,
+                            reason: requeueReason,
+                          });
+                          console.log(
+                            `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`
+                          );
+                        }
+                      }
                     }
                   }
                 } else if (effectiveResult.verdict === "approve") {
-                  // approve でもマージ完了しなければ、競合系はAutoFixへ、それ以外はjudge再試行に戻す
+                  // If approve but merge didn't complete, send conflict-related ones to AutoFix, others back to judge retry
                   let handledByConflictAutoFix = false;
                   const conflictSignals = hasMergeConflictSignals({
                     summary,
@@ -2015,7 +2091,7 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                       runId: pr.runId,
                       agentId: config.agentId,
                       reason: retryReason,
-                      // update-branchを投げた場合はクールダウンまで同一runを再判定しない
+                      // If update-branch was triggered, don't re-evaluate the same run until cooldown
                       restoreRunImmediately: !actionResult.mergeDeferred,
                     });
                     console.warn(`  Task ${pr.taskId} scheduled for judge retry because merge did not complete`);
@@ -2138,7 +2214,7 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
                   );
                   requeueReason = buildJudgeFailureMessage(result, mergeResult.error);
                 }
-                // ローカルマージの成否をログに残して判定結果の追跡を容易にする
+                // Log local merge success/failure to facilitate tracking of evaluation results
                 console.log(
                   `[Judge] Local merge result: ${mergeResult.success ? "success" : "failed"}`
                 );
@@ -2335,6 +2411,8 @@ Environment Variables:
   JUDGE_LOCAL_BASE_REPO_RECOVERY=llm|stash|none Recovery strategy for local base repo
   JUDGE_LOCAL_BASE_REPO_RECOVERY_CONFIDENCE=0.7 LLM confidence threshold
   JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT=20000 Diff size limit for DB storage
+  JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES=2 Retry threshold before non-approve escalation
+  JUDGE_RECOVER_NEEDS_HUMAN=true Recover needs_human backlog back to awaiting_judge
 
 Example:
   pnpm --filter @openTiger/judge start 42
@@ -2397,7 +2475,7 @@ async function main(): Promise<void> {
   // ハートビート開始
   const heartbeatTimer = startHeartbeat(agentId);
 
-  // PR番号が指定されている場合は単一レビュー
+  // Single review if PR number is specified
   const prArg = args.find((arg) => /^\d+$/.test(arg));
   if (prArg) {
     const prNumber = parseInt(prArg, 10);

@@ -26,7 +26,7 @@ export const AgentDetailsPage: React.FC = () => {
     refetchInterval: 10000,
   });
 
-  // ログが更新されたときに一番下までスクロールする
+  // Scroll to bottom when logs are updated
   useEffect(() => {
     if (logRef.current) {
       logRef.current.scrollTop = logRef.current.scrollHeight;

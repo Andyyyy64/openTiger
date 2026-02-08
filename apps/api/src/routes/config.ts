@@ -20,7 +20,7 @@ const updateSchema = z.object({
 });
 
 async function ensureConfigRow() {
-  // migration履歴が崩れていても system_config が動くよう、必要カラムを自己修復する
+  // Self-repair required columns so system_config works even if migration history is corrupted
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_wait_on_quota" text DEFAULT 'true' NOT NULL`
   );

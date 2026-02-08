@@ -6,7 +6,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export const webhookRoute = new Hono();
 
-// Webhook署名の検証
+// Verify webhook signature
 function verifyWebhookSignature(
   payload: string,
   signature: string | undefined,
@@ -16,7 +16,7 @@ function verifyWebhookSignature(
     return false;
   }
 
-  // sha256=... の形式から署名部分を抽出
+  // Extract signature part from sha256=... format
   const parts = signature.split("=");
   if (parts.length !== 2 || parts[0] !== "sha256") {
     return false;
@@ -27,12 +27,12 @@ function verifyWebhookSignature(
     return false;
   }
 
-  // HMAC-SHA256で署名を計算
+  // Calculate signature with HMAC-SHA256
   const hmac = createHmac("sha256", secret);
   hmac.update(payload);
   const expectedSignature = hmac.digest("hex");
 
-  // タイミング攻撃を防ぐため、一定時間比較を使用
+  // Use constant-time comparison to prevent timing attacks
   try {
     return timingSafeEqual(
       Buffer.from(signatureHex, "hex"),
@@ -43,7 +43,7 @@ function verifyWebhookSignature(
   }
 }
 
-// イベントをDBに記録
+// Record event to DB
 async function recordWebhookEvent(
   eventType: string,
   action: string | undefined,
@@ -66,18 +66,18 @@ async function recordWebhookEvent(
   return event?.id ?? "unknown";
 }
 
-// IssueイベントからタスクIDを抽出（Issue本文に [task:uuid] 形式で埋め込まれている場合）
+// Extract task ID from Issue event (when Issue body contains [task:uuid] format)
 function extractTaskIdFromIssue(body: string | undefined): string | null {
   if (!body) return null;
   const match = body.match(/\[task:([0-9a-f-]{36})\]/i);
   return match?.[1] ?? null;
 }
 
-// GitHub Webhook受信エンドポイント
+// GitHub Webhook receiving endpoint
 webhookRoute.post("/github", async (c) => {
   const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
 
-  // 署名検証（シークレットが設定されている場合のみ）
+  // Verify signature (only if secret is configured)
   if (webhookSecret) {
     const signature = c.req.header("X-Hub-Signature-256");
     const rawBody = await c.req.text();
@@ -87,8 +87,8 @@ webhookRoute.post("/github", async (c) => {
       return c.json({ error: "Invalid signature" }, 401);
     }
 
-    // ボディを再パースするためにリクエストを再構築
-    // Honoではボディを一度読むと再度読めないため、手動でパース
+    // Rebuild request to re-parse body
+    // In Hono, body can only be read once, so parse manually
     try {
       const payload = JSON.parse(rawBody) as Record<string, unknown>;
       return await handleWebhookPayload(c, payload);
@@ -97,12 +97,12 @@ webhookRoute.post("/github", async (c) => {
     }
   }
 
-  // シークレット未設定の場合は直接パース
+    // Parse directly if secret is not configured
   const payload = (await c.req.json()) as Record<string, unknown>;
   return await handleWebhookPayload(c, payload);
 });
 
-// Webhookペイロードを処理
+// Process webhook payload
 async function handleWebhookPayload(
   c: { json: (data: unknown, status?: number) => Response },
   payload: Record<string, unknown>
@@ -112,14 +112,14 @@ async function handleWebhookPayload(
 
   console.log(`[Webhook] Received: ${eventType ?? "unknown"} ${action ?? ""}`);
 
-  // イベントを記録
+  // Record event
   const eventId = await recordWebhookEvent(
     eventType ?? "unknown",
     action,
     payload
   );
 
-  // イベントタイプに応じた処理
+  // Process according to event type
   switch (eventType) {
     case "ping":
       return c.json({ message: "pong", eventId });
@@ -143,7 +143,7 @@ async function handleWebhookPayload(
   }
 }
 
-// Issueイベントの処理
+// Handle Issue event
 async function handleIssueEvent(
   c: { json: (data: unknown, status?: number) => Response },
   action: string | undefined,
@@ -163,14 +163,14 @@ async function handleIssueEvent(
 
   console.log(`[Webhook] Issue #${issueNumber}: ${action} - "${issueTitle}"`);
 
-  // 「openTiger」または「auto-task」ラベルが付いている場合、タスクを自動作成
+  // Auto-create task if "openTiger" or "auto-task" label is present
   const shouldAutoTask = labels.some(
     (l) => l.name === "openTiger" || l.name === "auto-task"
   );
 
   if (action === "opened" && shouldAutoTask) {
-    // Plannerにタスク生成を依頼（キューに追加）
-    // 実際の実装ではBullMQにジョブを追加
+    // Request task generation from Planner (add to queue)
+    // In actual implementation, add job to BullMQ
     console.log(`[Webhook] Auto-task triggered for issue #${issueNumber}`);
 
     return c.json({
@@ -183,7 +183,7 @@ async function handleIssueEvent(
   return c.json({ message: "Issue event processed", eventId, issueNumber });
 }
 
-// Pull Requestイベントの処理
+// Handle Pull Request event
 async function handlePullRequestEvent(
   c: { json: (data: unknown, status?: number) => Response },
   action: string | undefined,
@@ -203,17 +203,17 @@ async function handlePullRequestEvent(
 
   console.log(`[Webhook] PR #${prNumber}: ${action} - "${prTitle}"`);
 
-  // PRがopenTiger Workerによって作成されたものかチェック
+  // Check if PR was created by openTiger Worker
   const isOpenTigerPR =
     (pr.head as Record<string, unknown>)?.ref?.toString().startsWith("agent/") ?? false;
 
   if (action === "opened" && isOpenTigerPR) {
-    // Judgeにレビューを依頼
+    // Request review from Judge
     console.log(`[Webhook] Judge review triggered for PR #${prNumber}`);
   }
 
   if (action === "closed" && pr.merged) {
-    // PRがマージされた場合、関連タスクを完了に更新
+    // Update related task to completed if PR was merged
     const taskId = extractTaskIdFromIssue(prBody);
     if (taskId) {
       await db
@@ -233,7 +233,7 @@ async function handlePullRequestEvent(
   });
 }
 
-// Pushイベントの処理
+// Handle Push event
 async function handlePushEvent(
   c: { json: (data: unknown, status?: number) => Response },
   payload: Record<string, unknown>,
@@ -254,7 +254,7 @@ async function handlePushEvent(
   });
 }
 
-// Check Run/Suiteイベントの処理
+// Handle Check Run/Suite event
 async function handleCheckEvent(
   c: { json: (data: unknown, status?: number) => Response },
   action: string | undefined,
@@ -271,9 +271,9 @@ async function handleCheckEvent(
 
   console.log(`[Webhook] Check: ${action} - status=${status}, conclusion=${conclusion}`);
 
-  // CI完了時にJudgeに通知
+  // Notify Judge when CI completes
   if (status === "completed" && conclusion) {
-    // 関連するPRを特定してJudgeを起動
+    // Identify related PR and start Judge
     const pullRequests =
       (checkSuite?.pull_requests as Array<Record<string, unknown>>) ??
       (checkRun?.pull_requests as Array<Record<string, unknown>>) ??

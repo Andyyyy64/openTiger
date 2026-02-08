@@ -50,7 +50,7 @@ function generatePRBody(options: CreatePROptions): string {
     lines.push(`Closes #${issue.number}`, "");
   }
 
-  // タスク情報
+  // Task information
   lines.push(
     "## Task Details",
     "",
@@ -182,7 +182,7 @@ export async function ensureRemoteBaseBranch(
     };
   }
 
-  // rebaseで履歴が変わるため currentBranch を強制更新
+  // Force update currentBranch as rebase changes history
   const pushBranchResult = await push(repoPath, `${originalBranch}:${originalBranch}`, true);
   if (!pushBranchResult.success) {
     return {
@@ -219,7 +219,7 @@ export async function createTaskPR(
   const labels = ["agent", "autogen", `${task.riskLevel}-risk`];
 
   try {
-    // 既存のPRを探す（同じブランチからのPR）
+    // Find existing PR (PR from same branch)
     const existingPRs = await findPRs({
       head: branchName,
       base: baseBranch,

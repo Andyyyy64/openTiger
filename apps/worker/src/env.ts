@@ -115,7 +115,7 @@ export async function getProjectEnvSummary(
 export async function buildTaskEnv(
   cwd: string
 ): Promise<Record<string, string>> {
-  // h1ve固有の環境変数は実行対象に渡さない
+  // Don't pass h1ve-specific environment variables to execution target
   const baseEnv: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
     if (!value || shouldStripEnvKey(key)) {
@@ -124,7 +124,7 @@ export async function buildTaskEnv(
     baseEnv[key] = value;
   }
 
-  // 実行対象の.envを読み込み、必要な設定だけを付与する
+  // Load target's .env and only provide necessary settings
   const projectEnv = await loadProjectEnv(cwd);
   for (const [key, value] of Object.entries(projectEnv)) {
     if (PROTECTED_ENV_KEYS.has(key)) {
@@ -137,7 +137,7 @@ export async function buildTaskEnv(
 }
 
 async function loadConfigFromDb(): Promise<Record<string, string>> {
-  // DBからランタイム設定を取得してOpenCodeに渡す
+  // Get runtime settings from DB and pass to OpenCode
   try {
     const rows = await db.select().from(configTable).limit(1);
     const row = rows[0];
@@ -162,10 +162,10 @@ async function loadConfigFromDb(): Promise<Record<string, string>> {
 export async function buildOpenCodeEnv(
   cwd: string
 ): Promise<Record<string, string>> {
-  // 実行対象の.envは引き継ぎ、LLM用のキーだけ許可する
+  // Inherit target's .env and only allow LLM-related keys
   const env = await buildTaskEnv(cwd);
 
-  // DBから最新の設定を取得してOpenCodeに渡す
+  // Get latest settings from DB and pass to OpenCode
   const dbConfig = await loadConfigFromDb();
   for (const [key, value] of Object.entries(dbConfig)) {
     if (value && OPEN_CODE_ENV_KEYS.has(key)) {
@@ -173,7 +173,7 @@ export async function buildOpenCodeEnv(
     }
   }
 
-  // process.envからもフォールバックで取得（DB優先）
+  // Also get from process.env as fallback (DB takes priority)
   for (const key of OPEN_CODE_ENV_KEYS) {
     if (env[key]) {
       continue;
@@ -185,7 +185,7 @@ export async function buildOpenCodeEnv(
     env[key] = value;
   }
 
-  // OPENCODE_CONFIG が明示されていない場合でも既定の設定ファイルを使う
+  // Use default config file even if OPENCODE_CONFIG is not explicitly set
   if (!env.OPENCODE_CONFIG) {
     const configPath = await resolveDefaultOpenCodeConfigPath(cwd);
     if (configPath) {

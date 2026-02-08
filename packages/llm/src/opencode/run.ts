@@ -5,29 +5,29 @@ import { join } from "node:path";
 import { z } from "zod";
 import { extractOpenCodeTokenUsage, type OpenCodeTokenUsage } from "./parse.js";
 
-// OpenCode実行オプション
+// OpenCode execution options
 export const OpenCodeOptions = z.object({
-  // 作業ディレクトリ
+  // Working directory
   workdir: z.string(),
-  // 指示ファイルパス
+  // Instructions file path
   instructionsPath: z.string().optional(),
-  // タスク内容
+  // Task content
   task: z.string(),
-  // タイムアウト（秒）
+  // Timeout (seconds)
   timeoutSeconds: z.number().int().positive().default(3600),
-  // 環境変数
+  // Environment variables
   env: z.record(z.string()).optional(),
-  // 既存の環境変数を引き継ぐか
+  // Whether to inherit existing environment variables
   inheritEnv: z.boolean().optional(),
-  // 使用モデル（例: google/gemini-2.0-flash-exp）
+  // Model to use (e.g., google/gemini-2.0-flash-exp)
   model: z.string().optional(),
-  // リトライ設定
+  // Retry configuration
   maxRetries: z.number().int().nonnegative().optional(),
   retryDelayMs: z.number().int().nonnegative().optional(),
 });
 export type OpenCodeOptions = z.infer<typeof OpenCodeOptions>;
 
-// 実行結果
+// Execution result
 export interface OpenCodeResult {
   success: boolean;
   exitCode: number;
@@ -38,7 +38,7 @@ export interface OpenCodeResult {
   retryCount: number;
 }
 
-// デフォルト設定
+// Default configuration
 const DEFAULT_MODEL = process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview";
 const DEFAULT_FALLBACK_MODEL =
   process.env.OPENCODE_FALLBACK_MODEL ?? "google/gemini-2.5-flash";
@@ -87,6 +87,13 @@ const IDLE_CHECK_INTERVAL_MS = 5000;
 const PROGRESS_LOG_INTERVAL_MS = 30000;
 const MAX_CONSECUTIVE_PLANNING_LINES = 10;
 const EXTERNAL_PERMISSION_PROMPT = /permission required:\s*external_directory/i;
+const EXTERNAL_PERMISSION_HINTS = [
+  "permission required",
+  "allow once",
+  "always allow",
+  "reject",
+];
+const PARENT_SHUTDOWN_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
 
 function isRetryableError(stderr: string, exitCode: number): boolean {
   if (exitCode === 1 && !stderr) return false;
@@ -123,6 +130,15 @@ function normalizeChunkLine(line: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 200);
+}
+
+function normalizeForPromptDetection(text: string): string {
+  return text
+    .replace(ANSI_ESCAPE_REGEX, "")
+    .replace(/[\u0000-\u001F\u007F]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function hasRepeatedPattern(chunks: string[]): boolean {
@@ -164,7 +180,7 @@ async function buildOpenCodePrompt(options: OpenCodeOptions): Promise<string> {
     return options.task;
   }
 
-  // 指示ファイルがある場合はタスクの先頭に結合する
+  // If instructions file exists, prepend it to the task
   const instructions = await readFile(options.instructionsPath, "utf-8");
   const trimmed = instructions.trim();
   if (!trimmed) {
@@ -193,7 +209,7 @@ async function executeOpenCodeOnce(
   const tempDir = await mkdtemp(join(tmpdir(), "openTiger-opencode-"));
   const promptPath = join(tempDir, "prompt.txt");
 
-  // プロンプトをファイルで渡してCLIの引数制限やパース問題を避ける
+  // Pass prompt via file to avoid CLI argument limits and parsing issues
   const prompt = await buildOpenCodePrompt(options);
   await writeFile(promptPath, prompt, "utf-8");
 
@@ -202,11 +218,11 @@ async function executeOpenCodeOnce(
     args.push("--model", model);
   }
 
-  // opencode 側の致命的エラーを stderr に出し、検知できるようにする
+  // Output fatal errors from opencode to stderr so they can be detected
   args.push("--print-logs", "--log-level", "ERROR");
   args.push("--file", promptPath);
   args.push("--");
-  args.push("添付したプロンプトを読んで指示に従ってください。");
+      args.push("Read the attached prompt and follow the instructions.");
 
   const baseEnv = options.inheritEnv === false ? {} : globalThis.process.env;
   const useProcessGroup = process.platform !== "win32";
@@ -216,7 +232,7 @@ async function executeOpenCodeOnce(
       ...baseEnv,
       ...options.env,
     },
-    // 子プロセスが残留しないようにプロセスグループで停止できる形にする
+    // Enable process group termination to prevent child processes from lingering
     detached: useProcessGroup,
     timeout: options.timeoutSeconds * 1000,
     stdio: ["ignore", "pipe", "pipe"],
@@ -227,6 +243,7 @@ async function executeOpenCodeOnce(
   let quotaExceeded = false;
   let permissionPromptBlocked = false;
   let printedErrorSummary = false;
+  const parentSignalHandlers: Array<{ signal: NodeJS.Signals; listener: () => void }> = [];
   const MAX_ERROR_SUMMARY_LENGTH = 240;
   const terminateOpenCode = (signal: NodeJS.Signals): void => {
     const pid = childProcess.pid;
@@ -234,7 +251,7 @@ async function executeOpenCodeOnce(
       try {
         childProcess.kill(signal);
       } catch {
-        // 既に終了している場合は無視する
+        // Ignore if already terminated
       }
       return;
     }
@@ -243,15 +260,33 @@ async function executeOpenCodeOnce(
         process.kill(-pid, signal);
         return;
       } catch {
-        // プロセスグループ停止が失敗した場合はPIDを直接停止する
+        // If process group termination fails, kill the PID directly
       }
     }
     try {
       process.kill(pid, signal);
     } catch {
-      // 既に終了している場合は無視する
+      // Ignore if already terminated
     }
   };
+  const registerParentSignalHandlers = (): void => {
+    for (const signal of PARENT_SHUTDOWN_SIGNALS) {
+      const listener = () => {
+        stderr += `\n[OpenCode] Parent process received ${signal}. Terminating child process`;
+        terminateOpenCode("SIGTERM");
+        setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
+      };
+      process.once(signal, listener);
+      parentSignalHandlers.push({ signal, listener });
+    }
+  };
+  const unregisterParentSignalHandlers = (): void => {
+    for (const { signal, listener } of parentSignalHandlers) {
+      process.off(signal, listener);
+    }
+    parentSignalHandlers.length = 0;
+  };
+  registerParentSignalHandlers();
   const timeout = setTimeout(() => {
     timedOut = true;
     terminateOpenCode("SIGTERM");
@@ -289,7 +324,7 @@ async function executeOpenCodeOnce(
       return;
     }
     doomLoopDetected = true;
-    process.stderr.write("\n[OpenCode] ドゥームループを検出したため強制終了します。\n");
+    process.stderr.write("\n[OpenCode] Doom loop detected. Forcing termination.\n");
     terminateOpenCode("SIGTERM");
     setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
   };
@@ -335,7 +370,10 @@ async function executeOpenCodeOnce(
     if (permissionPromptBlocked) {
       return;
     }
-    if (!EXTERNAL_PERMISSION_PROMPT.test(chunk)) {
+    const normalizedChunk = normalizeForPromptDetection(chunk);
+    const hasPromptHint = normalizedChunk.includes("external_directory")
+      && EXTERNAL_PERMISSION_HINTS.some((hint) => normalizedChunk.includes(hint));
+    if (!EXTERNAL_PERMISSION_PROMPT.test(normalizedChunk) && !hasPromptHint) {
       return;
     }
 
@@ -355,7 +393,7 @@ async function executeOpenCodeOnce(
     lastOutputAt = Date.now();
     lastVisibleProgressAt = Date.now();
     detectPermissionPrompt(chunk);
-    // リアルタイムでログに出力
+    // Output logs in real-time
     process.stdout.write(chunk);
     for (const line of chunk.split(/\r?\n/)) {
       pushChunkAndDetectDoomLoop(line);
@@ -394,8 +432,8 @@ async function executeOpenCodeOnce(
     for (const line of lines) {
       if (!quotaExceeded && isQuotaExceededError(line)) {
         quotaExceeded = true;
-        // クォータ超過は継続しても回復しないため早期に停止する
-        process.stderr.write("\n[OpenCode] クォータ上限に到達したため中断します。\n");
+        // Quota exceeded won't recover, so stop early
+        process.stderr.write("\n[OpenCode] Quota limit reached. Aborting.\n");
         terminateOpenCode("SIGTERM");
         setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
         continue;
@@ -426,6 +464,7 @@ async function executeOpenCodeOnce(
       if (settleGuard) {
         clearInterval(settleGuard);
       }
+      unregisterParentSignalHandlers();
       rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
       resolve(result);
     };
@@ -437,7 +476,7 @@ async function executeOpenCodeOnce(
       const idleTimeoutMessage = idleTimedOut
         ? `\n[OpenCode] Idle timeout exceeded (${Math.round(idleTimeoutMs / 1000)}s without visible progress)`
         : "";
-      const quotaMessage = quotaExceeded ? "\n[OpenCode] クォータ上限に到達しました" : "";
+      const quotaMessage = quotaExceeded ? "\n[OpenCode] Quota limit reached" : "";
       const doomLoopMessage = doomLoopDetected ? "\n[OpenCode] Doom loop detected" : "";
       const permissionPromptMessage = permissionPromptBlocked
         ? "\n[OpenCode] external_directory permission prompt blocked the run"
@@ -480,7 +519,7 @@ async function executeOpenCodeOnce(
       if (settled) {
         return;
       }
-      // closeイベント取りこぼし時の保険
+      // Fallback for missed close events
       if (signal) {
         stderr += `\n[OpenCode] Process exited by signal: ${signal}`;
       }
@@ -498,7 +537,7 @@ async function executeOpenCodeOnce(
       });
     });
 
-    // ごく稀にclose/exitが飛ばない環境差を吸収する
+    // Absorb rare environment differences where close/exit events are missed
     settleGuard = setInterval(() => {
       if (settled) {
         return;
@@ -552,7 +591,7 @@ export async function runOpenCode(
         continue;
       }
       console.error(
-        `[OpenCode] ${currentModel ?? "unknown model"} のクォータ上限に到達しました。API利用枠を確認してください。`
+        `[OpenCode] ${currentModel ?? "unknown model"} quota limit reached. Please check your API quota.`
       );
       break;
     }
@@ -562,7 +601,7 @@ export async function runOpenCode(
       && currentModel !== DEFAULT_FALLBACK_MODEL
       && THOUGHT_SIGNATURE_ERROR.test(result.stderr)
     ) {
-      // Gemini 3系のthought_signature必須エラー回避のためにモデルを切り替える
+      // Switch model to avoid Gemini 3 thought_signature required error
       fallbackUsed = true;
       currentModel = DEFAULT_FALLBACK_MODEL;
       console.warn(

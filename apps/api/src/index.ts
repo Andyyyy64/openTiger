@@ -30,7 +30,7 @@ function setupProcessLogging(logName: string): string | undefined {
   const logPath = join(logDir, `${logName}.log`);
   const stream = createWriteStream(logPath, { flags: "a" });
 
-  // ターミナルが流れても追跡できるようにログをファイルに残す
+  // Save logs to file so they can be tracked even if terminal output is lost
   const stdoutWrite = process.stdout.write.bind(process.stdout);
   const stderrWrite = process.stderr.write.bind(process.stderr);
 
@@ -83,7 +83,7 @@ app.get("/", (c) => {
   });
 });
 
-// 作業対象のAPIと衝突しないよう、ポートは環境変数で切り替える
+// Switch port via environment variable to avoid conflicts with target API
 const port = parseInt(
   process.env.OPENTIGER_API_PORT ?? process.env.API_PORT ?? "4301",
   10,

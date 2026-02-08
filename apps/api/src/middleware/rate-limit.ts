@@ -2,7 +2,7 @@ import type { Context, Next } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 
-// レート制限設定
+// Rate limit configuration
 interface RateLimitConfig {
   // ウィンドウ時間（ミリ秒）
   windowMs: number;
@@ -16,7 +16,7 @@ interface RateLimitConfig {
   message?: string;
 }
 
-// インメモリストア（本番環境ではRedisを使用推奨）
+// In-memory store (Redis recommended for production)
 interface RateLimitEntry {
   count: number;
   resetAt: number;
@@ -24,7 +24,7 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>();
 
-// 古いエントリを定期的にクリーンアップ
+// Periodically clean up old entries
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of store.entries()) {
@@ -34,7 +34,7 @@ setInterval(() => {
   }
 }, 60000); // 1分ごと
 
-// デフォルト設定
+// Default configuration
 const defaultConfig: RateLimitConfig = {
   windowMs: 60 * 1000, // 1分
   maxRequests: 100, // 1分あたり100リクエスト
@@ -42,9 +42,9 @@ const defaultConfig: RateLimitConfig = {
   message: "Too many requests, please try again later",
 };
 
-// クライアントIPを取得
+// Get client IP
 function getClientIP(c: Context): string {
-  // プロキシ経由の場合
+  // If via proxy
   const forwarded = c.req.header("X-Forwarded-For");
   if (forwarded) {
     const firstIp = forwarded.split(",")[0];
@@ -58,31 +58,31 @@ function getClientIP(c: Context): string {
     return realIp;
   }
 
-  // 直接接続の場合（Honoではデフォルトで取得不可のためフォールバック）
+  // Direct connection (fallback as Hono doesn't get it by default)
   return "unknown";
 }
 
-// レート制限ミドルウェア
+// Rate limit middleware
 export function rateLimitMiddleware(config: Partial<RateLimitConfig> = {}) {
   const cfg = { ...defaultConfig, ...config };
 
   return createMiddleware(async (c: Context, next: Next) => {
     const path = c.req.path;
 
-    // スキップパスのチェック
+    // Check skip paths
     const shouldSkip = cfg.skipPaths?.some((pattern) => pattern.test(path));
     if (shouldSkip) {
       return next();
     }
 
-    // クライアント識別子を取得
+    // Get client identifier
     const key = cfg.keyGenerator?.(c) ?? getClientIP(c);
     const now = Date.now();
 
-    // 現在のエントリを取得
+    // Get current entry
     let entry = store.get(key);
 
-    // エントリがないか期限切れの場合は新規作成
+    // Create new entry if none exists or expired
     if (!entry || entry.resetAt < now) {
       entry = {
         count: 0,
@@ -90,11 +90,11 @@ export function rateLimitMiddleware(config: Partial<RateLimitConfig> = {}) {
       };
     }
 
-    // カウントを増加
+    // Increment count
     entry.count++;
     store.set(key, entry);
 
-    // レスポンスヘッダーを設定
+    // Set response headers
     const remaining = Math.max(0, cfg.maxRequests - entry.count);
     const resetSeconds = Math.ceil((entry.resetAt - now) / 1000);
 
@@ -102,7 +102,7 @@ export function rateLimitMiddleware(config: Partial<RateLimitConfig> = {}) {
     c.header("X-RateLimit-Remaining", String(remaining));
     c.header("X-RateLimit-Reset", String(resetSeconds));
 
-    // 制限超過チェック
+    // Check limit exceeded
     if (entry.count > cfg.maxRequests) {
       c.header("Retry-After", String(resetSeconds));
       throw new HTTPException(429, {
@@ -114,14 +114,14 @@ export function rateLimitMiddleware(config: Partial<RateLimitConfig> = {}) {
   });
 }
 
-// エンドポイント別のレート制限
+// Rate limiting per endpoint
 export function endpointRateLimit(
   limits: Record<string, { windowMs: number; maxRequests: number }>
 ) {
   return createMiddleware(async (c: Context, next: Next) => {
     const path = c.req.path;
 
-    // パスに対応する制限を検索
+    // Find limit corresponding to path
     for (const [pattern, limit] of Object.entries(limits)) {
       if (path.startsWith(pattern) || new RegExp(pattern).test(path)) {
         const key = `${getClientIP(c)}:${pattern}`;

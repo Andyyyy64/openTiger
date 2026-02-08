@@ -2,45 +2,45 @@ import type { Context, Next } from "hono";
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
 
-// 認証方式
+// Authentication method
 type AuthMethod = "bearer" | "api-key" | "none";
 
-// 認証設定
+// Authentication configuration
 interface AuthConfig {
-  // 認証をスキップするパス（正規表現）
+  // Paths to skip authentication (regex)
   skipPaths?: RegExp[];
-  // 許可するAPIキー（カンマ区切りで複数可）
+  // Allowed API keys (comma-separated, multiple allowed)
   apiKeys?: string[];
-  // Bearerトークンの検証関数
+  // Bearer token validation function
   validateToken?: (token: string) => Promise<boolean> | boolean;
 }
 
-// デフォルト設定
+// Default configuration
 const defaultConfig: AuthConfig = {
   skipPaths: [/^\/health/, /^\/api\/webhook\/github/],
   apiKeys: process.env.API_KEYS?.split(",").map((k) => k.trim()) ?? [],
 };
 
-// 認証ミドルウェア
+// Authentication middleware
 export function authMiddleware(config: AuthConfig = defaultConfig) {
   return createMiddleware(async (c: Context, next: Next) => {
     const path = c.req.path;
 
-    // スキップパスのチェック
+    // Check skip paths
     const shouldSkip = config.skipPaths?.some((pattern) => pattern.test(path));
     if (shouldSkip) {
       return next();
     }
 
-    // 認証ヘッダーを取得
+    // Get authentication headers
     const authHeader = c.req.header("Authorization");
     const apiKeyHeader = c.req.header("X-API-Key");
 
-    // API Keyによる認証
+    // Authenticate with API Key
     if (apiKeyHeader) {
       const isValidApiKey = config.apiKeys?.includes(apiKeyHeader);
       if (isValidApiKey) {
-        // 認証情報をコンテキストに保存
+        // Save authentication info to context
         c.set("authMethod", "api-key" as AuthMethod);
         c.set("apiKey", apiKeyHeader);
         return next();
@@ -48,11 +48,11 @@ export function authMiddleware(config: AuthConfig = defaultConfig) {
       throw new HTTPException(401, { message: "Invalid API key" });
     }
 
-    // Bearerトークンによる認証
+    // Authenticate with Bearer token
     if (authHeader?.startsWith("Bearer ")) {
       const token = authHeader.slice(7);
 
-      // カスタム検証関数がある場合
+      // If custom validation function exists
       if (config.validateToken) {
         const isValid = await config.validateToken(token);
         if (isValid) {
@@ -63,7 +63,7 @@ export function authMiddleware(config: AuthConfig = defaultConfig) {
         throw new HTTPException(401, { message: "Invalid token" });
       }
 
-      // デフォルト: API_SECRETと比較
+      // Default: compare with API_SECRET
       const apiSecret = process.env.API_SECRET;
       if (apiSecret && token === apiSecret) {
         c.set("authMethod", "bearer" as AuthMethod);
@@ -72,8 +72,8 @@ export function authMiddleware(config: AuthConfig = defaultConfig) {
       throw new HTTPException(401, { message: "Invalid token" });
     }
 
-    // 認証ヘッダーがない場合
-    // 開発環境では認証をスキップ（API_SECRET未設定時）
+    // If no authentication header
+    // Skip authentication in development (when API_SECRET is not set)
     if (!process.env.API_SECRET && !config.apiKeys?.length) {
       c.set("authMethod", "none" as AuthMethod);
       return next();
@@ -85,12 +85,12 @@ export function authMiddleware(config: AuthConfig = defaultConfig) {
   });
 }
 
-// 管理者権限チェックミドルウェア
+// Admin-only access check middleware
 export function adminOnly() {
   return createMiddleware(async (c: Context, next: Next) => {
     const authMethod = c.get("authMethod") as AuthMethod | undefined;
 
-    // API Keyまたは有効なトークンが必要
+    // API Key or valid token required
     if (authMethod === "api-key" || authMethod === "bearer") {
       return next();
     }
@@ -101,7 +101,7 @@ export function adminOnly() {
   });
 }
 
-// 認証情報を取得するヘルパー
+// Helper to get authentication info
 export function getAuthInfo(c: Context): {
   method: AuthMethod;
   apiKey?: string;

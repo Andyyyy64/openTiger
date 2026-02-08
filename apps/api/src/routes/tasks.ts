@@ -239,7 +239,7 @@ async function enrichTasksWithRetryInfo(taskRows: typeof tasks.$inferSelect[]) {
   }));
 }
 
-// タスク一覧取得
+// Get task list
 tasksRoute.get("/", async (c) => {
   const status = c.req.query("status");
 
@@ -254,7 +254,7 @@ tasksRoute.get("/", async (c) => {
   return c.json({ tasks: enriched });
 });
 
-// タスク詳細取得
+// Get task details
 tasksRoute.get("/:id", async (c) => {
   const id = c.req.param("id");
 
@@ -268,7 +268,7 @@ tasksRoute.get("/:id", async (c) => {
   return c.json({ task: enriched });
 });
 
-// タスク作成リクエストのスキーマ
+// Task creation request schema
 const createTaskSchema = z.object({
   title: z.string().min(1),
   goal: z.string().min(1),
@@ -295,7 +295,7 @@ const createTaskSchema = z.object({
   timeboxMinutes: z.number().int().positive().optional(),
 });
 
-// タスク作成
+// Create task
 tasksRoute.post("/", zValidator("json", createTaskSchema), async (c) => {
   const body = c.req.valid("json");
 
@@ -318,7 +318,7 @@ tasksRoute.post("/", zValidator("json", createTaskSchema), async (c) => {
   return c.json({ task: result[0] }, 201);
 });
 
-// タスク更新リクエストのスキーマ
+// Task update request schema
 const updateTaskSchema = z.object({
   title: z.string().min(1).optional(),
   goal: z.string().min(1).optional(),
@@ -349,7 +349,7 @@ const updateTaskSchema = z.object({
   timeboxMinutes: z.number().int().positive().optional(),
 });
 
-// タスク更新
+// Update task
 tasksRoute.patch("/:id", zValidator("json", updateTaskSchema), async (c) => {
   const id = c.req.param("id");
   const body = c.req.valid("json");
@@ -370,7 +370,7 @@ tasksRoute.patch("/:id", zValidator("json", updateTaskSchema), async (c) => {
   return c.json({ task: result[0] });
 });
 
-// タスク削除
+// Delete task
 tasksRoute.delete("/:id", async (c) => {
   const id = c.req.param("id");
 

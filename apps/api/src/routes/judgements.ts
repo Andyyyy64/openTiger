@@ -121,7 +121,7 @@ judgementsRoute.get("/:id/diff", async (c) => {
   let truncated = false;
   let lastError: string | undefined;
 
-  // 保存済みの成果物 -> ローカル差分 -> PR差分の順に探索する
+  // Search in order: saved artifacts -> local diff -> PR diff
   if (runId) {
     const storedDiff = await db
       .select({
@@ -163,7 +163,7 @@ judgementsRoute.get("/:id/diff", async (c) => {
     }
   }
 
-  // GitHub認証エラー時でも、手元workspaceが残っていれば差分を復元する
+  // Restore diff from local workspace if available, even on GitHub auth error
   if (!diff && runId) {
     const [runRecord] = await db
       .select({
@@ -252,7 +252,7 @@ judgementsRoute.get("/", async (c) => {
     .orderBy(desc(events.createdAt))
     .limit(limit);
 
-  // UI側で詳細を組み立てられるようpayloadをそのまま返す
+  // Return payload as-is so UI can build details
   const judgements = rows.map((row) => ({
     id: row.id,
     createdAt: row.createdAt,

@@ -62,7 +62,7 @@ agentsRoute.post("/", zValidator("json", registerAgentSchema), async (c) => {
     .where(eq(agents.id, body.id));
 
   if (existing.length > 0) {
-    // 既存なら更新
+    // Update if exists
     const result = await db
       .update(agents)
       .set({

@@ -34,7 +34,7 @@ plansRoute.get("/", async (c) => {
         ? payload?.taskIds.filter((id): id is string => typeof id === "string")
         : [];
 
-      // Plannerが記録した順序に合わせてタスクを並べ直す
+      // Reorder tasks to match order recorded by Planner
       let taskRows: Array<{
         id: string;
         title: string;

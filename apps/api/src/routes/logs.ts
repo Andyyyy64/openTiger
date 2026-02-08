@@ -289,7 +289,7 @@ async function readTailLines(
     await handle.read(buffer, 0, bytesToRead, startPosition);
     const chunk = buffer.toString("utf-8");
 
-    // 末尾から読むと最初の行が途中で切れることがあるため補正する
+    // Correct for cases where reading from end may truncate the first line
     const lines = chunk.split(/\r?\n/);
     if (startPosition > 0) {
       lines.shift();

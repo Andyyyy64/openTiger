@@ -10,7 +10,7 @@ healthRoute.get("/", (c) => {
   });
 });
 
-// 詳細ヘルスチェック（DB接続確認など）
+// Detailed health check (DB connection verification, etc.)
 healthRoute.get("/ready", async (c) => {
   // TODO: DB接続確認を追加
   return c.json({

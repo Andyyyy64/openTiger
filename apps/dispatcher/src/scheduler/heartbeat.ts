@@ -3,7 +3,7 @@ import { agents, leases, tasks } from "@openTiger/db/schema";
 import { eq, lt, and, inArray } from "drizzle-orm";
 
 // ハートビート設定
-const HEARTBEAT_TIMEOUT_SECONDS = 60; // 60秒以上応答がなければオフライン
+const HEARTBEAT_TIMEOUT_SECONDS = 60; // Offline if no response for 60 seconds or more
 const CHECK_INTERVAL_MS = 30000; // 30秒ごとにチェック
 
 // エージェントの健全性状態
@@ -35,12 +35,12 @@ export async function checkAgentHealth(agentId: string): Promise<AgentHealth | n
   const now = new Date();
   const lastHeartbeat = agent.lastHeartbeat;
   
-  // ハートビートが最近あるかチェック
+  // Check if heartbeat is recent
   const isHealthy = lastHeartbeat 
     ? (now.getTime() - lastHeartbeat.getTime()) < HEARTBEAT_TIMEOUT_SECONDS * 1000
     : false;
 
-  // エージェントが持っているリースを取得
+  // Get leases held by agent
   const agentLeases = await db
     .select()
     .from(leases)
@@ -72,7 +72,7 @@ export async function checkAllAgentsHealth(): Promise<AgentHealth[]> {
   return healthResults;
 }
 
-// 利用可能なエージェントを取得
+// Get available agents
 export async function getAvailableAgents(role?: string): Promise<string[]> {
   const conditions = [eq(agents.status, "idle")];
   if (role) {
@@ -86,7 +86,7 @@ export async function getAvailableAgents(role?: string): Promise<string[]> {
   const now = new Date();
   const threshold = new Date(now.getTime() - HEARTBEAT_TIMEOUT_SECONDS * 1000);
 
-  // ハートビートが最近のエージェントのみ
+  // Only agents with recent heartbeat
   return allAgents
     .filter((agent) => {
       if (!agent.lastHeartbeat) return false;
@@ -120,7 +120,7 @@ export async function reclaimDeadAgentLeases(): Promise<number> {
       .where(eq(leases.agentId, agent.id));
 
     for (const lease of agentLeases) {
-      // タスクをqueuedに戻す
+      // Return task to queued
       await db
         .update(tasks)
         .set({

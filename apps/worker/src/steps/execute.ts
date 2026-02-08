@@ -17,7 +17,7 @@ export interface ExecuteResult {
   error?: string;
 }
 
-// タスクからOpenCode用のプロンプトを生成
+// Generate prompt for OpenCode from task
 function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
   const lines: string[] = [
     `# Task: ${task.title}`,
@@ -139,7 +139,7 @@ function matchDeniedCommand(command: string, deniedCommands: string[]): string |
         return denied;
       }
     } catch {
-      // 正規表現でなければ部分一致で判定する
+      // If not a regex, use partial match for evaluation
     }
 
     if (lowerTarget.includes(pattern.toLowerCase())) {
@@ -150,7 +150,7 @@ function matchDeniedCommand(command: string, deniedCommands: string[]): string |
   return undefined;
 }
 
-// OpenCodeを実行してタスクを遂行
+// Execute OpenCode to complete task
 export async function executeTask(
   options: ExecuteOptions
 ): Promise<ExecuteResult> {
@@ -193,7 +193,7 @@ export async function executeTask(
   console.log("Executing OpenCode...");
   console.log("Task:", task.title);
 
-  // OpenCodeを実行
+  // Execute OpenCode
   const taskEnv = await buildOpenCodeEnv(repoPath);
   const timeoutCapSeconds = Number.parseInt(
     process.env.OPENCODE_TASK_TIMEOUT_CAP_SECONDS ?? "1800",

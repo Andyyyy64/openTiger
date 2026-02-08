@@ -55,7 +55,7 @@ export const LogsPage: React.FC = () => {
     refetchInterval: 10000,
   });
 
-  // ログが更新されたときに一番下までスクロールする
+  // Scroll to bottom when logs are updated
   useEffect(() => {
     if (cycleLogRef.current) {
       cycleLogRef.current.scrollTop = cycleLogRef.current.scrollHeight;

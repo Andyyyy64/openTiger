@@ -66,7 +66,7 @@ export async function checkoutRepository(
     branchName,
   } = options;
 
-  // タスクごとの作業ディレクトリ
+  // Working directory per task
   const repoPath = join(workspacePath, taskId);
 
   try {
@@ -80,7 +80,7 @@ export async function checkoutRepository(
       }
       const repoIsGit = await isGitRepo(localRepoPath);
       if (!repoIsGit) {
-        // 初期状態のローカルディレクトリでも作業できるようにGitを初期化する
+        // Initialize Git so work can be done even in initial local directory state
         const initResult = await initRepo(localRepoPath, baseBranch);
         if (!initResult.success) {
           return {
@@ -134,7 +134,7 @@ export async function checkoutRepository(
         };
       }
 
-      // ローカルリポジトリの.envをworktreeに引き継ぐ
+      // Inherit local repository's .env to worktree
       const sourceEnvPath = join(localRepoPath, ".env");
       const targetEnvPath = join(worktreePath, ".env");
       if (existsSync(sourceEnvPath)) {
@@ -150,7 +150,7 @@ export async function checkoutRepository(
       };
     }
 
-    // 既存のディレクトリがある場合はクリーンアップ
+    // Clean up if existing directory exists
     if (existsSync(repoPath)) {
       console.log(`Cleaning existing directory: ${repoPath}`);
       await removeDirWithRetry(repoPath);

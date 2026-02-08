@@ -13,7 +13,7 @@ export const AgentsPage: React.FC = () => {
     queryFn: () => tasksApi.list(),
   });
 
-  // 依存関係が未完了のためディスパッチできない状態を検出する
+  // Detect state where dispatch is not possible due to incomplete dependencies
   const queuedTasks = tasks?.filter(t => t.status === 'queued') ?? [];
   const doneTaskIds = new Set((tasks ?? []).filter(t => t.status === 'done').map(t => t.id));
   const queuedBlockedByDeps = queuedTasks.filter(task => {

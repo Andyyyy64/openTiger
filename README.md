@@ -26,6 +26,17 @@ Docs · [Index](docs/README.md) · [Flow](docs/flow.md) · [Modes](docs/mode.md)
 - Non-destructive verification that avoids mutating project state
 - Role-separated agents with operational visibility in the Dashboard
 
+## Never-stall operation rules
+
+- Run long-lived system processes in `start` mode, not `dev/watch`
+  - file-watch restarts can interrupt in-flight runs and create duplicate retries
+- Planner and Cycle Manager are started via `start:fresh` (clean + build + start) to avoid stale `dist` artifacts
+- Worker shutdown must always recover interrupted runs and clear `busy` state
+- OpenCode child processes must be terminated when parent processes receive shutdown signals
+- Judge non-approve retries use a circuit breaker to avoid infinite requeue loops
+  - escalate to `AutoFix` or `needs_human` instead of retrying forever
+- System process auto-restart uses backoff and defaults to unlimited retries (`SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS=-1`)
+
 ---
 
 ## How it works (short)

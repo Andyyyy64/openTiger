@@ -44,7 +44,7 @@ export interface VerifyResult {
   error?: string;
 }
 
-// テスト成果物はポリシー検証から除外する
+// Exclude test artifacts from policy validation
 const GENERATED_PATHS = [
   "node_modules",
   "node_modules/**",
@@ -129,9 +129,9 @@ async function runCommand(
   });
 }
 
-// パスがパターンにマッチするか確認
+// Check if path matches pattern
 function matchesPattern(path: string, patterns: string[]): boolean {
-  // Playwrightの`.last-run.json`などドットファイルも対象に含める
+  // Include dot files like Playwright's `.last-run.json`
   return patterns.some((pattern) => minimatch(path, pattern, { dot: true }));
 }
 
@@ -215,13 +215,13 @@ function matchDeniedCommand(
   return undefined;
 }
 
-// pnpm/npmのtestコマンドは引数の前に"--"が必要なので補正する
+// Correct for pnpm/npm test commands which require "--" before arguments
 function normalizeVerificationCommand(command: string): string {
   let normalized = command;
 
   if (isE2ECommand(normalized)) {
     const e2ePort = process.env.OPENTIGER_E2E_PORT ?? "5174";
-    // PlaywrightのwebServer待機先とViteのポートを一致させる
+    // Match Playwright webServer wait target with Vite port
     normalized = withEnvPrefix(normalized, "VITE_PORT", e2ePort);
     normalized = withEnvPrefix(
       normalized,
@@ -231,11 +231,11 @@ function normalizeVerificationCommand(command: string): string {
   }
 
   if (shouldForceCi(normalized)) {
-    // vitestのwatchを抑止して検証を終了させる
+    // Suppress vitest watch to allow verification to complete
     normalized = withEnvPrefix(normalized, "CI", "1");
   }
 
-  // test:e2e のようなサブスクリプトはそのまま実行する
+  // Execute subscripts like test:e2e as-is
   if (/\btest:/.test(normalized)) {
     return normalized;
   }
@@ -404,7 +404,7 @@ async function runDevCommandOnce(
   });
 }
 
-// dev起動は常駐するため、短時間だけ起動して落ちないことを確認する
+// dev startup is persistent, so verify it starts and doesn't crash in short time
 async function runDevCommand(
   command: string,
   cwd: string,
@@ -542,7 +542,7 @@ export async function verifyChanges(
   let stats: { additions: number; deletions: number } = { additions: 0, deletions: 0 };
   let usesCommittedDiff = false;
 
-  // 既にコミット済みで差分が消えている場合は、baseとheadの差分で確認する
+  // If already committed and diff is gone, check with base and head diff
   if (changedFiles.length === 0 && baseBranch && headBranch) {
     const committedFiles = await getChangedFilesBetweenRefs(
       repoPath,
@@ -564,7 +564,7 @@ export async function verifyChanges(
     } else {
       const baseExists = await refExists(repoPath, baseBranch);
       if (!baseExists) {
-        // ベースブランチが存在しない初回コミットはroot差分で評価する
+        // Evaluate first commit without base branch as root diff
         const rootFiles = await getChangedFilesFromRoot(repoPath);
         if (rootFiles.length > 0) {
           changedFiles = rootFiles;
@@ -588,7 +588,7 @@ export async function verifyChanges(
     allowEnvExampleOutsidePaths
       ? mergeAllowedPaths(effectiveAllowedPaths, ENV_EXAMPLE_PATHS)
       : effectiveAllowedPaths;
-  // 生成物はポリシー検証とコミット対象から除外する
+  // Exclude generated files from policy validation and commit targets
   const relevantFiles = [];
   for (const file of changedFiles) {
     if (isGeneratedPath(file)) {
@@ -676,7 +676,7 @@ export async function verifyChanges(
       break;
     }
 
-    // checkスクリプトがない場合は検証コマンドから除外する
+    // Exclude from verification commands if check script doesn't exist
     if (isCheckCommand(command) && !checkScriptAvailable) {
       const notice = `Skipped: ${command} (check script not found)`;
       console.warn(`  WARN: ${notice}`);

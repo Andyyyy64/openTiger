@@ -70,7 +70,7 @@ runsRoute.get("/:id", async (c) => {
       const stats = await stat(logPath);
       // 1MB制限
       if (stats.size > 1024 * 1024) {
-        // 末尾1MBを読むなどの実装も可能だが、一旦は部分読み込みで対応
+        // Could implement reading last 1MB, but for now handle with partial read
         const { open } = await import("node:fs/promises");
         const handle = await open(logPath, "r");
         try {
@@ -183,7 +183,7 @@ runsRoute.post(
     const runId = c.req.param("id");
     const body = c.req.valid("json");
 
-    // 実行が存在するか確認
+    // Check if run exists
     const runResult = await db.select().from(runs).where(eq(runs.id, runId));
     if (runResult.length === 0) {
       return c.json({ error: "Run not found" }, 404);

@@ -82,7 +82,7 @@ export async function commitAndPush(
     ];
     const isNoChanges = noChangesPatterns.some((pattern) => combined.includes(pattern));
 
-    // 既にコミット済みの差分がある場合はそのまま進める
+    // Continue as-is if diff is already committed
     if (!isNoChanges) {
       return {
         success: false,

@@ -15,7 +15,7 @@ export interface BranchResult {
 
 // ブランチ名を生成
 export function generateBranchName(agentId: string, taskId: string): string {
-  // UUIDの最初の8文字を使用
+  // Use first 8 characters of UUID
   const shortTaskId = taskId.slice(0, 8);
   return `agent/${agentId}/${shortTaskId}`;
 }

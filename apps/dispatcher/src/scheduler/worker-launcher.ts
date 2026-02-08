@@ -31,7 +31,7 @@ export interface LaunchResult {
   error?: string;
 }
 
-// アクティブなWorkerプロセスを管理
+// Manage active Worker processes
 const activeWorkers = new Map<
   string,
   { process?: ChildProcess; containerId?: string; agentId: string }
@@ -56,7 +56,7 @@ async function launchAsProcess(
     REPO_MODE: process.env.REPO_MODE,
     LOCAL_REPO_PATH: process.env.LOCAL_REPO_PATH,
     LOCAL_WORKTREE_ROOT: process.env.LOCAL_WORKTREE_ROOT,
-    // 重要な環境変数を明示的に上書き/保持
+    // Explicitly override/preserve important environment variables
     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     OPENCODE_MODEL: process.env.OPENCODE_MODEL,
@@ -96,7 +96,7 @@ async function launchAsProcess(
       );
       activeWorkers.delete(config.taskId);
 
-      // エージェントのステータスを更新
+      // Update agent status
       updateAgentStatus(config.agentId, "idle").catch(console.error);
     });
 
@@ -115,7 +115,7 @@ async function launchAsProcess(
   }
 }
 
-// WorkerをDockerコンテナとして起動
+// Launch Worker as Docker container
 async function launchAsDocker(
   config: WorkerLaunchConfig
 ): Promise<LaunchResult> {
@@ -168,7 +168,7 @@ async function launchAsDocker(
     dockerProcess.stdout?.on("data", (data: Buffer) => {
       const output = data.toString().trim();
       console.log(`[Worker ${config.agentId}] ${output}`);
-      // コンテナIDを取得（最初の出力がID）
+      // Get container ID (first output is ID)
       if (!containerId && output.length === 64) {
         containerId = output;
       }
@@ -189,7 +189,7 @@ async function launchAsDocker(
       }
     });
 
-    // 起動成功を判定（少し待ってからチェック）
+    // Determine launch success (check after short wait)
     setTimeout(() => {
       if (dockerProcess.exitCode === null) {
         activeWorkers.set(config.taskId, {
@@ -216,7 +216,7 @@ export async function launchWorker(
   }
   
   // 常駐Worker（キュー待機モード）を使用する場合、新規プロセス起動はスキップ
-  // すでに Worker が起動していることを前提とする
+  // Assume Worker is already running
   console.log(`[Launcher] Task ${config.taskId} assigned to worker ${config.agentId} via queue.`);
   return { success: true, pid: 0 };
 }
@@ -230,7 +230,7 @@ export async function stopWorker(taskId: string): Promise<boolean> {
 
   if (worker.process) {
     worker.process.kill("SIGTERM");
-    // 5秒待ってもまだ動いていたらSIGKILL
+    // SIGKILL if still running after 5 seconds
     setTimeout(() => {
       if (worker.process && !worker.process.killed) {
         worker.process.kill("SIGKILL");
@@ -260,7 +260,7 @@ export function getActiveWorkers(): Map<
   return activeWorkers;
 }
 
-// エージェントステータスを更新
+// Update agent status
 async function updateAgentStatus(
   agentId: string,
   status: "idle" | "busy" | "offline",

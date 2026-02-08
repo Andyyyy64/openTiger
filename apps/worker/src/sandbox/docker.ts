@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 export interface DockerExecOptions {
   // 使用するDockerイメージ
   image: string;
-  // コンテナ内の作業ディレクトリ
+  // Working directory inside container
   workdir: string;
   // ホスト側のディレクトリをマウント
   mounts?: Array<{
@@ -14,7 +14,7 @@ export interface DockerExecOptions {
   }>;
   // 環境変数
   env?: Record<string, string>;
-  // タイムアウト（秒）
+  // Timeout (seconds)
   timeoutSeconds?: number;
   // ネットワーク設定
   network?: "none" | "host" | "bridge";
@@ -71,7 +71,7 @@ const FORBIDDEN_COMMANDS = [
   "wget",
 ];
 
-// 環境変数をフィルタリング（Allowlist方式）
+// Filter environment variables (allowlist approach)
 function filterEnvVars(env: Record<string, string>): Record<string, string> {
   const filtered: Record<string, string> = {};
   for (const key of ALLOWED_ENV_VARS) {
@@ -82,7 +82,7 @@ function filterEnvVars(env: Record<string, string>): Record<string, string> {
   return filtered;
 }
 
-// コマンドが許可されているかチェック
+// Check if command is allowed
 function isCommandAllowed(command: string[]): boolean {
   const fullCommand = command.join(" ").toLowerCase();
   for (const forbidden of FORBIDDEN_COMMANDS) {
@@ -93,7 +93,7 @@ function isCommandAllowed(command: string[]): boolean {
   return true;
 }
 
-// Dockerコンテナ内でコマンドを実行
+// Execute command inside Docker container
 export async function runInDocker(
   command: string[],
   options: DockerExecOptions
@@ -230,9 +230,9 @@ export function createOpenCodeDockerOptions(
       // 追加の環境変数
       ...env,
     },
-    network: "bridge", // OpenCode はAPI通信が必要
+    network: "bridge", // OpenCode requires API communication
     timeoutSeconds: 3600,
-    memoryLimit: 4 * 1024 * 1024 * 1024, // 4GB（Gemini FlashならClaudeより軽量）
+    memoryLimit: 4 * 1024 * 1024 * 1024, // 4GB (Gemini Flash is lighter than Claude)
     cpuLimit: 2,
   };
 }
@@ -252,7 +252,7 @@ export async function runOpenCodeInSandbox(
   return runInDocker(command, options);
 }
 
-// Dockerイメージが利用可能かチェック
+// Check if Docker image is available
 export async function checkDockerAvailable(): Promise<boolean> {
   return new Promise((resolve) => {
     const process = spawn("docker", ["info"], { timeout: 10000 });
@@ -267,7 +267,7 @@ export async function checkDockerAvailable(): Promise<boolean> {
   });
 }
 
-// 指定したイメージが存在するかチェック
+// Check if specified image exists
 export async function checkImageExists(image: string): Promise<boolean> {
   return new Promise((resolve) => {
     const process = spawn("docker", ["image", "inspect", image], {

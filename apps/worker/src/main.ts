@@ -33,7 +33,7 @@ import {
 } from "./steps/index.js";
 import { generateBranchName } from "./steps/branch.js";
 
-// ハートビートの間隔（ミリ秒）
+// Heartbeat interval (milliseconds)
 const HEARTBEAT_INTERVAL = 30000; // 30秒
 
 const logStreams = new Set<ReturnType<typeof createWriteStream>>();
@@ -91,7 +91,7 @@ async function acquireTaskRuntimeLock(taskId: string): Promise<TaskRuntimeLock |
           return acquireTaskRuntimeLock(taskId);
         }
       } catch {
-        // 不正なロック情報はそのまま扱い、上位で重複実行としてスキップする
+        // Handle invalid lock info as-is; skip as duplicate execution at upper level
       }
       return null;
     }
@@ -148,16 +148,16 @@ async function recoverInterruptedAgentRuns(agentId: string): Promise<number> {
   return staleRuns.length;
 }
 
-// ハートビートを送信する関数
-async function startHeartbeat(agentId: string) {
+// Function to send heartbeat
+function startHeartbeat(agentId: string): NodeJS.Timeout {
   return setInterval(async () => {
     try {
       await db
         .update(agents)
         .set({
           lastHeartbeat: new Date(),
-          // オフライン扱いからの復帰を許可する。
-          // busyを上書きしないよう、offlineの時だけidleへ戻す。
+          // Allow recovery from offline status
+          // Only revert to idle when offline to avoid overwriting busy status
           status: sql`CASE WHEN ${agents.status} = 'offline' THEN 'idle' ELSE ${agents.status} END`,
         })
         .where(eq(agents.id, agentId));
@@ -167,7 +167,83 @@ async function startHeartbeat(agentId: string) {
   }, HEARTBEAT_INTERVAL);
 }
 
-// Worker設定
+async function markAgentOffline(agentId: string): Promise<void> {
+  await db
+    .update(agents)
+    .set({
+      status: "offline",
+      currentTaskId: null,
+      lastHeartbeat: new Date(),
+    })
+    .where(eq(agents.id, agentId));
+}
+
+function setupWorkerShutdownHandlers(params: {
+  agentId: string;
+  heartbeatTimer: NodeJS.Timeout;
+  getQueueWorker: () => ReturnType<typeof createTaskWorker> | null;
+}): () => void {
+  const { agentId, heartbeatTimer, getQueueWorker } = params;
+  let shuttingDown = false;
+
+  const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+    console.warn(`[Shutdown] ${agentId} received ${signal}. Draining worker...`);
+
+    clearInterval(heartbeatTimer);
+    const hardExitTimer = setTimeout(() => {
+      console.error(`[Shutdown] ${agentId} forced exit after timeout`);
+      process.exit(1);
+    }, 15000);
+    hardExitTimer.unref();
+
+    try {
+      const queueWorker = getQueueWorker();
+      if (queueWorker) {
+        await queueWorker.close();
+      }
+    } catch (error) {
+      console.error(`[Shutdown] Failed to close queue worker for ${agentId}:`, error);
+    }
+
+    try {
+      const recovered = await recoverInterruptedAgentRuns(agentId);
+      if (recovered > 0) {
+        console.warn(`[Shutdown] Requeued ${recovered} interrupted run(s) for ${agentId}`);
+      }
+    } catch (error) {
+      console.error(`[Shutdown] Failed to recover interrupted runs for ${agentId}:`, error);
+    }
+
+    try {
+      await markAgentOffline(agentId);
+    } catch (error) {
+      console.error(`[Shutdown] Failed to mark ${agentId} offline:`, error);
+    }
+
+    clearTimeout(hardExitTimer);
+    process.exit(0);
+  };
+
+  const listeners = (["SIGTERM", "SIGINT", "SIGHUP"] as const).map((signal) => {
+    const listener = () => {
+      void shutdown(signal);
+    };
+    process.on(signal, listener);
+    return { signal, listener };
+  });
+
+  return () => {
+    for (const { signal, listener } of listeners) {
+      process.off(signal, listener);
+    }
+  };
+}
+
+// Worker configuration
 export interface WorkerConfig {
   agentId: string;
   role?: string;
@@ -180,7 +256,7 @@ export interface WorkerConfig {
   logPath?: string;
 }
 
-// 実行結果
+// Execution result
 export interface WorkerResult {
   success: boolean;
   taskId: string;
@@ -190,7 +266,7 @@ export interface WorkerResult {
   costTokens?: number;
 }
 
-// Workerのメイン処理
+// Worker main processing
 export async function runWorker(
   taskData: Task,
   config: WorkerConfig
@@ -220,7 +296,7 @@ export async function runWorker(
   console.log(`${agentLabel} ${agentId} starting task: ${taskData.title}`);
   console.log("=".repeat(60));
 
-  // 実行記録を作成
+  // Create execution record
   const runRecords = await db
     .insert(runs)
     .values({
@@ -253,7 +329,7 @@ export async function runWorker(
       ? generateBranchName(agentId, taskId)
       : undefined;
 
-    // Step 1: リポジトリをチェックアウト
+    // Step 1: Check out repository
     console.log("\n[1/7] Checking out repository...");
     const checkoutResult = await checkoutRepository({
       repoUrl,
@@ -275,7 +351,7 @@ export async function runWorker(
     worktreeBasePath = checkoutResult.baseRepoPath;
     worktreePath = checkoutResult.worktreePath;
 
-    // Step 2: 作業ブランチを作成
+    // Step 2: Create working branch
     let branchName: string;
     if (repoMode === "local") {
       branchName = localBranchName ?? generateBranchName(agentId, taskId);
@@ -295,7 +371,7 @@ export async function runWorker(
       branchName = branchResult.branchName;
     }
 
-    // ブランチをartifactとして記録
+    // Record branch as artifact
     await db.insert(artifacts).values({
       runId,
       type: "branch",
@@ -316,7 +392,7 @@ export async function runWorker(
       });
     }
 
-    // Step 3: OpenCodeでタスクを実行
+    // Step 3: Execute task with OpenCode
     console.log("\n[3/7] Executing task with OpenCode...");
     const previousFailures = await db
       .select({
@@ -358,23 +434,23 @@ export async function runWorker(
       const isTimeout = executeResult.openCodeResult.exitCode === -1
         && executeResult.openCodeResult.stderr.includes("[OpenCode] Timeout exceeded");
       if (isTimeout) {
-        // タイムアウトでも変更があれば続行する（検証ステップで判定）
+        // Continue if there are changes even on timeout (evaluated in verification step)
         console.warn("[Worker] OpenCode timed out, but continuing to verify changes...");
       } else {
         throw new Error(executeResult.error);
       }
     }
 
-    // Step 4: 期待ファイルのチェック
+    // Step 4: Check expected files
     console.log("\n[4/7] Checking expected files...");
     const missingFiles = await validateExpectedFiles(repoPath, taskData);
     if (missingFiles.length > 0) {
-      // 期待ファイルが見つからない場合でも警告として続行（検証コマンドで実際に必要か判定）
+      // Continue with warning if expected files not found (verification commands will determine if actually needed)
       console.warn(`[Worker] Warning: Expected files not found: ${missingFiles.join(", ")}`);
       console.warn("[Worker] Continuing with verification commands...");
     }
 
-    // Step 5: 変更を検証
+    // Step 5: Verify changes
     console.log("\n[5/7] Verifying changes...");
     const verifyResult = await verifyChanges({
       repoPath,
@@ -383,9 +459,9 @@ export async function runWorker(
       policy: effectivePolicy,
       baseBranch,
       headBranch: branchName,
-      // pnpm install に伴う lockfile 変更は常に許容する
+      // Always allow lockfile changes from pnpm install
       allowLockfileOutsidePaths: true,
-      // local modeでは.env.exampleの作成で止めない
+      // Don't stop on .env.example creation in local mode
       allowEnvExampleOutsidePaths: repoMode === "local",
       allowNoChanges: shouldAllowNoChanges(taskData),
     });
@@ -435,7 +511,7 @@ export async function runWorker(
       };
     }
 
-    // Step 6: コミットしてプッシュ
+    // Step 6: Commit and push
     console.log("\n[6/7] Committing and pushing...");
     const commitResult = await commitAndPush({
       repoPath,
@@ -448,7 +524,7 @@ export async function runWorker(
       throw new Error(commitResult.error);
     }
 
-    // コミットをartifactとして記録
+    // Record commit as artifact
     await db.insert(artifacts).values({
       runId,
       type: "commit",
@@ -460,9 +536,9 @@ export async function runWorker(
       },
     });
 
-    // Step 7: PRを作成
+    // Step 7: Create PR
     console.log("\n[7/7] Creating PR...");
-    // 空リポジトリ対策: agentブランチのpush完了後にベースブランチを確保する
+    // Empty repository countermeasure: ensure base branch after agent branch push completes
     if (repoMode === "git") {
       const baseResult = await ensureRemoteBaseBranch(repoPath, baseBranch, branchName);
       if (!baseResult.success) {
@@ -486,7 +562,7 @@ export async function runWorker(
       throw new Error(prResult.error);
     }
 
-    // PRをartifactとして記録
+    // Record PR as artifact
     if (prResult.pr) {
       await db.insert(artifacts).values({
         runId,
@@ -499,7 +575,7 @@ export async function runWorker(
         },
       });
     } else if (repoMode === "git") {
-      // 直接プッシュした場合はその旨を記録
+      // Record if directly pushed
       await db.insert(artifacts).values({
         runId,
         type: "commit",
@@ -510,7 +586,7 @@ export async function runWorker(
       });
     }
 
-    // 実行成功を記録
+    // Record execution success
     await db
       .update(runs)
       .set({
@@ -520,7 +596,7 @@ export async function runWorker(
       })
       .where(eq(runs.id, runId));
 
-    // PRがある場合はJudgeの自動レビュー待ちにする
+    // Set to await automatic Judge review if PR exists
     const needsReview = repoMode === "local" || Boolean(prResult.pr);
     const nextStatus = needsReview ? "blocked" : "done";
     await db
@@ -532,10 +608,10 @@ export async function runWorker(
       })
       .where(eq(tasks.id, taskId));
 
-    // リースを解放
+    // Release lease
     await db.delete(leases).where(eq(leases.taskId, taskId));
 
-    // エージェントをidleに戻す
+    // Return agent to idle
     await db
       .update(agents)
       .set({ status: "idle", currentTaskId: null })
@@ -573,7 +649,7 @@ export async function runWorker(
       })
       .where(eq(runs.id, runId));
 
-    // タスクをfailedに更新
+    // Update task to failed
     await db
       .update(tasks)
       .set({
@@ -583,10 +659,10 @@ export async function runWorker(
       })
       .where(eq(tasks.id, taskId));
 
-    // リースを解放
+    // Release lease
     await db.delete(leases).where(eq(leases.taskId, taskId));
 
-    // エージェントをidleに戻す
+    // Return agent to idle
     await db
       .update(agents)
       .set({ status: "idle", currentTaskId: null })
@@ -666,7 +742,7 @@ function shouldAllowNoChanges(task: Task): boolean {
   const denies = denyHints.some((hint) => text.includes(hint));
   const verificationOnly = isVerificationOnlyCommands(commands);
 
-  // 検証目的のタスクは変更なしでも評価を継続する
+  // Continue evaluation for verification-only tasks even without changes
   return (allows && !denies) || verificationOnly;
 }
 
@@ -683,7 +759,7 @@ function isVerificationOnlyCommands(commands: string[]): boolean {
     dbCommandPattern,
   ];
 
-  // 検証系コマンドのみのタスクは変更なしでも成功扱いにする
+  // Treat tasks with only verification commands as successful even without changes
   return commands.every((command) =>
     verificationPatterns.some((pattern) => pattern.test(command))
   );
@@ -693,7 +769,7 @@ async function validateExpectedFiles(
   repoPath: string,
   task: Task
 ): Promise<string[]> {
-  // タスクの想定ファイルが存在するかを事前に確認する
+  // Pre-check if expected files for the task exist
   const files = task.context?.files ?? [];
   if (files.length === 0) {
     return [];
@@ -707,7 +783,7 @@ async function validateExpectedFiles(
       continue;
     }
 
-    // .envは運用側で生成されるため期待ファイルの検証対象から外す
+    // Exclude .env from expected file validation as it's generated by operations
     if (/(^|\/)\.env(\.|$)/.test(normalizedFile)) {
       continue;
     }
@@ -730,12 +806,12 @@ async function validateExpectedFiles(
       continue;
     }
 
-    // まず指定されたパスをチェック
+    // First check the specified path
     if (await pathExists(targetPath)) {
       continue;
     }
 
-    // 見つからない場合、よくあるパターンを試す（src/ サブディレクトリ）
+    // If not found, try common patterns (src/ subdirectory)
     const pathParts = normalizedFile.split("/");
     const foundAlternative = await (async () => {
       // packages/xxx/file.ts -> packages/xxx/src/file.ts
@@ -766,7 +842,7 @@ async function validateExpectedFiles(
 }
 
 function setTaskLogPath(logPath?: string): void {
-  // タスク単位のログを出し分ける
+  // Separate logs per task
   if (taskLogStream) {
     logStreams.delete(taskLogStream);
     taskLogStream.end();
@@ -803,7 +879,7 @@ function setupProcessLogging(agentId: string): string | undefined {
   const stream = createWriteStream(logPath, { flags: "a" });
   logStreams.add(stream);
 
-  // 標準出力/標準エラーをファイルにも記録する
+  // Also record stdout/stderr to file
   const stdoutWrite = process.stdout.write.bind(process.stdout);
   const stderrWrite = process.stderr.write.bind(process.stderr);
 
@@ -840,7 +916,7 @@ function buildTaskLogPath(
   return join(logDir, "tasks", taskId, `${agentId}-${runId}.log`);
 }
 
-// キューからタスクを受け取って実行するワーカープロセス
+// Worker process that receives and executes tasks from queue
 async function main() {
   const workerIndex = process.env.WORKER_INDEX;
   const agentRole = process.env.AGENT_ROLE ?? "worker";
@@ -857,7 +933,7 @@ async function main() {
         ? process.env.DOCSER_MODEL ?? process.env.OPENCODE_MODEL
         : process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL;
   const effectiveModel = agentModel ?? "google/gemini-3-flash-preview";
-  // 指示ファイルは環境変数があれば優先する
+  // Prioritize instructions file if environment variable is set
   const instructionsPath =
     agentRole === "tester"
       ? process.env.TESTER_INSTRUCTIONS_PATH
@@ -884,8 +960,8 @@ async function main() {
 
   const logPath = setupProcessLogging(agentId);
 
-  // エージェント登録
-  // 起動時に自分と同じ役割の古いエージェント（オフラインのものなど）を掃除する
+  // Agent registration
+  // Clean up old agents with the same role (offline ones, etc.) at startup
   if (workerIndex) {
     await db.delete(agents).where(eq(agents.id, agentId));
   }
@@ -900,7 +976,7 @@ async function main() {
   await db.insert(agents).values({
     id: agentId,
     role: agentRole,
-    status: "idle", // 起動時は待機中として登録
+    status: "idle", // Register as idle at startup
     lastHeartbeat: new Date(),
     metadata: {
       model: effectiveModel, // 役割ごとのモデルを記録する
@@ -916,6 +992,12 @@ async function main() {
 
   // ハートビート開始
   const heartbeatTimer = startHeartbeat(agentId);
+  let queueWorker: ReturnType<typeof createTaskWorker> | null = null;
+  const disposeShutdownHandlers = setupWorkerShutdownHandlers({
+    agentId,
+    heartbeatTimer,
+    getQueueWorker: () => queueWorker,
+  });
 
   console.log(`${agentLabel} ${agentId} started`);
   console.log(`Workspace: ${workspacePath}`);
@@ -923,12 +1005,12 @@ async function main() {
   console.log(`Base branch: ${baseBranch}`);
   console.log("Waiting for tasks...");
 
-  // TODO: BullMQキューからタスクを受け取る
-  // 現時点では環境変数からタスクIDを受け取る簡易版
+  // TODO: Receive tasks from BullMQ queue
+  // Currently a simple version that receives task ID from environment variable
   const taskId = process.env.TASK_ID;
 
   if (taskId) {
-    // 指定されたタスクを実行（単発実行モード）
+    // Execute specified task (single execution mode)
     const [taskData] = await db
       .select()
       .from(tasks)
@@ -961,13 +1043,14 @@ async function main() {
       await releaseTaskRuntimeLock(runtimeLock);
     });
 
+    disposeShutdownHandlers();
     process.exit(result.success ? 0 : 1);
   }
 
   // キュー待機モード（常駐モード）
   console.log(`${agentLabel} ${agentId} entering queue mode...`);
   
-  const worker = createTaskWorker(async (job: Job<TaskJobData>) => {
+  queueWorker = createTaskWorker(async (job: Job<TaskJobData>) => {
     if (job.data.agentId && job.data.agentId !== agentId) {
       throw new Error(
         `Task ${job.data.taskId} is assigned to ${job.data.agentId}, not ${agentId}`
@@ -989,7 +1072,7 @@ async function main() {
       .where(eq(tasks.id, job.data.taskId));
 
     if (!taskData) {
-      // DB Cleanup後にキューに残っていたジョブはスキップする
+      // Skip jobs remaining in queue after DB cleanup
       console.warn(`[Queue] Task not found in DB (likely cleaned up): ${job.data.taskId}`);
       return;
     }
@@ -1003,8 +1086,8 @@ async function main() {
         .limit(1);
 
       if (activeRuns.length === 0) {
-        // ロック競合直後は、別ワーカーがrun作成前の可能性がある。
-        // 直近更新なら誤回復を避けて今回ジョブは静かにスキップする。
+        // Right after lock conflict, another worker may be before run creation
+        // If recently updated, skip this job silently to avoid false recovery
         const updatedAtMs = taskData.updatedAt?.getTime?.() ?? 0;
         const recentlyUpdated = Date.now() - updatedAtMs < 2 * 60 * 1000;
         if (taskData.status === "running" && recentlyUpdated) {
@@ -1014,7 +1097,7 @@ async function main() {
           return;
         }
 
-        // 実行中Runが無く、更新も古い場合は状態不整合として復旧する
+        // Recover as state inconsistency if no running Run and update is old
         await db.delete(leases).where(eq(leases.taskId, job.data.taskId));
         await db
           .update(tasks)
@@ -1053,11 +1136,11 @@ async function main() {
     }
   }, getTaskQueueName(agentId));
 
-  worker.on("failed", (job: Job<TaskJobData> | undefined, err: Error) => {
+  queueWorker.on("failed", (job: Job<TaskJobData> | undefined, err: Error) => {
     console.error(`[Queue] Job ${job?.id} failed:`, err);
   });
 
-  worker.on("error", (err: Error) => {
+  queueWorker.on("error", (err: Error) => {
     console.error(`[Queue] Worker runtime error for ${agentId}:`, err);
   });
 
