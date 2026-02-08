@@ -42,16 +42,16 @@ importers:
       '@hono/zod-validator':
         specifier: ^0.4.2
         version: 0.4.3(hono@4.11.4)(zod@3.25.76)
-      '@sebastian-code/core':
+      '@openTiger/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@sebastian-code/db':
+      '@openTiger/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@sebastian-code/queue':
+      '@openTiger/queue':
         specifier: workspace:*
         version: link:../../packages/queue
-      '@sebastian-code/vcs':
+      '@openTiger/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
       dotenv:
@@ -82,13 +82,13 @@ importers:
 
   apps/cycle-manager:
     dependencies:
-      '@sebastian-code/core':
+      '@openTiger/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@sebastian-code/db':
+      '@openTiger/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@sebastian-code/queue':
+      '@openTiger/queue':
         specifier: workspace:*
         version: link:../../packages/queue
       dotenv:
@@ -113,7 +113,7 @@ importers:
 
   apps/dashboard:
     dependencies:
-      '@sebastian-code/core':
+      '@openTiger/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@tanstack/react-query':
@@ -177,13 +177,13 @@ importers:
 
   apps/dispatcher:
     dependencies:
-      '@sebastian-code/core':
+      '@openTiger/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@sebastian-code/db':
+      '@openTiger/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@sebastian-code/queue':
+      '@openTiger/queue':
         specifier: workspace:*
         version: link:../../packages/queue
       bullmq:
@@ -211,16 +211,16 @@ importers:
 
   apps/judge:
     dependencies:
-      '@sebastian-code/core':
+      '@openTiger/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@sebastian-code/db':
+      '@openTiger/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@sebastian-code/llm':
+      '@openTiger/llm':
         specifier: workspace:*
         version: link:../../packages/llm
-      '@sebastian-code/vcs':
+      '@openTiger/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
       dotenv:
@@ -245,16 +245,16 @@ importers:
 
   apps/planner:
     dependencies:
-      '@sebastian-code/core':
+      '@openTiger/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@sebastian-code/db':
+      '@openTiger/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@sebastian-code/llm':
+      '@openTiger/llm':
         specifier: workspace:*
         version: link:../../packages/llm
-      '@sebastian-code/vcs':
+      '@openTiger/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
       dotenv:
@@ -279,19 +279,19 @@ importers:
 
   apps/worker:
     dependencies:
-      '@sebastian-code/core':
+      '@openTiger/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@sebastian-code/db':
+      '@openTiger/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@sebastian-code/llm':
+      '@openTiger/llm':
         specifier: workspace:*
         version: link:../../packages/llm
-      '@sebastian-code/queue':
+      '@openTiger/queue':
         specifier: workspace:*
         version: link:../../packages/queue
-      '@sebastian-code/vcs':
+      '@openTiger/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
       bullmq:
@@ -338,7 +338,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@sebastian-code/core':
+      '@openTiger/core':
         specifier: workspace:*
         version: link:../core
       drizzle-orm:
