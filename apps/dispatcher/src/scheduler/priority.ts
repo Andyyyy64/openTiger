@@ -20,8 +20,11 @@ export interface AvailableTask {
 }
 
 const DEFAULT_RETRY_DELAY_MS = 5 * 60 * 1000;
+const BLOCK_ON_AWAITING_JUDGE_BACKLOG =
+  process.env.DISPATCH_BLOCK_ON_AWAITING_JUDGE === "true";
 let lastObservedJudgeBacklog = -1;
 let lastObservedPendingJudgeRun = false;
+let lastObservedJudgeBacklogBlocked = false;
 
 function getRetryDelayMs(): number {
   const raw = process.env.DISPATCH_RETRY_DELAY_MS ?? String(DEFAULT_RETRY_DELAY_MS);
@@ -38,6 +41,7 @@ function getRetryDelayMs(): number {
 export async function getAvailableTasks(): Promise<AvailableTask[]> {
   // PR/Judge待ちが残っている間は新規タスクを配布しない。
   // これにより「PR消化 -> Issue/Planner」の順序を担保する。
+  // ただしデフォルトでは完全停止せず、通常タスクの進行を優先する。
   const [awaitingJudgeTasks] = await db
     .select({ count: count() })
     .from(tasks)
@@ -66,18 +70,27 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
       || lastObservedPendingJudgeRun !== hasPendingJudgeRun
     ) {
       console.log(
-        `[Priority] Dispatch paused: awaiting_judge backlog=${judgeBacklogCount}, pending_judge_run=${hasPendingJudgeRun}`
+        `[Priority] Awaiting_judge backlog observed: backlog=${judgeBacklogCount}, pending_judge_run=${hasPendingJudgeRun}, hard_block=${BLOCK_ON_AWAITING_JUDGE_BACKLOG}`
       );
     }
     lastObservedJudgeBacklog = judgeBacklogCount;
     lastObservedPendingJudgeRun = hasPendingJudgeRun;
-    return [];
+    if (BLOCK_ON_AWAITING_JUDGE_BACKLOG) {
+      lastObservedJudgeBacklogBlocked = true;
+      return [];
+    }
+  } else if (lastObservedJudgeBacklog > 0 || lastObservedPendingJudgeRun) {
+    console.log("[Priority] Awaiting_judge backlog cleared");
+    lastObservedJudgeBacklog = 0;
+    lastObservedPendingJudgeRun = false;
   }
-  if (lastObservedJudgeBacklog > 0 || lastObservedPendingJudgeRun) {
-    console.log("[Priority] Dispatch resumed: awaiting_judge backlog cleared");
+  if (
+    lastObservedJudgeBacklogBlocked
+    && !(judgeBacklogCount > 0 || hasPendingJudgeRun)
+  ) {
+    console.log("[Priority] Dispatch resumed after awaiting_judge backlog gate");
+    lastObservedJudgeBacklogBlocked = false;
   }
-  lastObservedJudgeBacklog = 0;
-  lastObservedPendingJudgeRun = false;
 
   // queuedステータスのタスクを取得
   const queuedTasks = await db
@@ -90,13 +103,43 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     return [];
   }
 
-  console.log(`[Priority] Found ${queuedTasks.length} queued tasks`);
+  const misqueuedPrReviewTaskIds = queuedTasks
+    .filter((task) =>
+      task.goal.startsWith("Review and process open PR #")
+      || task.title.includes("[PR] Review #")
+    )
+    .map((task) => task.id);
+  if (misqueuedPrReviewTaskIds.length > 0) {
+    // PR review はJudge専用。queuedに紛れたものはawaiting_judgeへ戻す。
+    await db
+      .update(tasks)
+      .set({
+        status: "blocked",
+        blockReason: "awaiting_judge",
+        updatedAt: new Date(),
+      })
+      .where(inArray(tasks.id, misqueuedPrReviewTaskIds));
+    console.log(
+      `[Priority] Moved ${misqueuedPrReviewTaskIds.length} PR-review task(s) back to blocked(awaiting_judge)`
+    );
+  }
+
+  const dispatchableQueuedTasks = queuedTasks.filter(
+    (task) => !misqueuedPrReviewTaskIds.includes(task.id)
+  );
+
+  if (dispatchableQueuedTasks.length === 0) {
+    console.log("[Priority] No dispatchable queued tasks found");
+    return [];
+  }
+
+  console.log(`[Priority] Found ${dispatchableQueuedTasks.length} dispatchable queued tasks`);
 
   const cooldownBlockedIds = new Set<string>();
   const retryDelayMs = getRetryDelayMs();
 
   if (retryDelayMs > 0) {
-    const queuedIds = queuedTasks.map((task) => task.id);
+    const queuedIds = dispatchableQueuedTasks.map((task) => task.id);
     const cutoff = new Date(Date.now() - retryDelayMs);
     const recentFailures = await db
       .select({
@@ -152,7 +195,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
   const doneIds = new Set(doneTasks.map((t) => t.id));
 
   // フィルタリング: リースなし、依存関係解決済み、targetArea の衝突なし
-  const available = queuedTasks.filter((task) => {
+  const available = dispatchableQueuedTasks.filter((task) => {
     // 直近失敗の再配布はクールダウンする
     if (cooldownBlockedIds.has(task.id)) {
       console.log(`[Priority] Task ${task.id} blocked by cooldown`);
