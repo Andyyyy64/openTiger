@@ -34,7 +34,7 @@ Docs · [Index](docs/README.md) · [Flow](docs/flow.md) · [Modes](docs/mode.md)
 - Worker shutdown must always recover interrupted runs and clear `busy` state
 - OpenCode child processes must be terminated when parent processes receive shutdown signals
 - Judge non-approve retries use a circuit breaker to avoid infinite requeue loops
-  - escalate to `AutoFix` or `needs_human` instead of retrying forever
+  - escalate to `AutoFix` or `needs_rework` instead of retrying forever
 - System process auto-restart uses backoff and defaults to unlimited retries (`SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS=-1`)
 
 ---
