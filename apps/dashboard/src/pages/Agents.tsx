@@ -22,7 +22,7 @@ export const AgentsPage: React.FC = () => {
   const doneTaskIds = new Set((tasks ?? []).filter((t) => t.status === "done").map((t) => t.id));
   const queuedBlockedByDeps = queuedTasks.filter((task) => {
     const deps = task.dependencies ?? [];
-    return deps.length > 0 && deps.some((depId) => !doneTaskIds.has(depId));
+    return deps.some((depId) => !doneTaskIds.has(depId));
   });
   const idleWorkers = agents?.filter((a) => a.role === "worker" && a.status === "idle") ?? [];
   const blockedByDepsWithIdleWorkers =

@@ -167,7 +167,7 @@ function isDevCommand(command: string): boolean {
   return /\b(pnpm|npm|yarn|bun)\b[^\n]*\b(run\s+)?dev\b/.test(command);
 }
 
-function ensureDevCommand(commands: string[], devCommand?: string): string[] {
+function ensureDevCommand(commands: string[]): string[] {
   // `dev` は常駐プロセスになりやすく検証用途には不向きなので自動補完しない
   return commands;
 }
@@ -180,7 +180,7 @@ export function applyDevCommandPolicy(
     return result;
   }
   const tasks = result.tasks.map((task) => {
-    const updatedCommands = ensureDevCommand(task.commands, devCommand);
+    const updatedCommands = ensureDevCommand(task.commands);
     if (updatedCommands === task.commands) {
       return task;
     }

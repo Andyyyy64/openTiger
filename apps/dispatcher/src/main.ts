@@ -1,18 +1,15 @@
-import { join, resolve, relative, isAbsolute } from "node:path";
+import { resolve, relative, isAbsolute } from "node:path";
 import { db } from "@openTiger/db";
-import { tasks, agents, runs } from "@openTiger/db/schema";
+import { tasks, runs } from "@openTiger/db/schema";
 import { and, eq } from "drizzle-orm";
 import { getRepoMode, getLocalRepoPath, getLocalWorktreeRoot } from "@openTiger/core";
 import { setupProcessLogging } from "@openTiger/core/process-logging";
 import {
   createTaskQueue,
   enqueueTask,
-  createTaskWorker,
   getQueueStats,
-  type TaskJobData,
   getTaskQueueName,
 } from "@openTiger/queue";
-import type { Job } from "bullmq";
 
 import {
   cleanupExpiredLeases,
@@ -26,7 +23,6 @@ import {
   getBusyAgentCount,
   reclaimDeadAgentLeases,
   getAgentStats,
-  registerAgent,
   getAvailableAgents,
   type LaunchMode,
 } from "./scheduler/index";
@@ -328,22 +324,6 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
     // 次のポーリングまで待機
     await new Promise((resolve) => setTimeout(resolve, config.pollIntervalMs));
   }
-}
-
-// BullMQワーカーを起動
-function startQueueWorker(): void {
-  const worker = createTaskWorker(async (job: Job<TaskJobData>) => {
-    console.log(`[Queue] Processing job ${job.id} for task ${job.data.taskId}`);
-    // 実際の処理はWorkerプロセスが行うため、ここでは監視のみ
-  });
-
-  worker.on("completed", (job) => {
-    console.log(`[Queue] Job ${job.id} completed`);
-  });
-
-  worker.on("failed", (job, error) => {
-    console.error(`[Queue] Job ${job?.id} failed:`, error.message);
-  });
 }
 
 // シグナルハンドラー

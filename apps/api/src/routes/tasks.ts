@@ -4,7 +4,6 @@ import { z } from "zod";
 import { db } from "@openTiger/db";
 import { tasks, runs } from "@openTiger/db/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
-import { CreateTaskInput } from "@openTiger/core";
 
 export const tasksRoute = new Hono();
 

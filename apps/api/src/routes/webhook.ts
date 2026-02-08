@@ -170,7 +170,6 @@ async function handleIssueEvent(
 
   const issueNumber = issue.number as number;
   const issueTitle = issue.title as string;
-  const issueBody = issue.body as string | undefined;
   const labels = (issue.labels as Array<{ name: string }>) ?? [];
 
   console.log(`[Webhook] Issue #${issueNumber}: ${action} - "${issueTitle}"`);
@@ -209,7 +208,6 @@ async function handlePullRequestEvent(
   const prNumber = pr.number as number;
   const prTitle = pr.title as string;
   const prBody = pr.body as string | undefined;
-  const prState = pr.state as string;
 
   console.log(`[Webhook] PR #${prNumber}: ${action} - "${prTitle}"`);
 

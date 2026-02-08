@@ -39,7 +39,7 @@ const activeWorkers = new Map<
 const DEFAULT_OPENCODE_CONFIG_PATH = resolve(import.meta.dirname, "../../../../opencode.json");
 
 // Workerをプロセスとして起動
-async function launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResult> {
+async function _launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResult> {
   const env = {
     ...process.env,
     TASK_ID: config.taskId,

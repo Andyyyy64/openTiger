@@ -274,7 +274,7 @@ export async function createIssuesForTasks(params: {
       });
 
       const updatedContext = {
-        ...(task.context ?? {}),
+        ...task.context,
         issue: {
           number: issue.number,
           url: issue.url,

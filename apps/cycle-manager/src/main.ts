@@ -88,7 +88,6 @@ const DEFAULT_CONFIG: CycleManagerConfig = {
 };
 
 // Cycle Managerの状態
-let isRunning = false;
 let monitorTimer: ReturnType<typeof setInterval> | null = null;
 let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 let statsTimer: ReturnType<typeof setInterval> | null = null;
@@ -96,7 +95,6 @@ let activeConfig: CycleManagerConfig = { ...DEFAULT_CONFIG };
 let replanInProgress = false;
 let lastReplanAt: number | null = null;
 let warnedMissingRequirementPath = false;
-const replanDebugEnabled = process.env.REPLAN_DEBUG === "true";
 const CYCLE_ENDING_CRITICAL_ANOMALIES = new Set(["stuck_task", "cost_spike"]);
 const SHELL_CONTROL_PATTERN = /&&|\|\||[|;&<>`]/;
 
@@ -794,7 +792,6 @@ async function runStatsLoop(): Promise<void> {
 function setupSignalHandlers(): void {
   const shutdown = async (signal: string) => {
     console.log(`\n[Shutdown] Received ${signal}, stopping Cycle Manager...`);
-    isRunning = false;
 
     // タイマーを停止
     if (monitorTimer) clearInterval(monitorTimer);
@@ -914,7 +911,6 @@ async function main(): Promise<void> {
   }
 
   // 監視を開始
-  isRunning = true;
 
   // 監視ループ
   monitorTimer = setInterval(runMonitorLoop, activeConfig.monitorIntervalMs);

@@ -4,7 +4,6 @@ import { eq, lt, and, inArray } from "drizzle-orm";
 
 // ハートビート設定
 const HEARTBEAT_TIMEOUT_SECONDS = 60; // Offline if no response for 60 seconds or more
-const CHECK_INTERVAL_MS = 30000; // 30秒ごとにチェック
 
 // エージェントの健全性状態
 export interface AgentHealth {

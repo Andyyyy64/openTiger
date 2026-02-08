@@ -34,7 +34,6 @@ export async function executeOpenCodeOnce(
       : 900;
   const idleTimeoutMs = Math.min(options.timeoutSeconds * 1000, resolvedIdleTimeoutSeconds * 1000);
   const idleTimeoutEnabled = idleTimeoutMs > 0;
-  let lastOutputAt = startTime;
   let lastVisibleProgressAt = startTime;
   const args: string[] = ["run"];
   const tempDir = await mkdtemp(join(tmpdir(), "openTiger-opencode-"));
@@ -219,7 +218,6 @@ export async function executeOpenCodeOnce(
   childProcess.stdout.on("data", (data: Buffer) => {
     const chunk = data.toString();
     stdout += chunk;
-    lastOutputAt = Date.now();
     lastVisibleProgressAt = Date.now();
     detectPermissionPrompt(chunk);
     // Output logs in real-time
@@ -255,7 +253,6 @@ export async function executeOpenCodeOnce(
   childProcess.stderr.on("data", (data: Buffer) => {
     const chunk = data.toString();
     stderr += chunk;
-    lastOutputAt = Date.now();
     detectPermissionPrompt(chunk);
     const lines = chunk.split(/\r?\n/).filter((line) => line.trim().length > 0);
     for (const line of lines) {

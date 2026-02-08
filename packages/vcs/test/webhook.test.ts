@@ -13,8 +13,6 @@ describe("verifyGitHubWebhookSignature", () => {
   it("有効な署名を検証できる", () => {
     // sha256=で始まる署名を検証
     const payload = '{"action":"opened"}';
-    // HMAC-SHA256で計算した署名
-    const signature = "sha256=a5f75a1c71f1abe13a2c7c3b7f7ad0c4c5e2f4a3c8d6e9b2a1c4d5e6f7a8b9c0";
 
     // 正しい署名を生成するためのテスト
     const crypto = require("node:crypto");

@@ -8,7 +8,6 @@ import {
   PolicySchema,
   type Policy,
   getRepoMode,
-  getLocalRepoPath,
   applyRepoModePolicyOverrides,
 } from "@openTiger/core";
 import { setupProcessLogging } from "@openTiger/core/process-logging";
@@ -222,7 +221,7 @@ async function main(): Promise<void> {
     });
 
   // ハートビート開始
-  const heartbeatTimer = startHeartbeat(agentId);
+  startHeartbeat(agentId);
 
   // Single review if PR number is specified
   const prArg = args.find((arg) => /^\d+$/.test(arg));

@@ -136,9 +136,6 @@ export async function cleanupExpiredLeases(): Promise<number> {
 
   // 期限切れリースのタスクをqueuedに戻す
   for (const lease of expiredLeases) {
-    // タスクの情報を取得
-    const [task] = await db.select().from(tasks).where(eq(tasks.id, lease.taskId));
-
     // 失敗回数をカウント（context.retryCount などに持たせることも検討できるが、
     // 現状はシンプルに status を queued に戻す。
     // ただし、何度も失敗している場合は blocked にするなどのロジックをここに追加可能）

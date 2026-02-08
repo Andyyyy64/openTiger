@@ -181,7 +181,6 @@ async function createDocserTask(params: {
     return { created: false, reason: "already_created" };
   }
 
-  const docFiles = params.diffFiles.filter((file) => isDocPath(file));
   const nonDocFiles = params.diffFiles.filter((file) => !isDocPath(file));
   const docGap = await detectDocGap(params.repoPathForScripts ?? params.source.workdir);
 

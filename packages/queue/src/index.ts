@@ -320,7 +320,7 @@ export async function obliterateAllQueues(): Promise<number> {
         const queue = new Queue(queueName, { connection });
         await queue.obliterate({ force: true });
         removedCount++;
-      } catch (error) {
+      } catch {
         // キューが存在しない場合はスキップ
       }
     }

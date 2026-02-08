@@ -217,7 +217,7 @@ export async function createTaskPR(options: CreatePROptions): Promise<CreatePRRe
       isUpdate: false,
     };
   }
-  const { repoPath, branchName, task, baseBranch = "main" } = options;
+  const { branchName, task, baseBranch = "main" } = options;
 
   console.log("Checking for existing PR...");
 

@@ -2,6 +2,9 @@ import { access, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Task } from "@openTiger/core";
 
+// 制御文字を直接書かずにANSIエスケープを除去する
+const ANSI_ESCAPE_REGEX = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
 function hasGlobPattern(path: string): boolean {
   return /[*?[\]]/.test(path);
 }
@@ -17,7 +20,7 @@ async function pathExists(path: string): Promise<boolean> {
 
 export function sanitizeRetryHint(message: string): string {
   return message
-    .replace(/\x1B\[[0-9;]*m/g, "")
+    .replace(ANSI_ESCAPE_REGEX, "")
     .replace(/\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+/g, "<path>")
     .replace(/external_directory\s*\([^)]*\)/gi, "external_directory(<path>)")
     .replace(/\s+/g, " ")

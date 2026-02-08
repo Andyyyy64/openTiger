@@ -4,7 +4,7 @@ import { eq, inArray, and, desc } from "drizzle-orm";
 import type { FailureClassification } from "./types";
 
 // ANSIエスケープを除去して失敗メッセージを安定化する
-const ANSI_ESCAPE_REGEX = new RegExp("\\x1B\\[[0-9;]*m", "g");
+const ANSI_ESCAPE_REGEX = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
 export function classifyFailure(errorMessage: string | null): FailureClassification {
   const message = (errorMessage ?? "").toLowerCase();

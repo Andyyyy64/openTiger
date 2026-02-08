@@ -1,5 +1,6 @@
 import {
   ANSI_ESCAPE_REGEX,
+  CONTROL_CHARS_REGEX,
   DOOM_LOOP_PATTERN_MAX_LENGTH,
   DOOM_LOOP_PATTERN_REPEAT_THRESHOLD,
   QUOTA_EXCEEDED_ERRORS,
@@ -44,7 +45,7 @@ export function normalizeChunkLine(line: string): string {
 export function normalizeForPromptDetection(text: string): string {
   return text
     .replace(ANSI_ESCAPE_REGEX, "")
-    .replace(/[\u0000-\u001F\u007F]+/g, " ")
+    .replace(CONTROL_CHARS_REGEX, " ")
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();

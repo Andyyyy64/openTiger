@@ -30,7 +30,12 @@ export const QUOTA_EXCEEDED_ERRORS = [
   /retryinfo/i,
   /generate_content_paid_tier_input_token_count/i,
 ];
-export const ANSI_ESCAPE_REGEX = /\x1B\[[0-9;]*m/g;
+const ANSI_ESCAPE_SEQUENCE = `${String.fromCharCode(27)}\\[[0-9;]*m`;
+// 制御文字の埋め込みを避けてANSIエスケープを組み立てる
+export const ANSI_ESCAPE_REGEX = new RegExp(ANSI_ESCAPE_SEQUENCE, "g");
+const CONTROL_CHARS_CLASS = `${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}`;
+// 制御文字の除去でプロンプト検出を安定させる
+export const CONTROL_CHARS_REGEX = new RegExp(`[${CONTROL_CHARS_CLASS}]+`, "g");
 
 export const DOOM_LOOP_WINDOW = 64;
 export const DOOM_LOOP_IDENTICAL_THRESHOLD = 5;
