@@ -235,16 +235,21 @@ export async function requeueFailedTasks(): Promise<number> {
   return result.length;
 }
 
-// 最大リトライ回数（-1で無制限）
-// 運用で調整できるよう環境変数化（既定値: 無制限）
+type BlockReason = "awaiting_judge" | "needs_rework" | "needs_human";
+
+// 最大リトライ回数（-1でカテゴリ上限のみ適用）
 const MAX_RETRY_COUNT = (() => {
   const parsed = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1", 10);
   return Number.isFinite(parsed) ? parsed : -1;
 })();
 
+const REQUEUE_NEEDS_HUMAN = process.env.REQUEUE_NEEDS_HUMAN === "true";
+
 type FailureCategory =
   | "env"
   | "setup"
+  | "permission"
+  | "noop"
   | "policy"
   | "test"
   | "flaky"
@@ -255,16 +260,19 @@ type FailureClassification = {
   category: FailureCategory;
   retryable: boolean;
   reason: string;
+  blockReason: Extract<BlockReason, "needs_rework" | "needs_human">;
 };
 
 const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
-  env: 10,
-  setup: 10,
-  policy: 10,
-  test: 10,
-  flaky: 10,
-  model: 6,
-  model_loop: 2,
+  env: 5,
+  setup: 3,
+  permission: 0,
+  noop: 0,
+  policy: 2,
+  test: 2,
+  flaky: 6,
+  model: 2,
+  model_loop: 1,
 };
 
 function isUnlimitedRetry(): boolean {
@@ -277,7 +285,7 @@ function isRetryAllowed(retryCount: number): boolean {
 
 function resolveCategoryRetryLimit(category: FailureCategory): number {
   if (isUnlimitedRetry()) {
-    return Number.MAX_SAFE_INTEGER;
+    return CATEGORY_RETRY_LIMIT[category];
   }
   return Math.min(CATEGORY_RETRY_LIMIT[category], MAX_RETRY_COUNT);
 }
@@ -286,12 +294,35 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
   const message = (errorMessage ?? "").toLowerCase();
 
   if (
+    /external_directory permission prompt|permission required:\s*external_directory/.test(message)
+  ) {
+    return {
+      category: "permission",
+      retryable: false,
+      reason: "external_directory_permission_prompt",
+      blockReason: "needs_human",
+    };
+  }
+
+  if (
+    /no changes were made|no relevant changes were made|no commits between/.test(message)
+  ) {
+    return {
+      category: "noop",
+      retryable: false,
+      reason: "no_actionable_changes",
+      blockReason: "needs_human",
+    };
+  }
+
+  if (
     /policy violation|denied command|outside allowed paths|change to denied path/.test(message)
   ) {
     return {
       category: "policy",
       retryable: true,
       reason: "policy_violation",
+      blockReason: "needs_rework",
     };
   }
 
@@ -304,6 +335,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
       category: "setup",
       retryable: true,
       reason: "setup_or_bootstrap_issue",
+      blockReason: "needs_rework",
     };
   }
 
@@ -312,6 +344,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
       category: "env",
       retryable: true,
       reason: "environment_issue",
+      blockReason: "needs_human",
     };
   }
 
@@ -320,6 +353,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
       category: "test",
       retryable: true,
       reason: "test_failure",
+      blockReason: "needs_rework",
     };
   }
 
@@ -332,6 +366,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
       category: "flaky",
       retryable: true,
       reason: "transient_or_flaky_failure",
+      blockReason: "needs_rework",
     };
   }
 
@@ -344,6 +379,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
       category: "model_loop",
       retryable: true,
       reason: "model_doom_loop",
+      blockReason: "needs_human",
     };
   }
 
@@ -351,10 +387,9 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
     category: "model",
     retryable: true,
     reason: "model_or_unknown_failure",
+    blockReason: "needs_rework",
   };
 }
-
-type BlockReason = "awaiting_judge" | "needs_rework" | "needs_human";
 
 function normalizeBlockReason(reason: string | null): BlockReason | null {
   if (reason === "awaiting_judge" || reason === "needs_rework" || reason === "needs_human") {
@@ -380,6 +415,48 @@ function normalizeContext(
     notes?: string;
     issue?: { number: number; url?: string; title?: string };
   };
+}
+
+function normalizeFailureSignature(errorMessage: string | null): string {
+  return (errorMessage ?? "")
+    .toLowerCase()
+    .replace(/\x1B\[[0-9;]*m/g, "")
+    .replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, "<uuid>")
+    .replace(/\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+/g, "<path>")
+    .replace(/\d+/g, "<n>")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 400);
+}
+
+async function hasRepeatedFailureSignature(
+  taskId: string,
+  latestErrorMessage: string | null,
+  threshold = 3
+): Promise<boolean> {
+  if (threshold <= 1) {
+    return true;
+  }
+
+  const latestSignature = normalizeFailureSignature(latestErrorMessage);
+  if (!latestSignature) {
+    return false;
+  }
+
+  const recentRuns = await db
+    .select({ errorMessage: runs.errorMessage })
+    .from(runs)
+    .where(and(eq(runs.taskId, taskId), inArray(runs.status, ["failed", "cancelled"])))
+    .orderBy(desc(runs.startedAt))
+    .limit(threshold);
+
+  if (recentRuns.length < threshold) {
+    return false;
+  }
+
+  return recentRuns.every(
+    (run) => normalizeFailureSignature(run.errorMessage) === latestSignature
+  );
 }
 
 async function hasPendingJudgeRun(taskId: string): Promise<boolean> {
@@ -441,11 +518,9 @@ export async function requeueFailedTasksWithCooldown(
     return 0;
   }
 
-  // クールダウン経過済み＆リトライ上限未満のタスクをフィルタ
+  // クールダウン経過済みのタスクをフィルタ
   const eligibleTasks = failedTasks.filter((task) => {
-    const cooldownPassed = task.updatedAt < cutoff;
-    const retryAllowed = isRetryAllowed(task.retryCount ?? 0);
-    return cooldownPassed && retryAllowed;
+    return task.updatedAt < cutoff;
   });
 
   if (eligibleTasks.length === 0) {
@@ -473,13 +548,27 @@ export async function requeueFailedTasksWithCooldown(
     const categoryRetryLimit = resolveCategoryRetryLimit(failure.category);
     const currentRetry = task.retryCount ?? 0;
     const nextRetryCount = currentRetry + 1;
+    const globalRetryAllowed = isRetryAllowed(currentRetry);
+    const repeatedFailure = await hasRepeatedFailureSignature(
+      task.id,
+      latestRun?.errorMessage ?? null
+    );
 
-    if (!failure.retryable || currentRetry >= categoryRetryLimit) {
+    if (
+      !globalRetryAllowed
+      || !failure.retryable
+      || currentRetry >= categoryRetryLimit
+      || repeatedFailure
+    ) {
+      const blockReason: Extract<BlockReason, "needs_rework" | "needs_human"> = repeatedFailure
+        ? "needs_human"
+        : failure.blockReason;
+      const blockDetailReason = repeatedFailure ? "repeated_same_failure_signature" : failure.reason;
       await db
         .update(tasks)
         .set({
           status: "blocked",
-          blockReason: "needs_rework",
+          blockReason,
           updatedAt: new Date(),
         })
         .where(eq(tasks.id, task.id));
@@ -493,11 +582,14 @@ export async function requeueFailedTasksWithCooldown(
           retryable: failure.retryable,
           retryCount: currentRetry,
           retryLimit: categoryRetryLimit,
-          reason: failure.reason,
+          reason: blockDetailReason,
+          blockReason,
+          globalRetryAllowed,
+          repeatedFailure,
         },
       });
       console.log(
-        `[Cleanup] Blocked failed task ${task.id} (${failure.category}, retry=${currentRetry}/${categoryRetryLimit})`
+        `[Cleanup] Blocked failed task ${task.id} (${failure.category}, retry=${currentRetry}/${categoryRetryLimit}, reason=${blockDetailReason})`
       );
       continue;
     }
@@ -609,7 +701,12 @@ export async function requeueBlockedTasksWithCooldown(
         continue;
       }
 
-      // judge対象runが無い needs_human は通常キューへ戻して停滞を防ぐ
+      if (!REQUEUE_NEEDS_HUMAN) {
+        // 明示設定がない限り needs_human は手動介入待ちのまま維持する
+        continue;
+      }
+
+      // 明示設定時のみ needs_human を通常キューへ戻す
       await db
         .update(tasks)
         .set({
