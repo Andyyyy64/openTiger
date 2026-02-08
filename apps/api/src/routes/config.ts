@@ -40,6 +40,40 @@ async function ensureConfigRow() {
   const existing = await db.select().from(configTable).limit(1);
   const current = existing[0];
   if (current) {
+    const shouldNormalizeMaxConcurrentWorkers = (current.maxConcurrentWorkers ?? "").trim() === "10";
+    const shouldNormalizeDailyTokenLimit = (current.dailyTokenLimit ?? "").trim() === "50000000";
+    const shouldNormalizeHourlyTokenLimit = (current.hourlyTokenLimit ?? "").trim() === "5000000";
+    const shouldNormalizeTaskTokenLimit = (current.taskTokenLimit ?? "").trim() === "1000000";
+
+    if (
+      shouldNormalizeMaxConcurrentWorkers
+      || shouldNormalizeDailyTokenLimit
+      || shouldNormalizeHourlyTokenLimit
+      || shouldNormalizeTaskTokenLimit
+    ) {
+      const patch: Partial<typeof configTable.$inferInsert> = {
+        updatedAt: new Date(),
+      };
+      if (shouldNormalizeMaxConcurrentWorkers) {
+        patch.maxConcurrentWorkers = "-1";
+      }
+      if (shouldNormalizeDailyTokenLimit) {
+        patch.dailyTokenLimit = "-1";
+      }
+      if (shouldNormalizeHourlyTokenLimit) {
+        patch.hourlyTokenLimit = "-1";
+      }
+      if (shouldNormalizeTaskTokenLimit) {
+        patch.taskTokenLimit = "-1";
+      }
+
+      const [updated] = await db
+        .update(configTable)
+        .set(patch)
+        .where(eq(configTable.id, current.id))
+        .returning();
+      return updated ?? current;
+    }
     return current;
   }
   const created = await db

@@ -12,10 +12,10 @@ export type ConfigField = {
 };
 
 export const CONFIG_FIELDS: ConfigField[] = [
-  { key: "MAX_CONCURRENT_WORKERS", column: "maxConcurrentWorkers", defaultValue: "10" },
-  { key: "DAILY_TOKEN_LIMIT", column: "dailyTokenLimit", defaultValue: "50000000" },
-  { key: "HOURLY_TOKEN_LIMIT", column: "hourlyTokenLimit", defaultValue: "5000000" },
-  { key: "TASK_TOKEN_LIMIT", column: "taskTokenLimit", defaultValue: "1000000" },
+  { key: "MAX_CONCURRENT_WORKERS", column: "maxConcurrentWorkers", defaultValue: "-1" },
+  { key: "DAILY_TOKEN_LIMIT", column: "dailyTokenLimit", defaultValue: "-1" },
+  { key: "HOURLY_TOKEN_LIMIT", column: "hourlyTokenLimit", defaultValue: "-1" },
+  { key: "TASK_TOKEN_LIMIT", column: "taskTokenLimit", defaultValue: "-1" },
   { key: "DISPATCHER_ENABLED", column: "dispatcherEnabled", defaultValue: "true" },
   { key: "JUDGE_ENABLED", column: "judgeEnabled", defaultValue: "true" },
   { key: "CYCLE_MANAGER_ENABLED", column: "cycleManagerEnabled", defaultValue: "true" },
@@ -28,9 +28,6 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "REPO_URL", column: "repoUrl", defaultValue: "" },
   { key: "LOCAL_REPO_PATH", column: "localRepoPath", defaultValue: "" },
   { key: "LOCAL_WORKTREE_ROOT", column: "localWorktreeRoot", defaultValue: "" },
-  { key: "JUDGE_MODE", column: "judgeMode", defaultValue: "auto" },
-  { key: "LOCAL_POLICY_MAX_LINES", column: "localPolicyMaxLines", defaultValue: "5000" },
-  { key: "LOCAL_POLICY_MAX_FILES", column: "localPolicyMaxFiles", defaultValue: "100" },
   { key: "BASE_BRANCH", column: "baseBranch", defaultValue: "main" },
   { key: "OPENCODE_MODEL", column: "opencodeModel", defaultValue: "google/gemini-3-flash-preview" },
   { key: "OPENCODE_WAIT_ON_QUOTA", column: "opencodeWaitOnQuota", defaultValue: "true" },
