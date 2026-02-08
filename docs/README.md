@@ -8,6 +8,8 @@ This folder documents the current (code-aligned) openTiger behavior.
   - End-to-end lifecycle, state transitions, and recovery loops.
 - `docs/mode.md`
   - `REPO_MODE`, `JUDGE_MODE`, `LAUNCH_MODE`, scaling, and startup behavior.
+- `docs/config.md`
+  - `/system` APIs and `system_config` setting reference.
 - `docs/nonhumanoriented.md`
   - Design principles for long-running autonomous operation.
 - `docs/task.md`
@@ -27,5 +29,6 @@ This folder documents the current (code-aligned) openTiger behavior.
 
 1. `docs/flow.md`
 2. `docs/mode.md`
-3. `docs/agent/*.md`
-4. `docs/task.md`
+3. `docs/config.md`
+4. `docs/agent/*.md`
+5. `docs/task.md`

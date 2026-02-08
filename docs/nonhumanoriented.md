@@ -10,6 +10,12 @@ Practical definition:
 - no infinite same-step loop without state change
 - repeated failures are converted into a different recovery path
 
+Completion policy:
+
+- Do not promise guaranteed completion in all external conditions.
+- Guarantee that the system does not intentionally stall.
+- When progress degrades, force a strategy switch through recovery state transitions.
+
 ## 2. Core Principles
 
 - Recovery-first over perfect first-run success
@@ -43,6 +49,15 @@ State is transformed rather than abandoned.
 - repeated same failure signatures trigger rework/autofix escalation
 - merge-conflict approvals route to conflict autofix task when possible
 
+### 3.5 Event-Driven Progress Recovery
+
+Recovery switching is event-driven, not fixed-time-trigger driven.
+
+- repeated failure signatures -> `needs_rework` / rework split
+- non-approve circuit breaker -> autofix path
+- quota failures -> `quota_wait` then cooldown requeue
+- missing judgeable runs -> restore `awaiting_judge` run context
+
 ## 4. Quota Philosophy
 
 Quota pressure is treated as recoverable external pressure, not terminal failure.
@@ -64,3 +79,4 @@ Operators must see progress intent, not only attempt outcomes.
 - maximizing first-attempt success at the cost of recoverability
 - strict sequential processing when safe parallelism is available
 - manual-only recovery flows
+- fixed-minute watchdog automation as the primary recovery trigger

@@ -25,6 +25,7 @@ Docs: [Index](docs/README.md) | [Flow](docs/flow.md) | [Modes](docs/mode.md) | [
 ## What Makes It Different
 
 - Prioritizes “do not stall” over first-attempt perfection
+- Does not claim guaranteed completion; it keeps running and switches recovery strategy when progress patterns degrade
 - Backlog-first startup
   - Existing issues/PRs are processed before generating new plans
 - Explicit recovery states
@@ -73,5 +74,6 @@ pnpm restart
 
 - `docs/flow.md`: end-to-end state transitions and convergence flow
 - `docs/mode.md`: operating modes and scaling setup
+- `docs/config.md`: `/system` and `system_config` settings guide
 - `docs/nonhumanoriented.md`: “never stall” design principles
 - `docs/agent/*.md`: per-agent responsibilities

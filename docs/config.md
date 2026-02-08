@@ -1,0 +1,170 @@
+# System Configuration Guide
+
+This document covers runtime settings managed by `system_config` and `/system` APIs.
+
+## 1. Where Settings Live
+
+- Persistent config store:
+  - DB table `config` (served by `/config` API)
+- Process control and orchestration:
+  - `/system` API routes
+- Environment-only controls:
+  - startup env vars for services (not all are in `config` table)
+
+## 2. Recommended Setup Order (Top Priority First)
+
+Configure these first:
+
+1. Git and repository settings
+2. LLM provider API keys
+3. Model selection
+4. Agent/process counts
+5. Recovery and quota behavior
+6. Replan behavior
+
+## 3. Core `system_config` Keys
+
+### 3.1 Git / Repo
+
+- `REPO_MODE` (`git` or `local`)
+- `REPO_URL`
+- `BASE_BRANCH`
+- `LOCAL_REPO_PATH`
+- `LOCAL_WORKTREE_ROOT`
+- `GITHUB_TOKEN`
+- `GITHUB_OWNER`
+- `GITHUB_REPO`
+
+### 3.2 LLM Provider Keys
+
+- `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
+- `ANTHROPIC_API_KEY`
+- `XAI_API_KEY`
+- `DEEPSEEK_API_KEY`
+
+### 3.3 Model Selection
+
+- `OPENCODE_MODEL`
+- `PLANNER_MODEL`
+- `JUDGE_MODEL`
+- `WORKER_MODEL`
+
+### 3.4 Agent Scaling and Switches
+
+- `DISPATCHER_ENABLED`
+- `JUDGE_ENABLED`
+- `CYCLE_MANAGER_ENABLED`
+- `WORKER_COUNT`
+- `TESTER_COUNT`
+- `DOCSER_COUNT`
+- `JUDGE_COUNT`
+- `PLANNER_COUNT`
+
+Notes:
+
+- Planner is operationally capped to one process in system start logic.
+- Worker/tester/docser/judge can be scaled by count.
+
+### 3.5 Quota and Replan
+
+- `OPENCODE_WAIT_ON_QUOTA`
+- `OPENCODE_QUOTA_RETRY_DELAY_MS`
+- `OPENCODE_MAX_QUOTA_WAITS`
+- `AUTO_REPLAN`
+- `REPLAN_REQUIREMENT_PATH`
+- `REPLAN_INTERVAL_MS`
+- `REPLAN_COMMAND`
+- `REPLAN_WORKDIR`
+- `REPLAN_REPO_URL`
+- `PLANNER_USE_REMOTE`
+- `PLANNER_REPO_URL`
+
+## 4. `/config` API (Backed by DB)
+
+- `GET /config`
+  - returns current config snapshot
+- `PATCH /config`
+  - updates selected keys via `{ updates: Record<string, string> }`
+
+Behavior:
+
+- unknown keys are rejected
+- missing keys retain previous values
+- config is persisted and reflected in UI `system_config`
+
+## 5. `/system` API (Runtime Orchestration)
+
+### 5.1 Startup Planning
+
+- `POST /system/preflight`
+  - builds launch recommendation from requirement content + issue/PR/task backlog
+  - may skip planner intentionally when issue/pr backlog exists
+
+### 5.2 Process Control
+
+- `GET /system/processes`
+- `GET /system/processes/:name`
+- `POST /system/processes/:name/start`
+- `POST /system/processes/:name/stop`
+- `POST /system/processes/stop-all`
+
+Important runtime behavior:
+
+- planner duplicate start is blocked
+- live bound agent detection can return already-running without launching duplicate process
+
+### 5.3 Requirement / Repo Utilities
+
+- `GET /system/requirements`
+- `POST /system/github/repo`
+
+### 5.4 Maintenance
+
+- `POST /system/restart`
+- `GET /system/restart`
+- `POST /system/cleanup`
+
+Warning:
+
+- `/system/cleanup` truncates runtime tables and clears queue state.
+
+## 6. Process Names You Can Start/Stop
+
+Static names:
+
+- `planner`
+- `dispatcher`
+- `cycle-manager`
+- `db-up`
+- `db-down`
+- `db-push`
+
+Dynamic names:
+
+- `judge`, `judge-2`, `judge-3`, ...
+- `worker-1`, `worker-2`, ...
+- `tester-1`, `tester-2`, ...
+- `docser-1`, `docser-2`, ...
+
+## 7. Operational Policy Alignment
+
+This project policy is:
+
+- do not stall
+- no fixed-minute watchdog as primary trigger
+- force recovery strategy switching based on runtime events
+
+Examples:
+
+- repeated failures -> `needs_rework` path
+- quota failure -> `quota_wait` path
+- judge backlog inconsistencies -> run restoration / requeue path
+
+## 8. Minimal Production Baseline
+
+- set valid GitHub token/owner/repo
+- set at least one working LLM API key and model
+- keep `PLANNER_COUNT=1`
+- set `WORKER_COUNT>=1`, `JUDGE_COUNT>=1`
+- keep `DISPATCHER_ENABLED=true`, `JUDGE_ENABLED=true`, `CYCLE_MANAGER_ENABLED=true`
