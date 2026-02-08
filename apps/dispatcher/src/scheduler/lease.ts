@@ -156,7 +156,7 @@ export async function cleanupExpiredLeases(): Promise<number> {
         blockReason: null,
         updatedAt: new Date(),
       })
-      .where(eq(tasks.id, lease.taskId));
+      .where(and(eq(tasks.id, lease.taskId), eq(tasks.status, "running")));
 
     await markAgentIdleIfNoActiveWork(lease.agentId);
   }

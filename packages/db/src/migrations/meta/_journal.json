@@ -71,6 +71,13 @@
       "when": 1770480189416,
       "tag": "0009_icy_chimera",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1770531497493,
+      "tag": "0010_military_hex",
+      "breakpoints": true
     }
   ]
 }

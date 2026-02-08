@@ -4,7 +4,7 @@ export interface BranchOptions {
   repoPath: string;
   agentId: string;
   taskId: string;
-  baseBranch?: string;
+  baseRef?: string;
 }
 
 export interface BranchResult {
@@ -24,13 +24,13 @@ export function generateBranchName(agentId: string, taskId: string): string {
 export async function createWorkBranch(
   options: BranchOptions
 ): Promise<BranchResult> {
-  const { repoPath, agentId, taskId, baseBranch = "main" } = options;
+  const { repoPath, agentId, taskId, baseRef = "main" } = options;
 
   const branchName = generateBranchName(agentId, taskId);
 
   console.log(`Creating branch: ${branchName}`);
 
-  const result = await createBranch(repoPath, branchName, baseBranch);
+  const result = await createBranch(repoPath, branchName, baseRef);
 
   if (!result.success) {
     return {

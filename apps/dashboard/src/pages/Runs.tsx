@@ -50,12 +50,24 @@ export const RunsPage: React.FC = () => {
             const task = taskById.get(group.taskId);
             const latestRun = group.runs[0];
             const retryStatus = formatRetryStatus(task?.retry, now);
+            const isRetryWaiting = retryStatus === 'pending' || /^\d+s$/.test(retryStatus);
             const retryLabel = retryStatus !== 'pending' && retryStatus !== 'due' && retryStatus !== '--'
-              ? <span className="text-yellow-500 font-bold">{retryStatus}</span>
-              : <span className="text-zinc-500">{retryStatus}</span>;
+              ? (
+                <span className={isRetryWaiting ? 'text-term-tiger font-bold animate-pulse' : 'text-term-tiger font-bold'}>
+                  {retryStatus}
+                </span>
+              )
+              : (
+                <span className={isRetryWaiting ? 'text-term-tiger animate-pulse' : 'text-zinc-500'}>
+                  {retryStatus}
+                </span>
+              );
 
             return (
-              <section key={group.taskId} className="border border-term-border p-0">
+              <section
+                key={group.taskId}
+                className={`border p-0 ${isRetryWaiting ? 'border-term-tiger/60 animate-pulse' : 'border-term-border'}`}
+              >
                 {/* Task Header */}
                 <div className="bg-term-border/10 px-4 py-3 border-b border-term-border flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-1 max-w-[70%]">

@@ -128,7 +128,7 @@ export async function reclaimDeadAgentLeases(): Promise<number> {
           blockReason: null,
           updatedAt: new Date(),
         })
-        .where(eq(tasks.id, lease.taskId));
+        .where(and(eq(tasks.id, lease.taskId), eq(tasks.status, "running")));
 
       // リースを削除
       await db.delete(leases).where(eq(leases.id, lease.id));

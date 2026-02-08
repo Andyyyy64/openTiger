@@ -11,6 +11,7 @@ export interface CommitOptions {
 
 export interface CommitResult {
   success: boolean;
+  committed: boolean;
   commitMessage: string;
   error?: string;
 }
@@ -59,6 +60,7 @@ export async function commitAndPush(
   if (!stageResult.success) {
     return {
       success: false,
+      committed: false,
       commitMessage: "",
       error: `Failed to stage changes: ${stageResult.stderr}`,
     };
@@ -66,6 +68,7 @@ export async function commitAndPush(
 
   // コミットメッセージを生成
   const commitMessage = generateCommitMessage(task, changedFiles);
+  let committed = true;
 
   console.log("Committing...");
 
@@ -86,11 +89,13 @@ export async function commitAndPush(
     if (!isNoChanges) {
       return {
         success: false,
+        committed: false,
         commitMessage,
         error: `Failed to commit: ${combinedRaw || "git commit returned non-zero exit code"}`,
       };
     }
     console.log("No new changes to commit, skipping commit step");
+    committed = false;
   }
 
   console.log("Pushing to remote...");
@@ -110,6 +115,7 @@ export async function commitAndPush(
         } else {
           return {
             success: false,
+            committed: false,
             commitMessage,
             error: `Failed to push after force retry: ${forcePushResult.stderr}`,
           };
@@ -117,6 +123,7 @@ export async function commitAndPush(
       } else {
         return {
           success: false,
+          committed: false,
           commitMessage,
           error: `Failed to push: ${pushResult.stderr}`,
         };
@@ -125,6 +132,7 @@ export async function commitAndPush(
     if (!pushResult.success) {
       return {
         success: false,
+        committed: false,
         commitMessage,
         error: `Failed to push: ${pushResult.stderr}`,
       };
@@ -137,6 +145,7 @@ export async function commitAndPush(
 
   return {
     success: true,
+    committed,
     commitMessage,
   };
 }

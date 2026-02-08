@@ -162,7 +162,7 @@ export const config = pgTable("config", {
   autoReplan: text("auto_replan").default("true").notNull(),
   replanRequirementPath: text("replan_requirement_path").default("requirement.md").notNull(),
   replanIntervalMs: text("replan_interval_ms").default("60000").notNull(),
-  replanCommand: text("replan_command").default("pnpm --filter @openTiger/planner start").notNull(),
+  replanCommand: text("replan_command").default("pnpm --filter @openTiger/planner run start:fresh").notNull(),
   replanWorkdir: text("replan_workdir").default("").notNull(),
   replanRepoUrl: text("replan_repo_url").default("").notNull(),
   githubToken: text("github_token").default("").notNull(),

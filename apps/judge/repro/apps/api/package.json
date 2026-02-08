@@ -1,0 +1,10 @@
+{
+  "name": "@repo/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node index.js",
+    "build": "echo 'building api...'",
+    "lint": "echo 'linting api...'"
+  }
+}

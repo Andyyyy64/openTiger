@@ -24,6 +24,17 @@ export const TaskContext = z.object({
   files: z.array(z.string()).optional(), // 関連ファイル
   specs: z.string().optional(), // 仕様・要件
   notes: z.string().optional(), // 補足情報
+  pr: z
+    .object({
+      number: z.number().int(),
+      url: z.string().url().optional(),
+      sourceTaskId: z.string().uuid().optional(),
+      sourceRunId: z.string().uuid().optional(),
+      headRef: z.string().optional(),
+      headSha: z.string().optional(),
+      baseRef: z.string().optional(),
+    })
+    .optional(), // PR起点の作業コンテキスト
   issue: z
     .object({
       number: z.number().int(),

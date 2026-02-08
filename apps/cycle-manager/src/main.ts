@@ -117,7 +117,7 @@ const DEFAULT_CONFIG: CycleManagerConfig = {
   replanIntervalMs: parseInt(process.env.REPLAN_INTERVAL_MS ?? "300000", 10),
   replanRequirementPath:
     process.env.REPLAN_REQUIREMENT_PATH ?? process.env.REQUIREMENT_PATH,
-  replanCommand: process.env.REPLAN_COMMAND ?? "pnpm --filter @openTiger/planner start",
+  replanCommand: process.env.REPLAN_COMMAND ?? "pnpm --filter @openTiger/planner run start:fresh",
   replanWorkdir: process.env.REPLAN_WORKDIR ?? process.cwd(),
   replanRepoUrl: process.env.REPLAN_REPO_URL ?? process.env.REPO_URL,
   replanBaseBranch: process.env.REPLAN_BASE_BRANCH
