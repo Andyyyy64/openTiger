@@ -64,6 +64,8 @@ function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
     "- Add tests if applicable",
     "- Do not run any git operations (no commit/push/checkout/branch/rebase)",
     "- Do not run long-running dev/watch/start servers (forbidden: dev, watch, start, next dev, vite, turbo dev)",
+    "- Never access files/directories outside the current repository working directory",
+    "- If expected files are missing, report the mismatch and stop instead of scanning parent/home directories",
     "- Execute actions directly; do not emit repetitive planning chatter",
     "- Never call todo/todoread/todowrite pseudo tools"
   );

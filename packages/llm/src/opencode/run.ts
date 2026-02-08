@@ -86,6 +86,7 @@ const DEFAULT_IDLE_TIMEOUT_SECONDS = parseInt(
 const IDLE_CHECK_INTERVAL_MS = 5000;
 const PROGRESS_LOG_INTERVAL_MS = 30000;
 const MAX_CONSECUTIVE_PLANNING_LINES = 10;
+const EXTERNAL_PERMISSION_PROMPT = /permission required:\s*external_directory/i;
 
 function isRetryableError(stderr: string, exitCode: number): boolean {
   if (exitCode === 1 && !stderr) return false;
@@ -224,6 +225,7 @@ async function executeOpenCodeOnce(
   let timedOut = false;
   let idleTimedOut = false;
   let quotaExceeded = false;
+  let permissionPromptBlocked = false;
   let printedErrorSummary = false;
   const MAX_ERROR_SUMMARY_LENGTH = 240;
   const terminateOpenCode = (signal: NodeJS.Signals): void => {
@@ -329,11 +331,30 @@ async function executeOpenCodeOnce(
     );
   };
 
+  const detectPermissionPrompt = (chunk: string): void => {
+    if (permissionPromptBlocked) {
+      return;
+    }
+    if (!EXTERNAL_PERMISSION_PROMPT.test(chunk)) {
+      return;
+    }
+
+    permissionPromptBlocked = true;
+    stderr +=
+      "\n[OpenCode] Non-interactive run blocked by external_directory permission prompt";
+    process.stderr.write(
+      "\n[OpenCode] external_directory permission prompt detected. Aborting non-interactive run.\n"
+    );
+    terminateOpenCode("SIGTERM");
+    setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
+  };
+
   childProcess.stdout.on("data", (data: Buffer) => {
     const chunk = data.toString();
     stdout += chunk;
     lastOutputAt = Date.now();
     lastVisibleProgressAt = Date.now();
+    detectPermissionPrompt(chunk);
     // リアルタイムでログに出力
     process.stdout.write(chunk);
     for (const line of chunk.split(/\r?\n/)) {
@@ -368,6 +389,7 @@ async function executeOpenCodeOnce(
     const chunk = data.toString();
     stderr += chunk;
     lastOutputAt = Date.now();
+    detectPermissionPrompt(chunk);
     const lines = chunk.split(/\r?\n/).filter((line) => line.trim().length > 0);
     for (const line of lines) {
       if (!quotaExceeded && isQuotaExceededError(line)) {
@@ -417,12 +439,34 @@ async function executeOpenCodeOnce(
         : "";
       const quotaMessage = quotaExceeded ? "\n[OpenCode] クォータ上限に到達しました" : "";
       const doomLoopMessage = doomLoopDetected ? "\n[OpenCode] Doom loop detected" : "";
+      const permissionPromptMessage = permissionPromptBlocked
+        ? "\n[OpenCode] external_directory permission prompt blocked the run"
+        : "";
 
       return {
-        success: !timedOut && !idleTimedOut && !quotaExceeded && !doomLoopDetected && code === 0,
-        exitCode: timedOut || idleTimedOut || quotaExceeded || doomLoopDetected ? -1 : code ?? -1,
+        success:
+          !timedOut
+          && !idleTimedOut
+          && !quotaExceeded
+          && !doomLoopDetected
+          && !permissionPromptBlocked
+          && code === 0,
+        exitCode:
+          timedOut
+          || idleTimedOut
+          || quotaExceeded
+          || doomLoopDetected
+          || permissionPromptBlocked
+            ? -1
+            : code ?? -1,
         stdout,
-        stderr: stderr + timeoutMessage + idleTimeoutMessage + quotaMessage + doomLoopMessage,
+        stderr:
+          stderr
+          + timeoutMessage
+          + idleTimeoutMessage
+          + quotaMessage
+          + doomLoopMessage
+          + permissionPromptMessage,
         durationMs,
         tokenUsage,
       };

@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from "node:child_process";
-import { join } from "node:path";
+import { resolve } from "node:path";
 import { db } from "@openTiger/db";
 import { agents } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
@@ -36,6 +36,10 @@ const activeWorkers = new Map<
   string,
   { process?: ChildProcess; containerId?: string; agentId: string }
 >();
+const DEFAULT_OPENCODE_CONFIG_PATH = resolve(
+  import.meta.dirname,
+  "../../../../opencode.json"
+);
 
 // Workerをプロセスとして起動
 async function launchAsProcess(
@@ -56,7 +60,7 @@ async function launchAsProcess(
     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     OPENCODE_MODEL: process.env.OPENCODE_MODEL,
-    OPENCODE_CONFIG: process.env.OPENCODE_CONFIG ?? join(process.cwd(), "../../opencode.json"),
+    OPENCODE_CONFIG: process.env.OPENCODE_CONFIG ?? DEFAULT_OPENCODE_CONFIG_PATH,
     DATABASE_URL: process.env.DATABASE_URL,
     REDIS_URL: process.env.REDIS_URL,
     ...config.env,
