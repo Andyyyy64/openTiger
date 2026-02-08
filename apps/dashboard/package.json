@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "check": "pnpm run lint && pnpm run typecheck",
-    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "lint": "oxlint .",
+    "lint:ci": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
@@ -31,6 +32,7 @@
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.16",
     "globals": "^15.14.0",
+    "oxlint": "^1.43.0",
     "tailwindcss": "^4.0.0",
     "typescript": "~5.7.3",
     "typescript-eslint": "^8.18.2",

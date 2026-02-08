@@ -5,13 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=../../.env src/main.ts",
-    "build": "tsc",
+    "build": "tsup src/main.ts --format esm --target es2022 --sourcemap --clean --outDir dist",
     "start": "node dist/main.js",
     "start:fresh": "pnpm clean && pnpm build && node dist/main.js",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage --passWithNoTests",
-    "lint": "tsc --noEmit",
+    "lint": "oxlint .",
+    "lint:ci": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },

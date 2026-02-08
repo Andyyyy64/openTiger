@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=../../.env src/index.ts",
-    "build": "tsc",
+    "build": "tsup src/index.ts --format esm --target es2022 --sourcemap --clean --outDir dist",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "tsc --noEmit",
+    "lint": "oxlint .",
+    "lint:ci": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },

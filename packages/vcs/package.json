@@ -10,12 +10,13 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsup src/index.ts --format esm --target es2022 --sourcemap --clean --dts --outDir dist",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "lint": "tsc --noEmit",
+    "lint": "oxlint .",
+    "lint:ci": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
