@@ -1,23 +1,23 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { configApi, systemApi, type SystemProcess } from '../lib/api';
+import React, { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { configApi, systemApi, type SystemProcess } from "../lib/api";
 
 const MAX_PLANNERS = 1;
 
-const STATUS_LABELS: Record<SystemProcess['status'], string> = {
-  idle: 'IDLE',
-  running: 'RUNNING',
-  completed: 'DONE',
-  failed: 'FAILED',
-  stopped: 'STOPPED',
+const STATUS_LABELS: Record<SystemProcess["status"], string> = {
+  idle: "IDLE",
+  running: "RUNNING",
+  completed: "DONE",
+  failed: "FAILED",
+  stopped: "STOPPED",
 };
 
-const STATUS_COLORS: Record<SystemProcess['status'], string> = {
-  idle: 'text-zinc-500',
-  running: 'text-term-tiger animate-pulse',
-  completed: 'text-zinc-300',
-  failed: 'text-red-500',
-  stopped: 'text-yellow-500',
+const STATUS_COLORS: Record<SystemProcess["status"], string> = {
+  idle: "text-zinc-500",
+  running: "text-term-tiger animate-pulse",
+  completed: "text-zinc-300",
+  failed: "text-red-500",
+  stopped: "text-yellow-500",
 };
 
 type StartResult = {
@@ -28,19 +28,19 @@ type StartResult = {
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (!value) return fallback;
-  return value.toLowerCase() !== 'false';
+  return value.toLowerCase() !== "false";
 }
 
 function parseCount(
   value: string | undefined,
   fallback: number,
   label: string,
-  max?: number
+  max?: number,
 ): { count: number; warning?: string } {
   const parsed = value ? parseInt(value, 10) : NaN;
   const normalized = Number.isFinite(parsed) ? parsed : fallback;
   const base = Math.max(0, normalized);
-  if (typeof max !== 'number') {
+  if (typeof max !== "number") {
     return { count: base };
   }
   const clamped = Math.min(base, max);
@@ -50,44 +50,45 @@ function parseCount(
   return { count: clamped };
 }
 
-const formatTimestamp = (value?: string) => (value ? new Date(value).toLocaleTimeString() : '--:--:--');
+const formatTimestamp = (value?: string) =>
+  value ? new Date(value).toLocaleTimeString() : "--:--:--";
 
 export const StartPage: React.FC = () => {
   const queryClient = useQueryClient();
-  const [requirementPath, setRequirementPath] = useState('requirement.md');
-  const [content, setContent] = useState('');
-  const [loadMessage, setLoadMessage] = useState('');
+  const [requirementPath, setRequirementPath] = useState("requirement.md");
+  const [content, setContent] = useState("");
+  const [loadMessage, setLoadMessage] = useState("");
   const [startResult, setStartResult] = useState<StartResult | null>(null);
-  const [repoOwner, setRepoOwner] = useState('');
-  const [repoName, setRepoName] = useState('');
-  const [repoMessage, setRepoMessage] = useState('');
+  const [repoOwner, setRepoOwner] = useState("");
+  const [repoName, setRepoName] = useState("");
+  const [repoMessage, setRepoMessage] = useState("");
 
   const { data: config } = useQuery({
-    queryKey: ['config'],
+    queryKey: ["config"],
     queryFn: () => configApi.get(),
   });
 
   const { data: health, isError: isHealthError } = useQuery({
-    queryKey: ['system', 'health'],
+    queryKey: ["system", "health"],
     queryFn: () => systemApi.health(),
     refetchInterval: 30000,
     retry: 1,
   });
 
   const { data: processes } = useQuery({
-    queryKey: ['system', 'processes'],
+    queryKey: ["system", "processes"],
     queryFn: () => systemApi.processes(),
     refetchInterval: 5000,
   });
 
   const planner = useMemo(
-    () => processes?.find((process) => process.name === 'planner'),
-    [processes]
+    () => processes?.find((process) => process.name === "planner"),
+    [processes],
   );
 
   useEffect(() => {
     if (!config?.config) return;
-    if (config.config.REPLAN_REQUIREMENT_PATH && requirementPath === 'requirement.md') {
+    if (config.config.REPLAN_REQUIREMENT_PATH && requirementPath === "requirement.md") {
       setRequirementPath(config.config.REPLAN_REQUIREMENT_PATH);
     }
     if (!repoOwner && config.config.GITHUB_OWNER) {
@@ -105,25 +106,25 @@ export const StartPage: React.FC = () => {
       setLoadMessage(`> READ_OK: ${data.path}`);
     },
     onError: (error) => {
-      setLoadMessage(error instanceof Error ? `> READ_ERR: ${error.message}` : '> READ_FAIL');
+      setLoadMessage(error instanceof Error ? `> READ_ERR: ${error.message}` : "> READ_FAIL");
     },
   });
 
   const startMutation = useMutation({
     mutationFn: async () => {
       const settings = config?.config;
-      if (!settings) throw new Error('Config not loaded');
-      const repoMode = (settings.REPO_MODE ?? 'git').toLowerCase();
+      if (!settings) throw new Error("Config not loaded");
+      const repoMode = (settings.REPO_MODE ?? "git").toLowerCase();
       const hasRepoUrl = Boolean(settings.REPO_URL?.trim());
-      if (repoMode === 'git' && !hasRepoUrl && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
-        throw new Error('GitHub repo is not configured');
+      if (repoMode === "git" && !hasRepoUrl && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
+        throw new Error("GitHub repo is not configured");
       }
 
-      const workerCount = parseCount(settings.WORKER_COUNT, 1, 'Worker');
-      const testerCount = parseCount(settings.TESTER_COUNT, 1, 'Tester');
-      const docserCount = parseCount(settings.DOCSER_COUNT, 1, 'Docser');
-      const judgeCount = parseCount(settings.JUDGE_COUNT, 1, 'Judge');
-      const plannerCount = parseCount(settings.PLANNER_COUNT, 1, 'Planner', MAX_PLANNERS);
+      const workerCount = parseCount(settings.WORKER_COUNT, 1, "Worker");
+      const testerCount = parseCount(settings.TESTER_COUNT, 1, "Tester");
+      const docserCount = parseCount(settings.DOCSER_COUNT, 1, "Docser");
+      const judgeCount = parseCount(settings.JUDGE_COUNT, 1, "Judge");
+      const plannerCount = parseCount(settings.PLANNER_COUNT, 1, "Planner", MAX_PLANNERS);
 
       const warnings = [
         workerCount.warning,
@@ -131,9 +132,7 @@ export const StartPage: React.FC = () => {
         docserCount.warning,
         judgeCount.warning,
         plannerCount.warning,
-      ].filter(
-        (value): value is string => typeof value === 'string'
-      );
+      ].filter((value): value is string => typeof value === "string");
 
       const hasRequirementContent = content.trim().length > 0;
       const preflight = await systemApi.preflight({
@@ -142,16 +141,16 @@ export const StartPage: React.FC = () => {
       });
       const recommendations = preflight.recommendations;
       const backlog =
-        preflight.preflight.github.issueTaskBacklogCount
-        + preflight.preflight.github.openPrCount
-        + preflight.preflight.local.queuedTaskCount
-        + preflight.preflight.local.runningTaskCount
-        + preflight.preflight.local.failedTaskCount
-        + preflight.preflight.local.blockedTaskCount
-        + preflight.preflight.local.pendingJudgeTaskCount;
+        preflight.preflight.github.issueTaskBacklogCount +
+        preflight.preflight.github.openPrCount +
+        preflight.preflight.local.queuedTaskCount +
+        preflight.preflight.local.runningTaskCount +
+        preflight.preflight.local.failedTaskCount +
+        preflight.preflight.local.blockedTaskCount +
+        preflight.preflight.local.pendingJudgeTaskCount;
 
       if (!recommendations.startPlanner && backlog === 0) {
-        throw new Error('Requirements empty and no issue/PR backlog found');
+        throw new Error("Requirements empty and no issue/PR backlog found");
       }
 
       warnings.push(...preflight.preflight.github.warnings.map((warning) => `GitHub: ${warning}`));
@@ -161,47 +160,53 @@ export const StartPage: React.FC = () => {
         warnings.push(`Issue tasks generated: ${preflight.preflight.github.generatedTaskCount}`);
       }
       if (hasRequirementContent && !recommendations.startPlanner) {
-        warnings.push('Open issue/PR backlog detected; planner launch skipped for this run');
+        warnings.push("Open issue/PR backlog detected; planner launch skipped for this run");
       }
 
       const started: string[] = [];
       const errors: string[] = [];
 
-      const startProcess = async (name: string, payload?: { requirementPath?: string; content?: string }) => {
+      const startProcess = async (
+        name: string,
+        payload?: { requirementPath?: string; content?: string },
+      ) => {
         try {
           await systemApi.startProcess(name, payload);
           started.push(name);
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Unknown error';
+          const message = error instanceof Error ? error.message : "Unknown error";
           errors.push(`${name}: ${message}`);
         }
       };
 
       const plannerStartCount = Math.min(
         plannerCount.count,
-        recommendations.plannerCount ?? (recommendations.startPlanner ? 1 : 0)
+        recommendations.plannerCount ?? (recommendations.startPlanner ? 1 : 0),
       );
       for (let i = 1; i <= plannerStartCount; i += 1) {
-        const plannerName = i === 1 ? 'planner' : `planner-${i}`;
+        const plannerName = i === 1 ? "planner" : `planner-${i}`;
         await startProcess(plannerName, { requirementPath, content });
       }
       if (recommendations.startDispatcher) {
-        await startProcess('dispatcher');
+        await startProcess("dispatcher");
       }
       const judgeStartCount = Math.min(
         judgeCount.count,
-        recommendations.judgeCount ?? (recommendations.startJudge ? 1 : 0)
+        recommendations.judgeCount ?? (recommendations.startJudge ? 1 : 0),
       );
       if (judgeStartCount > 0) {
         for (let i = 1; i <= judgeStartCount; i += 1) {
-          const judgeName = i === 1 ? 'judge' : `judge-${i}`;
+          const judgeName = i === 1 ? "judge" : `judge-${i}`;
           await startProcess(judgeName);
         }
-      } else if (parseBoolean(settings.JUDGE_ENABLED, true) && preflight.preflight.github.openPrCount > 0) {
-        warnings.push('Open PR backlog exists but judge was not recommended');
+      } else if (
+        parseBoolean(settings.JUDGE_ENABLED, true) &&
+        preflight.preflight.github.openPrCount > 0
+      ) {
+        warnings.push("Open PR backlog exists but judge was not recommended");
       }
       if (recommendations.startCycleManager) {
-        await startProcess('cycle-manager');
+        await startProcess("cycle-manager");
       }
 
       const workerStartCount = Math.min(workerCount.count, recommendations.workerCount);
@@ -216,12 +221,12 @@ export const StartPage: React.FC = () => {
     },
     onSuccess: (result) => {
       setStartResult(result);
-      queryClient.invalidateQueries({ queryKey: ['system', 'processes'] });
+      queryClient.invalidateQueries({ queryKey: ["system", "processes"] });
     },
     onError: (error) => {
       setStartResult({
         started: [],
-        errors: [error instanceof Error ? error.message : 'Launch failed'],
+        errors: [error instanceof Error ? error.message : "Launch failed"],
         warnings: [],
       });
     },
@@ -230,7 +235,7 @@ export const StartPage: React.FC = () => {
   const createRepoMutation = useMutation({
     mutationFn: async () => {
       if (!repoOwner.trim() || !repoName.trim()) {
-        throw new Error('Owner and repo are required');
+        throw new Error("Owner and repo are required");
       }
       return systemApi.createGithubRepo({
         owner: repoOwner.trim(),
@@ -240,50 +245,61 @@ export const StartPage: React.FC = () => {
     },
     onSuccess: (repo) => {
       setRepoMessage(`> REPO_READY: ${repo.owner}/${repo.name}`);
-      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: ["config"] });
     },
     onError: (error) => {
-      setRepoMessage(error instanceof Error ? `> REPO_ERR: ${error.message}` : '> REPO_FAIL');
+      setRepoMessage(error instanceof Error ? `> REPO_ERR: ${error.message}` : "> REPO_FAIL");
     },
   });
 
   const configValues = config?.config ?? {};
-  const repoMode = (configValues.REPO_MODE ?? 'git').toLowerCase();
-  const isGitMode = repoMode === 'git';
+  const repoMode = (configValues.REPO_MODE ?? "git").toLowerCase();
+  const isGitMode = repoMode === "git";
   const hasGithubToken = Boolean(configValues.GITHUB_TOKEN?.trim());
   const repoUrl = configValues.REPO_URL?.trim();
   const isRepoMissing =
-    isGitMode && (!repoUrl && (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO));
-  const workerCount = parseCount(configValues.WORKER_COUNT, 1, 'Worker').count;
-  const testerCount = parseCount(configValues.TESTER_COUNT, 1, 'Tester').count;
-  const docserCount = parseCount(configValues.DOCSER_COUNT, 1, 'Docser').count;
-  const judgeCount = parseCount(configValues.JUDGE_COUNT, 1, 'Judge').count;
-  const plannerCount = parseCount(configValues.PLANNER_COUNT, 1, 'Planner', MAX_PLANNERS).count;
+    isGitMode && !repoUrl && (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO);
+  const workerCount = parseCount(configValues.WORKER_COUNT, 1, "Worker").count;
+  const testerCount = parseCount(configValues.TESTER_COUNT, 1, "Tester").count;
+  const docserCount = parseCount(configValues.DOCSER_COUNT, 1, "Docser").count;
+  const judgeCount = parseCount(configValues.JUDGE_COUNT, 1, "Judge").count;
+  const plannerCount = parseCount(configValues.PLANNER_COUNT, 1, "Planner", MAX_PLANNERS).count;
 
-  const runningWorkers = processes?.filter(
-    (process) => process.name.startsWith('worker-') && process.status === 'running'
-  ).length ?? 0;
-  const runningTesters = processes?.filter(
-    (process) => process.name.startsWith('tester-') && process.status === 'running'
-  ).length ?? 0;
-  const runningDocsers = processes?.filter(
-    (process) => process.name.startsWith('docser-') && process.status === 'running'
-  ).length ?? 0;
+  const runningWorkers =
+    processes?.filter(
+      (process) => process.name.startsWith("worker-") && process.status === "running",
+    ).length ?? 0;
+  const runningTesters =
+    processes?.filter(
+      (process) => process.name.startsWith("tester-") && process.status === "running",
+    ).length ?? 0;
+  const runningDocsers =
+    processes?.filter(
+      (process) => process.name.startsWith("docser-") && process.status === "running",
+    ).length ?? 0;
 
-  const runningJudges = processes?.filter(
-    (process) => (process.name === 'judge' || process.name.startsWith('judge-')) && process.status === 'running'
-  ).length ?? 0;
-  const runningPlanners = processes?.filter(
-    (process) => (process.name === 'planner' || process.name.startsWith('planner-')) && process.status === 'running'
-  ).length ?? 0;
+  const runningJudges =
+    processes?.filter(
+      (process) =>
+        (process.name === "judge" || process.name.startsWith("judge-")) &&
+        process.status === "running",
+    ).length ?? 0;
+  const runningPlanners =
+    processes?.filter(
+      (process) =>
+        (process.name === "planner" || process.name.startsWith("planner-")) &&
+        process.status === "running",
+    ).length ?? 0;
 
-  const dispatcherStatus = processes?.find((process) => process.name === 'dispatcher')?.status ?? 'idle';
-  const judgeStatus = runningJudges > 0 ? 'running' : 'idle';
-  const cycleStatus = processes?.find((process) => process.name === 'cycle-manager')?.status ?? 'idle';
+  const dispatcherStatus =
+    processes?.find((process) => process.name === "dispatcher")?.status ?? "idle";
+  const judgeStatus = runningJudges > 0 ? "running" : "idle";
+  const cycleStatus =
+    processes?.find((process) => process.name === "cycle-manager")?.status ?? "idle";
 
   const isContentEmpty = content.trim().length === 0;
   const isStartBlocked = isRepoMissing;
-  const isHealthy = health?.status === 'ok' && !isHealthError;
+  const isHealthy = health?.status === "ok" && !isHealthError;
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6 text-term-fg">
@@ -301,17 +317,21 @@ export const StartPage: React.FC = () => {
         <section className="border border-term-border p-0 h-full">
           <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between items-center">
             <h2 className="text-sm font-bold uppercase tracking-wider">Status_Monitor</h2>
-            <span className="text-xs text-zinc-500">{isHealthy ? '[API: ONLINE]' : '[API: OFFLINE]'}</span>
+            <span className="text-xs text-zinc-500">
+              {isHealthy ? "[API: ONLINE]" : "[API: OFFLINE]"}
+            </span>
           </div>
 
           <div className="p-4 space-y-4 font-mono text-sm">
             <div className="grid grid-cols-2 gap-y-2">
               <div className="text-zinc-500">Dispatcher</div>
-              <div className={STATUS_COLORS[dispatcherStatus]}>{STATUS_LABELS[dispatcherStatus]}</div>
+              <div className={STATUS_COLORS[dispatcherStatus]}>
+                {STATUS_LABELS[dispatcherStatus]}
+              </div>
 
               <div className="text-zinc-500">Planner</div>
-              <div className={STATUS_COLORS[runningPlanners > 0 ? 'running' : 'idle']}>
-                {runningPlanners > 0 ? 'RUNNING' : 'IDLE'} ({runningPlanners}/{plannerCount})
+              <div className={STATUS_COLORS[runningPlanners > 0 ? "running" : "idle"]}>
+                {runningPlanners > 0 ? "RUNNING" : "IDLE"} ({runningPlanners}/{plannerCount})
               </div>
 
               <div className="text-zinc-500">Judge</div>
@@ -326,29 +346,39 @@ export const StartPage: React.FC = () => {
             <div className="border-t border-term-border pt-4 mt-2">
               <div className="flex justify-between mb-1">
                 <span className="text-zinc-500">Active Workers</span>
-                <span>{runningWorkers} / {workerCount}</span>
+                <span>
+                  {runningWorkers} / {workerCount}
+                </span>
               </div>
               <div className="w-full bg-zinc-900 h-1 mb-3">
                 <div
                   className="h-full bg-term-tiger"
-                  style={{ width: `${workerCount > 0 ? (runningWorkers / workerCount) * 100 : 0}%` }}
+                  style={{
+                    width: `${workerCount > 0 ? (runningWorkers / workerCount) * 100 : 0}%`,
+                  }}
                 ></div>
               </div>
 
               <div className="flex justify-between mb-1">
                 <span className="text-zinc-500">Active Testers</span>
-                <span>{runningTesters} / {testerCount}</span>
+                <span>
+                  {runningTesters} / {testerCount}
+                </span>
               </div>
               <div className="w-full bg-zinc-900 h-1 mb-3">
                 <div
                   className="h-full bg-term-tiger"
-                  style={{ width: `${testerCount > 0 ? (runningTesters / testerCount) * 100 : 0}%` }}
+                  style={{
+                    width: `${testerCount > 0 ? (runningTesters / testerCount) * 100 : 0}%`,
+                  }}
                 ></div>
               </div>
 
               <div className="flex justify-between mb-1">
                 <span className="text-zinc-500">Docs</span>
-                <span>{runningDocsers} / {docserCount}</span>
+                <span>
+                  {runningDocsers} / {docserCount}
+                </span>
               </div>
             </div>
           </div>
@@ -390,7 +420,9 @@ export const StartPage: React.FC = () => {
                 {!hasGithubToken && (
                   <div className="text-yellow-500">GitHub token is missing in System config</div>
                 )}
-                {repoMessage && <div className="text-[10px] text-zinc-500 font-mono">{repoMessage}</div>}
+                {repoMessage && (
+                  <div className="text-[10px] text-zinc-500 font-mono">{repoMessage}</div>
+                )}
               </div>
             )}
             <div className="flex flex-col gap-1">
@@ -411,7 +443,9 @@ export const StartPage: React.FC = () => {
                   [ LOAD ]
                 </button>
               </div>
-              {loadMessage && <div className="text-[10px] text-zinc-500 font-mono mt-1">{loadMessage}</div>}
+              {loadMessage && (
+                <div className="text-[10px] text-zinc-500 font-mono mt-1">{loadMessage}</div>
+              )}
             </div>
 
             <textarea
@@ -422,26 +456,40 @@ export const StartPage: React.FC = () => {
             />
 
             <div className="flex justify-between items-center pt-2">
-              <span className="text-xs text-zinc-600">
-                {content.length} bytes loaded
-              </span>
+              <span className="text-xs text-zinc-600">{content.length} bytes loaded</span>
               <button
                 onClick={() => startMutation.mutate()}
                 disabled={startMutation.isPending || isStartBlocked}
                 className="bg-term-tiger text-black px-6 py-2 text-sm font-bold uppercase hover:opacity-90 disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500"
               >
-                {startMutation.isPending ? '> INITIATING...' : '> EXECUTE RUN'}
+                {startMutation.isPending ? "> INITIATING..." : "> EXECUTE RUN"}
               </button>
             </div>
 
             {/* Result Console */}
             {(startResult || isContentEmpty || isStartBlocked) && (
               <div className="border-t border-term-border mt-2 pt-2 gap-1 flex flex-col text-xs font-mono">
-                {isContentEmpty && <div className="text-yellow-500">&gt; WARN: Content empty (Issue/PR preflight only)</div>}
-                {isStartBlocked && <div className="text-yellow-500">&gt; WARN: GitHub repo is missing</div>}
-                {startResult?.warnings.map(w => <div key={w} className="text-yellow-500">&gt; WARN: {w}</div>)}
-                {startResult?.errors.map(e => <div key={e} className="text-red-500">&gt; ERR: {e}</div>)}
-                {startResult?.started.length && <div className="text-term-tiger">&gt; BOOT SEQ INITIATED</div>}
+                {isContentEmpty && (
+                  <div className="text-yellow-500">
+                    &gt; WARN: Content empty (Issue/PR preflight only)
+                  </div>
+                )}
+                {isStartBlocked && (
+                  <div className="text-yellow-500">&gt; WARN: GitHub repo is missing</div>
+                )}
+                {startResult?.warnings.map((w) => (
+                  <div key={w} className="text-yellow-500">
+                    &gt; WARN: {w}
+                  </div>
+                ))}
+                {startResult?.errors.map((e) => (
+                  <div key={e} className="text-red-500">
+                    &gt; ERR: {e}
+                  </div>
+                ))}
+                {startResult?.started.length && (
+                  <div className="text-term-tiger">&gt; BOOT SEQ INITIATED</div>
+                )}
               </div>
             )}
           </div>
@@ -452,8 +500,8 @@ export const StartPage: React.FC = () => {
       <section className="border border-term-border p-0">
         <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider">Planner_Output</h2>
-          <span className={`text-xs uppercase ${STATUS_COLORS[planner?.status ?? 'idle']}`}>
-            [{STATUS_LABELS[planner?.status ?? 'idle']}]
+          <span className={`text-xs uppercase ${STATUS_COLORS[planner?.status ?? "idle"]}`}>
+            [{STATUS_LABELS[planner?.status ?? "idle"]}]
           </span>
         </div>
         <div className="p-4 font-mono text-xs space-y-1">
@@ -467,9 +515,9 @@ export const StartPage: React.FC = () => {
           </div>
           <div className="flex gap-4">
             <span className="text-zinc-500 w-24">LOG_PATH</span>
-            <span className="text-zinc-400">{planner?.logPath || '--'}</span>
+            <span className="text-zinc-400">{planner?.logPath || "--"}</span>
           </div>
-          {planner?.message && planner.status === 'failed' && (
+          {planner?.message && planner.status === "failed" && (
             <div className="text-red-500 mt-2 border-l-2 border-red-500 pl-2">
               &gt; CRITICAL_ERR: {planner.message}
             </div>

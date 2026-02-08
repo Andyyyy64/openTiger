@@ -136,7 +136,7 @@ function isExcerptTarget(path: string): boolean {
 
 function filterFilesByAllowedPaths(
   fileList: string[],
-  allowedPaths: string[]
+  allowedPaths: string[],
 ): { matchedFiles: string[]; unmatchedAllowedPaths: string[] } {
   if (allowedPaths.length === 0) {
     return { matchedFiles: fileList, unmatchedAllowedPaths: [] };
@@ -144,19 +144,17 @@ function filterFilesByAllowedPaths(
 
   const normalized = allowedPaths.map((pattern) => normalizeAllowedPath(pattern));
   const matchedFiles = fileList.filter((file) =>
-    normalized.some((pattern) => matchPath(file, pattern))
+    normalized.some((pattern) => matchPath(file, pattern)),
   );
-  const unmatchedAllowedPaths = normalized.filter((pattern) =>
-    !fileList.some((file) => matchPath(file, pattern))
+  const unmatchedAllowedPaths = normalized.filter(
+    (pattern) => !fileList.some((file) => matchPath(file, pattern)),
   );
 
   return { matchedFiles, unmatchedAllowedPaths };
 }
 
 function formatExcerptLines(lines: string[], startLine: number): string {
-  return lines
-    .map((line, index) => `${startLine + index + 1}|${line}`)
-    .join("\n");
+  return lines.map((line, index) => `${startLine + index + 1}|${line}`).join("\n");
 }
 
 function buildExcerpt(content: string): { excerpt: string; truncated: boolean } {
@@ -176,10 +174,7 @@ function buildExcerpt(content: string): { excerpt: string; truncated: boolean } 
   return { excerpt, truncated: true };
 }
 
-async function buildFileExcerpts(
-  workdir: string,
-  files: string[]
-): Promise<FileExcerpt[]> {
+async function buildFileExcerpts(workdir: string, files: string[]): Promise<FileExcerpt[]> {
   const excerpts: FileExcerpt[] = [];
   let totalChars = 0;
 
@@ -220,14 +215,9 @@ async function buildFileExcerpts(
   return excerpts;
 }
 
-async function buildRepoSnapshot(
-  workdir: string,
-  requirement: Requirement
-): Promise<RepoSnapshot> {
+async function buildRepoSnapshot(workdir: string, requirement: Requirement): Promise<RepoSnapshot> {
   const entries = await readdir(workdir, { withFileTypes: true });
-  const topLevel = entries.map((entry) =>
-    entry.isDirectory() ? `${entry.name}/` : entry.name
-  );
+  const topLevel = entries.map((entry) => (entry.isDirectory() ? `${entry.name}/` : entry.name));
 
   const [fileList, readme, architecture] = await Promise.all([
     listTrackedFiles(workdir, MAX_FILES),
@@ -238,12 +228,12 @@ async function buildRepoSnapshot(
   // 許可パスに該当するファイルと抜粋を集めて差分点検の根拠を確保する
   const { matchedFiles, unmatchedAllowedPaths } = filterFilesByAllowedPaths(
     fileList,
-    requirement.allowedPaths
+    requirement.allowedPaths,
   );
   const excerptTargets = matchedFiles.filter((file) => isExcerptTarget(file));
   const excerpts = await buildFileExcerpts(
     workdir,
-    excerptTargets.length > 0 ? excerptTargets : matchedFiles
+    excerptTargets.length > 0 ? excerptTargets : matchedFiles,
   );
 
   return {
@@ -258,23 +248,24 @@ async function buildRepoSnapshot(
 }
 
 function buildInspectionPrompt(requirement: Requirement, snapshot: RepoSnapshot): string {
-  const readmeBlock = snapshot.readme
-    ? `\n## README (抜粋)\n${snapshot.readme}`
-    : "";
+  const readmeBlock = snapshot.readme ? `\n## README (抜粋)\n${snapshot.readme}` : "";
   const architectureBlock = snapshot.architecture
     ? `\n## docs/architecture.md (抜粋)\n${snapshot.architecture}`
     : "";
 
-  const allowedPathBlock = snapshot.unmatchedAllowedPaths.length > 0
-    ? `\nUnmatched allowedPaths:\n${snapshot.unmatchedAllowedPaths.map((path) => `- ${path}`).join("\n")}`
-    : "\nUnmatched allowedPaths:\n(なし)";
-  const excerptBlock = snapshot.excerpts.length > 0
-    ? snapshot.excerpts
-      .map((excerpt) =>
-        `### ${excerpt.path}${excerpt.truncated ? " (truncated)" : ""}\n\`\`\`\n${excerpt.excerpt}\n\`\`\``
-      )
-      .join("\n\n")
-    : "(該当ファイルが見つかりませんでした)";
+  const allowedPathBlock =
+    snapshot.unmatchedAllowedPaths.length > 0
+      ? `\nUnmatched allowedPaths:\n${snapshot.unmatchedAllowedPaths.map((path) => `- ${path}`).join("\n")}`
+      : "\nUnmatched allowedPaths:\n(なし)";
+  const excerptBlock =
+    snapshot.excerpts.length > 0
+      ? snapshot.excerpts
+          .map(
+            (excerpt) =>
+              `### ${excerpt.path}${excerpt.truncated ? " (truncated)" : ""}\n\`\`\`\n${excerpt.excerpt}\n\`\`\``,
+          )
+          .join("\n\n")
+      : "(該当ファイルが見つかりませんでした)";
 
   return `
 あなたは要件と実装の差分を点検するエキスパートです。
@@ -377,25 +368,27 @@ const INSPECTION_QUOTA_RETRY_DELAY_MS = (() => {
 })();
 
 // runOpenCode が内部でハングした場合に備えて Promise.race で強制打ち切りする
-function withHardTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  label: string
-): Promise<T> {
+function withHardTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error(`${label}: hard timeout after ${Math.round(timeoutMs / 1000)}s`));
     }, timeoutMs);
     promise.then(
-      (value) => { clearTimeout(timer); resolve(value); },
-      (error) => { clearTimeout(timer); reject(error); }
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
     );
   });
 }
 
 function isQuotaExceededMessage(message: string): boolean {
   return /quota exceeded|exceeded your current quota|generate_requests_per_model_per_day|resource_exhausted/i.test(
-    message
+    message,
   );
 }
 
@@ -419,7 +412,7 @@ export async function inspectCodebase(
   options: {
     workdir: string;
     timeoutSeconds?: number;
-  }
+  },
 ): Promise<CodebaseInspection | undefined> {
   const snapshot = await buildRepoSnapshot(options.workdir, requirement);
   const prompt = buildInspectionPrompt(requirement, snapshot);
@@ -435,19 +428,22 @@ export async function inspectCodebase(
 
   let lastError = "";
   let attempts = 0;
-  for (let attempt = 0; isUnlimitedInspectionRetry() || attempt < INSPECTION_MAX_RETRIES; attempt++) {
+  for (
+    let attempt = 0;
+    isUnlimitedInspectionRetry() || attempt < INSPECTION_MAX_RETRIES;
+    attempt++
+  ) {
     const remaining = deadline ? Math.floor((deadline - Date.now()) / 1000) : null;
     if (remaining !== null && remaining <= 10) {
       console.warn("[Planner] Inspection deadline reached, giving up.");
       break;
     }
 
-    const attemptTimeout = remaining !== null
-      ? Math.min(perAttemptTimeout, remaining)
-      : perAttemptTimeout;
+    const attemptTimeout =
+      remaining !== null ? Math.min(perAttemptTimeout, remaining) : perAttemptTimeout;
     if (attempt > 0) {
       console.log(
-        `[Planner] Inspection retry ${attempt}/${formatInspectionRetryLimit()} (timeout: ${attemptTimeout}s)`
+        `[Planner] Inspection retry ${attempt}/${formatInspectionRetryLimit()} (timeout: ${attemptTimeout}s)`,
       );
     }
     attempts = attempt + 1;
@@ -468,7 +464,7 @@ export async function inspectCodebase(
           env: getPlannerOpenCodeEnv(),
         }),
         hardTimeoutMs,
-        "Inspection"
+        "Inspection",
       );
 
       if (result.success && result.stdout.trim().length > 0) {
@@ -494,7 +490,7 @@ export async function inspectCodebase(
   }
 
   console.warn(
-    `[Planner] Codebase inspection failed after ${attempts} attempts: ${lastError.slice(0, 200)}`
+    `[Planner] Codebase inspection failed after ${attempts} attempts: ${lastError.slice(0, 200)}`,
   );
   return;
 }
@@ -508,9 +504,7 @@ function parseInspectionResult(stdout: string): CodebaseInspection {
     notes?: string[];
   };
 
-  let gaps = Array.isArray(parsed.gaps)
-    ? parsed.gaps.filter((g) => typeof g === "string")
-    : [];
+  let gaps = Array.isArray(parsed.gaps) ? parsed.gaps.filter((g) => typeof g === "string") : [];
   const evidence = Array.isArray(parsed.evidence)
     ? parsed.evidence.filter((item) => typeof item === "string")
     : [];
@@ -535,16 +529,10 @@ function parseInspectionResult(stdout: string): CodebaseInspection {
 }
 
 export function formatInspectionNotes(inspection: CodebaseInspection): string {
-  const lines: string[] = [
-    "コードベース差分点検:",
-    `概要: ${inspection.summary}`,
-  ];
+  const lines: string[] = ["コードベース差分点検:", `概要: ${inspection.summary}`];
 
   if (inspection.satisfied.length > 0) {
-    lines.push(
-      "既に満たしている点:",
-      ...inspection.satisfied.map((item) => `- ${item}`)
-    );
+    lines.push("既に満たしている点:", ...inspection.satisfied.map((item) => `- ${item}`));
   }
 
   if (inspection.gaps.length > 0) {
@@ -552,10 +540,7 @@ export function formatInspectionNotes(inspection: CodebaseInspection): string {
   }
 
   if (inspection.evidence.length > 0) {
-    lines.push(
-      "根拠:",
-      ...inspection.evidence.map((item) => `- ${item}`)
-    );
+    lines.push("根拠:", ...inspection.evidence.map((item) => `- ${item}`));
   }
 
   if (inspection.notes.length > 0) {

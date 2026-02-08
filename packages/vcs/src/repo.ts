@@ -22,11 +22,7 @@ async function getAuthenticatedLogin(octokit: Octokit): Promise<string> {
   return response.data.login;
 }
 
-async function fetchRepo(
-  octokit: Octokit,
-  owner: string,
-  repo: string
-): Promise<RepoCreateInfo> {
+async function fetchRepo(octokit: Octokit, owner: string, repo: string): Promise<RepoCreateInfo> {
   const response = await octokit.repos.get({ owner, repo });
   return {
     owner,
@@ -47,18 +43,19 @@ export async function createRepo(options: CreateRepoOptions): Promise<RepoCreate
 
   try {
     const login = await getAuthenticatedLogin(octokit);
-    const response = login === owner
-      ? await octokit.repos.createForAuthenticatedUser({
-        name,
-        description,
-        private: isPrivate,
-      })
-      : await octokit.repos.createInOrg({
-        org: owner,
-        name,
-        description,
-        private: isPrivate,
-      });
+    const response =
+      login === owner
+        ? await octokit.repos.createForAuthenticatedUser({
+            name,
+            description,
+            private: isPrivate,
+          })
+        : await octokit.repos.createInOrg({
+            org: owner,
+            name,
+            description,
+            private: isPrivate,
+          });
 
     return {
       owner,
@@ -68,9 +65,10 @@ export async function createRepo(options: CreateRepoOptions): Promise<RepoCreate
       created: true,
     };
   } catch (error) {
-    const status = typeof error === "object" && error && "status" in error
-      ? Number((error as { status?: number }).status)
-      : undefined;
+    const status =
+      typeof error === "object" && error && "status" in error
+        ? Number((error as { status?: number }).status)
+        : undefined;
     if (status === 422) {
       return fetchRepo(octokit, owner, name);
     }

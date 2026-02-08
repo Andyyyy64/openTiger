@@ -14,27 +14,27 @@ const DEFAULT_REPLAN_COMMAND = "pnpm --filter @openTiger/planner run start:fresh
 async function ensureConfigColumns(): Promise<void> {
   // Self-repair required columns so system_config works even if migration history is corrupted
   await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_wait_on_quota" text DEFAULT 'true' NOT NULL`
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_wait_on_quota" text DEFAULT 'true' NOT NULL`,
   );
   await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_quota_retry_delay_ms" text DEFAULT '30000' NOT NULL`
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_quota_retry_delay_ms" text DEFAULT '30000' NOT NULL`,
   );
   await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`,
   );
   await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_count" text DEFAULT '1' NOT NULL`
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_count" text DEFAULT '1' NOT NULL`,
   );
   await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_count" text DEFAULT '1' NOT NULL`
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_count" text DEFAULT '1' NOT NULL`,
   );
 }
 
 function createLegacyNormalizationPatch(
-  current: typeof configTable.$inferSelect
+  current: typeof configTable.$inferSelect,
 ): Partial<typeof configTable.$inferInsert> | null {
   const shouldNormalizeReplanCommand = LEGACY_REPLAN_COMMANDS.has(
-    (current.replanCommand ?? "").trim()
+    (current.replanCommand ?? "").trim(),
   );
   const shouldNormalizeMaxConcurrentWorkers = (current.maxConcurrentWorkers ?? "").trim() === "10";
   const shouldNormalizeDailyTokenLimit = (current.dailyTokenLimit ?? "").trim() === "50000000";
@@ -42,11 +42,11 @@ function createLegacyNormalizationPatch(
   const shouldNormalizeTaskTokenLimit = (current.taskTokenLimit ?? "").trim() === "1000000";
 
   if (
-    !shouldNormalizeReplanCommand
-    && !shouldNormalizeMaxConcurrentWorkers
-    && !shouldNormalizeDailyTokenLimit
-    && !shouldNormalizeHourlyTokenLimit
-    && !shouldNormalizeTaskTokenLimit
+    !shouldNormalizeReplanCommand &&
+    !shouldNormalizeMaxConcurrentWorkers &&
+    !shouldNormalizeDailyTokenLimit &&
+    !shouldNormalizeHourlyTokenLimit &&
+    !shouldNormalizeTaskTokenLimit
   ) {
     return null;
   }

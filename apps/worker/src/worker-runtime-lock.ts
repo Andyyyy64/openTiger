@@ -38,9 +38,9 @@ export async function acquireTaskRuntimeLock(taskId: string): Promise<TaskRuntim
           acquiredAt: new Date().toISOString(),
         },
         null,
-        2
+        2,
       ),
-      "utf-8"
+      "utf-8",
     );
     return { path: lockPath, handle };
   } catch (error) {

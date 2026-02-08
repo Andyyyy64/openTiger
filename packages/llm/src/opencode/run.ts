@@ -16,40 +16,32 @@ import {
   calculateBackoffDelay,
   delay,
 } from "./opencode-helpers";
-import {
-  parseBooleanEnvValue,
-  parseIntegerEnvValue,
-  readRuntimeEnv,
-} from "./opencode-env";
+import { parseBooleanEnvValue, parseIntegerEnvValue, readRuntimeEnv } from "./opencode-env";
 import { executeOpenCodeOnce } from "./opencode-executor";
 
 export { OpenCodeOptions } from "./opencode-types";
 export type { OpenCodeResult } from "./opencode-types";
 
-export async function runOpenCode(
-  options: OpenCodeOptions
-): Promise<OpenCodeResult> {
+export async function runOpenCode(options: OpenCodeOptions): Promise<OpenCodeResult> {
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
   const waitOnQuota = parseBooleanEnvValue(
     readRuntimeEnv(options, "OPENCODE_WAIT_ON_QUOTA"),
-    DEFAULT_WAIT_ON_QUOTA
+    DEFAULT_WAIT_ON_QUOTA,
   );
   const runtimeQuotaRetryDelayMs = parseIntegerEnvValue(
     readRuntimeEnv(options, "OPENCODE_QUOTA_RETRY_DELAY_MS"),
-    DEFAULT_QUOTA_RETRY_DELAY_MS
+    DEFAULT_QUOTA_RETRY_DELAY_MS,
   );
-  const quotaRetryDelayMs = Number.isFinite(runtimeQuotaRetryDelayMs)
-    && runtimeQuotaRetryDelayMs > 0
-    ? runtimeQuotaRetryDelayMs
-    : 30000;
+  const quotaRetryDelayMs =
+    Number.isFinite(runtimeQuotaRetryDelayMs) && runtimeQuotaRetryDelayMs > 0
+      ? runtimeQuotaRetryDelayMs
+      : 30000;
   const runtimeMaxQuotaWaits = parseIntegerEnvValue(
     readRuntimeEnv(options, "OPENCODE_MAX_QUOTA_WAITS"),
-    DEFAULT_MAX_QUOTA_WAITS
+    DEFAULT_MAX_QUOTA_WAITS,
   );
-  const maxQuotaWaits = Number.isFinite(runtimeMaxQuotaWaits)
-    ? runtimeMaxQuotaWaits
-    : -1;
+  const maxQuotaWaits = Number.isFinite(runtimeMaxQuotaWaits) ? runtimeMaxQuotaWaits : -1;
   let currentModel = options.model ?? DEFAULT_MODEL;
   let fallbackUsed = false;
   let quotaWaitCount = 0;
@@ -73,27 +65,27 @@ export async function runOpenCode(
         const waitMs = detectedDelay ?? quotaRetryDelayMs;
         console.warn(
           `[OpenCode] ${currentModel ?? "unknown model"} quota exceeded. ` +
-          `Waiting ${Math.round(waitMs / 1000)}s before retry (${quotaWaitCount}${maxQuotaWaits < 0 ? "" : `/${maxQuotaWaits}`}).`
+            `Waiting ${Math.round(waitMs / 1000)}s before retry (${quotaWaitCount}${maxQuotaWaits < 0 ? "" : `/${maxQuotaWaits}`}).`,
         );
         await delay(waitMs);
         continue;
       }
       console.error(
-        `[OpenCode] ${currentModel ?? "unknown model"} quota limit reached. Please check your API quota.`
+        `[OpenCode] ${currentModel ?? "unknown model"} quota limit reached. Please check your API quota.`,
       );
       break;
     }
 
     if (
-      !fallbackUsed
-      && currentModel !== DEFAULT_FALLBACK_MODEL
-      && THOUGHT_SIGNATURE_ERROR.test(result.stderr)
+      !fallbackUsed &&
+      currentModel !== DEFAULT_FALLBACK_MODEL &&
+      THOUGHT_SIGNATURE_ERROR.test(result.stderr)
     ) {
       // Switch model to avoid Gemini 3 thought_signature required error
       fallbackUsed = true;
       currentModel = DEFAULT_FALLBACK_MODEL;
       console.warn(
-        `[OpenCode] Fallback model applied: ${currentModel} (reason: thought_signature)`
+        `[OpenCode] Fallback model applied: ${currentModel} (reason: thought_signature)`,
       );
       continue;
     }

@@ -99,17 +99,14 @@ export async function scheduleTaskForJudgeRetry(params: {
 }
 
 export function isImportedPrReviewTask(goal: string, title: string): boolean {
-  return (
-    goal.startsWith("Review and process open PR #")
-    || title.startsWith("[PR] Review #")
-  );
+  return goal.startsWith("Review and process open PR #") || title.startsWith("[PR] Review #");
 }
 
 export async function recoverAwaitingJudgeBacklog(agentId: string): Promise<number> {
-  const cooldownMs = Number.isFinite(JUDGE_AWAITING_RETRY_COOLDOWN_MS)
-    && JUDGE_AWAITING_RETRY_COOLDOWN_MS > 0
-    ? JUDGE_AWAITING_RETRY_COOLDOWN_MS
-    : 120000;
+  const cooldownMs =
+    Number.isFinite(JUDGE_AWAITING_RETRY_COOLDOWN_MS) && JUDGE_AWAITING_RETRY_COOLDOWN_MS > 0
+      ? JUDGE_AWAITING_RETRY_COOLDOWN_MS
+      : 120000;
   const cutoff = new Date(Date.now() - cooldownMs);
 
   const stuckTasks = await db
@@ -121,8 +118,8 @@ export async function recoverAwaitingJudgeBacklog(agentId: string): Promise<numb
       and(
         eq(tasks.status, "blocked"),
         eq(tasks.blockReason, "awaiting_judge"),
-        lte(tasks.updatedAt, cutoff)
-      )
+        lte(tasks.updatedAt, cutoff),
+      ),
     );
 
   if (stuckTasks.length === 0) {
@@ -134,13 +131,7 @@ export async function recoverAwaitingJudgeBacklog(agentId: string): Promise<numb
     const [pendingRun] = await db
       .select({ id: runs.id })
       .from(runs)
-      .where(
-        and(
-          eq(runs.taskId, task.id),
-          eq(runs.status, "success"),
-          isNull(runs.judgedAt)
-        )
-      )
+      .where(and(eq(runs.taskId, task.id), eq(runs.status, "success"), isNull(runs.judgedAt)))
       .limit(1);
 
     if (pendingRun?.id) {
@@ -157,8 +148,8 @@ export async function recoverAwaitingJudgeBacklog(agentId: string): Promise<numb
         and(
           eq(runs.taskId, task.id),
           eq(runs.status, "success"),
-          inArray(artifacts.type, ["pr", "worktree"])
-        )
+          inArray(artifacts.type, ["pr", "worktree"]),
+        ),
       )
       .orderBy(desc(runs.startedAt))
       .limit(1);
@@ -198,13 +189,7 @@ export async function claimRunForJudgement(runId: string): Promise<boolean> {
       judgedAt: new Date(),
       judgementVersion: sql`${runs.judgementVersion} + 1`,
     })
-    .where(
-      and(
-        eq(runs.id, runId),
-        eq(runs.status, "success"),
-        isNull(runs.judgedAt)
-      )
-    )
+    .where(and(eq(runs.id, runId), eq(runs.status, "success"), isNull(runs.judgedAt)))
     .returning({ id: runs.id });
 
   return result.length > 0;

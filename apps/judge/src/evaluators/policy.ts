@@ -96,17 +96,13 @@ function isLockfile(path: string): boolean {
 }
 
 function isPackageManifest(path: string): boolean {
-  return path === "package.json"
-    || path.endsWith("/package.json")
-    || path === "pnpm-workspace.yaml";
+  return (
+    path === "package.json" || path.endsWith("/package.json") || path === "pnpm-workspace.yaml"
+  );
 }
 
 // パスが許可されているか
-function isPathAllowed(
-  path: string,
-  allowedPaths: string[],
-  forbiddenPaths: string[]
-): boolean {
+function isPathAllowed(path: string, allowedPaths: string[], forbiddenPaths: string[]): boolean {
   // 禁止パスに該当する場合は不許可
   for (const forbidden of forbiddenPaths) {
     if (matchPath(path, forbidden)) {
@@ -126,7 +122,7 @@ function isPathAllowed(
 export async function evaluatePolicy(
   prNumber: number,
   policy: Policy,
-  allowedPaths: string[] = []
+  allowedPaths: string[] = [],
 ): Promise<PolicyEvaluationResult> {
   const violations: PolicyViolation[] = [];
   const reasons: string[] = [];
@@ -134,9 +130,7 @@ export async function evaluatePolicy(
 
   try {
     const diffStats = await getPRDiffStats(prNumber);
-    const hasManifestChanges = diffStats.files.some((file) =>
-      isPackageManifest(file.filename)
-    );
+    const hasManifestChanges = diffStats.files.some((file) => isPackageManifest(file.filename));
 
     // 変更行数のチェック
     const totalChanges = diffStats.additions + diffStats.deletions;
@@ -210,7 +204,7 @@ export function evaluateRiskLevel(
     changedFiles: number;
     files: Array<{ filename: string }>;
   },
-  policy: Policy
+  policy: Policy,
 ): "low" | "medium" | "high" {
   const totalChanges = diffStats.additions + diffStats.deletions;
 
@@ -240,7 +234,7 @@ export function evaluateRiskLevel(
   ];
 
   const touchesSensitiveFile = diffStats.files.some((file) =>
-    sensitivePatterns.some((pattern) => matchPath(file.filename, pattern))
+    sensitivePatterns.some((pattern) => matchPath(file.filename, pattern)),
   );
 
   if (touchesSensitiveFile) {

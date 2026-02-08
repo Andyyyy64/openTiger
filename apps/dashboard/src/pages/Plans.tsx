@@ -1,12 +1,16 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { plansApi, type PlanSnapshot } from '../lib/api';
-import { getTaskStatusColor } from '../ui/status';
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { plansApi, type PlanSnapshot } from "../lib/api";
+import { getTaskStatusColor } from "../ui/status";
 
 export const PlansPage: React.FC = () => {
-  const { data: plans, isLoading, error } = useQuery({
-    queryKey: ['plans'],
+  const {
+    data: plans,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["plans"],
     queryFn: () => plansApi.list(20),
   });
 
@@ -17,20 +21,26 @@ export const PlansPage: React.FC = () => {
           &gt; Active_Plans
         </h1>
         <span className="text-xs text-zinc-500">
-          {isLoading ? 'Scanning...' : `${plans?.length ?? 0} PLANS LOADED`}
+          {isLoading ? "Scanning..." : `${plans?.length ?? 0} PLANS LOADED`}
         </span>
       </div>
 
       {isLoading && (
-        <div className="text-center text-zinc-500 py-12 font-pixel animate-pulse">&gt; Retrieving plans...</div>
+        <div className="text-center text-zinc-500 py-12 font-pixel animate-pulse">
+          &gt; Retrieving plans...
+        </div>
       )}
       {error && (
-        <div className="text-center text-red-500 py-12 font-pixel">&gt; ERROR: Failed to load plans</div>
+        <div className="text-center text-red-500 py-12 font-pixel">
+          &gt; ERROR: Failed to load plans
+        </div>
       )}
 
       <div className="space-y-8">
         {(plans ?? []).length === 0 && !isLoading && !error && (
-          <div className="text-center text-zinc-500 py-12 font-pixel">&gt; No plans found in registry</div>
+          <div className="text-center text-zinc-500 py-12 font-pixel">
+            &gt; No plans found in registry
+          </div>
         )}
 
         {(plans ?? []).map((plan) => (
@@ -55,7 +65,7 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
             <span>ID: {plan.id.slice(0, 8)}</span>
           </div>
           <h2 className="text-lg font-bold text-term-fg uppercase tracking-wide">
-            plan@{plan.agentId ?? 'planner'}
+            plan@{plan.agentId ?? "planner"}
           </h2>
           {plan.requirement?.goal && (
             <div className="text-zinc-400 text-sm font-pixel border-l-2 border-term-tiger pl-2 mt-2">
@@ -81,7 +91,9 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
       {/* Warnings Block */}
       {warnings.length > 0 && (
         <div className="p-4 border-b border-term-border bg-yellow-900/10">
-          <div className="text-xs font-bold text-yellow-500 mb-2 uppercase">&gt; Warnings_Detected:</div>
+          <div className="text-xs font-bold text-yellow-500 mb-2 uppercase">
+            &gt; Warnings_Detected:
+          </div>
           <ul className="text-xs text-yellow-200/80 font-pixel space-y-1">
             {warnings.map((warning, index) => (
               <li key={index}>* {warning}</li>
@@ -121,7 +133,7 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
                 <td className="px-4 py-2 align-top">{renderRisk(task.riskLevel)}</td>
                 <td className="px-4 py-2 align-top text-zinc-300">{task.priority}</td>
                 <td className="px-4 py-2 align-top text-zinc-500">
-                  {task.dependencies?.length ? `[${task.dependencies.length}]` : '-'}
+                  {task.dependencies?.length ? `[${task.dependencies.length}]` : "-"}
                 </td>
                 <td className="px-4 py-2 align-top text-zinc-600">
                   {new Date(task.createdAt).toLocaleTimeString()}
@@ -145,9 +157,9 @@ const PlanCard = ({ plan }: { plan: PlanSnapshot }) => {
 const renderRisk = (risk: string) => {
   const label = risk.toUpperCase();
   switch (risk) {
-    case 'high':
+    case "high":
       return <span className="text-red-500 font-bold">! {label} !</span>;
-    case 'medium':
+    case "medium":
       return <span className="text-yellow-500">{label}</span>;
     default:
       return <span className="text-zinc-500">{label}</span>;

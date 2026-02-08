@@ -56,10 +56,7 @@ runsRoute.get("/:id", async (c) => {
   }
 
   // 関連する成果物も取得
-  const artifactResult = await db
-    .select()
-    .from(artifacts)
-    .where(eq(artifacts.runId, id));
+  const artifactResult = await db.select().from(artifacts).where(eq(artifacts.runId, id));
 
   // ログファイルの内容を取得
   let logContent: string | null = null;
@@ -76,7 +73,8 @@ runsRoute.get("/:id", async (c) => {
         try {
           const buffer = Buffer.alloc(1024 * 1024);
           const { bytesRead } = await handle.read(buffer, 0, 1024 * 1024, stats.size - 1024 * 1024);
-          logContent = "...(truncated, showing last 1MB)...\n" + buffer.toString("utf-8", 0, bytesRead);
+          logContent =
+            "...(truncated, showing last 1MB)...\n" + buffer.toString("utf-8", 0, bytesRead);
         } finally {
           await handle.close();
         }
@@ -176,30 +174,26 @@ const createArtifactSchema = z.object({
 });
 
 // 成果物追加
-runsRoute.post(
-  "/:id/artifacts",
-  zValidator("json", createArtifactSchema),
-  async (c) => {
-    const runId = c.req.param("id");
-    const body = c.req.valid("json");
+runsRoute.post("/:id/artifacts", zValidator("json", createArtifactSchema), async (c) => {
+  const runId = c.req.param("id");
+  const body = c.req.valid("json");
 
-    // Check if run exists
-    const runResult = await db.select().from(runs).where(eq(runs.id, runId));
-    if (runResult.length === 0) {
-      return c.json({ error: "Run not found" }, 404);
-    }
-
-    const result = await db
-      .insert(artifacts)
-      .values({
-        runId,
-        type: body.type,
-        ref: body.ref,
-        url: body.url,
-        metadata: body.metadata,
-      })
-      .returning();
-
-    return c.json({ artifact: result[0] }, 201);
+  // Check if run exists
+  const runResult = await db.select().from(runs).where(eq(runs.id, runId));
+  if (runResult.length === 0) {
+    return c.json({ error: "Run not found" }, 404);
   }
-);
+
+  const result = await db
+    .insert(artifacts)
+    .values({
+      runId,
+      type: body.type,
+      ref: body.ref,
+      url: body.url,
+      metadata: body.metadata,
+    })
+    .returning();
+
+  return c.json({ artifact: result[0] }, 201);
+});

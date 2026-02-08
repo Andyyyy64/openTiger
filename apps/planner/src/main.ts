@@ -66,32 +66,36 @@ async function main(): Promise<void> {
   setupProcessLogging(agentId, { label: "Planner" });
   const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
 
-  await db.insert(agents).values({
-    id: agentId,
-    role: "planner",
-    // 再計画の重複起動を避けるため、起動直後からbusyとして扱う
-    status: "busy",
-    lastHeartbeat: new Date(),
-    metadata: {
-      model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
-      provider: "gemini",
-    },
-  }).onConflictDoUpdate({
-    target: agents.id,
-    set: {
+  await db
+    .insert(agents)
+    .values({
+      id: agentId,
+      role: "planner",
+      // 再計画の重複起動を避けるため、起動直後からbusyとして扱う
       status: "busy",
       lastHeartbeat: new Date(),
-    },
-  });
+      metadata: {
+        model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
+        provider: "gemini",
+      },
+    })
+    .onConflictDoUpdate({
+      target: agents.id,
+      set: {
+        status: "busy",
+        lastHeartbeat: new Date(),
+      },
+    });
 
   // ハートビート開始
   const heartbeatTimer = startHeartbeat(agentId);
 
   // 引数がない場合は環境変数の要件パスを利用する
   try {
-    const requirementPath = args.find((arg) => !arg.startsWith("--"))
-      ?? process.env.REQUIREMENT_PATH
-      ?? process.env.REPLAN_REQUIREMENT_PATH;
+    const requirementPath =
+      args.find((arg) => !arg.startsWith("--")) ??
+      process.env.REQUIREMENT_PATH ??
+      process.env.REPLAN_REQUIREMENT_PATH;
 
     if (!requirementPath) {
       console.error("Error: Requirement file path is required");

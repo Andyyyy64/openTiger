@@ -7,25 +7,23 @@ import { clipText, normalizeStringList, extractIssueMessages } from "./planner-u
 
 function formatJudgeFeedbackEntry(payload: Record<string, unknown>): string | undefined {
   const rawPrNumber = payload.prNumber;
-  const prNumber = typeof rawPrNumber === "number"
-    ? rawPrNumber
-    : typeof rawPrNumber === "string" && !Number.isNaN(Number(rawPrNumber))
-      ? Number(rawPrNumber)
-      : undefined;
+  const prNumber =
+    typeof rawPrNumber === "number"
+      ? rawPrNumber
+      : typeof rawPrNumber === "string" && !Number.isNaN(Number(rawPrNumber))
+        ? Number(rawPrNumber)
+        : undefined;
   const verdict = typeof payload.verdict === "string" ? payload.verdict : "unknown";
   const reasons = normalizeStringList(payload.reasons, 3);
   const suggestions = normalizeStringList(payload.suggestions, 3);
   const summary = payload.summary;
   const codeIssues =
-    typeof summary === "object"
-    && summary !== null
-    && "llm" in summary
-    && typeof (summary as { llm?: unknown }).llm === "object"
-    ? extractIssueMessages(
-      (summary as { llm?: { codeIssues?: unknown } }).llm?.codeIssues,
-      3
-    )
-    : [];
+    typeof summary === "object" &&
+    summary !== null &&
+    "llm" in summary &&
+    typeof (summary as { llm?: unknown }).llm === "object"
+      ? extractIssueMessages((summary as { llm?: { codeIssues?: unknown } }).llm?.codeIssues, 3)
+      : [];
 
   const details: string[] = [];
 
@@ -79,7 +77,7 @@ export async function loadJudgeFeedback(limit: number = 5): Promise<string | und
 
 export function attachJudgeFeedbackToRequirement(
   requirement: Requirement,
-  feedback: string | undefined
+  feedback: string | undefined,
 ): Requirement {
   // 要件のノートにJudgeの結果を補足する
   if (!feedback) {
@@ -87,16 +85,14 @@ export function attachJudgeFeedbackToRequirement(
   }
 
   const feedbackBlock = `Judgeフィードバック:\n${feedback}`;
-  const notes = requirement.notes
-    ? `${requirement.notes}\n\n${feedbackBlock}`
-    : feedbackBlock;
+  const notes = requirement.notes ? `${requirement.notes}\n\n${feedbackBlock}` : feedbackBlock;
 
   return { ...requirement, notes };
 }
 
 export function attachJudgeFeedbackToTasks(
   result: TaskGenerationResult,
-  feedback: string | undefined
+  feedback: string | undefined,
 ): TaskGenerationResult {
   // Workerに引き継ぐためタスクのノートへ反映する
   if (!feedback) {
@@ -106,9 +102,7 @@ export function attachJudgeFeedbackToTasks(
   const feedbackBlock = `Judgeフィードバック:\n${feedback}`;
   const tasks = result.tasks.map((task) => {
     const context = task.context ?? {};
-    const notes = context.notes
-      ? `${context.notes}\n\n${feedbackBlock}`
-      : feedbackBlock;
+    const notes = context.notes ? `${context.notes}\n\n${feedbackBlock}` : feedbackBlock;
 
     return {
       ...task,
@@ -124,16 +118,14 @@ export function attachJudgeFeedbackToTasks(
 
 export function attachInspectionToRequirement(
   requirement: Requirement,
-  inspectionNotes: string | undefined
+  inspectionNotes: string | undefined,
 ): Requirement {
   // 差分点検の内容を要件に残してタスク生成へ引き継ぐ
   if (!inspectionNotes) {
     return requirement;
   }
 
-  const notes = requirement.notes
-    ? `${requirement.notes}\n\n${inspectionNotes}`
-    : inspectionNotes;
+  const notes = requirement.notes ? `${requirement.notes}\n\n${inspectionNotes}` : inspectionNotes;
 
   return { ...requirement, notes };
 }
@@ -171,7 +163,7 @@ export async function loadExistingTaskHints(limit: number = 30): Promise<string 
 
 export function attachExistingTasksToRequirement(
   requirement: Requirement,
-  hints: string | undefined
+  hints: string | undefined,
 ): Requirement {
   // 既存タスクを共有して重複した計画の生成を抑える
   if (!hints) {
@@ -185,7 +177,7 @@ export function attachExistingTasksToRequirement(
 
 export function attachInspectionToTasks(
   result: TaskGenerationResult,
-  inspectionNotes: string | undefined
+  inspectionNotes: string | undefined,
 ): TaskGenerationResult {
   // 差分点検の内容をWorkerにも共有して探索を深める
   if (!inspectionNotes) {
@@ -194,9 +186,7 @@ export function attachInspectionToTasks(
 
   const tasks = result.tasks.map((task) => {
     const context = task.context ?? {};
-    const notes = context.notes
-      ? `${context.notes}\n\n${inspectionNotes}`
-      : inspectionNotes;
+    const notes = context.notes ? `${context.notes}\n\n${inspectionNotes}` : inspectionNotes;
 
     return {
       ...task,

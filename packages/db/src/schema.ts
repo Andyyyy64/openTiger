@@ -1,11 +1,4 @@
-import {
-  pgTable,
-  uuid,
-  text,
-  integer,
-  timestamp,
-  jsonb,
-} from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 // タスクテーブル: 作業単位を管理
 export const tasks = pgTable("tasks", {
@@ -25,12 +18,8 @@ export const tasks = pgTable("tasks", {
   dependencies: uuid("dependencies").array().default([]).notNull(), // 先行タスクID
   timeboxMinutes: integer("timebox_minutes").default(60).notNull(),
   retryCount: integer("retry_count").default(0).notNull(), // リトライ回数
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // 実行記録テーブル: エージェントの実行履歴
@@ -41,9 +30,7 @@ export const runs = pgTable("runs", {
     .notNull(),
   agentId: text("agent_id").notNull(), // 実行エージェント識別子
   status: text("status").default("running").notNull(), // running/success/failed/cancelled
-  startedAt: timestamp("started_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   costTokens: integer("cost_tokens"), // 消費トークン数
   logPath: text("log_path"), // ログファイルパス
@@ -62,9 +49,7 @@ export const artifacts = pgTable("artifacts", {
   ref: text("ref"), // PR番号、コミットSHA等
   url: text("url"),
   metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // リーステーブル: タスクの一時的な占有権（ロックの代替）
@@ -76,9 +61,7 @@ export const leases = pgTable("leases", {
     .notNull(),
   agentId: text("agent_id").notNull(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // イベントログテーブル: 監査用
@@ -89,9 +72,7 @@ export const events = pgTable("events", {
   entityId: uuid("entity_id").notNull(),
   agentId: text("agent_id"),
   payload: jsonb("payload"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // エージェントテーブル: 登録されたエージェント
@@ -102,9 +83,7 @@ export const agents = pgTable("agents", {
   currentTaskId: uuid("current_task_id").references(() => tasks.id),
   lastHeartbeat: timestamp("last_heartbeat", { withTimezone: true }),
   metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // サイクルテーブル: 運用サイクルの管理（クリーン再スタート用）
@@ -112,9 +91,7 @@ export const cycles = pgTable("cycles", {
   id: uuid("id").primaryKey().defaultRandom(),
   number: integer("number").notNull(), // サイクル番号（1, 2, 3...）
   status: text("status").default("running").notNull(), // running/completed/aborted
-  startedAt: timestamp("started_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
   endedAt: timestamp("ended_at", { withTimezone: true }),
   // サイクル終了条件
   triggerType: text("trigger_type"), // time/task_count/failure_rate/manual
@@ -159,7 +136,9 @@ export const config = pgTable("config", {
   autoReplan: text("auto_replan").default("true").notNull(),
   replanRequirementPath: text("replan_requirement_path").default("requirement.md").notNull(),
   replanIntervalMs: text("replan_interval_ms").default("60000").notNull(),
-  replanCommand: text("replan_command").default("pnpm --filter @openTiger/planner run start:fresh").notNull(),
+  replanCommand: text("replan_command")
+    .default("pnpm --filter @openTiger/planner run start:fresh")
+    .notNull(),
   replanWorkdir: text("replan_workdir").default("").notNull(),
   replanRepoUrl: text("replan_repo_url").default("").notNull(),
   githubToken: text("github_token").default("").notNull(),
@@ -171,12 +150,8 @@ export const config = pgTable("config", {
   openaiApiKey: text("openai_api_key").default("").notNull(),
   xaiApiKey: text("xai_api_key").default("").notNull(),
   deepseekApiKey: text("deepseek_api_key").default("").notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // 型エクスポート

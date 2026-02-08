@@ -4,11 +4,7 @@ import { z } from "zod";
 import { db } from "@openTiger/db";
 import { config as configTable } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
-import {
-  CONFIG_KEYS,
-  buildConfigRecord,
-  rowToConfig,
-} from "../system-config";
+import { CONFIG_KEYS, buildConfigRecord, rowToConfig } from "../system-config";
 import { ensureConfigRow } from "../config-store";
 
 export const configRoute = new Hono();

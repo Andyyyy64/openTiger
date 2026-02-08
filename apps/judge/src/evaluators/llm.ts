@@ -55,7 +55,7 @@ function extractChangedFilesFromDiff(diff: string): Set<string> {
 
 function filterIssuesByDiffScope(
   issues: CodeIssue[],
-  changedFiles: Set<string>
+  changedFiles: Set<string>,
 ): { kept: CodeIssue[]; dropped: CodeIssue[] } {
   if (changedFiles.size === 0) {
     return { kept: issues, dropped: [] };
@@ -194,10 +194,10 @@ function extractJsonFromResponse(response: string): unknown {
 function summarizeLlmExecutionFailure(stderr: string): string {
   const lower = stderr.toLowerCase();
   if (
-    lower.includes("quota")
-    || lower.includes("resource_exhausted")
-    || lower.includes("rate limit")
-    || lower.includes("429")
+    lower.includes("quota") ||
+    lower.includes("resource_exhausted") ||
+    lower.includes("rate limit") ||
+    lower.includes("429")
   ) {
     return "LLM execution failed: quota_or_rate_limit";
   }
@@ -217,7 +217,7 @@ export async function evaluateLLM(
     taskGoal: string;
     instructionsPath?: string;
     timeoutSeconds?: number;
-  }
+  },
 ): Promise<LLMEvaluationResult> {
   try {
     // PRのdiffを取得
@@ -284,7 +284,7 @@ export async function evaluateLLM(
     }));
     const { kept: codeIssues, dropped: outOfScopeIssues } = filterIssuesByDiffScope(
       rawIssues,
-      changedFiles
+      changedFiles,
     );
 
     // 理由と提案を生成
@@ -308,9 +308,7 @@ export async function evaluateLLM(
     }
 
     if (outOfScopeIssues.length > 0) {
-      suggestions.push(
-        `Ignored ${outOfScopeIssues.length} LLM issue(s) outside PR diff scope.`
-      );
+      suggestions.push(`Ignored ${outOfScopeIssues.length} LLM issue(s) outside PR diff scope.`);
     }
 
     return {
@@ -339,7 +337,7 @@ export async function evaluateLLMDiff(
   options: {
     instructionsPath?: string;
     timeoutSeconds?: number;
-  }
+  },
 ): Promise<LLMEvaluationResult> {
   try {
     if (!diff || diff.trim().length === 0) {
@@ -399,7 +397,7 @@ export async function evaluateLLMDiff(
     }));
     const { kept: codeIssues, dropped: outOfScopeIssues } = filterIssuesByDiffScope(
       rawIssues,
-      changedFiles
+      changedFiles,
     );
 
     const reasons: string[] = [];
@@ -421,9 +419,7 @@ export async function evaluateLLMDiff(
     }
 
     if (outOfScopeIssues.length > 0) {
-      suggestions.push(
-        `Ignored ${outOfScopeIssues.length} LLM issue(s) outside PR diff scope.`
-      );
+      suggestions.push(`Ignored ${outOfScopeIssues.length} LLM issue(s) outside PR diff scope.`);
     }
 
     return {

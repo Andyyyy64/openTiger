@@ -96,7 +96,7 @@ function isCommandAllowed(command: string[]): boolean {
 // Execute command inside Docker container
 export async function runInDocker(
   command: string[],
-  options: DockerExecOptions
+  options: DockerExecOptions,
 ): Promise<DockerExecResult> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const startTime = Date.now();
@@ -143,9 +143,7 @@ export async function runInDocker(
   if (opts.mounts) {
     for (const mount of opts.mounts) {
       const readonlyFlag = mount.readonly ? ":ro" : "";
-      dockerArgs.push(
-        `--volume=${mount.hostPath}:${mount.containerPath}${readonlyFlag}`
-      );
+      dockerArgs.push(`--volume=${mount.hostPath}:${mount.containerPath}${readonlyFlag}`);
     }
   }
 
@@ -210,7 +208,7 @@ export async function runInDocker(
 // OpenCode実行用のDocker設定を生成
 export function createOpenCodeDockerOptions(
   workspacePath: string,
-  env?: Record<string, string>
+  env?: Record<string, string>,
 ): DockerExecOptions {
   return {
     image: "openTiger/worker:latest",
@@ -242,7 +240,7 @@ export async function runOpenCodeInSandbox(
   workspacePath: string,
   task: string,
   instructionsPath?: string,
-  additionalEnv?: Record<string, string>
+  additionalEnv?: Record<string, string>,
 ): Promise<DockerExecResult> {
   const options = createOpenCodeDockerOptions(workspacePath, additionalEnv);
 

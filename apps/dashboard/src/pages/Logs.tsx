@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { logsApi } from '../lib/api';
+import React, { useMemo, useState, useRef, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { logsApi } from "../lib/api";
 
 const DEFAULT_CYCLE_LINES = 200;
 const DEFAULT_ALL_LIMIT = 1000;
@@ -10,7 +10,7 @@ export const LogsPage: React.FC = () => {
   const [cycleLinesInput, setCycleLinesInput] = useState(String(DEFAULT_CYCLE_LINES));
   const [allLimitInput, setAllLimitInput] = useState(String(DEFAULT_ALL_LIMIT));
   const [sinceMinutesInput, setSinceMinutesInput] = useState(String(DEFAULT_SINCE_MINUTES));
-  const [sourceFilterInput, setSourceFilterInput] = useState('');
+  const [sourceFilterInput, setSourceFilterInput] = useState("");
 
   const cycleLogRef = useRef<HTMLDivElement>(null);
   const allLogsRef = useRef<HTMLDivElement>(null);
@@ -40,7 +40,7 @@ export const LogsPage: React.FC = () => {
     isLoading: isCycleLoading,
     error: cycleError,
   } = useQuery({
-    queryKey: ['logs', 'cycle-manager', cycleLines],
+    queryKey: ["logs", "cycle-manager", cycleLines],
     queryFn: () => logsApi.cycleManager(cycleLines),
     refetchInterval: 10000,
   });
@@ -50,7 +50,7 @@ export const LogsPage: React.FC = () => {
     isLoading: isAllLoading,
     error: allError,
   } = useQuery({
-    queryKey: ['logs', 'all', allLimit, sinceMinutes ?? 'all', sourceFilter ?? ''],
+    queryKey: ["logs", "all", allLimit, sinceMinutes ?? "all", sourceFilter ?? ""],
     queryFn: () => logsApi.all({ limit: allLimit, sinceMinutes, source: sourceFilter }),
     refetchInterval: 10000,
   });
@@ -124,15 +124,21 @@ export const LogsPage: React.FC = () => {
             cycle-manager.log (tail -n {cycleLines})
           </span>
           <span className="text-[10px] text-zinc-600 font-mono">
-            {cycleLog?.updatedAt ? `UPDATED: ${new Date(cycleLog.updatedAt).toLocaleTimeString()}` : ''}
+            {cycleLog?.updatedAt
+              ? `UPDATED: ${new Date(cycleLog.updatedAt).toLocaleTimeString()}`
+              : ""}
           </span>
         </div>
         <div
           ref={cycleLogRef}
           className="h-56 overflow-y-auto bg-black p-3 font-mono text-xs whitespace-pre-wrap text-zinc-300"
         >
-          {isCycleLoading && <div className="text-zinc-500 animate-pulse">&gt; Loading cycle-manager log...</div>}
-          {!isCycleLoading && cycleError && <div className="text-red-500">&gt; Failed to read cycle-manager log</div>}
+          {isCycleLoading && (
+            <div className="text-zinc-500 animate-pulse">&gt; Loading cycle-manager log...</div>
+          )}
+          {!isCycleLoading && cycleError && (
+            <div className="text-red-500">&gt; Failed to read cycle-manager log</div>
+          )}
           {!isCycleLoading && !cycleError && cycleLog?.log}
         </div>
       </section>
@@ -144,29 +150,36 @@ export const LogsPage: React.FC = () => {
           </span>
           <span className="text-[10px] text-zinc-600 font-mono">
             {allLogs
-              ? `SOURCES: ${allLogs.sourceCount} | RETURNED: ${allLogs.returned}/${allLogs.total}${allLogs.truncated ? ' (truncated)' : ''}`
-              : ''}
+              ? `SOURCES: ${allLogs.sourceCount} | RETURNED: ${allLogs.returned}/${allLogs.total}${allLogs.truncated ? " (truncated)" : ""}`
+              : ""}
           </span>
         </div>
         <div
           ref={allLogsRef}
           className="h-[560px] overflow-y-auto bg-black p-3 font-mono text-xs text-zinc-300"
         >
-          {isAllLoading && <div className="text-zinc-500 animate-pulse">&gt; Aggregating logs...</div>}
-          {!isAllLoading && allError && <div className="text-red-500">&gt; Failed to read aggregated logs</div>}
+          {isAllLoading && (
+            <div className="text-zinc-500 animate-pulse">&gt; Aggregating logs...</div>
+          )}
+          {!isAllLoading && allError && (
+            <div className="text-red-500">&gt; Failed to read aggregated logs</div>
+          )}
           {!isAllLoading && !allError && allLogs?.entries.length === 0 && (
             <div className="text-zinc-600">&gt; No log entries found for current filter.</div>
           )}
-          {!isAllLoading && !allError && allLogs?.entries.map((entry, index) => (
-            <div key={`${entry.source}:${entry.lineNo}:${index}`} className="whitespace-pre-wrap">
-              <span className="text-zinc-500">
-                [{entry.explicitTimestamp ? entry.timestamp : `~${entry.timestamp}`}]
-              </span>{' '}
-              <span className="text-blue-300">{entry.source}:{entry.lineNo}</span>{' '}
-              <span>|</span>{' '}
-              <span>{entry.line}</span>
-            </div>
-          ))}
+          {!isAllLoading &&
+            !allError &&
+            allLogs?.entries.map((entry, index) => (
+              <div key={`${entry.source}:${entry.lineNo}:${index}`} className="whitespace-pre-wrap">
+                <span className="text-zinc-500">
+                  [{entry.explicitTimestamp ? entry.timestamp : `~${entry.timestamp}`}]
+                </span>{" "}
+                <span className="text-blue-300">
+                  {entry.source}:{entry.lineNo}
+                </span>{" "}
+                <span>|</span> <span>{entry.line}</span>
+              </div>
+            ))}
         </div>
       </section>
     </div>

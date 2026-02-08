@@ -108,9 +108,7 @@ async function resolvePackageManager(workdir: string): Promise<"pnpm" | "yarn" |
   return "npm";
 }
 
-async function readRootScripts(
-  workdir: string
-): Promise<{ hasCheck: boolean; hasDev: boolean }> {
+async function readRootScripts(workdir: string): Promise<{ hasCheck: boolean; hasDev: boolean }> {
   try {
     const raw = await readFile(join(workdir, "package.json"), "utf-8");
     const parsed = JSON.parse(raw);
@@ -123,10 +121,7 @@ async function readRootScripts(
   }
 }
 
-function buildScriptCommand(
-  manager: "pnpm" | "yarn" | "npm",
-  script: "check" | "dev"
-): string {
+function buildScriptCommand(manager: "pnpm" | "yarn" | "npm", script: "check" | "dev"): string {
   if (manager === "yarn") {
     return `yarn ${script}`;
   }
@@ -138,7 +133,7 @@ function buildScriptCommand(
 
 async function resolveDocserCommands(
   workdir: string | undefined,
-  fallback: string[]
+  fallback: string[],
 ): Promise<string[]> {
   if (!workdir) {
     return fallback;
@@ -171,10 +166,7 @@ async function createDocserTask(params: {
   diffFiles: string[];
   repoPathForScripts?: string;
 }): Promise<DocserCreationResult> {
-  const sourceTask = await db
-    .select()
-    .from(tasks)
-    .where(eq(tasks.id, params.source.taskId));
+  const sourceTask = await db.select().from(tasks).where(eq(tasks.id, params.source.taskId));
 
   const baseTask = sourceTask[0];
   if (!baseTask) {
@@ -199,13 +191,8 @@ async function createDocserTask(params: {
   }
 
   const fallbackCommands =
-    baseTask.commands && baseTask.commands.length > 0
-      ? baseTask.commands
-      : ["npm run check"];
-  const commands = await resolveDocserCommands(
-    params.repoPathForScripts,
-    fallbackCommands
-  );
+    baseTask.commands && baseTask.commands.length > 0 ? baseTask.commands : ["npm run check"];
+  const commands = await resolveDocserCommands(params.repoPathForScripts, fallbackCommands);
 
   const notes = [
     `sourceTaskId: ${params.source.taskId}`,
@@ -269,9 +256,7 @@ async function createDocserTask(params: {
   return { created: true, docserTaskId: docserTask.id };
 }
 
-export async function createDocserTaskForPR(
-  params: DocserSourcePR
-): Promise<DocserCreationResult> {
+export async function createDocserTaskForPR(params: DocserSourcePR): Promise<DocserCreationResult> {
   const diffStats = await getPRDiffStats(params.prNumber);
   const diffFiles = diffStats.files.map((file) => file.filename);
 
@@ -283,15 +268,13 @@ export async function createDocserTaskForPR(
 }
 
 export async function createDocserTaskForLocal(
-  params: DocserSourceLocal & { diffFiles?: string[] }
+  params: DocserSourceLocal & { diffFiles?: string[] },
 ): Promise<DocserCreationResult> {
   const diffFiles =
-    params.diffFiles
-    ?? (await getLocalDiffStats(
-      params.worktreePath,
-      params.baseBranch,
-      params.branchName
-    )).files.map((file) => file.filename);
+    params.diffFiles ??
+    (await getLocalDiffStats(params.worktreePath, params.baseBranch, params.branchName)).files.map(
+      (file) => file.filename,
+    );
 
   return createDocserTask({
     source: params,

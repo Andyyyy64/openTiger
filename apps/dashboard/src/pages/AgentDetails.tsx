@@ -1,7 +1,7 @@
-import React, { useRef, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { agentsApi, logsApi } from '../lib/api';
+import React, { useRef, useEffect } from "react";
+import { useParams, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { agentsApi, logsApi } from "../lib/api";
 
 const LOG_LINES = 200;
 
@@ -10,7 +10,7 @@ export const AgentDetailsPage: React.FC = () => {
   const logRef = useRef<HTMLDivElement>(null);
 
   const { data: agent, isLoading: isAgentLoading } = useQuery({
-    queryKey: ['agents', id],
+    queryKey: ["agents", id],
     queryFn: () => agentsApi.get(id!),
     enabled: !!id,
   });
@@ -20,7 +20,7 @@ export const AgentDetailsPage: React.FC = () => {
     isLoading: isLogLoading,
     error: logError,
   } = useQuery({
-    queryKey: ['logs', 'agents', id],
+    queryKey: ["logs", "agents", id],
     queryFn: () => logsApi.agent(id!, LOG_LINES),
     enabled: !!id,
     refetchInterval: 10000,
@@ -34,7 +34,11 @@ export const AgentDetailsPage: React.FC = () => {
   }, [logData]);
 
   if (isAgentLoading) {
-    return <div className="p-8 text-center text-zinc-500 font-mono animate-pulse">&gt; Establishing connection...</div>;
+    return (
+      <div className="p-8 text-center text-zinc-500 font-mono animate-pulse">
+        &gt; Establishing connection...
+      </div>
+    );
   }
 
   if (!agent) {
@@ -43,7 +47,10 @@ export const AgentDetailsPage: React.FC = () => {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6 text-term-fg">
-      <Link to="/agents" className="inline-block text-xs font-mono text-zinc-500 hover:text-term-tiger mb-2 group">
+      <Link
+        to="/agents"
+        className="inline-block text-xs font-mono text-zinc-500 hover:text-term-tiger mb-2 group"
+      >
         &lt; cd ..
       </Link>
 
@@ -55,14 +62,19 @@ export const AgentDetailsPage: React.FC = () => {
             </h1>
             <div className="flex gap-4 mt-1 text-xs font-mono text-zinc-500">
               <span>ROLE: {agent.role.toUpperCase()}</span>
-              <span>STATUS: <span className={agent.status === 'idle' ? 'text-zinc-500' : 'text-term-tiger'}>{agent.status.toUpperCase()}</span></span>
+              <span>
+                STATUS:{" "}
+                <span className={agent.status === "idle" ? "text-zinc-500" : "text-term-tiger"}>
+                  {agent.status.toUpperCase()}
+                </span>
+              </span>
             </div>
           </div>
 
           <div className="text-right text-xs font-mono text-zinc-500">
             <div>LAST_HEARTBEAT</div>
             <div className="text-term-fg">
-              {agent.lastHeartbeat ? new Date(agent.lastHeartbeat).toLocaleString() : 'NEVER'}
+              {agent.lastHeartbeat ? new Date(agent.lastHeartbeat).toLocaleString() : "NEVER"}
             </div>
           </div>
         </div>
@@ -74,7 +86,9 @@ export const AgentDetailsPage: React.FC = () => {
             Console_Output (tail -n {LOG_LINES})
           </span>
           <span className="text-[10px] text-zinc-600 font-mono">
-            {logData?.updatedAt ? `UPDATED: ${new Date(logData.updatedAt).toLocaleTimeString()}` : ''}
+            {logData?.updatedAt
+              ? `UPDATED: ${new Date(logData.updatedAt).toLocaleTimeString()}`
+              : ""}
           </span>
         </div>
 
@@ -96,4 +110,3 @@ export const AgentDetailsPage: React.FC = () => {
     </div>
   );
 };
-

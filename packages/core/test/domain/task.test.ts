@@ -168,7 +168,7 @@ describe("CreateTaskInput", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    
+
     // CreateTaskInput はこれらのフィールドを除外している
     const result = CreateTaskInput.safeParse(input);
     expect(result.success).toBe(true);

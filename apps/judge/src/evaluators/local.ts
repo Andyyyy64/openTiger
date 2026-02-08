@@ -18,7 +18,7 @@ export interface LocalDiffStats {
 export async function getLocalDiffStats(
   worktreePath: string,
   baseBranch: string,
-  headBranch: string
+  headBranch: string,
 ): Promise<LocalDiffStats> {
   return getDiffStatsBetweenRefs(worktreePath, baseBranch, headBranch);
 }
@@ -26,7 +26,7 @@ export async function getLocalDiffStats(
 export async function getLocalDiffText(
   worktreePath: string,
   baseBranch: string,
-  headBranch: string
+  headBranch: string,
 ): Promise<string> {
   const result = await getDiffBetweenRefs(worktreePath, baseBranch, headBranch);
   return result.success ? result.stdout : "";
@@ -86,16 +86,12 @@ function isLockfile(path: string): boolean {
 }
 
 function isPackageManifest(path: string): boolean {
-  return path === "package.json"
-    || path.endsWith("/package.json")
-    || path === "pnpm-workspace.yaml";
+  return (
+    path === "package.json" || path.endsWith("/package.json") || path === "pnpm-workspace.yaml"
+  );
 }
 
-function isPathAllowed(
-  path: string,
-  allowedPaths: string[],
-  forbiddenPaths: string[]
-): boolean {
+function isPathAllowed(path: string, allowedPaths: string[], forbiddenPaths: string[]): boolean {
   for (const forbidden of forbiddenPaths) {
     if (matchPath(path, forbidden)) {
       return false;
@@ -114,7 +110,7 @@ export async function evaluateLocalPolicy(
   baseBranch: string,
   headBranch: string,
   policy: Policy,
-  allowedPaths: string[] = []
+  allowedPaths: string[] = [],
 ): Promise<PolicyEvaluationResult> {
   const violations: PolicyViolation[] = [];
   const reasons: string[] = [];
@@ -122,9 +118,7 @@ export async function evaluateLocalPolicy(
 
   try {
     const diffStats = await getLocalDiffStats(worktreePath, baseBranch, headBranch);
-    const hasManifestChanges = diffStats.files.some((file) =>
-      isPackageManifest(file.filename)
-    );
+    const hasManifestChanges = diffStats.files.some((file) => isPackageManifest(file.filename));
 
     const totalChanges = diffStats.additions + diffStats.deletions;
     if (totalChanges > policy.maxLinesChanged) {

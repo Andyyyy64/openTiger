@@ -16,8 +16,7 @@ export interface PlannerConfig {
   baseBranch: string;
 }
 
-const envPath = process.env.DOTENV_CONFIG_PATH
-  ?? resolve(import.meta.dirname, "../../../.env");
+const envPath = process.env.DOTENV_CONFIG_PATH ?? resolve(import.meta.dirname, "../../../.env");
 dotenv.config({ path: envPath });
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -65,10 +64,7 @@ function resolveGitRoot(cwd: string): string | undefined {
 // デフォルト設定
 export const DEFAULT_CONFIG: PlannerConfig = {
   workdir: resolvePlannerWorkdir(),
-  instructionsPath: resolve(
-    import.meta.dirname,
-    "../instructions/planning.md"
-  ),
+  instructionsPath: resolve(import.meta.dirname, "../instructions/planning.md"),
   useLlm: parseBoolean(process.env.USE_LLM, true),
   dryRun: parseBoolean(process.env.DRY_RUN, false),
   timeoutSeconds: parseInt(process.env.PLANNER_TIMEOUT ?? "300", 10),

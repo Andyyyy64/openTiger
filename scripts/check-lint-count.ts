@@ -75,17 +75,12 @@ function isExcludedDir(dirPath: string, projectRoot: string): boolean {
     }
 
     // 相対パスが除外パスで始まる場合（サブディレクトリも除外）
-    if (
-      relativePath.startsWith(excluded + path.sep) ||
-      relativePath.startsWith(excluded + "/")
-    ) {
+    if (relativePath.startsWith(excluded + path.sep) || relativePath.startsWith(excluded + "/")) {
       return true;
     }
 
     // フルパスに除外パスが含まれる場合
-    return (
-      dirPath.includes(`/${excluded}/`) || dirPath.includes(`\\${excluded}\\`)
-    );
+    return dirPath.includes(`/${excluded}/`) || dirPath.includes(`\\${excluded}\\`);
   });
 }
 
@@ -113,15 +108,10 @@ function isIgnoredPath(
     return false;
   }
 
-  const relativePath = path
-    .relative(projectRoot, absolutePath)
-    .split(path.sep)
-    .join("/");
+  const relativePath = path.relative(projectRoot, absolutePath).split(path.sep).join("/");
 
   const haystack = relativePath.toLowerCase();
-  return ignorePathSubstrings.some((needle) =>
-    haystack.includes(needle.toLowerCase()),
-  );
+  return ignorePathSubstrings.some((needle) => haystack.includes(needle.toLowerCase()));
 }
 
 /**
@@ -149,9 +139,7 @@ function scanDirectory(
 
         // 除外ディレクトリをスキップ
         if (!isExcludedDir(fullPath, projectRoot)) {
-          results.push(
-            ...scanDirectory(fullPath, ignorePathSubstrings, projectRoot),
-          );
+          results.push(...scanDirectory(fullPath, ignorePathSubstrings, projectRoot));
         }
       } else if (stat.isFile() && isTargetFile(fullPath)) {
         // 指定文字列を含むファイルはスキップする
@@ -279,16 +267,10 @@ function main() {
   const cliOptions = parseCliOptions(process.argv.slice(2));
   const lineThreshold = getLineThreshold(cliOptions.lineThreshold);
 
-  console.log(
-    `🔍 Checking file line counts (threshold: ${lineThreshold} lines)...\n`,
-  );
+  console.log(`🔍 Checking file line counts (threshold: ${lineThreshold} lines)...\n`);
 
   const projectRoot = process.cwd();
-  const allFiles = scanDirectory(
-    projectRoot,
-    cliOptions.ignorePathSubstrings,
-    projectRoot,
-  );
+  const allFiles = scanDirectory(projectRoot, cliOptions.ignorePathSubstrings, projectRoot);
 
   // 閾値以上のファイルをフィルタリング
   const largeFiles = allFiles.filter((file) => file.lineCount >= lineThreshold);
@@ -309,17 +291,13 @@ function main() {
 
   const otherFiles = largeFiles.filter((file) => {
     const relativePath = path.relative(projectRoot, file.filePath);
-    return (
-      !relativePath.startsWith("app/") && !relativePath.startsWith("server/")
-    );
+    return !relativePath.startsWith("app/") && !relativePath.startsWith("server/");
   });
 
   if (largeFiles.length === 0) {
     console.log(`✅ All files are under ${lineThreshold} lines!`);
   } else {
-    console.log(
-      `⚠️  Found ${largeFiles.length} file(s) with ${lineThreshold}+ lines:\n`,
-    );
+    console.log(`⚠️  Found ${largeFiles.length} file(s) with ${lineThreshold}+ lines:\n`);
 
     // フロントエンドファイルの表示
     if (frontendFiles.length > 0) {
@@ -370,10 +348,7 @@ function main() {
   // カテゴリ別の統計
   if (largeFiles.length > 0) {
     if (frontendFiles.length > 0) {
-      const frontendTotalLines = frontendFiles.reduce(
-        (sum, file) => sum + file.lineCount,
-        0,
-      );
+      const frontendTotalLines = frontendFiles.reduce((sum, file) => sum + file.lineCount, 0);
       const frontendAvg = Math.round(frontendTotalLines / frontendFiles.length);
       console.log(
         `   🌐 Frontend - Large files: ${frontendFiles.length}, Avg lines: ${frontendAvg}`,
@@ -381,25 +356,15 @@ function main() {
     }
 
     if (serverFiles.length > 0) {
-      const serverTotalLines = serverFiles.reduce(
-        (sum, file) => sum + file.lineCount,
-        0,
-      );
+      const serverTotalLines = serverFiles.reduce((sum, file) => sum + file.lineCount, 0);
       const serverAvg = Math.round(serverTotalLines / serverFiles.length);
-      console.log(
-        `   🖥️  Server - Large files: ${serverFiles.length}, Avg lines: ${serverAvg}`,
-      );
+      console.log(`   🖥️  Server - Large files: ${serverFiles.length}, Avg lines: ${serverAvg}`);
     }
 
     if (otherFiles.length > 0) {
-      const otherTotalLines = otherFiles.reduce(
-        (sum, file) => sum + file.lineCount,
-        0,
-      );
+      const otherTotalLines = otherFiles.reduce((sum, file) => sum + file.lineCount, 0);
       const otherAvg = Math.round(otherTotalLines / otherFiles.length);
-      console.log(
-        `   📁 Other - Large files: ${otherFiles.length}, Avg lines: ${otherAvg}`,
-      );
+      console.log(`   📁 Other - Large files: ${otherFiles.length}, Avg lines: ${otherAvg}`);
     }
   }
 }

@@ -106,7 +106,7 @@ function parseRiskTable(content: string): RiskItem[] {
     const riskCapture = match?.[1];
     const impactCapture = match?.[2];
     const mitigationCapture = match?.[3];
-    
+
     if (riskCapture && impactCapture && mitigationCapture) {
       const risk = riskCapture.trim();
       const impactRaw = impactCapture.toLowerCase();
@@ -118,12 +118,12 @@ function parseRiskTable(content: string): RiskItem[] {
       }
 
       const impactMap: Record<string, "high" | "medium" | "low"> = {
-        "高": "high",
-        "中": "medium",
-        "低": "low",
-        "high": "high",
-        "medium": "medium",
-        "low": "low",
+        高: "high",
+        中: "medium",
+        低: "low",
+        high: "high",
+        medium: "medium",
+        low: "low",
       };
 
       risks.push({

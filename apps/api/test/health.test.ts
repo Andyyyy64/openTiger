@@ -10,7 +10,7 @@ describe("healthRoute", () => {
     const response = await app.request("/health");
     expect(response.status).toBe(200);
 
-    const payload = await response.json() as {
+    const payload = (await response.json()) as {
       status: string;
       timestamp: string;
     };

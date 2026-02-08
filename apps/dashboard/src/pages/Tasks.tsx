@@ -1,13 +1,9 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { tasksApi } from '../lib/api';
-import type { TaskView } from '../lib/api';
-import {
-  formatTaskRetryStatus,
-  getTaskRiskColor,
-  getTaskStatusColor,
-} from '../ui/status';
+import React from "react";
+import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { tasksApi } from "../lib/api";
+import type { TaskView } from "../lib/api";
+import { formatTaskRetryStatus, getTaskRiskColor, getTaskStatusColor } from "../ui/status";
 
 export const TasksPage: React.FC = () => {
   const [now, setNow] = React.useState(Date.now());
@@ -17,8 +13,12 @@ export const TasksPage: React.FC = () => {
     return () => window.clearInterval(timer);
   }, []);
 
-  const { data: tasks, isLoading, error } = useQuery({
-    queryKey: ['tasks'],
+  const {
+    data: tasks,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["tasks"],
     queryFn: () => tasksApi.list(),
   });
 
@@ -28,7 +28,10 @@ export const TasksPage: React.FC = () => {
         <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
           &gt; Task_Scheduler
         </h1>
-        <Link to="/tasks/new" className="border border-term-tiger text-term-tiger px-4 py-2 text-sm uppercase hover:bg-term-tiger hover:text-black transition-colors">
+        <Link
+          to="/tasks/new"
+          className="border border-term-tiger text-term-tiger px-4 py-2 text-sm uppercase hover:bg-term-tiger hover:text-black transition-colors"
+        >
           [+ New Task]
         </Link>
       </div>
@@ -50,21 +53,30 @@ export const TasksPage: React.FC = () => {
             <tbody className="font-pixel text-sm divide-y divide-term-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-zinc-500 animate-pulse">&gt; Loading tasks...</td>
+                  <td colSpan={7} className="px-4 py-12 text-center text-zinc-500 animate-pulse">
+                    &gt; Loading tasks...
+                  </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-red-500">&gt; ERROR LOADING TASKS</td>
+                  <td colSpan={7} className="px-4 py-12 text-center text-red-500">
+                    &gt; ERROR LOADING TASKS
+                  </td>
                 </tr>
               ) : tasks?.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-zinc-500">&gt; No tasks found</td>
+                  <td colSpan={7} className="px-4 py-12 text-center text-zinc-500">
+                    &gt; No tasks found
+                  </td>
                 </tr>
               ) : (
                 tasks?.map((task: TaskView) => (
                   <tr key={task.id} className="hover:bg-term-tiger/5 transition-colors group">
                     <td className="px-4 py-2 align-top">
-                      <Link to={`/tasks/${task.id}`} className="font-bold text-term-fg hover:text-term-tiger block">
+                      <Link
+                        to={`/tasks/${task.id}`}
+                        className="font-bold text-term-fg hover:text-term-tiger block"
+                      >
                         {task.title}
                       </Link>
                       <div className="text-xs text-zinc-600 truncate max-w-xs">{task.goal}</div>

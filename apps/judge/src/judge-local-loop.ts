@@ -8,10 +8,7 @@ import { safeSetJudgeAgentState } from "./judge-agent";
 import { recordLocalReview } from "./judge-events";
 import { judgeSingleWorktree, buildJudgeFailureMessage } from "./judge-evaluate";
 import { mergeLocalBranch } from "./judge-local-merge";
-import {
-  requeueTaskAfterJudge,
-  claimRunForJudgement,
-} from "./judge-retry";
+import { requeueTaskAfterJudge, claimRunForJudgement } from "./judge-retry";
 
 export async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log("=".repeat(60));
@@ -44,10 +41,7 @@ export async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
               }
             }
 
-            const { result, summary, diffFiles } = await judgeSingleWorktree(
-              target,
-              config
-            );
+            const { result, summary, diffFiles } = await judgeSingleWorktree(target, config);
             let mergeResult: { success: boolean; error?: string } | undefined;
 
             if (!config.dryRun) {
@@ -70,15 +64,12 @@ export async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
                 });
                 nextStatus = mergeResult.success ? "done" : "queued";
                 if (!mergeResult.success) {
-                  console.error(
-                    "[Judge] Failed to merge local branch:",
-                    mergeResult.error
-                  );
+                  console.error("[Judge] Failed to merge local branch:", mergeResult.error);
                   requeueReason = buildJudgeFailureMessage(result, mergeResult.error);
                 }
                 // Log local merge success/failure to facilitate tracking of evaluation results
                 console.log(
-                  `[Judge] Local merge result: ${mergeResult.success ? "success" : "failed"}`
+                  `[Judge] Local merge result: ${mergeResult.success ? "success" : "failed"}`,
                 );
 
                 if (mergeResult.success) {
@@ -141,7 +132,7 @@ export async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
               summary,
               config.agentId,
               config.dryRun,
-              mergeResult
+              mergeResult,
             );
           } catch (error) {
             console.error(`  Error processing worktree ${target.worktreePath}:`, error);

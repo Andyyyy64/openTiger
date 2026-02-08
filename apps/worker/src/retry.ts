@@ -64,18 +64,12 @@ export function isRetryableError(error: Error): boolean {
 // テスト失敗はリトライ可能（自己修正のため）
 export function isTestFailureRetryable(error: Error): boolean {
   const message = error.message;
-  return TEST_FAILURE_RETRYABLE_PATTERNS.some((pattern) =>
-    pattern.test(message)
-  );
+  return TEST_FAILURE_RETRYABLE_PATTERNS.some((pattern) => pattern.test(message));
 }
 
 // 指数バックオフで待機時間を計算
-function calculateDelay(
-  attempt: number,
-  config: RetryConfig
-): number {
-  const delay =
-    config.initialDelayMs * Math.pow(config.backoffMultiplier, attempt - 1);
+function calculateDelay(attempt: number, config: RetryConfig): number {
+  const delay = config.initialDelayMs * Math.pow(config.backoffMultiplier, attempt - 1);
   // ジッターを追加（±10%）
   const jitter = delay * 0.1 * (Math.random() * 2 - 1);
   return Math.min(delay + jitter, config.maxDelayMs);
@@ -90,7 +84,7 @@ function sleep(ms: number): Promise<void> {
 export async function withRetry<T>(
   fn: () => Promise<T>,
   config: Partial<RetryConfig> = {},
-  logger?: Logger
+  logger?: Logger,
 ): Promise<RetryResult<T>> {
   const opts: RetryConfig = { ...DEFAULT_RETRY_CONFIG, ...config };
   const startTime = Date.now();
@@ -139,18 +133,14 @@ export async function withRetry<T>(
 // OpenCodeに前回の失敗を伝えて修正を依頼
 export interface SelfHealingConfig extends RetryConfig {
   // 失敗情報を含めたプロンプトを生成する関数
-  createRetryPrompt: (
-    originalTask: string,
-    error: string,
-    attempt: number
-  ) => string;
+  createRetryPrompt: (originalTask: string, error: string, attempt: number) => string;
 }
 
 // 自己修正用のプロンプトテンプレート
 export function createSelfHealingPrompt(
   originalTask: string,
   error: string,
-  attempt: number
+  attempt: number,
 ): string {
   return `
 ## 前回の実行で失敗しました（試行 ${attempt}回目）
@@ -181,7 +171,6 @@ export const DEFAULT_SELF_HEALING_CONFIG: SelfHealingConfig = {
   ...DEFAULT_RETRY_CONFIG,
   maxAttempts: 3,
   initialDelayMs: 10000,
-  isRetryable: (error) =>
-    isRetryableError(error) || isTestFailureRetryable(error),
+  isRetryable: (error) => isRetryableError(error) || isTestFailureRetryable(error),
   createRetryPrompt: createSelfHealingPrompt,
 };

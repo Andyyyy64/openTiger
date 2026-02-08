@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 // PlannerのLLMはプロンプト内の情報だけで判断できるためツールを無効化する
 export const PLANNER_OPENCODE_CONFIG_PATH = resolve(
   import.meta.dirname,
-  "../opencode.planner.json"
+  "../opencode.planner.json",
 );
 
 function resolvePlannerQuotaWaits(): string {
@@ -17,7 +17,7 @@ function resolvePlannerQuotaWaits(): string {
 }
 
 export function getPlannerOpenCodeEnv(
-  extraEnv: Record<string, string> = {}
+  extraEnv: Record<string, string> = {},
 ): Record<string, string> {
   const env: Record<string, string> = {
     OPENCODE_CONFIG: PLANNER_OPENCODE_CONFIG_PATH,

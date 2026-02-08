@@ -3,7 +3,7 @@ import { getRepoMode } from "./repo-mode";
 
 export function applyRepoModePolicyOverrides(
   policy: Policy,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
 ): Policy {
   const repoMode = getRepoMode(env);
 

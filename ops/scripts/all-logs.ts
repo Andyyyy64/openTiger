@@ -79,9 +79,7 @@ async function collectLogFiles(rootDir: string): Promise<string[]> {
 }
 
 function extractTimestampMs(line: string): number | undefined {
-  const iso = line.match(
-    /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\b/
-  );
+  const iso = line.match(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\b/);
   if (iso?.[0]) {
     const ms = Date.parse(iso[0]);
     if (Number.isFinite(ms)) {
@@ -89,9 +87,7 @@ function extractTimestampMs(line: string): number | undefined {
     }
   }
 
-  const slash = line.match(
-    /\b(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})\b/
-  );
+  const slash = line.match(/\b(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})\b/);
   if (slash) {
     const [, y, m, d, hh, mm, ss] = slash;
     const ms = new Date(
@@ -100,7 +96,7 @@ function extractTimestampMs(line: string): number | undefined {
       Number(d),
       Number(hh),
       Number(mm),
-      Number(ss)
+      Number(ss),
     ).getTime();
     if (Number.isFinite(ms)) {
       return ms;
@@ -130,8 +126,7 @@ async function buildEntries(files: string[]): Promise<LogEntry[]> {
       }
 
       const parsed = extractTimestampMs(line);
-      const timestampMs =
-        parsed ?? fileStat.mtimeMs + index / 1_000_000;
+      const timestampMs = parsed ?? fileStat.mtimeMs + index / 1_000_000;
 
       allEntries.push({
         timestampMs,

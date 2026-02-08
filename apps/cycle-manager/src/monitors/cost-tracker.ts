@@ -29,10 +29,7 @@ interface CostSummary {
 }
 
 // 期間別コスト集計
-export async function getCostByPeriod(
-  startTime: Date,
-  endTime: Date
-): Promise<CostSummary> {
+export async function getCostByPeriod(startTime: Date, endTime: Date): Promise<CostSummary> {
   const result = await db
     .select({
       status: runs.status,
@@ -60,8 +57,7 @@ export async function getCostByPeriod(
   }
 
   const averageTokensPerRun = runsCount > 0 ? totalTokens / runsCount : 0;
-  const costPerSuccessfulTask =
-    successfulRuns > 0 ? totalTokens / successfulRuns : 0;
+  const costPerSuccessfulTask = successfulRuns > 0 ? totalTokens / successfulRuns : 0;
 
   return {
     period: `${startTime.toISOString()} - ${endTime.toISOString()}`,
@@ -93,9 +89,7 @@ export async function getLastHourCost(): Promise<CostSummary> {
 }
 
 // コスト制限チェック
-export async function checkCostLimits(
-  config: CostConfig = defaultCostConfig
-): Promise<{
+export async function checkCostLimits(config: CostConfig = defaultCostConfig): Promise<{
   isWithinLimits: boolean;
   dailyUsage: number;
   dailyLimit: number;
@@ -115,31 +109,23 @@ export async function checkCostLimits(
   const dailyUsageRatio = dailyLimit > 0 ? todayCost.totalTokens / dailyLimit : 0;
   if (dailyLimit > 0) {
     if (dailyUsageRatio >= 1) {
-      warnings.push(
-        `Daily token limit exceeded: ${todayCost.totalTokens}/${dailyLimit}`
-      );
+      warnings.push(`Daily token limit exceeded: ${todayCost.totalTokens}/${dailyLimit}`);
     } else if (dailyUsageRatio >= config.warningThreshold) {
-      warnings.push(
-        `Daily token usage at ${(dailyUsageRatio * 100).toFixed(1)}%`
-      );
+      warnings.push(`Daily token usage at ${(dailyUsageRatio * 100).toFixed(1)}%`);
     }
   }
 
   const hourlyUsageRatio = hourlyLimit > 0 ? hourCost.totalTokens / hourlyLimit : 0;
   if (hourlyLimit > 0) {
     if (hourlyUsageRatio >= 1) {
-      warnings.push(
-        `Hourly token limit exceeded: ${hourCost.totalTokens}/${hourlyLimit}`
-      );
+      warnings.push(`Hourly token limit exceeded: ${hourCost.totalTokens}/${hourlyLimit}`);
     } else if (hourlyUsageRatio >= config.warningThreshold) {
-      warnings.push(
-        `Hourly token usage at ${(hourlyUsageRatio * 100).toFixed(1)}%`
-      );
+      warnings.push(`Hourly token usage at ${(hourlyUsageRatio * 100).toFixed(1)}%`);
     }
   }
 
-  const isWithinLimits = (dailyLimit <= 0 || dailyUsageRatio < 1)
-    && (hourlyLimit <= 0 || hourlyUsageRatio < 1);
+  const isWithinLimits =
+    (dailyLimit <= 0 || dailyUsageRatio < 1) && (hourlyLimit <= 0 || hourlyUsageRatio < 1);
 
   return {
     isWithinLimits,
@@ -152,9 +138,7 @@ export async function checkCostLimits(
 }
 
 // コスト効率の分析
-export async function analyzeCostEfficiency(
-  days: number = 7
-): Promise<{
+export async function analyzeCostEfficiency(days: number = 7): Promise<{
   tokensPerSuccessfulTask: number;
   successRate: number;
   trend: "improving" | "stable" | "degrading";
@@ -172,8 +156,7 @@ export async function analyzeCostEfficiency(
   const totalSuccessful = firstHalf.successfulRuns + secondHalf.successfulRuns;
   const totalRuns = firstHalf.runsCount + secondHalf.runsCount;
 
-  const tokensPerSuccessfulTask =
-    totalSuccessful > 0 ? totalTokens / totalSuccessful : 0;
+  const tokensPerSuccessfulTask = totalSuccessful > 0 ? totalTokens / totalSuccessful : 0;
   const successRate = totalRuns > 0 ? totalSuccessful / totalRuns : 0;
 
   // トレンド判定
@@ -212,7 +195,7 @@ export async function analyzeCostEfficiency(
 // コストアラートを記録
 export async function recordCostAlert(
   alertType: string,
-  details: Record<string, unknown>
+  details: Record<string, unknown>,
 ): Promise<void> {
   await recordEvent({
     type: `cost.${alertType}`,

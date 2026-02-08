@@ -47,16 +47,13 @@ async function markAgentIdleIfNoActiveWork(agentId: string): Promise<void> {
 export async function acquireLease(
   taskId: string,
   agentId: string,
-  durationMinutes: number = DEFAULT_LEASE_DURATION_MINUTES
+  durationMinutes: number = DEFAULT_LEASE_DURATION_MINUTES,
 ): Promise<LeaseResult> {
   const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000);
 
   try {
     // 既存のリースがないか確認
-    const existingLease = await db
-      .select()
-      .from(leases)
-      .where(eq(leases.taskId, taskId));
+    const existingLease = await db.select().from(leases).where(eq(leases.taskId, taskId));
 
     if (existingLease.length > 0) {
       return {
@@ -113,7 +110,7 @@ export async function releaseLease(taskId: string): Promise<boolean> {
 // リースを延長
 export async function extendLease(
   taskId: string,
-  additionalMinutes: number = DEFAULT_LEASE_DURATION_MINUTES
+  additionalMinutes: number = DEFAULT_LEASE_DURATION_MINUTES,
 ): Promise<boolean> {
   const newExpiresAt = new Date(Date.now() + additionalMinutes * 60 * 1000);
 
@@ -131,10 +128,7 @@ export async function cleanupExpiredLeases(): Promise<number> {
   const now = new Date();
 
   // 期限切れリースを取得
-  const expiredLeases = await db
-    .select()
-    .from(leases)
-    .where(lt(leases.expiresAt, now));
+  const expiredLeases = await db.select().from(leases).where(lt(leases.expiresAt, now));
 
   if (expiredLeases.length === 0) {
     return 0;
@@ -144,11 +138,11 @@ export async function cleanupExpiredLeases(): Promise<number> {
   for (const lease of expiredLeases) {
     // タスクの情報を取得
     const [task] = await db.select().from(tasks).where(eq(tasks.id, lease.taskId));
-    
+
     // 失敗回数をカウント（context.retryCount などに持たせることも検討できるが、
     // 現状はシンプルに status を queued に戻す。
     // ただし、何度も失敗している場合は blocked にするなどのロジックをここに追加可能）
-    
+
     await db
       .update(tasks)
       .set({
@@ -213,9 +207,7 @@ export async function cleanupDanglingLeases(): Promise<number> {
 
 // running のまま固着したタスクを回復する
 // 例: run は failed/cancelled なのに task.status=running, lease だけ残っているケース
-export async function recoverOrphanedRunningTasks(
-  graceMs: number = 120000
-): Promise<number> {
+export async function recoverOrphanedRunningTasks(graceMs: number = 120000): Promise<number> {
   const threshold = new Date(Date.now() - graceMs);
 
   const candidates = await db

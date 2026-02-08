@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  ArtifactSchema,
-  ArtifactType,
-  CreateArtifactInput,
-} from "../../src/domain/artifact";
+import { ArtifactSchema, ArtifactType, CreateArtifactInput } from "../../src/domain/artifact";
 
 describe("ArtifactType", () => {
   it("すべての有効なタイプを受け入れる", () => {

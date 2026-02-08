@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --font-mono: 'Fira Code', monospace;
-  --font-pixel: 'Geist Pixel', monospace;
+  --font-mono: "Fira Code", monospace;
+  --font-pixel: "Geist Pixel", monospace;
 
   --color-term-bg: #050505;
   --color-term-fg: #e5e5e5;
@@ -12,8 +12,8 @@
 }
 
 @font-face {
-  font-family: 'Geist Pixel';
-  src: url('/src/assets/fonts/GeistPixel-Square.woff2') format('woff2');
+  font-family: "Geist Pixel";
+  src: url("/src/assets/fonts/GeistPixel-Square.woff2") format("woff2");
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -71,7 +71,6 @@ body {
 }
 
 @keyframes cursor-blink {
-
   0%,
   100% {
     opacity: 1;
@@ -83,7 +82,7 @@ body {
 }
 
 .cursor-blink::after {
-  content: '▋';
+  content: "▋";
   margin-left: 2px;
   animation: cursor-blink 1s step-end infinite;
   color: var(--color-term-tiger);

@@ -55,43 +55,42 @@ export function createTaskQueue(queueName = TASK_QUEUE_NAME): Queue<TaskJobData>
 // タスクワーカーを作成
 export function createTaskWorker(
   processor: (job: Job<TaskJobData>) => Promise<void>,
-  queueName = TASK_QUEUE_NAME
+  queueName = TASK_QUEUE_NAME,
 ): Worker<TaskJobData> {
   // lockDuration は短めにして、プロセスクラッシュ時のactiveジョブ停滞を早く自己回復させる。
   // 正常実行中はBullMQがロック更新するため、長時間タスクでも継続できる。
   const configuredLockDurationMs = Number.parseInt(
     process.env.TASK_QUEUE_LOCK_DURATION_MS ?? "120000",
-    10
+    10,
   );
-  const lockDurationMs = Number.isFinite(configuredLockDurationMs)
-    && configuredLockDurationMs >= 30000
-    ? configuredLockDurationMs
-    : 120000;
+  const lockDurationMs =
+    Number.isFinite(configuredLockDurationMs) && configuredLockDurationMs >= 30000
+      ? configuredLockDurationMs
+      : 120000;
   const configuredStalledIntervalMs = Number.parseInt(
     process.env.TASK_QUEUE_STALLED_INTERVAL_MS ?? "30000",
-    10
+    10,
   );
-  const stalledIntervalMs = Number.isFinite(configuredStalledIntervalMs)
-    && configuredStalledIntervalMs >= 5000
-    ? configuredStalledIntervalMs
-    : 30000;
+  const stalledIntervalMs =
+    Number.isFinite(configuredStalledIntervalMs) && configuredStalledIntervalMs >= 5000
+      ? configuredStalledIntervalMs
+      : 30000;
   const configuredMaxStalledCount = Number.parseInt(
     process.env.TASK_QUEUE_MAX_STALLED_COUNT ?? "1",
-    10
+    10,
   );
-  const maxStalledCount = Number.isFinite(configuredMaxStalledCount)
-    && configuredMaxStalledCount >= 0
-    ? configuredMaxStalledCount
-    : 1;
+  const maxStalledCount =
+    Number.isFinite(configuredMaxStalledCount) && configuredMaxStalledCount >= 0
+      ? configuredMaxStalledCount
+      : 1;
   // 常駐エージェントは単一ジョブ実行を既定にする（1 agent = 1 task）
   const configuredConcurrency = Number.parseInt(
     process.env.TASK_QUEUE_WORKER_CONCURRENCY ?? "1",
-    10
+    10,
   );
-  const workerConcurrency = Number.isFinite(configuredConcurrency) && configuredConcurrency > 0
-    ? configuredConcurrency
-    : 1;
-  
+  const workerConcurrency =
+    Number.isFinite(configuredConcurrency) && configuredConcurrency > 0 ? configuredConcurrency : 1;
+
   return new Worker(queueName, processor, {
     connection: getConnectionConfig(),
     concurrency: workerConcurrency,
@@ -104,7 +103,7 @@ export function createTaskWorker(
 // タスクをキューに追加
 export async function enqueueTask(
   queue: Queue<TaskJobData>,
-  data: TaskJobData
+  data: TaskJobData,
 ): Promise<Job<TaskJobData>> {
   const jobName = `task:${data.taskId}`;
   // taskId 固定の jobId を使うと、failed/completed ジョブが残っている間に
@@ -117,7 +116,7 @@ export async function enqueueTask(
 // ジョブ状態を取得
 export async function getJobState(
   queue: Queue<TaskJobData>,
-  jobId: string
+  jobId: string,
 ): Promise<string | null> {
   const job = await queue.getJob(jobId);
   if (!job) return null;
@@ -157,16 +156,14 @@ export function createDeadLetterQueue(): Queue<TaskJobData> {
 export async function moveToDeadLetter(
   job: Job<TaskJobData>,
   deadLetterQueue: Queue<TaskJobData>,
-  reason: string
+  reason: string,
 ): Promise<void> {
   await deadLetterQueue.add(`dead:${job.data.taskId}`, job.data, {
     priority: 0,
     attempts: 0,
   });
 
-  console.log(
-    `[Queue] Moved job ${job.id} to dead letter queue: ${reason}`
-  );
+  console.log(`[Queue] Moved job ${job.id} to dead letter queue: ${reason}`);
 }
 
 // 失敗ジョブを再キューイング
@@ -176,7 +173,7 @@ export async function requeueFailedJob(
   options?: {
     priority?: number;
     delay?: number;
-  }
+  },
 ): Promise<Job<TaskJobData> | null> {
   const job = await queue.getJob(jobId);
   if (!job) {
@@ -192,17 +189,13 @@ export async function requeueFailedJob(
   // 古いジョブを削除
   await job.remove();
 
-  console.log(
-    `[Queue] Requeued failed job ${jobId} as ${newJob.id}`
-  );
+  console.log(`[Queue] Requeued failed job ${jobId} as ${newJob.id}`);
 
   return newJob;
 }
 
 // 失敗ジョブを一括で再キューイング
-export async function requeueAllFailedJobs(
-  queue: Queue<TaskJobData>
-): Promise<number> {
+export async function requeueAllFailedJobs(queue: Queue<TaskJobData>): Promise<number> {
   const failedJobs = await queue.getFailed();
   let requeuedCount = 0;
 
@@ -229,7 +222,7 @@ export interface FailedJobHandler {
     jobId: string,
     failedReason: string,
     attemptsMade: number,
-    maxAttempts: number
+    maxAttempts: number,
   ) => Promise<void> | void;
   onDeadLetter: (jobId: string, data: TaskJobData) => Promise<void> | void;
 }
@@ -239,7 +232,7 @@ export function startFailedJobMonitor(
   queueEvents: QueueEvents,
   handler: FailedJobHandler,
   queue: Queue<TaskJobData>,
-  deadLetterQueue?: Queue<TaskJobData>
+  deadLetterQueue?: Queue<TaskJobData>,
 ): void {
   queueEvents.on("failed", async ({ jobId, failedReason }) => {
     const job = await queue.getJob(jobId);
@@ -263,7 +256,7 @@ export function startFailedJobMonitor(
 // 優先度でジョブを並べ替え
 export async function reprioritizeJobs(
   queue: Queue<TaskJobData>,
-  priorityFn: (data: TaskJobData) => number
+  priorityFn: (data: TaskJobData) => number,
 ): Promise<number> {
   const waitingJobs = await queue.getWaiting();
   let updatedCount = 0;
@@ -273,12 +266,16 @@ export async function reprioritizeJobs(
     if (newPriority !== job.data.priority) {
       // ジョブを削除して新しい優先度で再追加
       await job.remove();
-      await queue.add(job.name ?? `task:${job.data.taskId}`, {
-        ...job.data,
-        priority: newPriority,
-      }, {
-        priority: newPriority,
-      });
+      await queue.add(
+        job.name ?? `task:${job.data.taskId}`,
+        {
+          ...job.data,
+          priority: newPriority,
+        },
+        {
+          priority: newPriority,
+        },
+      );
       updatedCount++;
     }
   }
@@ -289,7 +286,7 @@ export async function reprioritizeJobs(
 // 古い失敗ジョブを削除
 export async function cleanOldFailedJobs(
   queue: Queue<TaskJobData>,
-  maxAgeMs: number = 7 * 24 * 60 * 60 * 1000 // 7日
+  maxAgeMs: number = 7 * 24 * 60 * 60 * 1000, // 7日
 ): Promise<number> {
   const failedJobs = await queue.getFailed();
   const now = Date.now();

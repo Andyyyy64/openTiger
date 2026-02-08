@@ -20,15 +20,15 @@ export interface AvailableTask {
 }
 
 const DEFAULT_RETRY_DELAY_MS = 5 * 60 * 1000;
-const BLOCK_ON_AWAITING_JUDGE_BACKLOG =
-  process.env.DISPATCH_BLOCK_ON_AWAITING_JUDGE === "true";
+const BLOCK_ON_AWAITING_JUDGE_BACKLOG = process.env.DISPATCH_BLOCK_ON_AWAITING_JUDGE === "true";
 let lastObservedJudgeBacklog = -1;
 let lastObservedPendingJudgeRun = false;
 let lastObservedJudgeBacklogBlocked = false;
 
 function isQuotaFailureMessage(message: string): boolean {
-  return /quota exceeded|resource has been exhausted|resource_exhausted|quota limit reached|generate_requests_per_model_per_day|generate_content_paid_tier_input_token_count|retryinfo/i
-    .test(message);
+  return /quota exceeded|resource has been exhausted|resource_exhausted|quota limit reached|generate_requests_per_model_per_day|generate_content_paid_tier_input_token_count|retryinfo/i.test(
+    message,
+  );
 }
 
 function getRetryDelayMs(): number {
@@ -62,8 +62,8 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
         isNull(runs.judgedAt),
         inArray(artifacts.type, ["pr", "worktree"]),
         eq(tasks.status, "blocked"),
-        eq(tasks.blockReason, "awaiting_judge")
-      )
+        eq(tasks.blockReason, "awaiting_judge"),
+      ),
     )
     .limit(1);
   const judgeBacklogCount = awaitingJudgeTasks?.count ?? 0;
@@ -71,11 +71,11 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
 
   if (judgeBacklogCount > 0 || hasPendingJudgeRun) {
     if (
-      lastObservedJudgeBacklog !== judgeBacklogCount
-      || lastObservedPendingJudgeRun !== hasPendingJudgeRun
+      lastObservedJudgeBacklog !== judgeBacklogCount ||
+      lastObservedPendingJudgeRun !== hasPendingJudgeRun
     ) {
       console.log(
-        `[Priority] Awaiting_judge backlog observed: backlog=${judgeBacklogCount}, pending_judge_run=${hasPendingJudgeRun}, hard_block=${BLOCK_ON_AWAITING_JUDGE_BACKLOG}`
+        `[Priority] Awaiting_judge backlog observed: backlog=${judgeBacklogCount}, pending_judge_run=${hasPendingJudgeRun}, hard_block=${BLOCK_ON_AWAITING_JUDGE_BACKLOG}`,
       );
     }
     lastObservedJudgeBacklog = judgeBacklogCount;
@@ -89,19 +89,13 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     lastObservedJudgeBacklog = 0;
     lastObservedPendingJudgeRun = false;
   }
-  if (
-    lastObservedJudgeBacklogBlocked
-    && !(judgeBacklogCount > 0 || hasPendingJudgeRun)
-  ) {
+  if (lastObservedJudgeBacklogBlocked && !(judgeBacklogCount > 0 || hasPendingJudgeRun)) {
     console.log("[Priority] Dispatch resumed after awaiting_judge backlog gate");
     lastObservedJudgeBacklogBlocked = false;
   }
 
   // queuedステータスのタスクを取得
-  const queuedTasks = await db
-    .select()
-    .from(tasks)
-    .where(eq(tasks.status, "queued"));
+  const queuedTasks = await db.select().from(tasks).where(eq(tasks.status, "queued"));
 
   if (queuedTasks.length === 0) {
     console.log("[Priority] No queued tasks found");
@@ -109,9 +103,10 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
   }
 
   const misqueuedPrReviewTaskIds = queuedTasks
-    .filter((task) =>
-      task.goal.startsWith("Review and process open PR #")
-      || task.title.includes("[PR] Review #")
+    .filter(
+      (task) =>
+        task.goal.startsWith("Review and process open PR #") ||
+        task.title.includes("[PR] Review #"),
     )
     .map((task) => task.id);
   if (misqueuedPrReviewTaskIds.length > 0) {
@@ -125,12 +120,12 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
       })
       .where(inArray(tasks.id, misqueuedPrReviewTaskIds));
     console.log(
-      `[Priority] Moved ${misqueuedPrReviewTaskIds.length} PR-review task(s) back to blocked(awaiting_judge)`
+      `[Priority] Moved ${misqueuedPrReviewTaskIds.length} PR-review task(s) back to blocked(awaiting_judge)`,
     );
   }
 
   const dispatchableQueuedTasks = queuedTasks.filter(
-    (task) => !misqueuedPrReviewTaskIds.includes(task.id)
+    (task) => !misqueuedPrReviewTaskIds.includes(task.id),
   );
 
   if (dispatchableQueuedTasks.length === 0) {
@@ -158,8 +153,8 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
         and(
           inArray(runs.taskId, queuedIds),
           inArray(runs.status, ["failed", "cancelled"]),
-          gt(runs.finishedAt, cutoff)
-        )
+          gt(runs.finishedAt, cutoff),
+        ),
       )
       .orderBy(desc(runs.finishedAt));
 
@@ -175,11 +170,10 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
       const message = (run.errorMessage ?? "").toLowerCase();
 
       const isAgentRestartRecoveryCancel =
-        run.status === "cancelled"
-        && message.includes("agent process restarted before task completion");
+        run.status === "cancelled" &&
+        message.includes("agent process restarted before task completion");
       const isWorkspaceCleanupRace =
-        message.includes("enotempty")
-        || message.includes("directory not empty");
+        message.includes("enotempty") || message.includes("directory not empty");
       const isQuotaFailure = run.status === "failed" && isQuotaFailureMessage(message);
 
       if (isAgentRestartRecoveryCancel || isWorkspaceCleanupRace || isQuotaFailure) {
@@ -199,14 +193,11 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     .from(tasks)
     .where(eq(tasks.status, "running"));
   const activeTargetAreas = new Set(
-    runningTasks.map((t) => t.targetArea).filter((a): a is string => !!a)
+    runningTasks.map((t) => t.targetArea).filter((a): a is string => !!a),
   );
 
   // 完了済みタスクIDを取得
-  const doneTasks = await db
-    .select({ id: tasks.id })
-    .from(tasks)
-    .where(eq(tasks.status, "done"));
+  const doneTasks = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.status, "done"));
   const doneIds = new Set(doneTasks.map((t) => t.id));
 
   // フィルタリング: リースなし、依存関係解決済み、targetArea の衝突なし
@@ -233,7 +224,9 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     const deps = task.dependencies ?? [];
     const unresolvedDeps = deps.filter((depId) => !doneIds.has(depId));
     if (unresolvedDeps.length > 0) {
-      console.log(`[Priority] Task ${task.id} blocked by unresolved deps: ${unresolvedDeps.join(", ")}`);
+      console.log(
+        `[Priority] Task ${task.id} blocked by unresolved deps: ${unresolvedDeps.join(", ")}`,
+      );
       return false;
     }
 
@@ -288,8 +281,7 @@ function calculatePriorityScore(task: {
   score *= riskMultiplier[task.riskLevel ?? "low"] ?? 1.0;
 
   // 待機時間による調整（古いタスクを優先）
-  const waitingHours =
-    (Date.now() - task.createdAt.getTime()) / (1000 * 60 * 60);
+  const waitingHours = (Date.now() - task.createdAt.getTime()) / (1000 * 60 * 60);
   score += Math.min(waitingHours * 2, 20); // 最大20ポイント
 
   // 短いタスクを若干優先
@@ -302,9 +294,7 @@ function calculatePriorityScore(task: {
 }
 
 // 依存関係グラフを構築
-export async function buildDependencyGraph(): Promise<
-  Map<string, Set<string>>
-> {
+export async function buildDependencyGraph(): Promise<Map<string, Set<string>>> {
   const allTasks = await db.select().from(tasks);
   const graph = new Map<string, Set<string>>();
 

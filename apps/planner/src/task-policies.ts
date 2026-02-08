@@ -62,12 +62,13 @@ function isInitializationTask(task: PlannedTaskInput): boolean {
   }
 
   const allowed = task.allowedPaths ?? [];
-  const rootEvidence = [...allowed, ...files].some((path) =>
-    INIT_ROOT_FILES.includes(path)
-    || path === "apps/"
-    || path === "packages/"
-    || path === "apps/**"
-    || path === "packages/**"
+  const rootEvidence = [...allowed, ...files].some(
+    (path) =>
+      INIT_ROOT_FILES.includes(path) ||
+      path === "apps/" ||
+      path === "packages/" ||
+      path === "apps/**" ||
+      path === "packages/**",
   );
 
   if (!rootEvidence) {
@@ -75,10 +76,14 @@ function isInitializationTask(task: PlannedTaskInput): boolean {
   }
 
   const title = task.title.toLowerCase();
-  return ["init", "initialize", "bootstrap", "setup", "scaffold", "monorepo", "workspace"]
-    .some((hint) => title.includes(hint))
-    || ["初期化", "セットアップ", "モノレポ", "ワークスペース"]
-      .some((hint) => task.title.includes(hint));
+  return (
+    ["init", "initialize", "bootstrap", "setup", "scaffold", "monorepo", "workspace"].some((hint) =>
+      title.includes(hint),
+    ) ||
+    ["初期化", "セットアップ", "モノレポ", "ワークスペース"].some((hint) =>
+      task.title.includes(hint),
+    )
+  );
 }
 
 function normalizeVerificationCommands(commands: string[]): string[] {
@@ -117,12 +122,7 @@ export function normalizeGeneratedTasks(result: TaskGenerationResult): TaskGener
 
 // テスト関連の手がかりから担当ロールを推定する
 function inferTaskRole(task: PlannedTaskInput): "worker" | "tester" {
-  const hintText = [
-    task.title,
-    task.goal,
-    task.context?.specs,
-    task.context?.notes,
-  ]
+  const hintText = [task.title, task.goal, task.context?.specs, task.context?.notes]
     .filter((value): value is string => typeof value === "string")
     .join(" ")
     .toLowerCase();
@@ -139,10 +139,7 @@ function inferTaskRole(task: PlannedTaskInput): "worker" | "tester" {
     return "tester";
   }
 
-  const pathHints = [
-    ...(task.allowedPaths ?? []),
-    ...(task.context?.files ?? []),
-  ]
+  const pathHints = [...(task.allowedPaths ?? []), ...(task.context?.files ?? [])]
     .join(" ")
     .toLowerCase();
   if (/(test|__tests__|spec|playwright|e2e)/.test(pathHints)) {
@@ -177,7 +174,7 @@ function ensureDevCommand(commands: string[], devCommand?: string): string[] {
 
 export function applyDevCommandPolicy(
   result: TaskGenerationResult,
-  devCommand?: string
+  devCommand?: string,
 ): TaskGenerationResult {
   if (!devCommand) {
     return result;
@@ -192,10 +189,7 @@ export function applyDevCommandPolicy(
   return { ...result, tasks };
 }
 
-function filterVerificationCommands(
-  commands: string[],
-  checkScriptAvailable: boolean
-): string[] {
+function filterVerificationCommands(commands: string[], checkScriptAvailable: boolean): string[] {
   return commands.filter((command) => {
     if (isDevCommand(command)) {
       return false;
@@ -209,7 +203,7 @@ function filterVerificationCommands(
 
 export function applyVerificationCommandPolicy(
   result: TaskGenerationResult,
-  checkScriptAvailable: boolean
+  checkScriptAvailable: boolean,
 ): TaskGenerationResult {
   // `dev` は常に除外し、`check` はスクリプト未定義時のみ除外する
   const tasks = result.tasks.map((task) => {
@@ -224,12 +218,7 @@ export function applyVerificationCommandPolicy(
 }
 
 function taskTouchesFrontend(task: PlannedTaskInput): boolean {
-  const text = [
-    task.title,
-    task.goal,
-    task.context?.specs,
-    task.context?.notes,
-  ]
+  const text = [task.title, task.goal, task.context?.specs, task.context?.notes]
     .filter((value): value is string => typeof value === "string")
     .join(" ")
     .toLowerCase();
@@ -237,10 +226,7 @@ function taskTouchesFrontend(task: PlannedTaskInput): boolean {
   if (textHints.some((hint) => text.includes(hint))) {
     return true;
   }
-  const paths = [
-    ...(task.allowedPaths ?? []),
-    ...(task.context?.files ?? []),
-  ]
+  const paths = [...(task.allowedPaths ?? []), ...(task.context?.files ?? [])]
     .join(" ")
     .toLowerCase();
   return /apps\/web|web\/|frontend|ui/.test(paths);
@@ -253,7 +239,7 @@ function hasE2ECommand(commands: string[]): boolean {
 // フロントタスクのtesterにE2E検証を補う
 export function applyTesterCommandPolicy(
   result: TaskGenerationResult,
-  e2eCommand?: string
+  e2eCommand?: string,
 ): TaskGenerationResult {
   if (!e2eCommand) {
     return result;
@@ -287,13 +273,7 @@ export function generateInitializationTasks(requirement: Requirement): TaskGener
     goal: "pnpm workspaces が使える状態になり、pnpm -r list が成功する",
     role: "worker",
     context: {
-      files: [
-        "package.json",
-        "pnpm-workspace.yaml",
-        ".gitignore",
-        "apps/",
-        "packages/",
-      ],
+      files: ["package.json", "pnpm-workspace.yaml", ".gitignore", "apps/", "packages/"],
       specs: "apps/ と packages/ の土台と最小限のpackage.jsonを用意する",
       notes: requirement.goal,
     },
@@ -317,23 +297,22 @@ export function generateInitializationTasks(requirement: Requirement): TaskGener
   };
 }
 
-export function sanitizeTaskDependencyIndexes(
-  result: TaskGenerationResult
-): TaskGenerationResult {
+export function sanitizeTaskDependencyIndexes(result: TaskGenerationResult): TaskGenerationResult {
   let correctedTaskCount = 0;
 
   const tasks = result.tasks.map((task, index) => {
     const raw = task.dependsOnIndexes ?? [];
     const normalized = Array.from(
       new Set(
-        raw.filter((dep) =>
-          Number.isInteger(dep)
-          && dep >= 0
-          && dep < result.tasks.length
-          && dep !== index
-          && dep < index
-        )
-      )
+        raw.filter(
+          (dep) =>
+            Number.isInteger(dep) &&
+            dep >= 0 &&
+            dep < result.tasks.length &&
+            dep !== index &&
+            dep < index,
+        ),
+      ),
     );
 
     if (normalized.length === raw.length) {
@@ -362,7 +341,7 @@ export function sanitizeTaskDependencyIndexes(
 }
 
 export function reduceRedundantDependencyIndexes(
-  result: TaskGenerationResult
+  result: TaskGenerationResult,
 ): TaskGenerationResult {
   if (result.tasks.length <= 1) {
     return result;
@@ -436,7 +415,7 @@ export function reduceRedundantDependencyIndexes(
 export function ensureInitializationTaskForUninitializedRepo(
   result: TaskGenerationResult,
   requirement: Requirement,
-  repoUninitialized: boolean
+  repoUninitialized: boolean,
 ): TaskGenerationResult {
   if (!repoUninitialized) {
     return result;
@@ -474,8 +453,7 @@ export function ensureInitializationTaskForUninitializedRepo(
       return task;
     }
 
-    const nextDepends = [...currentDepends, initTaskIndex]
-      .filter((dep) => dep < index);
+    const nextDepends = [...currentDepends, initTaskIndex].filter((dep) => dep < index);
 
     return {
       ...task,
@@ -485,17 +463,14 @@ export function ensureInitializationTaskForUninitializedRepo(
 
   const filteredWarnings = result.warnings.filter((warning) => {
     // 初期化タスクを補った後は「初期化未タスク化」警告を残さない
-    return !(
-      warning.includes("allowedPaths")
-      && warning.includes("タスク化していません")
-    );
+    return !(warning.includes("allowedPaths") && warning.includes("タスク化していません"));
   });
 
   const warnings = injected
     ? [
-      ...filteredWarnings,
-      "リポジトリ初期化タスクを自動追加し、他タスクはその完了に依存するよう補正しました。",
-    ]
+        ...filteredWarnings,
+        "リポジトリ初期化タスクを自動追加し、他タスクはその完了に依存するよう補正しました。",
+      ]
     : filteredWarnings;
 
   return {
@@ -505,9 +480,6 @@ export function ensureInitializationTaskForUninitializedRepo(
   };
 }
 
-export function needsLockfileAllowance(
-  commands: string[],
-  allowedPaths: string[]
-): boolean {
+export function needsLockfileAllowance(commands: string[], allowedPaths: string[]): boolean {
   return requiresLockfile(commands) && !allowedPaths.includes("pnpm-lock.yaml");
 }

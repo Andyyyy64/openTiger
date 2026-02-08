@@ -1,26 +1,30 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { agentsApi, tasksApi } from '../lib/api';
-import { Link } from 'react-router-dom';
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { agentsApi, tasksApi } from "../lib/api";
+import { Link } from "react-router-dom";
 
 export const AgentsPage: React.FC = () => {
-  const { data: agents, isLoading, error } = useQuery({
-    queryKey: ['agents'],
+  const {
+    data: agents,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["agents"],
     queryFn: () => agentsApi.list(),
   });
   const { data: tasks } = useQuery({
-    queryKey: ['tasks'],
+    queryKey: ["tasks"],
     queryFn: () => tasksApi.list(),
   });
 
   // Detect state where dispatch is not possible due to incomplete dependencies
-  const queuedTasks = tasks?.filter(t => t.status === 'queued') ?? [];
-  const doneTaskIds = new Set((tasks ?? []).filter(t => t.status === 'done').map(t => t.id));
-  const queuedBlockedByDeps = queuedTasks.filter(task => {
+  const queuedTasks = tasks?.filter((t) => t.status === "queued") ?? [];
+  const doneTaskIds = new Set((tasks ?? []).filter((t) => t.status === "done").map((t) => t.id));
+  const queuedBlockedByDeps = queuedTasks.filter((task) => {
     const deps = task.dependencies ?? [];
-    return deps.length > 0 && deps.some(depId => !doneTaskIds.has(depId));
+    return deps.length > 0 && deps.some((depId) => !doneTaskIds.has(depId));
   });
-  const idleWorkers = agents?.filter(a => a.role === 'worker' && a.status === 'idle') ?? [];
+  const idleWorkers = agents?.filter((a) => a.role === "worker" && a.status === "idle") ?? [];
   const blockedByDepsWithIdleWorkers =
     queuedTasks.length > 0 &&
     queuedBlockedByDeps.length === queuedTasks.length &&
@@ -30,8 +34,8 @@ export const AgentsPage: React.FC = () => {
     if (!agents) return [];
     return [...agents].sort((a, b) => {
       // 1. Busy agents first
-      if (a.status === 'busy' && b.status !== 'busy') return -1;
-      if (a.status !== 'busy' && b.status === 'busy') return 1;
+      if (a.status === "busy" && b.status !== "busy") return -1;
+      if (a.status !== "busy" && b.status === "busy") return 1;
 
       // 2. Sort by role
       if (a.role !== b.role) return a.role.localeCompare(b.role);
@@ -54,7 +58,8 @@ export const AgentsPage: React.FC = () => {
         <div className="mb-8 border border-yellow-600 p-4 text-sm text-yellow-500 font-bold bg-yellow-900/10">
           [WARNING] 依存関係が未完了のため、待機中タスクがディスパッチできません。
           <br />
-          &gt; QUEUED: {queuedTasks.length} | BLOCKED: {queuedBlockedByDeps.length} | IDLE_WORKERS: {idleWorkers.length}
+          &gt; QUEUED: {queuedTasks.length} | BLOCKED: {queuedBlockedByDeps.length} | IDLE_WORKERS:{" "}
+          {idleWorkers.length}
         </div>
       )}
 
@@ -68,7 +73,9 @@ export const AgentsPage: React.FC = () => {
         </div>
 
         {isLoading ? (
-          <div className="py-12 text-center text-zinc-500 font-mono animate-pulse">&gt; Scanning network...</div>
+          <div className="py-12 text-center text-zinc-500 font-mono animate-pulse">
+            &gt; Scanning network...
+          </div>
         ) : error ? (
           <div className="py-12 text-center text-red-500 font-mono">&gt; CONNECTION ERROR</div>
         ) : agents?.length === 0 ? (
@@ -91,18 +98,22 @@ export const AgentsPage: React.FC = () => {
                 </div>
 
                 <div className="col-span-2">
-                  <span className={`text-xs uppercase px-1 ${agent.status === 'busy' ? 'bg-term-tiger text-black font-bold animate-pulse' : 'text-zinc-500'}`}>
-                    {agent.status === 'busy' ? 'PROCESSING' : 'IDLE'}
+                  <span
+                    className={`text-xs uppercase px-1 ${agent.status === "busy" ? "bg-term-tiger text-black font-bold animate-pulse" : "text-zinc-500"}`}
+                  >
+                    {agent.status === "busy" ? "PROCESSING" : "IDLE"}
                   </span>
                 </div>
 
                 <div className="col-span-2 text-xs text-zinc-400">
                   {agent.metadata?.provider && <span>{agent.metadata.provider}</span>}
-                  {agent.metadata?.model && <span className="text-zinc-600 block">{agent.metadata.model}</span>}
+                  {agent.metadata?.model && (
+                    <span className="text-zinc-600 block">{agent.metadata.model}</span>
+                  )}
                 </div>
 
                 <div className="col-span-3 text-xs">
-                  {agent.status === 'busy' ? (
+                  {agent.status === "busy" ? (
                     <div className="w-full">
                       <div className="flex justify-between mb-1">
                         <span className="text-term-tiger">EXEC_TASK</span>
@@ -118,7 +129,9 @@ export const AgentsPage: React.FC = () => {
                 </div>
 
                 <div className="col-span-2 text-right text-xs text-zinc-600">
-                  {agent.lastHeartbeat ? new Date(agent.lastHeartbeat).toLocaleTimeString() : '--:--:--'}
+                  {agent.lastHeartbeat
+                    ? new Date(agent.lastHeartbeat).toLocaleTimeString()
+                    : "--:--:--"}
                 </div>
               </Link>
             ))}

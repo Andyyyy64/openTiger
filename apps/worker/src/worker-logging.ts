@@ -74,7 +74,7 @@ export function buildTaskLogPath(
   logDir: string,
   taskId: string,
   runId: string,
-  agentId: string
+  agentId: string,
 ): string {
   return join(logDir, "tasks", taskId, `${agentId}-${runId}.log`);
 }

@@ -18,10 +18,7 @@ export interface AgentHealth {
 
 // エージェントの健全性をチェック
 export async function checkAgentHealth(agentId: string): Promise<AgentHealth | null> {
-  const result = await db
-    .select()
-    .from(agents)
-    .where(eq(agents.id, agentId));
+  const result = await db.select().from(agents).where(eq(agents.id, agentId));
 
   if (result.length === 0) {
     return null;
@@ -34,17 +31,14 @@ export async function checkAgentHealth(agentId: string): Promise<AgentHealth | n
 
   const now = new Date();
   const lastHeartbeat = agent.lastHeartbeat;
-  
+
   // Check if heartbeat is recent
-  const isHealthy = lastHeartbeat 
-    ? (now.getTime() - lastHeartbeat.getTime()) < HEARTBEAT_TIMEOUT_SECONDS * 1000
+  const isHealthy = lastHeartbeat
+    ? now.getTime() - lastHeartbeat.getTime() < HEARTBEAT_TIMEOUT_SECONDS * 1000
     : false;
 
   // Get leases held by agent
-  const agentLeases = await db
-    .select()
-    .from(leases)
-    .where(eq(leases.agentId, agentId));
+  const agentLeases = await db.select().from(leases).where(eq(leases.agentId, agentId));
 
   const firstLease = agentLeases[0];
   return {
@@ -101,10 +95,7 @@ export async function reclaimDeadAgentLeases(): Promise<number> {
   const threshold = new Date(now.getTime() - HEARTBEAT_TIMEOUT_SECONDS * 1000);
 
   // オフラインエージェントを検出
-  const offlineAgents = await db
-    .select()
-    .from(agents)
-    .where(lt(agents.lastHeartbeat, threshold));
+  const offlineAgents = await db.select().from(agents).where(lt(agents.lastHeartbeat, threshold));
 
   if (offlineAgents.length === 0) {
     return 0;
@@ -114,10 +105,7 @@ export async function reclaimDeadAgentLeases(): Promise<number> {
 
   for (const agent of offlineAgents) {
     // エージェントのリースを取得
-    const agentLeases = await db
-      .select()
-      .from(leases)
-      .where(eq(leases.agentId, agent.id));
+    const agentLeases = await db.select().from(leases).where(eq(leases.agentId, agent.id));
 
     for (const lease of agentLeases) {
       // Return task to queued
@@ -136,10 +124,7 @@ export async function reclaimDeadAgentLeases(): Promise<number> {
     }
 
     // エージェントをオフラインに更新
-    await db
-      .update(agents)
-      .set({ status: "offline" })
-      .where(eq(agents.id, agent.id));
+    await db.update(agents).set({ status: "offline" }).where(eq(agents.id, agent.id));
   }
 
   return reclaimedCount;
@@ -160,10 +145,7 @@ export async function recordHeartbeat(agentId: string): Promise<boolean> {
 }
 
 // エージェントを登録
-export async function registerAgent(
-  agentId: string,
-  role: string = "worker"
-): Promise<string> {
+export async function registerAgent(agentId: string, role: string = "worker"): Promise<string> {
   const result = await db
     .insert(agents)
     .values({

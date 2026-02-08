@@ -36,15 +36,10 @@ const activeWorkers = new Map<
   string,
   { process?: ChildProcess; containerId?: string; agentId: string }
 >();
-const DEFAULT_OPENCODE_CONFIG_PATH = resolve(
-  import.meta.dirname,
-  "../../../../opencode.json"
-);
+const DEFAULT_OPENCODE_CONFIG_PATH = resolve(import.meta.dirname, "../../../../opencode.json");
 
 // Workerをプロセスとして起動
-async function launchAsProcess(
-  config: WorkerLaunchConfig
-): Promise<LaunchResult> {
+async function launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResult> {
   const env = {
     ...process.env,
     TASK_ID: config.taskId,
@@ -91,9 +86,7 @@ async function launchAsProcess(
 
     // 終了時の処理
     workerProcess.on("exit", (code, signal) => {
-      console.log(
-        `[Worker ${config.agentId}] exited with code ${code}, signal ${signal}`
-      );
+      console.log(`[Worker ${config.agentId}] exited with code ${code}, signal ${signal}`);
       activeWorkers.delete(config.taskId);
 
       // Update agent status
@@ -116,9 +109,7 @@ async function launchAsProcess(
 }
 
 // Launch Worker as Docker container
-async function launchAsDocker(
-  config: WorkerLaunchConfig
-): Promise<LaunchResult> {
+async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult> {
   const image = config.dockerImage ?? "opentiger-worker:latest";
   const network = config.dockerNetwork ?? "opentiger_default";
 
@@ -205,16 +196,14 @@ async function launchAsDocker(
 }
 
 // Workerを起動
-export async function launchWorker(
-  config: WorkerLaunchConfig
-): Promise<LaunchResult> {
+export async function launchWorker(config: WorkerLaunchConfig): Promise<LaunchResult> {
   // エージェントをbusy状態に更新
   await updateAgentStatus(config.agentId, "busy", config.taskId);
 
   if (config.mode === "docker") {
     return launchAsDocker(config);
   }
-  
+
   // 常駐Worker（キュー待機モード）を使用する場合、新規プロセス起動はスキップ
   // Assume Worker is already running
   console.log(`[Launcher] Task ${config.taskId} assigned to worker ${config.agentId} via queue.`);
@@ -264,7 +253,7 @@ export function getActiveWorkers(): Map<
 async function updateAgentStatus(
   agentId: string,
   status: "idle" | "busy" | "offline",
-  currentTaskId: string | null = null
+  currentTaskId: string | null = null,
 ): Promise<void> {
   await db
     .update(agents)

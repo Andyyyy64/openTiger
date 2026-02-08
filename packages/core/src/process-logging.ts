@@ -8,7 +8,7 @@ export interface ProcessLoggingOptions {
 
 export function setupProcessLogging(
   logName: string,
-  options: ProcessLoggingOptions = {}
+  options: ProcessLoggingOptions = {},
 ): string | undefined {
   const logDir = options.logDir ?? process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
 

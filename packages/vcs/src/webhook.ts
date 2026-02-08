@@ -4,7 +4,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export function verifyGitHubWebhookSignature(
   payload: string | Buffer,
   signature: string | undefined,
-  secret: string
+  secret: string,
 ): boolean {
   if (!signature) {
     return false;
@@ -28,10 +28,7 @@ export function verifyGitHubWebhookSignature(
 
   // Use constant-time comparison to prevent timing attacks
   try {
-    return timingSafeEqual(
-      Buffer.from(signatureHex, "hex"),
-      Buffer.from(expectedSignature, "hex")
-    );
+    return timingSafeEqual(Buffer.from(signatureHex, "hex"), Buffer.from(expectedSignature, "hex"));
   } catch {
     return false;
   }
@@ -142,13 +139,27 @@ export interface CheckPayload extends WebhookPayload {
     id: number;
     name: string;
     status: "queued" | "in_progress" | "completed";
-    conclusion: "success" | "failure" | "neutral" | "cancelled" | "timed_out" | "action_required" | null;
+    conclusion:
+      | "success"
+      | "failure"
+      | "neutral"
+      | "cancelled"
+      | "timed_out"
+      | "action_required"
+      | null;
     pull_requests: Array<{ number: number }>;
   };
   check_suite?: {
     id: number;
     status: "queued" | "in_progress" | "completed";
-    conclusion: "success" | "failure" | "neutral" | "cancelled" | "timed_out" | "action_required" | null;
+    conclusion:
+      | "success"
+      | "failure"
+      | "neutral"
+      | "cancelled"
+      | "timed_out"
+      | "action_required"
+      | null;
     pull_requests: Array<{ number: number }>;
   };
 }

@@ -35,12 +35,9 @@ export async function recordEvent(input: EventInput): Promise<string> {
 export async function getEventsByTimeRange(
   startTime: Date,
   endTime: Date,
-  eventType?: string
+  eventType?: string,
 ): Promise<Array<typeof events.$inferSelect>> {
-  const conditions = [
-    gte(events.createdAt, startTime),
-    lte(events.createdAt, endTime),
-  ];
+  const conditions = [gte(events.createdAt, startTime), lte(events.createdAt, endTime)];
 
   if (eventType) {
     conditions.push(eq(events.type, eventType));
@@ -56,7 +53,7 @@ export async function getEventsByTimeRange(
 // イベントタイプ別の集計
 export async function getEventCountsByType(
   startTime: Date,
-  endTime?: Date
+  endTime?: Date,
 ): Promise<Record<string, number>> {
   const conditions = [gte(events.createdAt, startTime)];
   if (endTime) {
@@ -82,7 +79,7 @@ export async function getEventCountsByType(
 // コスト集計（トークン使用量）
 export async function getCostSummary(
   startTime: Date,
-  endTime?: Date
+  endTime?: Date,
 ): Promise<{
   totalTokens: number;
   runsCount: number;
@@ -113,9 +110,7 @@ export async function getCostSummary(
 }
 
 // 日次コストサマリー
-export async function getDailyCostSummary(
-  days: number = 7
-): Promise<
+export async function getDailyCostSummary(days: number = 7): Promise<
   Array<{
     date: string;
     totalTokens: number;
@@ -147,7 +142,7 @@ export async function logCycleEvent(
   cycleId: string,
   eventType: string,
   message: string,
-  details?: Record<string, unknown>
+  details?: Record<string, unknown>,
 ): Promise<void> {
   await recordEvent({
     type: `cycle.${eventType}`,

@@ -30,11 +30,7 @@ import {
   resolveDevVerificationCommand,
   resolveE2EVerificationCommand,
 } from "./planner-commands";
-import {
-  detectDocGap,
-  hasPendingDocserTask,
-  buildDocserTaskForGap,
-} from "./planner-docs";
+import { detectDocGap, hasPendingDocserTask, buildDocserTaskForGap } from "./planner-docs";
 import {
   attachExistingTasksToRequirement,
   attachInspectionToRequirement,
@@ -59,10 +55,7 @@ import {
 } from "./planner-tasks";
 import { DEFAULT_CONFIG, type PlannerConfig } from "./planner-config";
 
-function appendPlannerWarning(
-  result: TaskGenerationResult,
-  warning: string
-): TaskGenerationResult {
+function appendPlannerWarning(result: TaskGenerationResult, warning: string): TaskGenerationResult {
   return {
     ...result,
     warnings: [...result.warnings, warning],
@@ -73,7 +66,7 @@ function appendPlannerWarning(
 export async function planFromRequirement(
   requirementPath: string,
   config: PlannerConfig,
-  agentId: string
+  agentId: string,
 ): Promise<void> {
   console.log("=".repeat(60));
   console.log("openTiger Planner - Task Generation");
@@ -189,7 +182,9 @@ export async function planFromRequirement(
 
   const canUseLlmPlanning = config.useLlm && (repoUninitialized || Boolean(inspectionResult));
   if (config.useLlm && !canUseLlmPlanning) {
-    console.warn("[Planner] 差分点検結果がないためLLM計画をスキップし、簡易計画へフォールバックします。");
+    console.warn(
+      "[Planner] 差分点検結果がないためLLM計画をスキップし、簡易計画へフォールバックします。",
+    );
   }
 
   if (canUseLlmPlanning) {
@@ -212,7 +207,7 @@ export async function planFromRequirement(
         console.warn(`[Planner] LLM task generation failed: ${message}`);
         result = appendPlannerWarning(
           generateSimpleTasks(requirement),
-          `LLM task generation failed; fallback used: ${message}`
+          `LLM task generation failed; fallback used: ${message}`,
         );
       }
     } finally {
@@ -224,15 +219,11 @@ export async function planFromRequirement(
     console.log("\n[Generating tasks without LLM (fallback mode)...]");
     result = appendPlannerWarning(
       generateSimpleTasks(requirement),
-      "LLM planning skipped because inspection was unavailable."
+      "LLM planning skipped because inspection was unavailable.",
     );
   }
 
-  result = ensureInitializationTaskForUninitializedRepo(
-    result,
-    requirement,
-    repoUninitialized
-  );
+  result = ensureInitializationTaskForUninitializedRepo(result, requirement, repoUninitialized);
 
   const docGap = !repoUninitialized ? await detectDocGap(config.workdir) : undefined;
   if (docGap?.hasGap && !(await hasPendingDocserTask())) {
@@ -246,10 +237,7 @@ export async function planFromRequirement(
     result = {
       ...result,
       tasks: [...result.tasks, docserTask],
-      warnings: [
-        ...result.warnings,
-        "ドキュメントが未整備のためdocserタスクを追加しました。",
-      ],
+      warnings: [...result.warnings, "ドキュメントが未整備のためdocserタスクを追加しました。"],
     };
   }
 
@@ -280,7 +268,9 @@ export async function planFromRequirement(
     if (!task) continue;
     console.log(`  ${i + 1}. ${task.title}`);
     console.log(`     Goal: ${task.goal.slice(0, 80)}${task.goal.length > 80 ? "..." : ""}`);
-    console.log(`     Priority: ${task.priority}, Risk: ${task.riskLevel}, Time: ${task.timeboxMinutes}min`);
+    console.log(
+      `     Priority: ${task.priority}, Risk: ${task.riskLevel}, Time: ${task.timeboxMinutes}min`,
+    );
   }
 
   // Dry runの場合は保存しない
@@ -298,10 +288,10 @@ export async function planFromRequirement(
 
   const dedupeWindowMs = resolvePlanDedupeWindowMs();
   const holdTasksForIssueLinking =
-    getRepoMode() === "git"
-    && Boolean(process.env.GITHUB_TOKEN)
-    && Boolean(process.env.GITHUB_OWNER)
-    && Boolean(process.env.GITHUB_REPO);
+    getRepoMode() === "git" &&
+    Boolean(process.env.GITHUB_TOKEN) &&
+    Boolean(process.env.GITHUB_OWNER) &&
+    Boolean(process.env.GITHUB_REPO);
   if (planSignature?.signature) {
     let skippedReason: "in_progress" | "recent" | null = null;
     let savedIdsInTx: string[] = [];
@@ -323,10 +313,7 @@ export async function planFromRequirement(
       console.log("\n[Saving tasks to database...]");
       const savedIds = await saveTasks(result.tasks, database, {
         initialStateResolver: (input) => {
-          if (
-            holdTasksForIssueLinking
-            && !input.context?.issue?.number
-          ) {
+          if (holdTasksForIssueLinking && !input.context?.issue?.number) {
             return { status: "blocked", blockReason: "issue_linking" };
           }
           return { status: "queued", blockReason: null };
@@ -387,10 +374,7 @@ export async function planFromRequirement(
   console.log("\n[Saving tasks to database...]");
   const savedIds = await saveTasks(result.tasks, db, {
     initialStateResolver: (input) => {
-      if (
-        holdTasksForIssueLinking
-        && !input.context?.issue?.number
-      ) {
+      if (holdTasksForIssueLinking && !input.context?.issue?.number) {
         return { status: "blocked", blockReason: "issue_linking" };
       }
       return { status: "queued", blockReason: null };
@@ -428,7 +412,7 @@ export async function planFromRequirement(
 // 要件テキストから直接タスクを生成（API用）
 export async function planFromContent(
   content: string,
-  config: Partial<PlannerConfig> = {}
+  config: Partial<PlannerConfig> = {},
 ): Promise<TaskGenerationResult> {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
   let requirement = parseRequirementContent(content);
@@ -488,25 +472,27 @@ export async function planFromContent(
               applyTaskRolePolicy(
                 normalizeGeneratedTasks(
                   reduceRedundantDependencyIndexes(
-                    sanitizeTaskDependencyIndexes(generateInitializationTasks(requirement))
-                  )
-                )
+                    sanitizeTaskDependencyIndexes(generateInitializationTasks(requirement)),
+                  ),
+                ),
               ),
-              checkScriptAvailable
+              checkScriptAvailable,
             ),
-            e2eCommand
+            e2eCommand,
           ),
-          devCommand
+          devCommand,
         ),
-        judgeFeedback
+        judgeFeedback,
       ),
-      inspectionNotes
+      inspectionNotes,
     );
   }
 
   const canUseLlmPlanning = fullConfig.useLlm && (repoUninitialized || Boolean(inspectionResult));
   if (fullConfig.useLlm && !canUseLlmPlanning) {
-    console.warn("[Planner] 差分点検結果がないためLLM計画をスキップし、簡易計画へフォールバックします。");
+    console.warn(
+      "[Planner] 差分点検結果がないためLLM計画をスキップし、簡易計画へフォールバックします。",
+    );
   }
 
   if (canUseLlmPlanning) {
@@ -523,7 +509,7 @@ export async function planFromContent(
       console.warn(`[Planner] LLM task generation failed: ${message}`);
       result = appendPlannerWarning(
         generateSimpleTasks(requirement),
-        `LLM task generation failed; fallback used: ${message}`
+        `LLM task generation failed; fallback used: ${message}`,
       );
     }
     const docGap = !repoUninitialized ? await detectDocGap(fullConfig.workdir) : undefined;
@@ -538,10 +524,7 @@ export async function planFromContent(
       result = {
         ...result,
         tasks: [...result.tasks, docserTask],
-        warnings: [
-          ...result.warnings,
-          "ドキュメントが未整備のためdocserタスクを追加しました。",
-        ],
+        warnings: [...result.warnings, "ドキュメントが未整備のためdocserタスクを追加しました。"],
       };
     }
     result = sanitizeTaskDependencyIndexes(result);
@@ -552,15 +535,15 @@ export async function planFromContent(
           applyTesterCommandPolicy(
             applyVerificationCommandPolicy(
               applyTaskRolePolicy(normalizeGeneratedTasks(result)),
-              checkScriptAvailable
+              checkScriptAvailable,
             ),
-            e2eCommand
+            e2eCommand,
           ),
-          devCommand
+          devCommand,
         ),
-        judgeFeedback
+        judgeFeedback,
       ),
-      inspectionNotes
+      inspectionNotes,
     );
   }
 
@@ -575,20 +558,20 @@ export async function planFromContent(
                   sanitizeTaskDependencyIndexes(
                     appendPlannerWarning(
                       generateSimpleTasks(requirement),
-                      "LLM planning skipped because inspection was unavailable."
-                    )
-                  )
-                )
-              )
+                      "LLM planning skipped because inspection was unavailable.",
+                    ),
+                  ),
+                ),
+              ),
             ),
-            checkScriptAvailable
+            checkScriptAvailable,
           ),
-          e2eCommand
+          e2eCommand,
         ),
-        devCommand
+        devCommand,
       ),
-      judgeFeedback
+      judgeFeedback,
     ),
-    inspectionNotes
+    inspectionNotes,
   );
 }

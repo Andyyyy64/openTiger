@@ -8,14 +8,7 @@ import { CreateTaskInput } from "@openTiger/core";
 
 export const tasksRoute = new Hono();
 
-type FailureCategory =
-  | "env"
-  | "setup"
-  | "policy"
-  | "test"
-  | "flaky"
-  | "model"
-  | "model_loop";
+type FailureCategory = "env" | "setup" | "policy" | "test" | "flaky" | "model" | "model_loop";
 
 type RetryInfo = {
   autoRetry: boolean;
@@ -38,16 +31,13 @@ type RetryInfo = {
 
 const FAILED_TASK_RETRY_COOLDOWN_MS = Number.parseInt(
   process.env.FAILED_TASK_RETRY_COOLDOWN_MS ?? "30000",
-  10
+  10,
 );
 const BLOCKED_TASK_RETRY_COOLDOWN_MS = Number.parseInt(
   process.env.BLOCKED_TASK_RETRY_COOLDOWN_MS ?? "120000",
-  10
+  10,
 );
-const MAX_RETRY_COUNT = Number.parseInt(
-  process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1",
-  10
-);
+const MAX_RETRY_COUNT = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1", 10);
 
 const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
   env: 10,
@@ -86,15 +76,13 @@ function classifyFailure(errorMessage: string | null): {
 } {
   const message = (errorMessage ?? "").toLowerCase();
 
-  if (
-    /policy violation|denied command|outside allowed paths|change to denied path/.test(message)
-  ) {
+  if (/policy violation|denied command|outside allowed paths|change to denied path/.test(message)) {
     return { category: "policy", retryable: true };
   }
 
   if (
     /package\.json|pnpm-workspace\.yaml|cannot find module|enoent|command not found|repository not found|authentication failed|permission denied|no commits between|no history in common/.test(
-      message
+      message,
     )
   ) {
     return { category: "setup", retryable: true };
@@ -110,7 +98,7 @@ function classifyFailure(errorMessage: string | null): {
 
   if (
     /rate limit|429|503|502|timeout|timed out|econnreset|eai_again|temporarily unavailable/.test(
-      message
+      message,
     )
   ) {
     return { category: "flaky", retryable: true };
@@ -118,7 +106,7 @@ function classifyFailure(errorMessage: string | null): {
 
   if (
     /doom loop detected|excessive planning chatter detected|unsupported pseudo tool call detected: todo/.test(
-      message
+      message,
     )
   ) {
     return { category: "model_loop", retryable: true };
@@ -129,7 +117,7 @@ function classifyFailure(errorMessage: string | null): {
 
 function buildRetryInfo(
   task: typeof tasks.$inferSelect,
-  latestFailureMessage?: string | null
+  latestFailureMessage?: string | null,
 ): RetryInfo | null {
   if (task.status !== "failed" && task.status !== "blocked") {
     return null;
@@ -143,9 +131,8 @@ function buildRetryInfo(
     const retryAtMs = new Date(task.updatedAt).getTime() + BLOCKED_TASK_RETRY_COOLDOWN_MS;
     const retryInSeconds = Math.max(0, Math.ceil((retryAtMs - now) / 1000));
     // legacy互換: needs_human は awaiting_judge 扱いに統一
-    const normalizedBlockReason = task.blockReason === "needs_human"
-      ? "awaiting_judge"
-      : task.blockReason;
+    const normalizedBlockReason =
+      task.blockReason === "needs_human" ? "awaiting_judge" : task.blockReason;
     return {
       autoRetry: true,
       reason:
@@ -153,11 +140,11 @@ function buildRetryInfo(
           ? "awaiting_judge"
           : normalizedBlockReason === "quota_wait"
             ? "quota_wait"
-          : normalizedBlockReason === "needs_rework"
-            ? "needs_rework"
-            : retryInSeconds > 0
-              ? "cooldown_pending"
-              : "retry_due",
+            : normalizedBlockReason === "needs_rework"
+              ? "needs_rework"
+              : retryInSeconds > 0
+                ? "cooldown_pending"
+                : "retry_due",
       retryAt: new Date(retryAtMs).toISOString(),
       retryInSeconds,
       cooldownMs: BLOCKED_TASK_RETRY_COOLDOWN_MS,
@@ -214,10 +201,8 @@ function buildRetryInfo(
   };
 }
 
-async function enrichTasksWithRetryInfo(taskRows: typeof tasks.$inferSelect[]) {
-  const failedTaskIds = taskRows
-    .filter((task) => task.status === "failed")
-    .map((task) => task.id);
+async function enrichTasksWithRetryInfo(taskRows: (typeof tasks.$inferSelect)[]) {
+  const failedTaskIds = taskRows.filter((task) => task.status === "failed").map((task) => task.id);
 
   const latestFailureByTaskId = new Map<string, string | null>();
   if (failedTaskIds.length > 0) {
@@ -228,10 +213,7 @@ async function enrichTasksWithRetryInfo(taskRows: typeof tasks.$inferSelect[]) {
       })
       .from(runs)
       .where(
-        and(
-          inArray(runs.taskId, failedTaskIds),
-          inArray(runs.status, ["failed", "cancelled"])
-        )
+        and(inArray(runs.taskId, failedTaskIds), inArray(runs.status, ["failed", "cancelled"])),
       )
       .orderBy(desc(runs.startedAt));
 
@@ -350,9 +332,7 @@ const updateTaskSchema = z.object({
   priority: z.number().int().optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
   role: z.enum(["worker", "tester", "docser"]).optional(),
-  status: z
-    .enum(["queued", "running", "done", "failed", "blocked", "cancelled"])
-    .optional(),
+  status: z.enum(["queued", "running", "done", "failed", "blocked", "cancelled"]).optional(),
   blockReason: z.string().optional(),
   dependencies: z.array(z.string().uuid()).optional(),
   timeboxMinutes: z.number().int().positive().optional(),

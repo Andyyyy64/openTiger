@@ -1,27 +1,27 @@
-import type { Task, Run, Agent, CreateTaskInput, Artifact } from '@openTiger/core';
+import type { Task, Run, Agent, CreateTaskInput, Artifact } from "@openTiger/core";
 
 /**
  * Dashboard API Client
  * @openTiger/api へのリクエストをラップする
  */
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = "/api";
 
 export async function fetchApi<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
       ...options?.headers,
     },
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Unknown error' }));
+    const error = await response.json().catch(() => ({ message: "Unknown error" }));
     const message =
-      (typeof error?.message === 'string' && error.message)
-      || (typeof error?.error === 'string' && error.error)
-      || `API error: ${response.status}`;
+      (typeof error?.message === "string" && error.message) ||
+      (typeof error?.error === "string" && error.error) ||
+      `API error: ${response.status}`;
     throw new Error(message);
   }
 
@@ -75,8 +75,15 @@ export interface JudgementPayload {
   suggestions?: string[];
   summary?: {
     ci?: { pass?: boolean; status?: string; details?: Array<{ name: string; status: string }> };
-    policy?: { pass?: boolean; violations?: Array<{ severity: string; message: string; file?: string }> };
-    llm?: { pass?: boolean; confidence?: number; codeIssues?: Array<{ severity: string; category: string; message: string }> };
+    policy?: {
+      pass?: boolean;
+      violations?: Array<{ severity: string; message: string; file?: string }>;
+    };
+    llm?: {
+      pass?: boolean;
+      confidence?: number;
+      codeIssues?: Array<{ severity: string; category: string; message: string }>;
+    };
   };
   actions?: { commented?: boolean; approved?: boolean; merged?: boolean };
   mergeResult?: { success?: boolean; error?: string };
@@ -131,7 +138,7 @@ export interface ConfigResponse {
 }
 
 export interface RestartStatusResponse {
-  status: 'idle' | 'running' | 'completed' | 'failed';
+  status: "idle" | "running" | "completed" | "failed";
   startedAt?: string;
   finishedAt?: string;
   exitCode?: number | null;
@@ -145,9 +152,9 @@ export interface SystemProcess {
   label: string;
   description: string;
   group: string;
-  kind: 'service' | 'worker' | 'planner' | 'database' | 'command';
+  kind: "service" | "worker" | "planner" | "database" | "command";
   supportsStop: boolean;
-  status: 'idle' | 'running' | 'completed' | 'failed' | 'stopped';
+  status: "idle" | "running" | "completed" | "failed" | "stopped";
   startedAt?: string;
   finishedAt?: string;
   pid?: number;
@@ -208,104 +215,119 @@ export interface GitHubRepoInfo {
 export interface TaskRetryInfo {
   autoRetry: boolean;
   reason:
-  | 'cooldown_pending'
-  | 'retry_due'
-  | 'retry_exhausted'
-  | 'non_retryable_failure'
-  | 'awaiting_judge'
-  | 'quota_wait'
-  | 'needs_rework'
-  | 'unknown';
+    | "cooldown_pending"
+    | "retry_due"
+    | "retry_exhausted"
+    | "non_retryable_failure"
+    | "awaiting_judge"
+    | "quota_wait"
+    | "needs_rework"
+    | "unknown";
   retryAt: string | null;
   retryInSeconds: number | null;
   cooldownMs: number | null;
   retryCount: number;
   retryLimit: number;
-  failureCategory?: 'env' | 'setup' | 'policy' | 'test' | 'flaky' | 'model' | 'model_loop';
+  failureCategory?: "env" | "setup" | "policy" | "test" | "flaky" | "model" | "model_loop";
 }
 
 export type TaskView = Task & { retry?: TaskRetryInfo | null };
 
 // タスク関連
 export const tasksApi = {
-  list: () => fetchApi<{ tasks: TaskView[] }>('/tasks').then(res => res.tasks),
-  get: (id: string) => fetchApi<{ task: TaskView }>(`/tasks/${id}`).then(res => res.task),
-  create: (input: CreateTaskInput) => fetchApi<{ task: Task }>('/tasks', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  }).then(res => res.task),
+  list: () => fetchApi<{ tasks: TaskView[] }>("/tasks").then((res) => res.tasks),
+  get: (id: string) => fetchApi<{ task: TaskView }>(`/tasks/${id}`).then((res) => res.task),
+  create: (input: CreateTaskInput) =>
+    fetchApi<{ task: Task }>("/tasks", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((res) => res.task),
 };
 
 // 実行履歴関連
 export const runsApi = {
   list: (taskId?: string) =>
-    fetchApi<{ runs: Run[] }>(`/runs${taskId ? `?taskId=${taskId}` : ''}`).then(res => res.runs),
-  get: (id: string) => fetchApi<{ run: Run & { logContent?: string | null }, artifacts: Artifact[] }>(`/runs/${id}`),
-  stats: () => fetchApi<{ dailyTokens: number, tokenLimit: number }>('/runs/stats'),
+    fetchApi<{ runs: Run[] }>(`/runs${taskId ? `?taskId=${taskId}` : ""}`).then((res) => res.runs),
+  get: (id: string) =>
+    fetchApi<{ run: Run & { logContent?: string | null }; artifacts: Artifact[] }>(`/runs/${id}`),
+  stats: () => fetchApi<{ dailyTokens: number; tokenLimit: number }>("/runs/stats"),
 };
 
 // システム状態
 export const systemApi = {
-  health: () => fetchApi<{ status: string, timestamp: string }>('/health'),
-  restart: () => fetchApi<RestartStatusResponse>('/system/restart', { method: 'POST' }),
-  restartStatus: () => fetchApi<RestartStatusResponse>('/system/restart'),
-  processes: () => fetchApi<{ processes: SystemProcess[] }>('/system/processes').then(res => res.processes),
+  health: () => fetchApi<{ status: string; timestamp: string }>("/health"),
+  restart: () => fetchApi<RestartStatusResponse>("/system/restart", { method: "POST" }),
+  restartStatus: () => fetchApi<RestartStatusResponse>("/system/restart"),
+  processes: () =>
+    fetchApi<{ processes: SystemProcess[] }>("/system/processes").then((res) => res.processes),
   startProcess: (name: string, payload?: { requirementPath?: string; content?: string }) =>
     fetchApi<{ process: SystemProcess }>(`/system/processes/${name}/start`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(payload ?? {}),
-    }).then(res => res.process),
+    }).then((res) => res.process),
   stopProcess: (name: string) =>
     fetchApi<{ process: SystemProcess }>(`/system/processes/${name}/stop`, {
-      method: 'POST',
-    }).then(res => res.process),
+      method: "POST",
+    }).then((res) => res.process),
   requirement: (path?: string) =>
     fetchApi<RequirementResponse>(
-      `/system/requirements${path ? `?path=${encodeURIComponent(path)}` : ''}`
+      `/system/requirements${path ? `?path=${encodeURIComponent(path)}` : ""}`,
     ),
-  cleanup: () => fetchApi<{ cleaned: boolean }>('/system/cleanup', { method: 'POST' }),
-  stopAllProcesses: () => fetchApi<{ stopped: string[]; skipped: string[]; message: string }>('/system/processes/stop-all', { method: 'POST' }),
-  createGithubRepo: (payload: { owner?: string; repo?: string; description?: string; private?: boolean }) =>
-    fetchApi<{ repo: GitHubRepoInfo }>('/system/github/repo', {
-      method: 'POST',
+  cleanup: () => fetchApi<{ cleaned: boolean }>("/system/cleanup", { method: "POST" }),
+  stopAllProcesses: () =>
+    fetchApi<{ stopped: string[]; skipped: string[]; message: string }>(
+      "/system/processes/stop-all",
+      { method: "POST" },
+    ),
+  createGithubRepo: (payload: {
+    owner?: string;
+    repo?: string;
+    description?: string;
+    private?: boolean;
+  }) =>
+    fetchApi<{ repo: GitHubRepoInfo }>("/system/github/repo", {
+      method: "POST",
       body: JSON.stringify(payload),
-    }).then(res => res.repo),
+    }).then((res) => res.repo),
   preflight: (payload?: { content?: string; autoCreateIssueTasks?: boolean }) =>
-    fetchApi<SystemPreflightSummary>('/system/preflight', {
-      method: 'POST',
+    fetchApi<SystemPreflightSummary>("/system/preflight", {
+      method: "POST",
       body: JSON.stringify(payload ?? {}),
     }),
 };
 
 // エージェント関連
 export const agentsApi = {
-  list: () => fetchApi<{ agents: Agent[] }>('/agents').then(res => res.agents),
-  get: (id: string) => fetchApi<{ agent: Agent }>(`/agents/${id}`).then(res => res.agent),
+  list: () => fetchApi<{ agents: Agent[] }>("/agents").then((res) => res.agents),
+  get: (id: string) => fetchApi<{ agent: Agent }>(`/agents/${id}`).then((res) => res.agent),
 };
 
 // Planner関連
 export const plansApi = {
   list: (limit?: number) =>
-    fetchApi<{ plans: PlanSnapshot[] }>(`/plans${limit ? `?limit=${limit}` : ''}`).then(res => res.plans),
+    fetchApi<{ plans: PlanSnapshot[] }>(`/plans${limit ? `?limit=${limit}` : ""}`).then(
+      (res) => res.plans,
+    ),
 };
 
 // Judge関連
 export const judgementsApi = {
   list: (params?: { taskId?: string; runId?: string; verdict?: string; limit?: number }) => {
     const query = new URLSearchParams();
-    if (params?.taskId) query.set('taskId', params.taskId);
-    if (params?.runId) query.set('runId', params.runId);
-    if (params?.verdict) query.set('verdict', params.verdict);
-    if (params?.limit) query.set('limit', String(params.limit));
+    if (params?.taskId) query.set("taskId", params.taskId);
+    if (params?.runId) query.set("runId", params.runId);
+    if (params?.verdict) query.set("verdict", params.verdict);
+    if (params?.limit) query.set("limit", String(params.limit));
     const suffix = query.toString();
-    return fetchApi<{ judgements: JudgementEvent[] }>(`/judgements${suffix ? `?${suffix}` : ''}`)
-      .then(res => res.judgements);
+    return fetchApi<{ judgements: JudgementEvent[] }>(
+      `/judgements${suffix ? `?${suffix}` : ""}`,
+    ).then((res) => res.judgements);
   },
   diff: (id: string, limit?: number) => {
     const query = new URLSearchParams();
-    if (limit) query.set('limit', String(limit));
+    if (limit) query.set("limit", String(limit));
     const suffix = query.toString();
-    return fetchApi<JudgementDiffResponse>(`/judgements/${id}/diff${suffix ? `?${suffix}` : ''}`);
+    return fetchApi<JudgementDiffResponse>(`/judgements/${id}/diff${suffix ? `?${suffix}` : ""}`);
   },
 };
 
@@ -313,32 +335,32 @@ export const judgementsApi = {
 export const logsApi = {
   agent: (agentId: string, lines?: number) => {
     const query = new URLSearchParams();
-    if (lines) query.set('lines', String(lines));
+    if (lines) query.set("lines", String(lines));
     const suffix = query.toString();
-    return fetchApi<AgentLogResponse>(`/logs/agents/${agentId}${suffix ? `?${suffix}` : ''}`);
+    return fetchApi<AgentLogResponse>(`/logs/agents/${agentId}${suffix ? `?${suffix}` : ""}`);
   },
   cycleManager: (lines?: number) => {
     const query = new URLSearchParams();
-    if (lines) query.set('lines', String(lines));
+    if (lines) query.set("lines", String(lines));
     const suffix = query.toString();
-    return fetchApi<AgentLogResponse>(`/logs/cycle-manager${suffix ? `?${suffix}` : ''}`);
+    return fetchApi<AgentLogResponse>(`/logs/cycle-manager${suffix ? `?${suffix}` : ""}`);
   },
   all: (params?: { sinceMinutes?: number; limit?: number; source?: string }) => {
     const query = new URLSearchParams();
-    if (params?.sinceMinutes !== undefined) query.set('sinceMinutes', String(params.sinceMinutes));
-    if (params?.limit !== undefined) query.set('limit', String(params.limit));
-    if (params?.source) query.set('source', params.source);
+    if (params?.sinceMinutes !== undefined) query.set("sinceMinutes", String(params.sinceMinutes));
+    if (params?.limit !== undefined) query.set("limit", String(params.limit));
+    if (params?.source) query.set("source", params.source);
     const suffix = query.toString();
-    return fetchApi<AllLogsResponse>(`/logs/all${suffix ? `?${suffix}` : ''}`);
+    return fetchApi<AllLogsResponse>(`/logs/all${suffix ? `?${suffix}` : ""}`);
   },
 };
 
 // 設定関連
 export const configApi = {
-  get: () => fetchApi<ConfigResponse>('/config'),
+  get: () => fetchApi<ConfigResponse>("/config"),
   update: (updates: Record<string, string>) =>
-    fetchApi<{ config: Record<string, string>; requiresRestart: boolean }>('/config', {
-      method: 'PATCH',
+    fetchApi<{ config: Record<string, string>; requiresRestart: boolean }>("/config", {
+      method: "PATCH",
       body: JSON.stringify({ updates }),
     }),
 };

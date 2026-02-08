@@ -39,7 +39,7 @@ let redisErrorLogged = false;
 let redisRetryAfterMs = 0;
 const redisReconnectDelayMs = Number.parseInt(
   process.env.API_RATE_LIMIT_REDIS_RECONNECT_DELAY_MS ?? "30000",
-  10
+  10,
 );
 
 async function getRedisClient(): Promise<RedisClient | null> {
@@ -60,17 +60,17 @@ async function getRedisClient(): Promise<RedisClient | null> {
   });
   redisClient.on("error", (error: Error) => {
     if (!redisErrorLogged) {
-      console.warn("[RateLimit] Redis unavailable, falling back to in-memory store:", error.message);
+      console.warn(
+        "[RateLimit] Redis unavailable, falling back to in-memory store:",
+        error.message,
+      );
       redisErrorLogged = true;
     }
   });
   return redisClient;
 }
 
-async function incrementMemoryRateLimit(
-  key: string,
-  windowMs: number
-): Promise<RateLimitEntry> {
+async function incrementMemoryRateLimit(key: string, windowMs: number): Promise<RateLimitEntry> {
   const now = Date.now();
   let entry = memoryStore.get(key);
   if (!entry || entry.resetAt < now) {
@@ -85,10 +85,7 @@ async function incrementMemoryRateLimit(
   return entry;
 }
 
-async function incrementRateLimit(
-  key: string,
-  windowMs: number
-): Promise<RateLimitEntry> {
+async function incrementRateLimit(key: string, windowMs: number): Promise<RateLimitEntry> {
   const redis = await getRedisClient();
   if (!redis) {
     return incrementMemoryRateLimit(key, windowMs);
@@ -114,11 +111,11 @@ async function incrementRateLimit(
       console.warn("[RateLimit] Redis operation failed, falling back to in-memory store:", message);
       redisErrorLogged = true;
     }
-    redisRetryAfterMs = Date.now() + (
-      Number.isFinite(redisReconnectDelayMs) && redisReconnectDelayMs > 0
+    redisRetryAfterMs =
+      Date.now() +
+      (Number.isFinite(redisReconnectDelayMs) && redisReconnectDelayMs > 0
         ? redisReconnectDelayMs
-        : 30000
-    );
+        : 30000);
     if (redisClient) {
       redisClient.disconnect();
       redisClient = null;
@@ -201,7 +198,7 @@ export function rateLimitMiddleware(config: Partial<RateLimitConfig> = {}) {
 
 // Rate limiting per endpoint
 export function endpointRateLimit(
-  limits: Record<string, { windowMs: number; maxRequests: number }>
+  limits: Record<string, { windowMs: number; maxRequests: number }>,
 ) {
   return createMiddleware(async (c: Context, next: Next) => {
     const path = c.req.path;

@@ -1,12 +1,16 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { judgementsApi, type JudgementEvent } from '../lib/api';
-import { getCiStatusColor } from '../ui/status';
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { judgementsApi, type JudgementEvent } from "../lib/api";
+import { getCiStatusColor } from "../ui/status";
 
 export const JudgementsPage: React.FC = () => {
-  const { data: judgements, isLoading, error } = useQuery({
-    queryKey: ['judgements'],
+  const {
+    data: judgements,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["judgements"],
     queryFn: () => judgementsApi.list({ limit: 50 }),
   });
 
@@ -17,20 +21,26 @@ export const JudgementsPage: React.FC = () => {
           &gt; Judge_Audit_Log
         </h1>
         <span className="text-xs text-zinc-500">
-          {isLoading ? 'Scanning...' : `${judgements?.length ?? 0} EVENTS LOGGED`}
+          {isLoading ? "Scanning..." : `${judgements?.length ?? 0} EVENTS LOGGED`}
         </span>
       </div>
 
       {isLoading && (
-        <div className="text-center text-zinc-500 py-12 font-mono animate-pulse">&gt; Retrieving audit logs...</div>
+        <div className="text-center text-zinc-500 py-12 font-mono animate-pulse">
+          &gt; Retrieving audit logs...
+        </div>
       )}
       {error && (
-        <div className="text-center text-red-500 py-12 font-mono">&gt; ERROR: Failed to load logs</div>
+        <div className="text-center text-red-500 py-12 font-mono">
+          &gt; ERROR: Failed to load logs
+        </div>
       )}
 
       <div className="space-y-6">
         {(judgements ?? []).length === 0 && !isLoading && !error && (
-          <div className="text-center text-zinc-500 py-12 font-mono">&gt; No judgement events recorded</div>
+          <div className="text-center text-zinc-500 py-12 font-mono">
+            &gt; No judgement events recorded
+          </div>
         )}
 
         {(judgements ?? []).map((event) => (
@@ -43,9 +53,10 @@ export const JudgementsPage: React.FC = () => {
 
 const JudgementCard = ({ event }: { event: JudgementEvent }) => {
   const payload = event.payload ?? {};
-  const verdict = normalizeLegacyVerdict(payload.verdict ?? 'unknown');
+  const verdict = normalizeLegacyVerdict(payload.verdict ?? "unknown");
   const actions = payload.actions ?? {};
-  const ciStatus = payload.summary?.ci?.status ?? (payload.summary?.ci?.pass ? 'success' : 'unknown');
+  const ciStatus =
+    payload.summary?.ci?.status ?? (payload.summary?.ci?.pass ? "success" : "unknown");
   const policyPass = payload.summary?.policy?.pass;
   const llmPass = payload.summary?.llm?.pass;
   const llmConfidence = payload.summary?.llm?.confidence;
@@ -55,12 +66,17 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
   const prUrl = payload.prUrl;
   const [showDiff, setShowDiff] = React.useState(false);
 
-  const { data: diffData, isLoading: isDiffLoading, error: diffError } = useQuery({
-    queryKey: ['judgements', event.id, 'diff'],
+  const {
+    data: diffData,
+    isLoading: isDiffLoading,
+    error: diffError,
+  } = useQuery({
+    queryKey: ["judgements", event.id, "diff"],
     queryFn: () => judgementsApi.diff(event.id),
     enabled: showDiff,
   });
-  const diffErrorMessage = diffError instanceof Error ? diffError.message : 'Could not retrieve diff data.';
+  const diffErrorMessage =
+    diffError instanceof Error ? diffError.message : "Could not retrieve diff data.";
 
   return (
     <section className="border border-term-border p-0 font-mono">
@@ -68,9 +84,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
       <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-4 text-xs">
           <span className="text-zinc-500">{new Date(event.createdAt).toLocaleString()}</span>
-          <div className={`font-bold ${getVerdictColor(verdict)}`}>
-            [{verdict.toUpperCase()}]
-          </div>
+          <div className={`font-bold ${getVerdictColor(verdict)}`}>[{verdict.toUpperCase()}]</div>
 
           <div className="flex items-center gap-2 text-zinc-400">
             <span>TASK:</span>
@@ -90,14 +104,12 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
         </div>
 
         <div className="flex gap-4 text-xs">
-          <div className={`${getCiStatusColor(ciStatus)}`}>
-            CI:{ciStatus.toUpperCase()}
+          <div className={`${getCiStatusColor(ciStatus)}`}>CI:{ciStatus.toUpperCase()}</div>
+          <div className={policyPass ? "text-term-tiger" : "text-red-500"}>
+            POLICY:{policyPass ? "PASS" : "FAIL"}
           </div>
-          <div className={policyPass ? 'text-term-tiger' : 'text-red-500'}>
-            POLICY:{policyPass ? 'PASS' : 'FAIL'}
-          </div>
-          <div className={llmPass ? 'text-term-tiger' : 'text-yellow-500'}>
-            LLM:{llmPass ? 'PASS' : 'REV'}
+          <div className={llmPass ? "text-term-tiger" : "text-yellow-500"}>
+            LLM:{llmPass ? "PASS" : "REV"}
           </div>
         </div>
       </div>
@@ -109,29 +121,44 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
           <div className="text-zinc-500 uppercase font-bold tracking-wider mb-2">Merge_Status</div>
           <div className="grid grid-cols-[100px_1fr] gap-1">
             <span className="text-zinc-500">AUTO_MERGE</span>
-            <span>{payload.autoMerge ? 'TRUE' : 'FALSE'}</span>
+            <span>{payload.autoMerge ? "TRUE" : "FALSE"}</span>
 
             <span className="text-zinc-500">PR_LINK</span>
             <span>
               {prNumber ? (
-                prUrl ? <a href={prUrl} className="text-blue-400 hover:underline" target="_blank" rel="noreferrer">#{prNumber}</a> : <span>#{prNumber}</span>
-              ) : <span className="text-zinc-600">N/A</span>}
+                prUrl ? (
+                  <a
+                    href={prUrl}
+                    className="text-blue-400 hover:underline"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    #{prNumber}
+                  </a>
+                ) : (
+                  <span>#{prNumber}</span>
+                )
+              ) : (
+                <span className="text-zinc-600">N/A</span>
+              )}
             </span>
 
             <span className="text-zinc-500">ACTIONS</span>
             <span>
               {[
-                actions.commented && 'COMMENTED',
-                actions.approved && 'APPROVED',
-                actions.merged && 'MERGED'
-              ].filter(Boolean).join(', ') || 'NONE'}
+                actions.commented && "COMMENTED",
+                actions.approved && "APPROVED",
+                actions.merged && "MERGED",
+              ]
+                .filter(Boolean)
+                .join(", ") || "NONE"}
             </span>
 
             {payload.mergeResult && (
               <>
                 <span className="text-zinc-500">LOCAL_MERGE</span>
-                <span className={payload.mergeResult.success ? 'text-term-tiger' : 'text-red-500'}>
-                  {payload.mergeResult.success ? 'SUCCESS' : 'FAILED'}
+                <span className={payload.mergeResult.success ? "text-term-tiger" : "text-red-500"}>
+                  {payload.mergeResult.success ? "SUCCESS" : "FAILED"}
                 </span>
               </>
             )}
@@ -143,23 +170,33 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
           <div className="text-zinc-500 uppercase font-bold tracking-wider mb-2">Metrics</div>
           <div className="grid grid-cols-[120px_1fr] gap-1">
             <span className="text-zinc-500">CONFIDENCE</span>
-            <span>{typeof llmConfidence === 'number' ? `${Math.round(llmConfidence * 100)}%` : 'N/A'}</span>
+            <span>
+              {typeof llmConfidence === "number" ? `${Math.round(llmConfidence * 100)}%` : "N/A"}
+            </span>
 
             <span className="text-zinc-500">ISSUES</span>
             <span>{codeIssueCount} detected</span>
 
             <span className="text-zinc-500">VIOLATIONS</span>
-            <span className={violations.length > 0 ? 'text-red-500' : 'text-zinc-400'}>{violations.length}</span>
+            <span className={violations.length > 0 ? "text-red-500" : "text-zinc-400"}>
+              {violations.length}
+            </span>
           </div>
         </div>
 
         {/* Notes/Summary */}
         <div className="p-4 space-y-2">
           <div className="text-zinc-500 uppercase font-bold tracking-wider mb-2">Notes</div>
-          {(payload.reasons?.length || payload.suggestions?.length) ? (
+          {payload.reasons?.length || payload.suggestions?.length ? (
             <ul className="list-disc list-inside text-zinc-400 space-y-1">
-              {payload.reasons?.map((r, i) => <li key={`r-${i}`}>{r}</li>)}
-              {payload.suggestions?.map((s, i) => <li key={`s-${i}`} className="text-yellow-500/80">{s}</li>)}
+              {payload.reasons?.map((r, i) => (
+                <li key={`r-${i}`}>{r}</li>
+              ))}
+              {payload.suggestions?.map((s, i) => (
+                <li key={`s-${i}`} className="text-yellow-500/80">
+                  {s}
+                </li>
+              ))}
             </ul>
           ) : (
             <div className="text-zinc-600 italic">// No notes recorded</div>
@@ -173,10 +210,8 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
           onClick={() => setShowDiff(!showDiff)}
           className="text-xs text-zinc-400 hover:text-term-fg flex items-center gap-2 hover:underline"
         >
-          {showDiff ? '[-] HIDE_DIFF' : '[+] SHOW_DIFF'}
-          <span className="text-zinc-600 ml-2">
-            (Judge: {event.agentId ?? 'system'})
-          </span>
+          {showDiff ? "[-] HIDE_DIFF" : "[+] SHOW_DIFF"}
+          <span className="text-zinc-600 ml-2">(Judge: {event.agentId ?? "system"})</span>
         </button>
       </div>
 
@@ -184,7 +219,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
       {showDiff && (
         <div className="border-t border-term-border p-4 bg-black">
           <div className="mb-2 text-xs text-zinc-500 flex justify-between">
-            <span>SOURCE: {diffData?.source || 'unknown'}</span>
+            <span>SOURCE: {diffData?.source || "unknown"}</span>
             {diffData?.truncated && <span className="text-yellow-500">[ TRUNCATED ]</span>}
           </div>
 
@@ -194,7 +229,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
             <div className="text-red-500 text-xs">&gt; ERR: {diffErrorMessage}</div>
           ) : (
             <pre className="text-xs text-zinc-300 whitespace-pre-wrap overflow-x-auto">
-              {diffData?.diff || '// No diff available'}
+              {diffData?.diff || "// No diff available"}
             </pre>
           )}
         </div>
@@ -205,15 +240,15 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
 
 const getVerdictColor = (verdict: string) => {
   switch (verdict) {
-    case 'approve':
-      return 'text-term-tiger';
-    case 'request_changes':
-      return 'text-red-500';
+    case "approve":
+      return "text-term-tiger";
+    case "request_changes":
+      return "text-red-500";
     default:
-      return 'text-zinc-500';
+      return "text-zinc-500";
   }
 };
 
 function normalizeLegacyVerdict(verdict: string): string {
-  return verdict === 'needs_human' ? 'request_changes' : verdict;
+  return verdict === "needs_human" ? "request_changes" : verdict;
 }

@@ -66,10 +66,7 @@ function extractSystemLogTimestamp(fileName: string): number {
   return 0;
 }
 
-async function findLatestSystemLog(
-  logDir: string,
-  processNames: string[]
-): Promise<string | null> {
+async function findLatestSystemLog(logDir: string, processNames: string[]): Promise<string | null> {
   let entries: string[] = [];
   try {
     entries = await readdir(logDir);
@@ -78,13 +75,11 @@ async function findLatestSystemLog(
   }
 
   const candidates = entries
-    .filter((entry) =>
-      entry.endsWith(".log")
-      && processNames.some((name) => entry.startsWith(`system-${name}-`))
+    .filter(
+      (entry) =>
+        entry.endsWith(".log") && processNames.some((name) => entry.startsWith(`system-${name}-`)),
     )
-    .sort(
-      (a, b) => extractSystemLogTimestamp(b) - extractSystemLogTimestamp(a)
-    );
+    .sort((a, b) => extractSystemLogTimestamp(b) - extractSystemLogTimestamp(a));
 
   const latest = candidates[0];
   if (!latest) {
@@ -131,9 +126,7 @@ function parseTimestampMs(line: string): number | undefined {
     }
   }
 
-  const slash = line.match(
-    /\b(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})\b/
-  );
+  const slash = line.match(/\b(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2}):(\d{2})\b/);
   if (slash) {
     const [, y, m, d, hh, mm, ss] = slash;
     const ms = new Date(
@@ -142,7 +135,7 @@ function parseTimestampMs(line: string): number | undefined {
       Number(d),
       Number(hh),
       Number(mm),
-      Number(ss)
+      Number(ss),
     ).getTime();
     if (Number.isFinite(ms)) {
       return ms;
@@ -248,11 +241,9 @@ async function readAllLogs(options: {
     return a.lineNo - b.lineNo;
   });
 
-  const threshold =
-    sinceMinutes !== undefined ? Date.now() - sinceMinutes * 60_000 : undefined;
-  const filtered = threshold !== undefined
-    ? entries.filter((entry) => entry.timestampMs >= threshold)
-    : entries;
+  const threshold = sinceMinutes !== undefined ? Date.now() - sinceMinutes * 60_000 : undefined;
+  const filtered =
+    threshold !== undefined ? entries.filter((entry) => entry.timestampMs >= threshold) : entries;
 
   const total = filtered.length;
   const sliced = total > limit ? filtered.slice(total - limit) : filtered;
@@ -276,7 +267,7 @@ async function readAllLogs(options: {
 
 async function readTailLines(
   filePath: string,
-  lineLimit: number
+  lineLimit: number,
 ): Promise<{ log: string; sizeBytes: number; updatedAt: string }> {
   const fileStat = await stat(filePath);
   const sizeBytes = fileStat.size;
@@ -333,10 +324,9 @@ logsRoute.get("/cycle-manager", async (c) => {
   const lines = parseLines(c.req.query("lines"));
   const logDir = resolveLogDir();
   const directPath = join(logDir, "cycle-manager.log");
-  const logPath =
-    (await pathExists(directPath))
-      ? directPath
-      : (await findLatestSystemLog(logDir, ["cycle-manager"])) ?? directPath;
+  const logPath = (await pathExists(directPath))
+    ? directPath
+    : ((await findLatestSystemLog(logDir, ["cycle-manager"])) ?? directPath);
 
   try {
     const { log, sizeBytes, updatedAt } = await readTailLines(logPath, lines);

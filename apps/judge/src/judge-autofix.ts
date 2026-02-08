@@ -11,17 +11,12 @@ import {
 import type { EvaluationSummary } from "./pr-reviewer";
 
 export function escapeSqlLikePattern(input: string): string {
-  return input
-    .replaceAll("\\", "\\\\")
-    .replaceAll("%", "\\%")
-    .replaceAll("_", "\\_");
+  return input.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
 export function summarizeLLMIssuesForTask(summary: EvaluationSummary): string {
   const issues = summary.llm.codeIssues.slice(0, 12).map((issue, index) => {
-    const location = issue.file
-      ? `${issue.file}${issue.line ? `:${issue.line}` : ""}`
-      : "unknown";
+    const location = issue.file ? `${issue.file}${issue.line ? `:${issue.line}` : ""}` : "unknown";
     const suggestion = issue.suggestion ? ` | fix: ${issue.suggestion}` : "";
     return `${index + 1}. [${issue.severity}] ${issue.category} @ ${location}: ${issue.message}${suggestion}`;
   });
@@ -37,13 +32,13 @@ export function isMergeConflictReasonText(text: string | undefined): boolean {
   }
   const lower = text.toLowerCase();
   return (
-    lower.includes("not mergeable")
-    || lower.includes("merge conflict")
-    || lower.includes("conflict")
-    || lower.includes("pr_merge_conflict_detected")
-    || lower.includes("mergeable_state")
-    || lower.includes("dirty")
-    || lower.includes("update_branch_failed")
+    lower.includes("not mergeable") ||
+    lower.includes("merge conflict") ||
+    lower.includes("conflict") ||
+    lower.includes("pr_merge_conflict_detected") ||
+    lower.includes("mergeable_state") ||
+    lower.includes("dirty") ||
+    lower.includes("update_branch_failed")
   );
 }
 
@@ -57,9 +52,7 @@ export function hasMergeConflictSignals(params: {
   if (params.summary.llm.reasons.some((reason) => isMergeConflictReasonText(reason))) {
     return true;
   }
-  return params.summary.llm.suggestions.some((suggestion) =>
-    isMergeConflictReasonText(suggestion)
-  );
+  return params.summary.llm.suggestions.some((suggestion) => isMergeConflictReasonText(suggestion));
 }
 
 export async function getPrBranchContext(prNumber: number): Promise<{
@@ -81,10 +74,7 @@ export async function getPrBranchContext(prNumber: number): Promise<{
       baseRef: response.data.base.ref ?? undefined,
     };
   } catch (error) {
-    console.warn(
-      `[Judge] Failed to resolve PR branch context for #${prNumber}:`,
-      error
-    );
+    console.warn(`[Judge] Failed to resolve PR branch context for #${prNumber}:`, error);
     return {};
   }
 }
@@ -119,8 +109,8 @@ export async function createAutoFixTaskForPr(params: {
     .where(
       and(
         sql`${tasks.title} like ${titlePattern} escape '\\'`,
-        inArray(tasks.status, ["queued", "running", "blocked"])
-      )
+        inArray(tasks.status, ["queued", "running", "blocked"]),
+      ),
     )
     .limit(1);
   if (activeTask?.id) {
@@ -143,8 +133,8 @@ export async function createAutoFixTaskForPr(params: {
     new Set(
       params.summary.llm.codeIssues
         .map((issue) => issue.file?.trim())
-        .filter((file): file is string => Boolean(file))
-    )
+        .filter((file): file is string => Boolean(file)),
+    ),
   );
   const summarizedIssues = summarizeLLMIssuesForTask(params.summary);
   const nextAttempt = attemptCount + 1;
@@ -235,8 +225,8 @@ export async function createConflictAutoFixTaskForPr(params: {
     .where(
       and(
         sql`${tasks.title} like ${titlePattern} escape '\\'`,
-        inArray(tasks.status, ["queued", "running", "blocked"])
-      )
+        inArray(tasks.status, ["queued", "running", "blocked"]),
+      ),
     )
     .limit(1);
   if (activeTask?.id) {
@@ -258,9 +248,10 @@ export async function createConflictAutoFixTaskForPr(params: {
   const reasonLine = params.mergeDeferredReason
     ? `merge_reason: ${params.mergeDeferredReason}`
     : "merge_reason: unknown";
-  const llmReasonLines = params.summary.llm.reasons.length > 0
-    ? params.summary.llm.reasons.map((reason) => `- ${reason}`).join("\n")
-    : "- (none)";
+  const llmReasonLines =
+    params.summary.llm.reasons.length > 0
+      ? params.summary.llm.reasons.map((reason) => `- ${reason}`).join("\n")
+      : "- (none)";
   const nextAttempt = attemptCount + 1;
   const prBranchContext = await getPrBranchContext(params.prNumber);
 

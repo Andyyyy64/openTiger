@@ -1,6 +1,11 @@
 import { addPRComment, mergePR, getOctokit, getRepoInfo } from "@openTiger/vcs";
 import type { Policy } from "@openTiger/core";
-import type { CIEvaluationResult, PolicyEvaluationResult, LLMEvaluationResult, CodeIssue } from "./evaluators/index";
+import type {
+  CIEvaluationResult,
+  PolicyEvaluationResult,
+  LLMEvaluationResult,
+  CodeIssue,
+} from "./evaluators/index";
 
 const ALLOW_LLM_FAIL_AUTOMERGE = process.env.JUDGE_ALLOW_LLM_FAIL_AUTOMERGE !== "false";
 
@@ -28,7 +33,7 @@ export interface EvaluationSummary {
 export function makeJudgement(
   summary: EvaluationSummary,
   policy: Policy,
-  taskRiskLevel: "low" | "medium" | "high"
+  taskRiskLevel: "low" | "medium" | "high",
 ): JudgeResult {
   const reasons: string[] = [];
   const suggestions: string[] = [];
@@ -62,17 +67,13 @@ export function makeJudgement(
   // LLM評価
   suggestions.push(...summary.llm.suggestions);
   const maxRiskLevel = policy.autoMerge.maxRiskLevel;
-  const canAutoMerge =
-    policy.autoMerge.enabled && isRiskAllowed(taskRiskLevel, maxRiskLevel);
-  const allowLlmBypass =
-    ALLOW_LLM_FAIL_AUTOMERGE && canAutoMerge;
+  const canAutoMerge = policy.autoMerge.enabled && isRiskAllowed(taskRiskLevel, maxRiskLevel);
+  const allowLlmBypass = ALLOW_LLM_FAIL_AUTOMERGE && canAutoMerge;
 
   if (!summary.llm.pass) {
     reasons.push(...summary.llm.reasons);
     if (allowLlmBypass) {
-      suggestions.push(
-        "LLM指摘は参考情報として扱い、低リスクのため自動マージを優先します。"
-      );
+      suggestions.push("LLM指摘は参考情報として扱い、低リスクのため自動マージを優先します。");
       return {
         verdict: "approve",
         reasons: [],
@@ -103,8 +104,7 @@ export function makeJudgement(
     };
   }
 
-  const shouldRequireHuman =
-    taskRiskLevel === "high" && maxRiskLevel === "low";
+  const shouldRequireHuman = taskRiskLevel === "high" && maxRiskLevel === "low";
 
   if (shouldRequireHuman) {
     return {
@@ -128,17 +128,14 @@ export function makeJudgement(
 
 function isRiskAllowed(
   taskRisk: "low" | "medium" | "high",
-  maxRisk: "low" | "medium" | "high"
+  maxRisk: "low" | "medium" | "high",
 ): boolean {
   const priority = { low: 0, medium: 1, high: 2 };
   return priority[taskRisk] <= priority[maxRisk];
 }
 
 // レビューコメントを生成
-export function generateReviewComment(
-  result: JudgeResult,
-  summary: EvaluationSummary
-): string {
+export function generateReviewComment(result: JudgeResult, summary: EvaluationSummary): string {
   const verdictEmoji = {
     approve: "✅",
     request_changes: "❌",
@@ -232,7 +229,7 @@ export function generateReviewComment(
 export async function postReviewComment(
   prNumber: number,
   result: JudgeResult,
-  summary: EvaluationSummary
+  summary: EvaluationSummary,
 ): Promise<void> {
   const comment = generateReviewComment(result, summary);
   await addPRComment(prNumber, comment);
@@ -252,10 +249,7 @@ export async function approvePR(prNumber: number): Promise<void> {
 }
 
 // PRに変更をリクエスト
-export async function requestChanges(
-  prNumber: number,
-  reasons: string[]
-): Promise<void> {
+export async function requestChanges(prNumber: number, reasons: string[]): Promise<void> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
 
@@ -271,7 +265,7 @@ export async function requestChanges(
 // PRを自動マージ
 export async function autoMergePR(
   prNumber: number,
-  mergeMethod: "merge" | "squash" | "rebase" = "squash"
+  mergeMethod: "merge" | "squash" | "rebase" = "squash",
 ): Promise<boolean> {
   return mergePR(prNumber, mergeMethod);
 }
@@ -280,7 +274,7 @@ export async function autoMergePR(
 export async function reviewAndAct(
   prNumber: number,
   result: JudgeResult,
-  summary: EvaluationSummary
+  summary: EvaluationSummary,
 ): Promise<{
   commented: boolean;
   merged: boolean;
@@ -332,7 +326,6 @@ export async function reviewAndAct(
           await requestChanges(prNumber, result.reasons);
         }
         break;
-
     }
   } catch (error) {
     console.error(`Failed to process PR #${prNumber}:`, error);
@@ -342,7 +335,7 @@ export async function reviewAndAct(
 }
 
 async function trySyncPRWithBase(
-  prNumber: number
+  prNumber: number,
 ): Promise<{ requested: boolean; reason: string }> {
   try {
     const octokit = getOctokit();

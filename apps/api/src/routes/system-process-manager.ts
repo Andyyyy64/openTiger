@@ -4,12 +4,7 @@ import { createWriteStream, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@openTiger/db";
-import {
-  agents,
-  leases,
-  runs,
-  tasks,
-} from "@openTiger/db/schema";
+import { agents, leases, runs, tasks } from "@openTiger/db/schema";
 import { configToEnv } from "../system-config";
 import { ensureConfigRow } from "../config-store";
 import { getAuthInfo } from "../middleware/index";
@@ -102,15 +97,15 @@ const processStartLocks = new Set<string>();
 const AUTO_RESTART_ENABLED = process.env.SYSTEM_PROCESS_AUTO_RESTART !== "false";
 const AUTO_RESTART_DELAY_MS = Number.parseInt(
   process.env.SYSTEM_PROCESS_AUTO_RESTART_DELAY_MS ?? "2000",
-  10
+  10,
 );
 const AUTO_RESTART_WINDOW_MS = Number.parseInt(
   process.env.SYSTEM_PROCESS_AUTO_RESTART_WINDOW_MS ?? "300000",
-  10
+  10,
 );
 const AUTO_RESTART_MAX_ATTEMPTS = Number.parseInt(
   process.env.SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS ?? "-1",
-  10
+  10,
 );
 
 function resolveLogDir(): string {
@@ -130,7 +125,7 @@ function describeCommand(command: StartCommand): string {
 const MAX_PLANNER_PROCESSES = 1;
 const AGENT_LIVENESS_WINDOW_MS = Number.parseInt(
   process.env.SYSTEM_AGENT_LIVENESS_WINDOW_MS ?? "120000",
-  10
+  10,
 );
 
 function resolveBoundAgentId(processName: string): string | null {
@@ -170,13 +165,12 @@ async function detectLiveBoundAgent(processName: string): Promise<{
     return { alive: false, agentId };
   }
 
-  const livenessWindowMs = Number.isFinite(AGENT_LIVENESS_WINDOW_MS)
-    && AGENT_LIVENESS_WINDOW_MS > 0
-    ? AGENT_LIVENESS_WINDOW_MS
-    : 120000;
+  const livenessWindowMs =
+    Number.isFinite(AGENT_LIVENESS_WINDOW_MS) && AGENT_LIVENESS_WINDOW_MS > 0
+      ? AGENT_LIVENESS_WINDOW_MS
+      : 120000;
   const alive =
-    agent.status !== "offline"
-    && agent.lastHeartbeat.getTime() >= Date.now() - livenessWindowMs;
+    agent.status !== "offline" && agent.lastHeartbeat.getTime() >= Date.now() - livenessWindowMs;
 
   return {
     alive,
@@ -188,7 +182,7 @@ async function detectLiveBoundAgent(processName: string): Promise<{
 function parseIndexedProcessName(
   name: string,
   prefix: string,
-  options: { allowBaseName?: boolean } = {}
+  options: { allowBaseName?: boolean } = {},
 ): number | null {
   const allowBaseName = options.allowBaseName ?? false;
   if (allowBaseName && name === prefix) {
@@ -217,7 +211,7 @@ function buildPlannerDefinition(index: number): ProcessDefinition {
       const requirementPath = await resolveRequirementPath(
         payload.requirementPath,
         "requirement.md",
-        { allowMissing: Boolean(payload.content) }
+        { allowMissing: Boolean(payload.content) },
       );
       if (payload.content) {
         await writeRequirementFile(requirementPath, payload.content);
@@ -253,17 +247,21 @@ function buildJudgeDefinition(index: number): ProcessDefinition {
 
 function buildWorkerRoleDefinition(
   role: "worker" | "tester" | "docser",
-  index: number
+  index: number,
 ): ProcessDefinition {
   const name = `${role}-${index}`;
-  const label = role === "docser"
-    ? (index === 1 ? "Docser" : `Docser #${index}`)
-    : `${role === "worker" ? "Worker" : "Tester"} #${index}`;
-  const description = role === "worker"
-    ? "実装ワーカー"
-    : role === "tester"
-      ? "テスト専用ワーカー"
-      : "ドキュメント更新ワーカー";
+  const label =
+    role === "docser"
+      ? index === 1
+        ? "Docser"
+        : `Docser #${index}`
+      : `${role === "worker" ? "Worker" : "Tester"} #${index}`;
+  const description =
+    role === "worker"
+      ? "実装ワーカー"
+      : role === "tester"
+        ? "テスト専用ワーカー"
+        : "ドキュメント更新ワーカー";
   return {
     name,
     label,
@@ -377,7 +375,7 @@ const processDefinitions: ProcessDefinition[] = [
 ];
 
 const processDefinitionMap = new Map(
-  processDefinitions.map((definition) => [definition.name, definition])
+  processDefinitions.map((definition) => [definition.name, definition]),
 );
 
 function resolveProcessDefinition(name: string): ProcessDefinition | undefined {
@@ -403,10 +401,7 @@ function listProcessDefinitions(): ProcessDefinition[] {
   return Array.from(definitions.values());
 }
 
-function buildProcessInfo(
-  definition: ProcessDefinition,
-  runtime?: ProcessRuntime
-): ProcessInfo {
+function buildProcessInfo(definition: ProcessDefinition, runtime?: ProcessRuntime): ProcessInfo {
   return {
     name: definition.name,
     label: definition.label,
@@ -441,21 +436,23 @@ function canAutoRestart(definition: ProcessDefinition, runtime: ProcessRuntime):
 
 async function scheduleProcessAutoRestart(
   definition: ProcessDefinition,
-  runtime: ProcessRuntime
+  runtime: ProcessRuntime,
 ): Promise<void> {
   if (runtime.restartTimer) {
     clearTimeout(runtime.restartTimer);
   }
 
   const now = Date.now();
-  const windowMs = Number.isFinite(AUTO_RESTART_WINDOW_MS) && AUTO_RESTART_WINDOW_MS > 0
-    ? AUTO_RESTART_WINDOW_MS
-    : 300000;
-  const delayMs = Number.isFinite(AUTO_RESTART_DELAY_MS) && AUTO_RESTART_DELAY_MS >= 0
-    ? AUTO_RESTART_DELAY_MS
-    : 2000;
-  const hasMaxAttempts = Number.isFinite(AUTO_RESTART_MAX_ATTEMPTS)
-    && AUTO_RESTART_MAX_ATTEMPTS > 0;
+  const windowMs =
+    Number.isFinite(AUTO_RESTART_WINDOW_MS) && AUTO_RESTART_WINDOW_MS > 0
+      ? AUTO_RESTART_WINDOW_MS
+      : 300000;
+  const delayMs =
+    Number.isFinite(AUTO_RESTART_DELAY_MS) && AUTO_RESTART_DELAY_MS >= 0
+      ? AUTO_RESTART_DELAY_MS
+      : 2000;
+  const hasMaxAttempts =
+    Number.isFinite(AUTO_RESTART_MAX_ATTEMPTS) && AUTO_RESTART_MAX_ATTEMPTS > 0;
   const maxAttempts = hasMaxAttempts ? AUTO_RESTART_MAX_ATTEMPTS : Number.POSITIVE_INFINITY;
 
   const windowStart = runtime.restartWindowStartedAt ?? now;
@@ -463,7 +460,7 @@ async function scheduleProcessAutoRestart(
   const nextAttempts = (resetWindow ? 0 : (runtime.restartAttempts ?? 0)) + 1;
   const nextWindowStart = resetWindow ? now : windowStart;
   const cappedAttemptsForBackoff = Math.max(1, Math.min(nextAttempts, 6));
-  const nextDelayMs = Math.min(60000, delayMs * (2 ** (cappedAttemptsForBackoff - 1)));
+  const nextDelayMs = Math.min(60000, delayMs * 2 ** (cappedAttemptsForBackoff - 1));
   const attemptLabel = hasMaxAttempts ? `${nextAttempts}/${maxAttempts}` : `${nextAttempts}/∞`;
 
   if (hasMaxAttempts && nextAttempts > maxAttempts) {
@@ -475,7 +472,7 @@ async function scheduleProcessAutoRestart(
       message: `Auto-restart exhausted (${maxAttempts}/${Math.round(windowMs / 1000)}s)`,
     });
     console.error(
-      `[System] Auto-restart exhausted for ${definition.name} (attempts=${nextAttempts})`
+      `[System] Auto-restart exhausted for ${definition.name} (attempts=${nextAttempts})`,
     );
     return;
   }
@@ -548,7 +545,7 @@ async function scheduleProcessAutoRestart(
 
 async function startManagedProcess(
   definition: ProcessDefinition,
-  payload: StartPayload
+  payload: StartPayload,
 ): Promise<ProcessInfo> {
   const inFlightStart = processStartPromises.get(definition.name);
   if (inFlightStart) {
@@ -613,11 +610,7 @@ async function startManagedProcess(
     child.on("exit", (code, signal) => {
       const latest = managedProcesses.get(definition.name);
       if (!latest) return;
-      const status = latest.stopRequested
-        ? "stopped"
-        : code === 0
-          ? "completed"
-          : "failed";
+      const status = latest.stopRequested ? "stopped" : code === 0 ? "completed" : "failed";
       const nextRuntime: ProcessRuntime = {
         ...latest,
         status,
@@ -666,9 +659,7 @@ async function startManagedProcess(
   }
 }
 
-function stopManagedProcess(
-  definition: ProcessDefinition
-): ProcessInfo {
+function stopManagedProcess(definition: ProcessDefinition): ProcessInfo {
   const runtime = managedProcesses.get(definition.name);
   if (!runtime) {
     return buildProcessInfo(definition, { status: "idle" });
@@ -823,7 +814,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
       return c.json({ error: "Admin access required" }, 403);
     }
     const processes = listProcessDefinitions().map((definition) =>
-      buildProcessInfo(definition, managedProcesses.get(definition.name))
+      buildProcessInfo(definition, managedProcesses.get(definition.name)),
     );
     return c.json({ processes });
   });
@@ -866,9 +857,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
         stopRequested: false,
         message:
           `Detected existing live agent ${discoveredAgent.agentId}` +
-          (discoveredAgent.lastHeartbeat
-            ? ` (heartbeat=${discoveredAgent.lastHeartbeat})`
-            : ""),
+          (discoveredAgent.lastHeartbeat ? ` (heartbeat=${discoveredAgent.lastHeartbeat})` : ""),
       };
       managedProcesses.set(definition.name, runtime);
       return c.json({
@@ -889,7 +878,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
             error: "Planner already running",
             process: buildProcessInfo(definition, existing),
           },
-          409
+          409,
         );
       }
       if (processStartLocks.has(runtimeKey)) {
@@ -898,7 +887,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
             error: "Planner start already in progress",
             process: buildProcessInfo(definition, managedProcesses.get(runtimeKey)),
           },
-          409
+          409,
         );
       }
       processStartLocks.add(runtimeKey);
@@ -932,15 +921,13 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
                 `(openPR=${preflight.github.openPrCount}, awaitingJudge=${preflight.local.pendingJudgeTaskCount}). ` +
                 "Start judge first and clear PR backlog.",
             },
-            409
+            409,
           );
         }
       }
       const payload: StartPayload = {
         requirementPath:
-          typeof rawBody?.requirementPath === "string"
-            ? rawBody.requirementPath
-            : undefined,
+          typeof rawBody?.requirementPath === "string" ? rawBody.requirementPath : undefined,
         content: rawContent,
       };
       const processInfo = await startManagedProcess(definition, payload);
@@ -987,7 +974,12 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
     for (const definition of listProcessDefinitions()) {
       // Only stop processes other than ui and server
       // ui and server are started by pnpm run up and are not managed by system.ts
-      if (definition.name === "ui" || definition.name === "server" || definition.name === "dashboard" || definition.name === "api") {
+      if (
+        definition.name === "ui" ||
+        definition.name === "server" ||
+        definition.name === "dashboard" ||
+        definition.name === "api"
+      ) {
         continue;
       }
 
@@ -1052,10 +1044,15 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
           lastHeartbeat: new Date(),
         })
         .where(
-          inArray(
-            agents.role,
-            ["planner", "judge", "worker", "tester", "docser", "dispatcher", "cycle-manager"]
-          )
+          inArray(agents.role, [
+            "planner",
+            "judge",
+            "worker",
+            "tester",
+            "docser",
+            "dispatcher",
+            "cycle-manager",
+          ]),
         );
     } catch (error) {
       console.error("[System] stop-all cleanup failed:", error);

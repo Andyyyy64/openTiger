@@ -42,13 +42,13 @@ agentsRoute.get("/:id", async (c) => {
 const registerAgentSchema = z.object({
   id: z.string(),
   role: z.enum(["planner", "worker", "judge", "tester"]),
-    metadata: z
-      .object({
-        model: z.string().optional(),
-        provider: z.string().optional(),
-        version: z.string().optional(),
-      })
-      .optional(),
+  metadata: z
+    .object({
+      model: z.string().optional(),
+      provider: z.string().optional(),
+      version: z.string().optional(),
+    })
+    .optional(),
 });
 
 // エージェント登録
@@ -56,10 +56,7 @@ agentsRoute.post("/", zValidator("json", registerAgentSchema), async (c) => {
   const body = c.req.valid("json");
 
   // 既存エージェントの確認
-  const existing = await db
-    .select()
-    .from(agents)
-    .where(eq(agents.id, body.id));
+  const existing = await db.select().from(agents).where(eq(agents.id, body.id));
 
   if (existing.length > 0) {
     // Update if exists
@@ -99,30 +96,26 @@ const heartbeatSchema = z.object({
 });
 
 // ハートビート更新
-agentsRoute.post(
-  "/:id/heartbeat",
-  zValidator("json", heartbeatSchema),
-  async (c) => {
-    const id = c.req.param("id");
-    const body = c.req.valid("json");
+agentsRoute.post("/:id/heartbeat", zValidator("json", heartbeatSchema), async (c) => {
+  const id = c.req.param("id");
+  const body = c.req.valid("json");
 
-    const result = await db
-      .update(agents)
-      .set({
-        status: body.status,
-        currentTaskId: body.currentTaskId,
-        lastHeartbeat: new Date(),
-      })
-      .where(eq(agents.id, id))
-      .returning();
+  const result = await db
+    .update(agents)
+    .set({
+      status: body.status,
+      currentTaskId: body.currentTaskId,
+      lastHeartbeat: new Date(),
+    })
+    .where(eq(agents.id, id))
+    .returning();
 
-    if (result.length === 0) {
-      return c.json({ error: "Agent not found" }, 404);
-    }
-
-    return c.json({ agent: result[0] });
+  if (result.length === 0) {
+    return c.json({ error: "Agent not found" }, 404);
   }
-);
+
+  return c.json({ agent: result[0] });
+});
 
 // エージェント削除
 agentsRoute.delete("/:id", async (c) => {

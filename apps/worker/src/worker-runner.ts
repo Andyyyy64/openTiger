@@ -82,10 +82,7 @@ async function finalizeTaskState(options: FinalizeTaskStateOptions): Promise<voi
   }
 
   await db.transaction(async (tx) => {
-    await tx
-      .update(runs)
-      .set(runUpdate)
-      .where(eq(runs.id, options.runId));
+    await tx.update(runs).set(runUpdate).where(eq(runs.id, options.runId));
 
     await tx
       .update(tasks)
@@ -106,10 +103,7 @@ async function finalizeTaskState(options: FinalizeTaskStateOptions): Promise<voi
 }
 
 // タスクを実行するメイン処理
-export async function runWorker(
-  taskData: Task,
-  config: WorkerConfig
-): Promise<WorkerResult> {
+export async function runWorker(taskData: Task, config: WorkerConfig): Promise<WorkerResult> {
   const {
     agentId,
     role,
@@ -126,11 +120,7 @@ export async function runWorker(
   const taskPrContext = repoMode === "git" ? resolveTaskPrContext(taskData) : null;
 
   const taskId = taskData.id;
-  const agentLabel = role === "tester"
-    ? "Tester"
-    : role === "docser"
-      ? "Docser"
-      : "Worker";
+  const agentLabel = role === "tester" ? "Tester" : role === "docser" ? "Docser" : "Worker";
 
   console.log("=".repeat(60));
   console.log(`${agentLabel} ${agentId} starting task: ${taskData.title}`);
@@ -138,7 +128,7 @@ export async function runWorker(
   if (taskPrContext) {
     console.log(
       `[Worker] Using PR context: #${taskPrContext.number}` +
-      (taskPrContext.headRef ? ` (head=${taskPrContext.headRef})` : "")
+        (taskPrContext.headRef ? ` (head=${taskPrContext.headRef})` : ""),
     );
   }
 
@@ -162,18 +152,13 @@ export async function runWorker(
   const logDir = process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
   const taskLogPath = buildTaskLogPath(logDir, taskId, runId, agentId);
   setTaskLogPath(taskLogPath);
-  await db
-    .update(runs)
-    .set({ logPath: taskLogPath })
-    .where(eq(runs.id, runId));
+  await db.update(runs).set({ logPath: taskLogPath }).where(eq(runs.id, runId));
 
   let worktreeBasePath: string | undefined;
   let worktreePath: string | undefined;
 
   try {
-    const localBranchName = repoMode === "local"
-      ? generateBranchName(agentId, taskId)
-      : undefined;
+    const localBranchName = repoMode === "local" ? generateBranchName(agentId, taskId) : undefined;
 
     // Step 1: リポジトリをチェックアウトする
     console.log("\n[1/7] Checking out repository...");
@@ -253,18 +238,19 @@ export async function runWorker(
           eq(runs.taskId, taskId),
           ne(runs.id, runId),
           inArray(runs.status, ["failed", "cancelled"]),
-          isNotNull(runs.finishedAt)
-        )
+          isNotNull(runs.finishedAt),
+        ),
       )
       .orderBy(desc(runs.startedAt))
       .limit(3);
-    const retryHints = previousFailures
-      .map((row) => {
-        const status = row.status === "cancelled" ? "cancelled" : "failed";
-        const reason = sanitizeRetryHint(row.errorMessage ?? "No detailed error message")
-          .slice(0, 240);
-        return `${status} on ${row.agentId}: ${reason}`;
-      });
+    const retryHints = previousFailures.map((row) => {
+      const status = row.status === "cancelled" ? "cancelled" : "failed";
+      const reason = sanitizeRetryHint(row.errorMessage ?? "No detailed error message").slice(
+        0,
+        240,
+      );
+      return `${status} on ${row.agentId}: ${reason}`;
+    });
 
     const executeResult = await executeTask({
       repoPath,
@@ -276,8 +262,9 @@ export async function runWorker(
     });
 
     if (!executeResult.success) {
-      const isTimeout = executeResult.openCodeResult.exitCode === -1
-        && executeResult.openCodeResult.stderr.includes("[OpenCode] Timeout exceeded");
+      const isTimeout =
+        executeResult.openCodeResult.exitCode === -1 &&
+        executeResult.openCodeResult.stderr.includes("[OpenCode] Timeout exceeded");
       if (isTimeout) {
         // タイムアウトでも変更がある可能性があるため検証へ進む
         console.warn("[Worker] OpenCode timed out, but continuing to verify changes...");
@@ -317,7 +304,9 @@ export async function runWorker(
 
     if (verifyResult.changedFiles.length === 0) {
       console.log("\n[6/7] Skipping commit/PR...");
-      console.log("[Worker] No repository diff detected after verification. Marking task as no-op success.");
+      console.log(
+        "[Worker] No repository diff detected after verification. Marking task as no-op success.",
+      );
 
       await finalizeTaskState({
         runId,
@@ -416,7 +405,9 @@ export async function runWorker(
 
     if (!prResult.success) {
       if (isNoCommitsBetweenError(prResult.error ?? "")) {
-        console.warn("[Worker] No commits between base/head at PR creation. Treating as no-op success.");
+        console.warn(
+          "[Worker] No commits between base/head at PR creation. Treating as no-op success.",
+        );
 
         await finalizeTaskState({
           runId,
@@ -500,7 +491,7 @@ export async function runWorker(
     console.error("Task failed:", errorMessage);
     if (quotaFailure) {
       console.warn(
-        `[Worker] Quota failure detected. Parking task ${taskId} as blocked(quota_wait) for cooldown retry.`
+        `[Worker] Quota failure detected. Parking task ${taskId} as blocked(quota_wait) for cooldown retry.`,
       );
     }
     console.error("=".repeat(60));

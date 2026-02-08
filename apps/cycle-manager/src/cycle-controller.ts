@@ -1,12 +1,7 @@
 import { db } from "@openTiger/db";
 import { cycles, tasks, runs, agents, leases } from "@openTiger/db/schema";
 import { eq, and, gte, lte, sql, count, sum } from "drizzle-orm";
-import type {
-  CycleConfig,
-  CycleStats,
-  StateSnapshot,
-  CycleTriggerType,
-} from "@openTiger/core";
+import type { CycleConfig, CycleStats, StateSnapshot, CycleTriggerType } from "@openTiger/core";
 
 // サイクル制御の状態
 interface CycleState {
@@ -73,9 +68,7 @@ export async function captureStateSnapshot(): Promise<StateSnapshot> {
 }
 
 // サイクル統計を計算
-export async function calculateCycleStats(
-  cycleStartedAt: Date
-): Promise<CycleStats> {
+export async function calculateCycleStats(cycleStartedAt: Date): Promise<CycleStats> {
   // サイクル開始以降のRun統計を取得
   const runStats = await db
     .select({
@@ -198,7 +191,7 @@ export async function endCurrentCycle(reason: string): Promise<void> {
 
   console.log(
     `[Cycle] Ended cycle #${currentState.cycleNumber} - ${reason} ` +
-      `(completed: ${stats.tasksCompleted}, failed: ${stats.tasksFailed})`
+      `(completed: ${stats.tasksCompleted}, failed: ${stats.tasksFailed})`,
   );
 
   currentState.isRunning = false;
@@ -223,12 +216,7 @@ export async function shouldEndByTaskCount(): Promise<boolean> {
   const [result] = await db
     .select({ count: count() })
     .from(runs)
-    .where(
-      and(
-        gte(runs.startedAt, currentState.startedAt),
-        eq(runs.status, "success")
-      )
-    );
+    .where(and(gte(runs.startedAt, currentState.startedAt), eq(runs.status, "success")));
 
   return (result?.count ?? 0) >= currentState.config.maxTasksPerCycle;
 }
@@ -295,8 +283,6 @@ export async function restoreLatestCycle(): Promise<boolean> {
     isRunning: true,
   };
 
-  console.log(
-    `[Cycle] Restored cycle #${latestCycle.number} (id: ${latestCycle.id})`
-  );
+  console.log(`[Cycle] Restored cycle #${latestCycle.number} (id: ${latestCycle.id})`);
   return true;
 }

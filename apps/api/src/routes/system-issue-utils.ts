@@ -101,7 +101,9 @@ export function parseDependencyIssueNumbersFromIssueBody(body: string): number[]
       continue;
     }
 
-    if (/^#{1,6}\s*(dependencies?|depends\s*on|blocked\s*by|dependency|依存関係)\b/i.test(trimmed)) {
+    if (
+      /^#{1,6}\s*(dependencies?|depends\s*on|blocked\s*by|dependency|依存関係)\b/i.test(trimmed)
+    ) {
       inDependencySection = true;
       continue;
     }
@@ -131,7 +133,9 @@ export function inferRoleFromLabels(labels: string[]): "worker" | "tester" | "do
   if (lower.some((label) => label.includes("docs") || label.includes("docser"))) {
     return "docser";
   }
-  if (lower.some((label) => label.includes("test") || label.includes("qa") || label.includes("e2e"))) {
+  if (
+    lower.some((label) => label.includes("test") || label.includes("qa") || label.includes("e2e"))
+  ) {
     return "tester";
   }
   return "worker";
@@ -139,10 +143,19 @@ export function inferRoleFromLabels(labels: string[]): "worker" | "tester" | "do
 
 export function inferRiskFromLabels(labels: string[]): "low" | "medium" | "high" {
   const lower = labels.map((label) => label.toLowerCase());
-  if (lower.some((label) => label.includes("critical") || label.includes("security") || label.includes("urgent"))) {
+  if (
+    lower.some(
+      (label) =>
+        label.includes("critical") || label.includes("security") || label.includes("urgent"),
+    )
+  ) {
     return "high";
   }
-  if (lower.some((label) => label.includes("bug") || label.includes("important") || label.includes("fix"))) {
+  if (
+    lower.some(
+      (label) => label.includes("bug") || label.includes("important") || label.includes("fix"),
+    )
+  ) {
     return "medium";
   }
   return "low";
@@ -150,7 +163,11 @@ export function inferRiskFromLabels(labels: string[]): "low" | "medium" | "high"
 
 export function inferPriorityFromLabels(labels: string[]): number {
   const lower = labels.map((label) => label.toLowerCase());
-  if (lower.some((label) => label.includes("priority:high") || label.includes("p0") || label.includes("p1"))) {
+  if (
+    lower.some(
+      (label) => label.includes("priority:high") || label.includes("p0") || label.includes("p1"),
+    )
+  ) {
     return 90;
   }
   if (lower.some((label) => label.includes("priority:medium") || label.includes("p2"))) {
@@ -171,7 +188,7 @@ export function parseLinkedIssueNumbersFromPr(title: string, body: string): numb
 
     if (
       /\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|related|issue|closes|fixes|resolves)\b/i.test(
-        normalized
+        normalized,
       )
     ) {
       for (const issueNumber of parseIssueNumberRefs(normalized)) {
@@ -182,7 +199,7 @@ export function parseLinkedIssueNumbersFromPr(title: string, body: string): numb
 
   // Handle cases where multiple closing keywords appear on one line
   for (const match of `${title}\n${body}`.matchAll(
-    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b([^\n]+)/gi
+    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b([^\n]+)/gi,
   )) {
     for (const issueNumber of parseIssueNumberRefs(match[1] ?? "")) {
       numbers.add(issueNumber);

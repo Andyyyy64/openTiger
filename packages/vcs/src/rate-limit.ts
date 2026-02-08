@@ -65,9 +65,7 @@ export async function waitForRateLimit(): Promise<void> {
   const status = await getRateLimitStatus();
 
   if (status.isLimited && status.waitTimeMs > 0) {
-    console.log(
-      `[GitHub] Rate limit reached. Waiting ${Math.ceil(status.waitTimeMs / 1000)}s...`
-    );
+    console.log(`[GitHub] Rate limit reached. Waiting ${Math.ceil(status.waitTimeMs / 1000)}s...`);
     await new Promise((resolve) => setTimeout(resolve, status.waitTimeMs));
   }
 }
@@ -78,7 +76,7 @@ export async function withRateLimitHandling<T>(
   options: {
     maxRetries?: number;
     retryDelayMs?: number;
-  } = {}
+  } = {},
 ): Promise<T> {
   const maxRetries = options.maxRetries ?? 3;
   const retryDelayMs = options.retryDelayMs ?? 60000;
@@ -91,7 +89,7 @@ export async function withRateLimitHandling<T>(
       const status = await getRateLimitStatus();
       if (status.isLimited) {
         console.log(
-          `[GitHub] Rate limit active. Waiting ${Math.ceil(status.waitTimeMs / 1000)}s...`
+          `[GitHub] Rate limit active. Waiting ${Math.ceil(status.waitTimeMs / 1000)}s...`,
         );
         await new Promise((resolve) => setTimeout(resolve, status.waitTimeMs));
       }
@@ -111,7 +109,7 @@ export async function withRateLimitHandling<T>(
         const waitTime = retryDelayMs * Math.pow(2, attempt);
         console.log(
           `[GitHub] Rate limit error, retrying in ${Math.ceil(waitTime / 1000)}s... ` +
-          `(attempt ${attempt + 1}/${maxRetries})`
+            `(attempt ${attempt + 1}/${maxRetries})`,
         );
         await new Promise((resolve) => setTimeout(resolve, waitTime));
       } else {
@@ -128,9 +126,15 @@ export async function logRateLimitStatus(): Promise<void> {
   const status = await getRateLimitStatus();
 
   console.log("[GitHub Rate Limit]");
-  console.log(`  Core: ${status.core.remaining}/${status.core.limit} (resets at ${status.core.reset.toISOString()})`);
-  console.log(`  Search: ${status.search.remaining}/${status.search.limit} (resets at ${status.search.reset.toISOString()})`);
-  console.log(`  GraphQL: ${status.graphql.remaining}/${status.graphql.limit} (resets at ${status.graphql.reset.toISOString()})`);
+  console.log(
+    `  Core: ${status.core.remaining}/${status.core.limit} (resets at ${status.core.reset.toISOString()})`,
+  );
+  console.log(
+    `  Search: ${status.search.remaining}/${status.search.limit} (resets at ${status.search.reset.toISOString()})`,
+  );
+  console.log(
+    `  GraphQL: ${status.graphql.remaining}/${status.graphql.limit} (resets at ${status.graphql.reset.toISOString()})`,
+  );
 
   if (status.isLimited) {
     console.log(`  ** RATE LIMITED ** Wait time: ${Math.ceil(status.waitTimeMs / 1000)}s`);

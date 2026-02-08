@@ -49,7 +49,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
       Number.isFinite(JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
         ? Math.max(1, JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
         : 2
-    }`
+    }`,
   );
   console.log("=".repeat(60));
 
@@ -57,7 +57,9 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
     try {
       const recoveredAwaiting = await recoverAwaitingJudgeBacklog(config.agentId);
       if (recoveredAwaiting > 0) {
-        console.log(`[Judge] Recovered ${recoveredAwaiting} awaiting_judge task(s) by restoring runs`);
+        console.log(
+          `[Judge] Recovered ${recoveredAwaiting} awaiting_judge task(s) by restoring runs`,
+        );
       }
 
       // レビュー待ちのPRを取得
@@ -106,7 +108,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                 // レビューとアクションを実行
                 actionResult = await reviewAndAct(pr.prNumber, effectiveResult, summary);
                 console.log(
-                  `  Actions: commented=${actionResult.commented}, approved=${actionResult.approved}, merged=${actionResult.merged}`
+                  `  Actions: commented=${actionResult.commented}, approved=${actionResult.approved}, merged=${actionResult.merged}`,
                 );
 
                 // If merged, task is complete
@@ -159,7 +161,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           })
                           .where(eq(tasks.id, pr.taskId));
                         console.log(
-                          `  Task ${pr.taskId} blocked as needs_rework; auto-fix task queued: ${autoFix.taskId}`
+                          `  Task ${pr.taskId} blocked as needs_rework; auto-fix task queued: ${autoFix.taskId}`,
                         );
                       } else {
                         requeueReason = `${buildJudgeFailureMessage(effectiveResult)} | ${autoFix.reason}`;
@@ -171,7 +173,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                             reason: `retry_imported_pr_review:${requeueReason}`,
                           });
                           console.log(
-                            `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`
+                            `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`,
                           );
                         } else {
                           await requeueTaskAfterJudge({
@@ -181,18 +183,20 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                             reason: requeueReason,
                           });
                           console.log(
-                            `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`
+                            `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`,
                           );
                         }
                       }
                     } else {
-                      const doomLoopThreshold = Number.isFinite(JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES)
+                      const doomLoopThreshold = Number.isFinite(
+                        JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES,
+                      )
                         ? Math.max(1, JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES)
                         : 2;
                       const isDoomLoop = isDoomLoopFailure(summary);
                       const currentRetryCount = await getTaskRetryCount(pr.taskId);
-                      const shouldTripCircuitBreaker = isDoomLoop
-                        && currentRetryCount >= doomLoopThreshold;
+                      const shouldTripCircuitBreaker =
+                        isDoomLoop && currentRetryCount >= doomLoopThreshold;
 
                       if (shouldTripCircuitBreaker) {
                         const autoFix = await createAutoFixTaskForPr({
@@ -218,7 +222,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                             })
                             .where(eq(tasks.id, pr.taskId));
                           console.log(
-                            `  Task ${pr.taskId} hit doom-loop circuit breaker; auto-fix task queued: ${autoFix.taskId}`
+                            `  Task ${pr.taskId} hit doom-loop circuit breaker; auto-fix task queued: ${autoFix.taskId}`,
                           );
                         } else {
                           requeueReason = `${buildJudgeFailureMessage(effectiveResult)} | doom_loop_circuit_breaker_failed:${autoFix.reason}`;
@@ -232,7 +236,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                             restoreRunImmediately: false,
                           });
                           console.log(
-                            `  Task ${pr.taskId} doom-loop breaker fallback to judge retry (${autoFix.reason})`
+                            `  Task ${pr.taskId} doom-loop breaker fallback to judge retry (${autoFix.reason})`,
                           );
                         }
                       } else {
@@ -252,13 +256,15 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           ? "non-actionable"
                           : "llm-failed";
                         console.log(
-                          `  Task ${pr.taskId} scheduled for judge retry after cooldown (${marker})`
+                          `  Task ${pr.taskId} scheduled for judge retry after cooldown (${marker})`,
                         );
                       }
                     }
                   } else {
                     // CI/Policy系の非approveは再キューし、閾値超過でAutoFixへ昇格
-                    const retryThreshold = Number.isFinite(JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
+                    const retryThreshold = Number.isFinite(
+                      JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES,
+                    )
                       ? Math.max(1, JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
                       : 2;
                     const currentRetryCount = await getTaskRetryCount(pr.taskId);
@@ -288,7 +294,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           })
                           .where(eq(tasks.id, pr.taskId));
                         console.log(
-                          `  Task ${pr.taskId} hit non-approve circuit breaker; auto-fix task queued: ${autoFix.taskId}`
+                          `  Task ${pr.taskId} hit non-approve circuit breaker; auto-fix task queued: ${autoFix.taskId}`,
                         );
                       } else {
                         await db
@@ -300,7 +306,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           })
                           .where(eq(tasks.id, pr.taskId));
                         console.warn(
-                          `  Task ${pr.taskId} blocked as needs_rework; non-approve circuit breaker fallback (${autoFix.reason})`
+                          `  Task ${pr.taskId} blocked as needs_rework; non-approve circuit breaker fallback (${autoFix.reason})`,
                         );
                       }
                     } else {
@@ -313,7 +319,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           reason: `retry_imported_pr_review:${requeueReason}`,
                         });
                         console.log(
-                          `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`
+                          `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`,
                         );
                       } else {
                         await requeueTaskAfterJudge({
@@ -323,7 +329,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           reason: requeueReason,
                         });
                         console.log(
-                          `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`
+                          `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`,
                         );
                       }
                     }
@@ -360,12 +366,11 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                         })
                         .where(eq(tasks.id, pr.taskId));
                       console.warn(
-                        `  Task ${pr.taskId} blocked as needs_rework; conflict auto-fix task queued: ${conflictAutoFix.taskId}`
+                        `  Task ${pr.taskId} blocked as needs_rework; conflict auto-fix task queued: ${conflictAutoFix.taskId}`,
                       );
                       handledByConflictAutoFix = true;
                     } else {
-                      const fallbackReason =
-                        `Judge approved but merge conflict auto-fix was not queued (${conflictAutoFix.reason})`;
+                      const fallbackReason = `Judge approved but merge conflict auto-fix was not queued (${conflictAutoFix.reason})`;
                       await scheduleTaskForJudgeRetry({
                         taskId: pr.taskId,
                         runId: pr.runId,
@@ -374,7 +379,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                         restoreRunImmediately: false,
                       });
                       console.warn(
-                        `  Task ${pr.taskId} scheduled for judge retry (conflict autofix fallback: ${conflictAutoFix.reason})`
+                        `  Task ${pr.taskId} scheduled for judge retry (conflict autofix fallback: ${conflictAutoFix.reason})`,
                       );
                     }
                     // レビュー記録は継続して残す
@@ -392,7 +397,9 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                       // If update-branch was triggered, don't re-evaluate the same run until cooldown
                       restoreRunImmediately: !actionResult.mergeDeferred,
                     });
-                    console.warn(`  Task ${pr.taskId} scheduled for judge retry because merge did not complete`);
+                    console.warn(
+                      `  Task ${pr.taskId} scheduled for judge retry because merge did not complete`,
+                    );
                   }
                 } else {
                   await db
@@ -415,7 +422,9 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                   agentId: config.agentId,
                   reason: `judge_action_error:${requeueReason}`,
                 });
-                console.warn(`  Task ${pr.taskId} scheduled for judge retry due to judge action error`);
+                console.warn(
+                  `  Task ${pr.taskId} scheduled for judge retry due to judge action error`,
+                );
               }
             }
 
@@ -425,7 +434,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
               summary,
               actionResult,
               config.agentId,
-              config.dryRun
+              config.dryRun,
             );
 
             if (actionError) {

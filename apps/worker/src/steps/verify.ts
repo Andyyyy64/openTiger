@@ -192,7 +192,7 @@ function parseCommand(command: string): ParsedCommand | null {
 async function runCommand(
   command: string,
   cwd: string,
-  timeoutMs = 300000
+  timeoutMs = 300000,
 ): Promise<CommandResult> {
   const startTime = Date.now();
   const baseEnv = await buildTaskEnv(cwd);
@@ -311,10 +311,7 @@ function shouldForceCi(command: string): boolean {
   return /\b(pnpm|npm|yarn|bun)\b[^\n]*\btest\b/.test(command);
 }
 
-function matchDeniedCommand(
-  command: string,
-  deniedCommands: string[]
-): string | undefined {
+function matchDeniedCommand(command: string, deniedCommands: string[]): string | undefined {
   const target = command.trim();
   const lowerTarget = target.toLowerCase();
 
@@ -349,11 +346,7 @@ function normalizeVerificationCommand(command: string): string {
     const e2ePort = process.env.OPENTIGER_E2E_PORT ?? "5174";
     // Match Playwright webServer wait target with Vite port
     normalized = withEnvPrefix(normalized, "VITE_PORT", e2ePort);
-    normalized = withEnvPrefix(
-      normalized,
-      "PLAYWRIGHT_BASE_URL",
-      `http://localhost:${e2ePort}`
-    );
+    normalized = withEnvPrefix(normalized, "PLAYWRIGHT_BASE_URL", `http://localhost:${e2ePort}`);
   }
 
   if (shouldForceCi(normalized)) {
@@ -411,7 +404,7 @@ function resolveRunScript(command: string): string | undefined {
   }
 
   return VERIFICATION_SCRIPT_CANDIDATES.includes(
-    candidate as (typeof VERIFICATION_SCRIPT_CANDIDATES)[number]
+    candidate as (typeof VERIFICATION_SCRIPT_CANDIDATES)[number],
   )
     ? candidate
     : undefined;
@@ -460,7 +453,7 @@ async function findAvailablePort(): Promise<number> {
 async function runDevCommandOnce(
   command: string,
   cwd: string,
-  warmupMs = DEV_COMMAND_WARMUP_MS
+  warmupMs = DEV_COMMAND_WARMUP_MS,
 ): Promise<CommandResult> {
   const startTime = Date.now();
   let stdout = "";
@@ -525,9 +518,7 @@ async function runDevCommandOnce(
         command,
         success,
         outcome: success ? "passed" : "failed",
-        stdout: timedOut
-          ? `${stdout}\n[dev-check] warmup completed, process terminated`
-          : stdout,
+        stdout: timedOut ? `${stdout}\n[dev-check] warmup completed, process terminated` : stdout,
         stderr,
         durationMs,
       });
@@ -551,7 +542,7 @@ async function runDevCommandOnce(
 async function runDevCommand(
   command: string,
   cwd: string,
-  warmupMs = DEV_COMMAND_WARMUP_MS
+  warmupMs = DEV_COMMAND_WARMUP_MS,
 ): Promise<CommandResult> {
   const result = await runDevCommandOnce(command, cwd, warmupMs);
   if (!result.success && shouldRetryDevWithPort(result.stderr)) {
@@ -576,10 +567,9 @@ async function runDevCommand(
 }
 
 function touchesPackageManifest(files: string[]): boolean {
-  return files.some((file) =>
-    file === "package.json"
-    || file.endsWith("/package.json")
-    || file === "pnpm-workspace.yaml"
+  return files.some(
+    (file) =>
+      file === "package.json" || file.endsWith("/package.json") || file === "pnpm-workspace.yaml",
   );
 }
 
@@ -602,17 +592,12 @@ async function hasRootCheckScript(repoPath: string): Promise<boolean> {
   }
 }
 
-async function isGeneratedTypeScriptOutput(
-  file: string,
-  repoPath: string
-): Promise<boolean> {
+async function isGeneratedTypeScriptOutput(file: string, repoPath: string): Promise<boolean> {
   if (!GENERATED_EXTENSIONS.some((ext) => file.endsWith(ext))) {
     return false;
   }
 
-  const withoutMap = file.endsWith(".d.ts.map")
-    ? file.replace(/\.d\.ts\.map$/, "")
-    : file;
+  const withoutMap = file.endsWith(".d.ts.map") ? file.replace(/\.d\.ts\.map$/, "") : file;
   const base = withoutMap.endsWith(".d.ts")
     ? withoutMap.replace(/\.d\.ts$/, "")
     : withoutMap.replace(/\.js$/, "");
@@ -628,22 +613,20 @@ function checkPolicyViolations(
   changedFiles: string[],
   stats: { additions: number; deletions: number },
   allowedPaths: string[],
-  policy: Policy
+  policy: Policy,
 ): string[] {
   const violations: string[] = [];
 
   // 変更行数チェック
   const totalChanges = stats.additions + stats.deletions;
   if (totalChanges > policy.maxLinesChanged) {
-    violations.push(
-      `Too many lines changed: ${totalChanges} (max: ${policy.maxLinesChanged})`
-    );
+    violations.push(`Too many lines changed: ${totalChanges} (max: ${policy.maxLinesChanged})`);
   }
 
   // 変更ファイル数チェック
   if (changedFiles.length > policy.maxFilesChanged) {
     violations.push(
-      `Too many files changed: ${changedFiles.length} (max: ${policy.maxFilesChanged})`
+      `Too many files changed: ${changedFiles.length} (max: ${policy.maxFilesChanged})`,
     );
   }
 
@@ -663,9 +646,7 @@ function checkPolicyViolations(
 }
 
 // 変更を検証
-export async function verifyChanges(
-  options: VerifyOptions
-): Promise<VerifyResult> {
+export async function verifyChanges(options: VerifyOptions): Promise<VerifyResult> {
   const {
     repoPath,
     commands,
@@ -687,18 +668,10 @@ export async function verifyChanges(
 
   // If already committed and diff is gone, check with base and head diff
   if (changedFiles.length === 0 && baseBranch && headBranch) {
-    const committedFiles = await getChangedFilesBetweenRefs(
-      repoPath,
-      baseBranch,
-      headBranch
-    );
+    const committedFiles = await getChangedFilesBetweenRefs(repoPath, baseBranch, headBranch);
     if (committedFiles.length > 0) {
       changedFiles = committedFiles;
-      const diffStats = await getDiffStatsBetweenRefs(
-        repoPath,
-        baseBranch,
-        headBranch
-      );
+      const diffStats = await getDiffStatsBetweenRefs(repoPath, baseBranch, headBranch);
       stats = {
         additions: diffStats.additions,
         deletions: diffStats.deletions,
@@ -722,15 +695,14 @@ export async function verifyChanges(
     }
   }
   const effectiveAllowedPaths =
-    includesInstallCommand(commands)
-    || touchesPackageManifest(changedFiles)
-    || allowLockfileOutsidePaths
+    includesInstallCommand(commands) ||
+    touchesPackageManifest(changedFiles) ||
+    allowLockfileOutsidePaths
       ? mergeAllowedPaths(allowedPaths, LOCKFILE_PATHS)
       : allowedPaths;
-  const finalAllowedPaths =
-    allowEnvExampleOutsidePaths
-      ? mergeAllowedPaths(effectiveAllowedPaths, ENV_EXAMPLE_PATHS)
-      : effectiveAllowedPaths;
+  const finalAllowedPaths = allowEnvExampleOutsidePaths
+    ? mergeAllowedPaths(effectiveAllowedPaths, ENV_EXAMPLE_PATHS)
+    : effectiveAllowedPaths;
   // Exclude generated files from policy validation and commit targets
   const relevantFiles = [];
   for (const file of changedFiles) {
@@ -773,12 +745,7 @@ export async function verifyChanges(
   console.log(`Changes: +${stats.additions} -${stats.deletions}`);
 
   // ポリシー違反をチェック
-  const policyViolations = checkPolicyViolations(
-    relevantFiles,
-    stats,
-    finalAllowedPaths,
-    policy
-  );
+  const policyViolations = checkPolicyViolations(relevantFiles, stats, finalAllowedPaths, policy);
 
   if (policyViolations.length > 0) {
     console.error("Policy violations found:");

@@ -38,9 +38,7 @@ export function getRepoInfo(options: GitHubClientOptions = {}): RepoInfo {
   const repo = options.repo ?? process.env.GITHUB_REPO;
 
   if (!owner || !repo) {
-    throw new Error(
-      "GITHUB_OWNER and GITHUB_REPO environment variables must be set"
-    );
+    throw new Error("GITHUB_OWNER and GITHUB_REPO environment variables must be set");
   }
 
   return { owner, repo };

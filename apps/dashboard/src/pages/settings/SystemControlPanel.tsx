@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 type RestartPanelState = {
   status: string;
@@ -26,8 +26,12 @@ type SystemControlPanelProps = {
   stopAll: StopAllActionState;
 };
 
-export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({ restart, cleanup, stopAll }) => {
-  const isRestartRunning = restart.status === 'running';
+export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({
+  restart,
+  cleanup,
+  stopAll,
+}) => {
+  const isRestartRunning = restart.status === "running";
   const isRestartBlocked = restart.isPending || isRestartRunning;
 
   return (
@@ -40,7 +44,7 @@ export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({ restart,
         <div className="p-4 space-y-3 font-mono text-sm">
           <div className="flex justify-between items-center">
             <span className="text-zinc-500">CURRENT_STATUS</span>
-            <span className={isRestartRunning ? 'text-term-tiger animate-pulse' : 'text-zinc-300'}>
+            <span className={isRestartRunning ? "text-term-tiger animate-pulse" : "text-zinc-300"}>
               [{restart.statusLabel}]
             </span>
           </div>
@@ -55,10 +59,10 @@ export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({ restart,
             disabled={isRestartBlocked}
             className="w-full border border-term-border hover:bg-term-fg hover:text-black py-2 mt-2 text-xs uppercase transition-colors disabled:opacity-50"
           >
-            {isRestartBlocked ? '> REBOOTING...' : '> EXECUTE REBOOT'}
+            {isRestartBlocked ? "> REBOOTING..." : "> EXECUTE REBOOT"}
           </button>
 
-          {restart.errorMessage && restart.status === 'failed' && (
+          {restart.errorMessage && restart.status === "failed" && (
             <div className="text-red-500 text-xs mt-2">&gt; ERR: {restart.errorMessage}</div>
           )}
         </div>
@@ -71,8 +75,9 @@ export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({ restart,
         </div>
         <div className="p-4 space-y-3 font-mono text-sm">
           <div className="text-zinc-500 text-xs mb-2">
-            {' // Purges all runtime data (plans, tasks, runs, events).'}
-            <br />// Use with caution.
+            {" // Purges all runtime data (plans, tasks, runs, events)."}
+            <br />
+            // Use with caution.
           </div>
 
           <button
@@ -80,7 +85,7 @@ export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({ restart,
             disabled={cleanup.isPending}
             className="w-full border border-red-900 text-red-500 hover:bg-red-900 hover:text-white py-2 text-xs uppercase transition-colors disabled:opacity-50"
           >
-            {cleanup.isPending ? '> PURGING...' : '> PURGE DATABASE'}
+            {cleanup.isPending ? "> PURGING..." : "> PURGE DATABASE"}
           </button>
 
           {cleanup.isSuccess && (
@@ -96,8 +101,9 @@ export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({ restart,
         </div>
         <div className="p-4 space-y-3 font-mono text-sm">
           <div className="text-zinc-500 text-xs mb-2">
-            {' // Stops all managed processes except UI and server.'}
-            <br />// Planner, Dispatcher, Judge, Workers, etc. will be stopped.
+            {" // Stops all managed processes except UI and server."}
+            <br />
+            // Planner, Dispatcher, Judge, Workers, etc. will be stopped.
           </div>
 
           <button
@@ -105,12 +111,12 @@ export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({ restart,
             disabled={stopAll.isPending}
             className="w-full border border-orange-900 text-orange-500 hover:bg-orange-900 hover:text-white py-2 text-xs uppercase transition-colors disabled:opacity-50"
           >
-            {stopAll.isPending ? '> STOPPING...' : '> DELETE ALL PROCESSES'}
+            {stopAll.isPending ? "> STOPPING..." : "> DELETE ALL PROCESSES"}
           </button>
 
           {stopAll.isSuccess && (
             <div className="text-term-tiger text-xs mt-2">
-              &gt; SUCCESS: {stopAll.successMessage || 'Processes stopped.'}
+              &gt; SUCCESS: {stopAll.successMessage || "Processes stopped."}
             </div>
           )}
         </div>

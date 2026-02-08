@@ -1,23 +1,10 @@
 {
   "$schema": "../schemas/policy.schema.json",
   "allowedPaths": ["**/*"],
-  "deniedPaths": [
-    ".env",
-    ".env.*",
-    "**/*.pem",
-    "**/*.key",
-    "**/secrets/**"
-  ],
+  "deniedPaths": [".env", ".env.*", "**/*.pem", "**/*.key", "**/secrets/**"],
   "maxLinesChanged": 500,
   "maxFilesChanged": 20,
-  "deniedCommands": [
-    "rm -rf /",
-    "rm -rf /*",
-    "sudo",
-    "chmod 777",
-    "curl.*|.*sh",
-    "wget.*|.*sh"
-  ],
+  "deniedCommands": ["rm -rf /", "rm -rf /*", "sudo", "chmod 777", "curl.*|.*sh", "wget.*|.*sh"],
   "autoMerge": {
     "enabled": true,
     "maxRiskLevel": "medium",

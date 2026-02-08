@@ -104,7 +104,7 @@ export async function recoverDirtyBaseRepo(options: {
     {
       instructionsPath: options.instructionsPath,
       timeoutSeconds: 300,
-    }
+    },
   );
 
   await db.insert(events).values({
@@ -128,8 +128,7 @@ export async function recoverDirtyBaseRepo(options: {
   const meetsConfidence = llmResult.confidence >= options.recoveryRules.minConfidence;
   const meetsErrors = !options.recoveryRules.requireNoErrors || !hasError;
   const meetsWarnings = !options.recoveryRules.requireNoWarnings || !hasWarning;
-  const shouldRestore =
-    llmResult.pass && meetsConfidence && meetsErrors && meetsWarnings;
+  const shouldRestore = llmResult.pass && meetsConfidence && meetsErrors && meetsWarnings;
   if (!shouldRestore || !stashRef) {
     return { success: true };
   }
@@ -157,7 +156,7 @@ export async function recoverDirtyBaseRepo(options: {
 
   const commitResult = await commitChanges(
     options.baseRepoPath,
-    "chore: recover base repo changes"
+    "chore: recover base repo changes",
   );
   if (!commitResult.success) {
     const combinedMessage = `${commitResult.stdout}\n${commitResult.stderr}`;
@@ -249,10 +248,7 @@ export async function mergeLocalBranch(target: {
     }
   }
 
-  const checkoutResult = await checkoutBranch(
-    target.baseRepoPath,
-    target.baseBranch
-  );
+  const checkoutResult = await checkoutBranch(target.baseRepoPath, target.baseBranch);
   if (!checkoutResult.success) {
     return {
       success: false,
@@ -261,17 +257,12 @@ export async function mergeLocalBranch(target: {
   }
 
   // まずはfast-forwardで安全に取り込み、失敗時はマージコミットを許可する
-  const ffResult = await mergeBranch(
-    target.baseRepoPath,
-    target.branchName,
-    { ffOnly: true }
-  );
+  const ffResult = await mergeBranch(target.baseRepoPath, target.branchName, { ffOnly: true });
   if (!ffResult.success) {
-    const mergeResult = await mergeBranch(
-      target.baseRepoPath,
-      target.branchName,
-      { ffOnly: false, noEdit: true }
-    );
+    const mergeResult = await mergeBranch(target.baseRepoPath, target.branchName, {
+      ffOnly: false,
+      noEdit: true,
+    });
     if (!mergeResult.success) {
       const abortResult = await abortMerge(target.baseRepoPath);
       if (!abortResult.success) {

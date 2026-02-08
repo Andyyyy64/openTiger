@@ -1,9 +1,6 @@
 import { config as configTable } from "@openTiger/db/schema";
 
-type ConfigColumn = keyof Omit<
-  typeof configTable.$inferSelect,
-  "id" | "createdAt" | "updatedAt"
->;
+type ConfigColumn = keyof Omit<typeof configTable.$inferSelect, "id" | "createdAt" | "updatedAt">;
 
 export type ConfigField = {
   key: string;
@@ -31,7 +28,11 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "BASE_BRANCH", column: "baseBranch", defaultValue: "main" },
   { key: "OPENCODE_MODEL", column: "opencodeModel", defaultValue: "google/gemini-3-flash-preview" },
   { key: "OPENCODE_WAIT_ON_QUOTA", column: "opencodeWaitOnQuota", defaultValue: "true" },
-  { key: "OPENCODE_QUOTA_RETRY_DELAY_MS", column: "opencodeQuotaRetryDelayMs", defaultValue: "30000" },
+  {
+    key: "OPENCODE_QUOTA_RETRY_DELAY_MS",
+    column: "opencodeQuotaRetryDelayMs",
+    defaultValue: "30000",
+  },
   { key: "OPENCODE_MAX_QUOTA_WAITS", column: "opencodeMaxQuotaWaits", defaultValue: "-1" },
   { key: "PLANNER_MODEL", column: "plannerModel", defaultValue: "google/gemini-3-pro-preview" },
   { key: "JUDGE_MODEL", column: "judgeModel", defaultValue: "google/gemini-3-pro-preview" },
@@ -39,9 +40,17 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "PLANNER_USE_REMOTE", column: "plannerUseRemote", defaultValue: "true" },
   { key: "PLANNER_REPO_URL", column: "plannerRepoUrl", defaultValue: "" },
   { key: "AUTO_REPLAN", column: "autoReplan", defaultValue: "true" },
-  { key: "REPLAN_REQUIREMENT_PATH", column: "replanRequirementPath", defaultValue: "requirement.md" },
+  {
+    key: "REPLAN_REQUIREMENT_PATH",
+    column: "replanRequirementPath",
+    defaultValue: "requirement.md",
+  },
   { key: "REPLAN_INTERVAL_MS", column: "replanIntervalMs", defaultValue: "60000" },
-  { key: "REPLAN_COMMAND", column: "replanCommand", defaultValue: "pnpm --filter @openTiger/planner run start:fresh" },
+  {
+    key: "REPLAN_COMMAND",
+    column: "replanCommand",
+    defaultValue: "pnpm --filter @openTiger/planner run start:fresh",
+  },
   { key: "REPLAN_WORKDIR", column: "replanWorkdir", defaultValue: "" },
   { key: "REPLAN_REPO_URL", column: "replanRepoUrl", defaultValue: "" },
   { key: "GITHUB_TOKEN", column: "githubToken", defaultValue: "" },
@@ -64,7 +73,7 @@ export const DEFAULT_CONFIG = CONFIG_FIELDS.reduce<Record<string, string>>((acc,
 
 export function buildConfigRecord(
   values: Record<string, string>,
-  options: { includeDefaults?: boolean } = {}
+  options: { includeDefaults?: boolean } = {},
 ): Partial<typeof configTable.$inferInsert> {
   const includeDefaults = options.includeDefaults ?? false;
   const record: Partial<Record<ConfigColumn, string>> = {};
@@ -81,21 +90,16 @@ export function buildConfigRecord(
   return record as Partial<typeof configTable.$inferInsert>;
 }
 
-export function rowToConfig(
-  row: typeof configTable.$inferSelect
-): Record<string, string> {
+export function rowToConfig(row: typeof configTable.$inferSelect): Record<string, string> {
   const result: Record<string, string> = {};
   for (const field of CONFIG_FIELDS) {
     const value = row[field.column];
-    result[field.key] =
-      typeof value === "string" && value.length > 0 ? value : field.defaultValue;
+    result[field.key] = typeof value === "string" && value.length > 0 ? value : field.defaultValue;
   }
   return result;
 }
 
-export function configToEnv(
-  row: typeof configTable.$inferSelect
-): Record<string, string> {
+export function configToEnv(row: typeof configTable.$inferSelect): Record<string, string> {
   const config = rowToConfig(row);
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(config)) {

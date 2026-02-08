@@ -56,10 +56,7 @@ function parseRepoInfoFromPrUrl(prUrl: string): { owner: string; repo: string } 
   }
 }
 
-async function getPullRequestDiffFromUrl(
-  prNumber: number,
-  prUrl?: string
-): Promise<string> {
+async function getPullRequestDiffFromUrl(prNumber: number, prUrl?: string): Promise<string> {
   const octokit = getOctokit();
   const repoInfo = prUrl ? parseRepoInfoFromPrUrl(prUrl) : undefined;
   const { owner, repo } = repoInfo ?? getRepoInfo();
@@ -208,9 +205,7 @@ judgementsRoute.get("/:id/diff", async (c) => {
   }
 
   if (!diff) {
-    const message = lastError
-      ? `Diff not available: ${lastError}`
-      : "Diff not available";
+    const message = lastError ? `Diff not available: ${lastError}` : "Diff not available";
     return c.json({ error: message }, 404);
   }
 

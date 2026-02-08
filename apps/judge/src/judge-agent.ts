@@ -22,7 +22,7 @@ export async function startHeartbeat(agentId: string): Promise<NodeJS.Timeout> {
 export async function setJudgeAgentState(
   agentId: string,
   status: "idle" | "busy",
-  currentTaskId: string | null = null
+  currentTaskId: string | null = null,
 ): Promise<void> {
   await db
     .update(agents)
@@ -37,7 +37,7 @@ export async function setJudgeAgentState(
 export async function safeSetJudgeAgentState(
   agentId: string,
   status: "idle" | "busy",
-  currentTaskId: string | null = null
+  currentTaskId: string | null = null,
 ): Promise<void> {
   try {
     await setJudgeAgentState(agentId, status, currentTaskId);

@@ -6,8 +6,7 @@ import { createHmac, timingSafeEqual, randomUUID } from "node:crypto";
 
 export const webhookRoute = new Hono();
 
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function normalizeWebhookEntityId(deliveryId: string | undefined): string {
   if (deliveryId && UUID_PATTERN.test(deliveryId)) {
@@ -20,7 +19,7 @@ function normalizeWebhookEntityId(deliveryId: string | undefined): string {
 function verifyWebhookSignature(
   payload: string,
   signature: string | undefined,
-  secret: string
+  secret: string,
 ): boolean {
   if (!signature) {
     return false;
@@ -44,10 +43,7 @@ function verifyWebhookSignature(
 
   // Use constant-time comparison to prevent timing attacks
   try {
-    return timingSafeEqual(
-      Buffer.from(signatureHex, "hex"),
-      Buffer.from(expectedSignature, "hex")
-    );
+    return timingSafeEqual(Buffer.from(signatureHex, "hex"), Buffer.from(expectedSignature, "hex"));
   } catch {
     return false;
   }
@@ -58,7 +54,7 @@ async function recordWebhookEvent(
   eventType: string,
   action: string | undefined,
   payload: Record<string, unknown>,
-  deliveryId: string | undefined
+  deliveryId: string | undefined,
 ): Promise<string> {
   const [event] = await db
     .insert(events)
@@ -120,7 +116,7 @@ webhookRoute.post("/github", async (c) => {
 async function handleWebhookPayload(
   c: { json: (data: unknown, status?: number) => Response },
   payload: Record<string, unknown>,
-  metadata: { eventType?: string; deliveryId?: string }
+  metadata: { eventType?: string; deliveryId?: string },
 ): Promise<Response> {
   const eventType = metadata.eventType;
   const action = payload.action as string | undefined;
@@ -132,7 +128,7 @@ async function handleWebhookPayload(
     eventType ?? "unknown",
     action,
     payload,
-    metadata.deliveryId
+    metadata.deliveryId,
   );
 
   // Process according to event type
@@ -164,7 +160,7 @@ async function handleIssueEvent(
   c: { json: (data: unknown, status?: number) => Response },
   action: string | undefined,
   payload: Record<string, unknown>,
-  eventId: string
+  eventId: string,
 ): Promise<Response> {
   const issue = payload.issue as Record<string, unknown> | undefined;
 
@@ -180,9 +176,7 @@ async function handleIssueEvent(
   console.log(`[Webhook] Issue #${issueNumber}: ${action} - "${issueTitle}"`);
 
   // Auto-create task if "openTiger" or "auto-task" label is present
-  const shouldAutoTask = labels.some(
-    (l) => l.name === "openTiger" || l.name === "auto-task"
-  );
+  const shouldAutoTask = labels.some((l) => l.name === "openTiger" || l.name === "auto-task");
 
   if (action === "opened" && shouldAutoTask) {
     // Request task generation from Planner (add to queue)
@@ -204,7 +198,7 @@ async function handlePullRequestEvent(
   c: { json: (data: unknown, status?: number) => Response },
   action: string | undefined,
   payload: Record<string, unknown>,
-  eventId: string
+  eventId: string,
 ): Promise<Response> {
   const pr = payload.pull_request as Record<string, unknown> | undefined;
 
@@ -253,14 +247,12 @@ async function handlePullRequestEvent(
 async function handlePushEvent(
   c: { json: (data: unknown, status?: number) => Response },
   payload: Record<string, unknown>,
-  eventId: string
+  eventId: string,
 ): Promise<Response> {
   const ref = payload.ref as string;
   const commits = payload.commits as Array<Record<string, unknown>> | undefined;
 
-  console.log(
-    `[Webhook] Push to ${ref}: ${commits?.length ?? 0} commits`
-  );
+  console.log(`[Webhook] Push to ${ref}: ${commits?.length ?? 0} commits`);
 
   return c.json({
     message: "Push event processed",
@@ -275,15 +267,13 @@ async function handleCheckEvent(
   c: { json: (data: unknown, status?: number) => Response },
   action: string | undefined,
   payload: Record<string, unknown>,
-  eventId: string
+  eventId: string,
 ): Promise<Response> {
   const checkRun = payload.check_run as Record<string, unknown> | undefined;
   const checkSuite = payload.check_suite as Record<string, unknown> | undefined;
 
-  const conclusion =
-    (checkRun?.conclusion as string) ?? (checkSuite?.conclusion as string);
-  const status =
-    (checkRun?.status as string) ?? (checkSuite?.status as string);
+  const conclusion = (checkRun?.conclusion as string) ?? (checkSuite?.conclusion as string);
+  const status = (checkRun?.status as string) ?? (checkSuite?.status as string);
 
   console.log(`[Webhook] Check: ${action} - status=${status}, conclusion=${conclusion}`);
 
@@ -297,9 +287,7 @@ async function handleCheckEvent(
 
     for (const pr of pullRequests) {
       const prNumber = pr.number as number;
-      console.log(
-        `[Webhook] CI ${conclusion} for PR #${prNumber}, Judge review may be triggered`
-      );
+      console.log(`[Webhook] CI ${conclusion} for PR #${prNumber}, Judge review may be triggered`);
     }
   }
 

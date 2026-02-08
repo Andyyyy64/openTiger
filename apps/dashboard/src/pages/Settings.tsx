@@ -1,21 +1,21 @@
-import React, { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { configApi, systemApi } from '../lib/api';
-import { SettingsHeader } from './settings/SettingsHeader';
-import { SystemControlPanel } from './settings/SystemControlPanel';
-import { SettingsConfigSections } from './settings/SettingsConfigSections';
-import { GROUPED_SETTINGS } from './settings/grouping';
+import React, { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { configApi, systemApi } from "../lib/api";
+import { SettingsHeader } from "./settings/SettingsHeader";
+import { SystemControlPanel } from "./settings/SystemControlPanel";
+import { SettingsConfigSections } from "./settings/SettingsConfigSections";
+import { GROUPED_SETTINGS } from "./settings/grouping";
 
 export const SettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const { data, isLoading, error } = useQuery({
-    queryKey: ['config'],
+    queryKey: ["config"],
     queryFn: () => configApi.get(),
   });
   const restartQuery = useQuery({
-    queryKey: ['system-restart'],
+    queryKey: ["system-restart"],
     queryFn: () => systemApi.restartStatus(),
-    refetchInterval: (query) => (query.state.data?.status === 'running' ? 3000 : false),
+    refetchInterval: (query) => (query.state.data?.status === "running" ? 3000 : false),
   });
 
   const [values, setValues] = useState<Record<string, string>>({});
@@ -29,14 +29,14 @@ export const SettingsPage: React.FC = () => {
   const mutation = useMutation({
     mutationFn: (updates: Record<string, string>) => configApi.update(updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['config'] });
+      queryClient.invalidateQueries({ queryKey: ["config"] });
     },
   });
 
   const restartMutation = useMutation({
     mutationFn: () => systemApi.restart(),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['system-restart'] });
+      queryClient.invalidateQueries({ queryKey: ["system-restart"] });
     },
   });
   const cleanupMutation = useMutation({
@@ -61,10 +61,11 @@ export const SettingsPage: React.FC = () => {
     setValues((prev) => ({ ...prev, [key]: value }));
   };
 
-  const restartStatus = restartQuery.data?.status ?? 'idle';
+  const restartStatus = restartQuery.data?.status ?? "idle";
   const restartStatusLabel = restartStatus.toUpperCase();
 
-  const formatTimestamp = (value?: string) => (value ? new Date(value).toLocaleTimeString() : '--:--:--');
+  const formatTimestamp = (value?: string) =>
+    value ? new Date(value).toLocaleTimeString() : "--:--:--";
   const restartPanel = {
     status: restartStatus,
     statusLabel: restartStatusLabel,
@@ -108,7 +109,9 @@ export const SettingsPage: React.FC = () => {
       {/* システム操作パネル */}
       <SystemControlPanel restart={restartPanel} cleanup={cleanupPanel} stopAll={stopAllPanel} />
 
-      {isLoading && <div className="text-center text-zinc-500 monitor-scan">&gt; Scanning configuration...</div>}
+      {isLoading && (
+        <div className="text-center text-zinc-500 monitor-scan">&gt; Scanning configuration...</div>
+      )}
       {error && <div className="text-center text-red-500">&gt; CONFIG LOAD ERROR</div>}
 
       <SettingsConfigSections grouped={grouped} values={values} onChange={updateValue} />

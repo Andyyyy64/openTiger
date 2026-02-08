@@ -26,9 +26,7 @@ export async function cleanupExpiredLeases(): Promise<number> {
   await db
     .update(tasks)
     .set({ status: "queued", blockReason: null, updatedAt: new Date() })
-    .where(
-      and(inArray(tasks.id, taskIds), eq(tasks.status, "running"))
-    );
+    .where(and(inArray(tasks.id, taskIds), eq(tasks.status, "running")));
 
   for (const lease of expired) {
     await recordEvent({

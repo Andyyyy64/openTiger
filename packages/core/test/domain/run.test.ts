@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  RunSchema,
-  RunStatus,
-  StartRunInput,
-  CompleteRunInput,
-} from "../../src/domain/run";
+import { RunSchema, RunStatus, StartRunInput, CompleteRunInput } from "../../src/domain/run";
 
 describe("RunStatus", () => {
   it("すべての有効なステータスを受け入れる", () => {

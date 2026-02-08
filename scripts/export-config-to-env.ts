@@ -16,7 +16,7 @@ function encodeEnvValue(value: string): string {
 
 function replaceConfigLines(
   source: string,
-  values: Record<string, string>
+  values: Record<string, string>,
 ): { content: string; updatedKeys: string[] } {
   const lines = source.length > 0 ? source.split(/\r?\n/) : [];
   const remaining = new Set(CONFIG_KEYS);

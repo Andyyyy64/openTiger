@@ -45,8 +45,8 @@ export async function getPendingPRs(): Promise<PendingPR[]> {
         eq(artifacts.type, "pr"),
         eq(runs.status, "success"),
         isNull(runs.judgedAt),
-        isNotNull(artifacts.ref)
-      )
+        isNotNull(artifacts.ref),
+      ),
     )
     .orderBy(desc(runs.startedAt));
 
@@ -60,10 +60,7 @@ export async function getPendingPRs(): Promise<PendingPR[]> {
     const prNumber = parseInt(row.prNumber, 10);
     if (Number.isNaN(prNumber)) continue;
 
-    const taskResult = await db
-      .select()
-      .from(tasks)
-      .where(eq(tasks.id, row.taskId));
+    const taskResult = await db.select().from(tasks).where(eq(tasks.id, row.taskId));
 
     const task = taskResult[0];
     if (!task) continue;
@@ -105,8 +102,8 @@ export async function getPendingWorktrees(): Promise<PendingWorktree[]> {
         eq(artifacts.type, "worktree"),
         eq(runs.status, "success"),
         isNull(runs.judgedAt),
-        isNotNull(artifacts.ref)
-      )
+        isNotNull(artifacts.ref),
+      ),
     )
     .orderBy(desc(runs.startedAt));
 
@@ -126,10 +123,7 @@ export async function getPendingWorktrees(): Promise<PendingWorktree[]> {
         ? String((metadata as { branchName?: unknown }).branchName ?? "HEAD")
         : "HEAD";
 
-    const taskResult = await db
-      .select()
-      .from(tasks)
-      .where(eq(tasks.id, row.taskId));
+    const taskResult = await db.select().from(tasks).where(eq(tasks.id, row.taskId));
 
     const task = taskResult[0];
     if (!task) continue;

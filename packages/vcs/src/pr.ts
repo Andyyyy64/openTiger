@@ -49,7 +49,7 @@ export async function findPRs(options: SearchPROptions): Promise<PRInfo[]> {
 // PRを更新
 export async function updatePR(
   prNumber: number,
-  options: Partial<CreatePROptions>
+  options: Partial<CreatePROptions>,
 ): Promise<PRInfo> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
@@ -115,10 +115,7 @@ export async function createPR(options: CreatePROptions): Promise<PRInfo> {
 }
 
 // PRにコメントを追加
-export async function addPRComment(
-  prNumber: number,
-  body: string
-): Promise<void> {
+export async function addPRComment(prNumber: number, body: string): Promise<void> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
 
@@ -133,7 +130,7 @@ export async function addPRComment(
 // PRをマージ
 export async function mergePR(
   prNumber: number,
-  mergeMethod: "merge" | "squash" | "rebase" = "squash"
+  mergeMethod: "merge" | "squash" | "rebase" = "squash",
 ): Promise<boolean> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
@@ -166,9 +163,7 @@ export async function closePR(prNumber: number): Promise<void> {
 }
 
 // PRのCIステータスを取得
-export async function getPRCIStatus(
-  prNumber: number
-): Promise<"success" | "failure" | "pending"> {
+export async function getPRCIStatus(prNumber: number): Promise<"success" | "failure" | "pending"> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
 

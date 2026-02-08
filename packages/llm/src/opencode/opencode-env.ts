@@ -1,9 +1,6 @@
 import type { OpenCodeOptions } from "./opencode-types";
 
-export function readRuntimeEnv(
-  options: OpenCodeOptions,
-  key: string
-): string | undefined {
+export function readRuntimeEnv(options: OpenCodeOptions, key: string): string | undefined {
   const optionValue = options.env?.[key];
   if (typeof optionValue === "string" && optionValue.trim().length > 0) {
     return optionValue;
@@ -15,10 +12,7 @@ export function readRuntimeEnv(
   return undefined;
 }
 
-export function parseBooleanEnvValue(
-  value: string | undefined,
-  fallback: boolean
-): boolean {
+export function parseBooleanEnvValue(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) {
     return fallback;
   }
@@ -32,10 +26,7 @@ export function parseBooleanEnvValue(
   return fallback;
 }
 
-export function parseIntegerEnvValue(
-  value: string | undefined,
-  fallback: number
-): number {
+export function parseIntegerEnvValue(value: string | undefined, fallback: number): number {
   if (value === undefined) {
     return fallback;
   }

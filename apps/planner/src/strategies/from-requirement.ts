@@ -71,25 +71,27 @@ ${requirement.goal}
 ${requirement.background || "(なし)"}
 
 ### Constraints
-${requirement.constraints.length > 0 ? requirement.constraints.map(c => `- ${c}`).join("\n") : "(なし)"}
+${requirement.constraints.length > 0 ? requirement.constraints.map((c) => `- ${c}`).join("\n") : "(なし)"}
 
 ### Acceptance Criteria
-${requirement.acceptanceCriteria.map(c => `- ${c}`).join("\n")}
+${requirement.acceptanceCriteria.map((c) => `- ${c}`).join("\n")}
 
 ### Scope
 #### In Scope
-${requirement.scope.inScope.map(s => `- ${s}`).join("\n") || "(なし)"}
+${requirement.scope.inScope.map((s) => `- ${s}`).join("\n") || "(なし)"}
 
 #### Out of Scope
-${requirement.scope.outOfScope.map(s => `- ${s}`).join("\n") || "(なし)"}
+${requirement.scope.outOfScope.map((s) => `- ${s}`).join("\n") || "(なし)"}
 
 ### Allowed Paths
-${requirement.allowedPaths.map(p => `- ${p}`).join("\n")}
+${requirement.allowedPaths.map((p) => `- ${p}`).join("\n")}
 
 ### Risk Assessment
-${requirement.riskAssessment.length > 0 
-  ? requirement.riskAssessment.map(r => `- ${r.risk} (${r.impact}): ${r.mitigation}`).join("\n")
-  : "(なし)"}
+${
+  requirement.riskAssessment.length > 0
+    ? requirement.riskAssessment.map((r) => `- ${r.risk} (${r.impact}): ${r.mitigation}`).join("\n")
+    : "(なし)"
+}
 
 ### Notes
 ${requirement.notes || "(なし)"}
@@ -170,7 +172,7 @@ function resolveDependencies(
     riskLevel?: string;
     dependsOn?: number[];
     timeboxMinutes?: number;
-  }>
+  }>,
 ): PlannedTaskInput[] {
   // 一旦全タスクを生成（依存関係は後で解決）
   const taskInputs: PlannedTaskInput[] = tasks.map((task, index) => ({
@@ -200,7 +202,7 @@ export async function generateTasksFromRequirement(
     instructionsPath?: string;
     timeoutSeconds?: number;
     inspection?: CodebaseInspection;
-  }
+  },
 ): Promise<TaskGenerationResult> {
   const prompt = buildPrompt(requirement, options.inspection);
   const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
@@ -246,10 +248,7 @@ export async function generateTasksFromRequirement(
   const tasks = resolveDependencies(parsed.tasks);
 
   // 合計見積もり時間
-  const totalEstimatedMinutes = tasks.reduce(
-    (sum, t) => sum + (t.timeboxMinutes ?? 60),
-    0
-  );
+  const totalEstimatedMinutes = tasks.reduce((sum, t) => sum + (t.timeboxMinutes ?? 60), 0);
 
   return {
     tasks,
@@ -294,10 +293,10 @@ export function generateSimpleTasks(requirement: Requirement): TaskGenerationRes
 // リスクレベルを判定
 function determineRiskLevel(requirement: Requirement): "low" | "medium" | "high" {
   // 高リスクの項目があれば全体も高リスク
-  if (requirement.riskAssessment.some(r => r.impact === "high")) {
+  if (requirement.riskAssessment.some((r) => r.impact === "high")) {
     return "high";
   }
-  if (requirement.riskAssessment.some(r => r.impact === "medium")) {
+  if (requirement.riskAssessment.some((r) => r.impact === "medium")) {
     return "medium";
   }
   return "low";

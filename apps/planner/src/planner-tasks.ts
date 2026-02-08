@@ -13,10 +13,11 @@ export async function saveTasks(
   taskInputs: PlannedTaskInput[],
   database: DbLike = db,
   options?: {
-    initialStateResolver?: (
-      input: PlannedTaskInput
-    ) => { status?: "queued" | "blocked"; blockReason?: string | null };
-  }
+    initialStateResolver?: (input: PlannedTaskInput) => {
+      status?: "queued" | "blocked";
+      blockReason?: string | null;
+    };
+  },
 ): Promise<string[]> {
   const savedIds: string[] = [];
 
@@ -55,7 +56,7 @@ export async function saveTasks(
 export async function resolveDependencies(
   savedIds: string[],
   originalTasks: PlannedTaskInput[],
-  database: DbLike = db
+  database: DbLike = db,
 ): Promise<void> {
   // 元のタスクにdependsOnがあった場合、インデックスからIDに変換
   for (let i = 0; i < originalTasks.length; i++) {
@@ -78,7 +79,7 @@ export async function resolveDependencies(
 
     if (dependencyIds.length !== dependsOnIndexes.length) {
       console.warn(
-        `[Planner] dependencies mismatch for task ${savedId} (indexes: ${dependsOnIndexes.join(", ")})`
+        `[Planner] dependencies mismatch for task ${savedId} (indexes: ${dependsOnIndexes.join(", ")})`,
       );
     }
 
@@ -116,9 +117,7 @@ export async function recordPlannerPlanEvent(params: {
         dependencies: task.dependencies ?? [],
       };
     })
-    .filter(
-      (task): task is NonNullable<typeof task> => typeof task !== "undefined"
-    );
+    .filter((task): task is NonNullable<typeof task> => typeof task !== "undefined");
 
   try {
     await database.insert(events).values({
@@ -262,8 +261,8 @@ export async function createIssuesForTasks(params: {
           and(
             eq(tasks.id, taskId),
             eq(tasks.status, "blocked"),
-            eq(tasks.blockReason, "issue_linking")
-          )
+            eq(tasks.blockReason, "issue_linking"),
+          ),
         );
       continue;
     }
@@ -307,8 +306,8 @@ export async function createIssuesForTasks(params: {
           and(
             eq(tasks.id, taskId),
             eq(tasks.status, "blocked"),
-            eq(tasks.blockReason, "issue_linking")
-          )
+            eq(tasks.blockReason, "issue_linking"),
+          ),
         );
     }
   }

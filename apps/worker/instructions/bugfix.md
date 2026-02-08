@@ -54,9 +54,7 @@ Error: Cannot read property 'id' of undefined
 describe("getUserName", () => {
   it("ユーザーが見つからない場合にエラーを投げる", async () => {
     // 存在しないユーザーIDを渡す
-    await expect(getUserName("non-existent-id")).rejects.toThrow(
-      UserNotFoundError
-    );
+    await expect(getUserName("non-existent-id")).rejects.toThrow(UserNotFoundError);
   });
 });
 ```
@@ -71,9 +69,9 @@ async function getUserName(userId: string): Promise<string> {
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId),
   });
-  
+
   // userがundefinedの場合にエラーが発生
-  return user.name;  // ← ここでundefinedにアクセス
+  return user.name; // ← ここでundefinedにアクセス
 }
 ```
 
@@ -85,12 +83,12 @@ async function getUserName(userId: string): Promise<string> {
   const user = await db.query.users.findFirst({
     where: eq(users.id, userId),
   });
-  
+
   // nullチェックを追加
   if (!user) {
     throw new UserNotFoundError(userId);
   }
-  
+
   return user.name;
 }
 ```
@@ -112,7 +110,7 @@ pnpm test
 ```typescript
 // Before: nullチェックなし
 function getFirstItem<T>(items: T[]): T {
-  return items[0];  // 空配列でundefined
+  return items[0]; // 空配列でundefined
 }
 
 // After: 適切なエラーハンドリング
@@ -135,7 +133,7 @@ function getFirstItem<T>(items: T[]): T | undefined {
 // Before: awaitなしでPromiseを返す
 async function fetchData() {
   try {
-    return fetch("/api/data");  // awaitがない
+    return fetch("/api/data"); // awaitがない
   } catch (error) {
     // このcatchは実行されない
     console.error(error);
@@ -162,7 +160,7 @@ let counter = 0;
 async function increment() {
   const current = counter;
   await someAsyncOperation();
-  counter = current + 1;  // 競合する可能性
+  counter = current + 1; // 競合する可能性
 }
 
 // After: アトミックな操作を使用
@@ -186,7 +184,7 @@ async function increment() {
 function getPage(items: Item[], page: number, pageSize: number) {
   const start = page * pageSize;
   const end = start + pageSize;
-  return items.slice(start, end);  // page=1で最初のページではない
+  return items.slice(start, end); // page=1で最初のページではない
 }
 
 // After: 1-indexedを考慮

@@ -23,26 +23,22 @@ const FORBIDDEN_COMMIT_PATH_PATTERNS: RegExp[] = [
 
 function findForbiddenChangedFiles(changedFiles: string[]): string[] {
   return changedFiles.filter((file) =>
-    FORBIDDEN_COMMIT_PATH_PATTERNS.some((pattern) => pattern.test(file))
+    FORBIDDEN_COMMIT_PATH_PATTERNS.some((pattern) => pattern.test(file)),
   );
 }
 
 function isNonFastForwardPush(stderr: string, stdout: string): boolean {
   const message = `${stderr}\n${stdout}`.toLowerCase();
-  return message.includes("fetch first")
-    || message.includes("non-fast-forward")
-    || message.includes("failed to push some refs");
+  return (
+    message.includes("fetch first") ||
+    message.includes("non-fast-forward") ||
+    message.includes("failed to push some refs")
+  );
 }
 
 // コミットメッセージを生成
 function generateCommitMessage(task: Task, changedFiles: string[]): string {
-  const lines: string[] = [
-    `[openTiger] ${task.title}`,
-    "",
-    `Task ID: ${task.id}`,
-    "",
-    "Changes:",
-  ];
+  const lines: string[] = [`[openTiger] ${task.title}`, "", `Task ID: ${task.id}`, "", "Changes:"];
 
   // 変更ファイルを追加（最大10ファイル）
   const filesToShow = changedFiles.slice(0, 10);
@@ -58,9 +54,7 @@ function generateCommitMessage(task: Task, changedFiles: string[]): string {
 }
 
 // 変更をコミットしてプッシュ
-export async function commitAndPush(
-  options: CommitOptions
-): Promise<CommitResult> {
+export async function commitAndPush(options: CommitOptions): Promise<CommitResult> {
   const { repoPath, branchName, task, changedFiles } = options;
   const repoMode = getRepoMode();
   const forbiddenFiles = findForbiddenChangedFiles(changedFiles);
@@ -125,10 +119,12 @@ export async function commitAndPush(
     // プッシュ
     let pushResult = await push(repoPath, branchName);
     if (!pushResult.success) {
-      if (branchName.startsWith("agent/")
-        && isNonFastForwardPush(pushResult.stderr, pushResult.stdout)) {
+      if (
+        branchName.startsWith("agent/") &&
+        isNonFastForwardPush(pushResult.stderr, pushResult.stdout)
+      ) {
         console.warn(
-          `Push rejected for ${branchName} due to non-fast-forward. Retrying with force push...`
+          `Push rejected for ${branchName} due to non-fast-forward. Retrying with force push...`,
         );
         const forcePushResult = await push(repoPath, branchName, true);
         if (forcePushResult.success) {

@@ -34,9 +34,9 @@
 
 # Allowed Paths
 
-- packages/db/**
-- apps/api/**
-- apps/web/**
+- packages/db/\*\*
+- apps/api/\*\*
+- apps/web/\*\*
 
 # Risk Assessment
 

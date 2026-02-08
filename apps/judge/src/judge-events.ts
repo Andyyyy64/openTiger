@@ -13,7 +13,7 @@ export async function recordJudgeReview(
   summary: EvaluationSummary,
   actionResult: { commented: boolean; approved: boolean; merged: boolean },
   agentId: string,
-  dryRun: boolean
+  dryRun: boolean,
 ): Promise<void> {
   try {
     await db.insert(events).values({
@@ -38,10 +38,7 @@ export async function recordJudgeReview(
       },
     });
   } catch (error) {
-    console.error(
-      `[Judge] Failed to record review event for PR #${pr.prNumber}:`,
-      error
-    );
+    console.error(`[Judge] Failed to record review event for PR #${pr.prNumber}:`, error);
   }
 }
 
@@ -58,7 +55,7 @@ export async function recordLocalReview(
   summary: EvaluationSummary,
   agentId: string,
   dryRun: boolean,
-  mergeResult?: { success: boolean; error?: string }
+  mergeResult?: { success: boolean; error?: string },
 ): Promise<void> {
   try {
     await db.insert(events).values({

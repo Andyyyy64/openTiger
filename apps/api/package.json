@@ -16,12 +16,12 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@hono/node-server": "^1.13.8",
+    "@hono/zod-validator": "^0.4.2",
     "@openTiger/core": "workspace:*",
     "@openTiger/db": "workspace:*",
     "@openTiger/queue": "workspace:*",
     "@openTiger/vcs": "workspace:*",
-    "@hono/node-server": "^1.13.8",
-    "@hono/zod-validator": "^0.4.2",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.38.4",
     "hono": "^4.7.2",

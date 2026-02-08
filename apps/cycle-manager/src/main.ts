@@ -62,10 +62,7 @@ interface CycleManagerConfig {
 // デフォルト設定
 const DEFAULT_CONFIG: CycleManagerConfig = {
   cycleConfig: {
-    maxDurationMs: parseInt(
-      process.env.CYCLE_MAX_DURATION_MS ?? String(4 * 60 * 60 * 1000),
-      10
-    ), // 4時間
+    maxDurationMs: parseInt(process.env.CYCLE_MAX_DURATION_MS ?? String(4 * 60 * 60 * 1000), 10), // 4時間
     maxTasksPerCycle: parseInt(process.env.CYCLE_MAX_TASKS ?? "100", 10),
     maxFailureRate: parseFloat(process.env.CYCLE_MAX_FAILURE_RATE ?? "0.3"),
     minTasksForFailureCheck: 10,
@@ -80,26 +77,14 @@ const DEFAULT_CONFIG: CycleManagerConfig = {
   autoStartCycle: process.env.AUTO_START_CYCLE !== "false",
   autoReplan: process.env.AUTO_REPLAN !== "false",
   replanIntervalMs: parseInt(process.env.REPLAN_INTERVAL_MS ?? "300000", 10),
-  replanRequirementPath:
-    process.env.REPLAN_REQUIREMENT_PATH ?? process.env.REQUIREMENT_PATH,
+  replanRequirementPath: process.env.REPLAN_REQUIREMENT_PATH ?? process.env.REQUIREMENT_PATH,
   replanCommand: process.env.REPLAN_COMMAND ?? "pnpm --filter @openTiger/planner run start:fresh",
   replanWorkdir: process.env.REPLAN_WORKDIR ?? process.cwd(),
   replanRepoUrl: process.env.REPLAN_REPO_URL ?? process.env.REPO_URL,
-  replanBaseBranch: process.env.REPLAN_BASE_BRANCH
-    ?? process.env.BASE_BRANCH
-    ?? "main",
-  failedTaskRetryCooldownMs: parseInt(
-    process.env.FAILED_TASK_RETRY_COOLDOWN_MS ?? "30000",
-    10
-  ),
-  blockedTaskRetryCooldownMs: parseInt(
-    process.env.BLOCKED_TASK_RETRY_COOLDOWN_MS ?? "120000",
-    10
-  ),
-  stuckRunTimeoutMs: parseInt(
-    process.env.STUCK_RUN_TIMEOUT_MS ?? "900000",
-    10
-  ),
+  replanBaseBranch: process.env.REPLAN_BASE_BRANCH ?? process.env.BASE_BRANCH ?? "main",
+  failedTaskRetryCooldownMs: parseInt(process.env.FAILED_TASK_RETRY_COOLDOWN_MS ?? "30000", 10),
+  blockedTaskRetryCooldownMs: parseInt(process.env.BLOCKED_TASK_RETRY_COOLDOWN_MS ?? "120000", 10),
+  stuckRunTimeoutMs: parseInt(process.env.STUCK_RUN_TIMEOUT_MS ?? "900000", 10),
 };
 
 // Cycle Managerの状態
@@ -121,9 +106,7 @@ interface ReplanSignature {
   repoHeadSha: string;
 }
 
-async function computeRequirementHash(
-  requirementPath: string
-): Promise<string | undefined> {
+async function computeRequirementHash(requirementPath: string): Promise<string | undefined> {
   try {
     const content = await readFile(requirementPath, "utf-8");
     return createHash("sha256").update(content).digest("hex");
@@ -133,17 +116,11 @@ async function computeRequirementHash(
   }
 }
 
-async function fetchRepoHeadSha(
-  repoUrl: string,
-  baseBranch: string
-): Promise<string | undefined> {
+async function fetchRepoHeadSha(repoUrl: string, baseBranch: string): Promise<string | undefined> {
   const token = process.env.GITHUB_TOKEN;
   const authenticatedUrl =
     token && repoUrl.startsWith("https://github.com/")
-      ? repoUrl.replace(
-        "https://github.com/",
-        `https://x-access-token:${token}@github.com/`
-      )
+      ? repoUrl.replace("https://github.com/", `https://x-access-token:${token}@github.com/`)
       : repoUrl;
 
   return new Promise((resolveResult) => {
@@ -222,7 +199,7 @@ async function fetchLocalHeadSha(workdir: string): Promise<string | undefined> {
 }
 
 async function computeReplanSignature(
-  config: CycleManagerConfig
+  config: CycleManagerConfig,
 ): Promise<ReplanSignature | undefined> {
   // 要件とリポジトリの状態をまとめて署名し、差異判定に使う
   if (!config.replanRequirementPath) {
@@ -251,9 +228,7 @@ async function computeReplanSignature(
     repoUrl: repoIdentity,
     baseBranch: config.replanBaseBranch,
   };
-  const signature = createHash("sha256")
-    .update(JSON.stringify(signaturePayload))
-    .digest("hex");
+  const signature = createHash("sha256").update(JSON.stringify(signaturePayload)).digest("hex");
 
   return {
     signature,
@@ -262,10 +237,7 @@ async function computeReplanSignature(
   };
 }
 
-function readPayloadField(
-  payload: unknown,
-  key: string
-): unknown | undefined {
+function readPayloadField(payload: unknown, key: string): unknown | undefined {
   if (!payload || typeof payload !== "object") {
     return;
   }
@@ -322,7 +294,7 @@ async function getLastPlanCreatedAt(): Promise<Date | null> {
 
 async function shouldTriggerReplan(
   state: SystemState,
-  config: CycleManagerConfig
+  config: CycleManagerConfig,
 ): Promise<{ shouldRun: boolean; signature?: ReplanSignature; reason?: string }> {
   if (!config.autoReplan || replanInProgress) {
     return { shouldRun: false, reason: "disabled_or_running" };
@@ -338,12 +310,12 @@ async function shouldTriggerReplan(
   }
   const plannerRecentWindowRaw = Number.parseInt(
     process.env.REPLAN_PLANNER_ACTIVE_WINDOW_MS ?? "90000",
-    10
+    10,
   );
-  const plannerRecentWindowMs = Number.isFinite(plannerRecentWindowRaw)
-    && plannerRecentWindowRaw > 0
-    ? plannerRecentWindowRaw
-    : 90000;
+  const plannerRecentWindowMs =
+    Number.isFinite(plannerRecentWindowRaw) && plannerRecentWindowRaw > 0
+      ? plannerRecentWindowRaw
+      : 90000;
   const plannerRecentSince = new Date(Date.now() - plannerRecentWindowMs);
   const [plannerRecentlyActive] = await db
     .select({
@@ -352,11 +324,13 @@ async function shouldTriggerReplan(
       lastHeartbeat: agents.lastHeartbeat,
     })
     .from(agents)
-    .where(and(
-      eq(agents.role, "planner"),
-      isNotNull(agents.lastHeartbeat),
-      gte(agents.lastHeartbeat, plannerRecentSince)
-    ))
+    .where(
+      and(
+        eq(agents.role, "planner"),
+        isNotNull(agents.lastHeartbeat),
+        gte(agents.lastHeartbeat, plannerRecentSince),
+      ),
+    )
     .orderBy(desc(agents.lastHeartbeat))
     .limit(1);
   if (plannerRecentlyActive) {
@@ -380,8 +354,8 @@ async function shouldTriggerReplan(
         isNull(runs.judgedAt),
         inArray(artifacts.type, ["pr", "worktree"]),
         eq(tasks.status, "blocked"),
-        eq(tasks.blockReason, "awaiting_judge")
-      )
+        eq(tasks.blockReason, "awaiting_judge"),
+      ),
     )
     .limit(1);
   if (pendingJudgeRun) {
@@ -546,10 +520,7 @@ function buildPlannerReplanEnv(config: CycleManagerConfig): Record<string, strin
   return env;
 }
 
-async function triggerReplan(
-  state: SystemState,
-  signature?: ReplanSignature
-): Promise<void> {
+async function triggerReplan(state: SystemState, signature?: ReplanSignature): Promise<void> {
   // 競合状態防止: 既に実行中なら何もしない
   if (replanInProgress) {
     console.log("[CycleManager] triggerReplan called but already in progress, skipping");
@@ -578,11 +549,11 @@ async function triggerReplan(
   lastReplanAt = Date.now();
 
   console.log(
-    `[CycleManager] Triggering planner: ${[command.executable, ...command.args].join(" ")}`
+    `[CycleManager] Triggering planner: ${[command.executable, ...command.args].join(" ")}`,
   );
   if (plannerEnv.PLANNER_REPO_URL) {
     console.log(
-      `[CycleManager] Replan planner env: REPO_MODE=${plannerEnv.REPO_MODE}, PLANNER_USE_REMOTE=${plannerEnv.PLANNER_USE_REMOTE}, PLANNER_REPO_URL=${plannerEnv.PLANNER_REPO_URL}`
+      `[CycleManager] Replan planner env: REPO_MODE=${plannerEnv.REPO_MODE}, PLANNER_USE_REMOTE=${plannerEnv.PLANNER_USE_REMOTE}, PLANNER_REPO_URL=${plannerEnv.PLANNER_REPO_URL}`,
     );
   }
   await recordEvent({
@@ -690,11 +661,9 @@ async function runMonitorLoop(): Promise<void> {
       console.log(`[CycleManager] Detected ${anomalies.length} anomalies`);
 
       // クリティカルな異常があればサイクル終了
-      const criticalAnomalies = anomalies.filter(
-        (a) => a.severity === "critical"
-      );
+      const criticalAnomalies = anomalies.filter((a) => a.severity === "critical");
       const endingCriticalAnomalies = criticalAnomalies.filter((anomaly) =>
-        CYCLE_ENDING_CRITICAL_ANOMALIES.has(anomaly.type)
+        CYCLE_ENDING_CRITICAL_ANOMALIES.has(anomaly.type),
       );
       if (endingCriticalAnomalies.length > 0) {
         console.log("[CycleManager] Critical anomalies detected, ending cycle");
@@ -703,7 +672,7 @@ async function runMonitorLoop(): Promise<void> {
         await startNewCycle();
       } else if (criticalAnomalies.length > 0) {
         console.warn(
-          "[CycleManager] Critical anomaly detected, but cycle restart skipped (non-recoverable by restart)"
+          "[CycleManager] Critical anomaly detected, but cycle restart skipped (non-recoverable by restart)",
         );
       }
     }
@@ -773,14 +742,14 @@ async function runCleanupLoop(): Promise<void> {
 
     // 失敗タスクをクールダウン後に再キュー（既定: 無制限）
     const requeuedTasks = await requeueFailedTasksWithCooldown(
-      activeConfig.failedTaskRetryCooldownMs
+      activeConfig.failedTaskRetryCooldownMs,
     );
     if (requeuedTasks > 0) {
       console.log(`[Cleanup] Requeued ${requeuedTasks} failed tasks`);
     }
 
     const requeuedBlockedTasks = await requeueBlockedTasksWithCooldown(
-      activeConfig.blockedTaskRetryCooldownMs
+      activeConfig.blockedTaskRetryCooldownMs,
     );
     if (requeuedBlockedTasks > 0) {
       console.log(`[Cleanup] Requeued ${requeuedBlockedTasks} blocked tasks`);
@@ -814,7 +783,7 @@ async function runStatsLoop(): Promise<void> {
       `[Stats] Cycle #${state.cycleNumber}: ` +
         `completed=${stats.tasksCompleted}, ` +
         `failed=${stats.tasksFailed}, ` +
-        `tokens=${costSummary.totalTokens}`
+        `tokens=${costSummary.totalTokens}`,
     );
   } catch (error) {
     console.error("[CycleManager] Stats loop error:", error);
@@ -890,7 +859,9 @@ async function handleCommand(command: string): Promise<void> {
 
     default:
       console.log("Unknown command:", command);
-      console.log("Available commands: status, anomalies, clear-anomalies, end-cycle, new-cycle, cleanup");
+      console.log(
+        "Available commands: status, anomalies, clear-anomalies, end-cycle, new-cycle, cleanup",
+      );
   }
 }
 
@@ -908,12 +879,8 @@ async function main(): Promise<void> {
 
   console.log(`Monitor interval: ${activeConfig.monitorIntervalMs}ms`);
   console.log(`Cleanup interval: ${activeConfig.cleanupIntervalMs}ms`);
-  console.log(
-    `Failed task retry cooldown: ${activeConfig.failedTaskRetryCooldownMs}ms`
-  );
-  console.log(
-    `Blocked task retry cooldown: ${activeConfig.blockedTaskRetryCooldownMs}ms`
-  );
+  console.log(`Failed task retry cooldown: ${activeConfig.failedTaskRetryCooldownMs}ms`);
+  console.log(`Blocked task retry cooldown: ${activeConfig.blockedTaskRetryCooldownMs}ms`);
   console.log(`Stats interval: ${activeConfig.statsIntervalMs}ms`);
   console.log(`Max cycle duration: ${activeConfig.cycleConfig.maxDurationMs}ms`);
   console.log(`Max tasks per cycle: ${activeConfig.cycleConfig.maxTasksPerCycle}`);
@@ -921,11 +888,9 @@ async function main(): Promise<void> {
   console.log(`Auto replan: ${activeConfig.autoReplan}`);
   if (activeConfig.autoReplan) {
     console.log(`Replan interval: ${activeConfig.replanIntervalMs}ms`);
+    console.log(`Replan requirement: ${activeConfig.replanRequirementPath ?? "not set"}`);
     console.log(
-      `Replan requirement: ${activeConfig.replanRequirementPath ?? "not set"}`
-    );
-    console.log(
-      `Replan repo: ${activeConfig.replanRepoUrl ?? "not set"} (${activeConfig.replanBaseBranch})`
+      `Replan repo: ${activeConfig.replanRepoUrl ?? "not set"} (${activeConfig.replanBaseBranch})`,
     );
   }
   console.log("=".repeat(60));

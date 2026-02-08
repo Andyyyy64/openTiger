@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  AgentSchema,
-  AgentRole,
-  AgentStatus,
-  RegisterAgentInput,
-} from "../../src/domain/agent";
+import { AgentSchema, AgentRole, AgentStatus, RegisterAgentInput } from "../../src/domain/agent";
 
 describe("AgentRole", () => {
   it("すべての有効な役割を受け入れる", () => {

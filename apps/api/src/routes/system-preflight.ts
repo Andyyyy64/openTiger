@@ -1,12 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@openTiger/db";
-import {
-  artifacts,
-  config as configTable,
-  events,
-  runs,
-  tasks,
-} from "@openTiger/db/schema";
+import { artifacts, config as configTable, events, runs, tasks } from "@openTiger/db/schema";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
@@ -91,7 +85,7 @@ async function resolveIssueTaskCommands(): Promise<string[]> {
 async function createTaskFromIssue(
   issue: OpenIssueSnapshot,
   commands: string[],
-  dependencyTaskIds: string[] = []
+  dependencyTaskIds: string[] = [],
 ): Promise<string | null> {
   const allowedPaths = parseAllowedPathsFromIssueBody(issue.body);
   const role = inferRoleFromLabels(issue.labels);
@@ -244,7 +238,7 @@ export async function buildPreflightSummary(options: {
   const githubContext = resolveGitHubContext(options.configRow);
   if (!githubContext) {
     summary.github.warnings.push(
-      "GitHub token/owner/repo is not fully configured. Skipping issue and PR preflight."
+      "GitHub token/owner/repo is not fully configured. Skipping issue and PR preflight.",
     );
     return summary;
   }
@@ -270,9 +264,7 @@ export async function buildPreflightSummary(options: {
     return summary;
   }
 
-  const commands = options.autoCreateIssueTasks
-    ? await resolveIssueTaskCommands()
-    : [];
+  const commands = options.autoCreateIssueTasks ? await resolveIssueTaskCommands() : [];
   const generatedIssueTaskIds = new Map<number, string>();
 
   for (const issue of openIssues) {
@@ -284,7 +276,7 @@ export async function buildPreflightSummary(options: {
     const linkedTasks = issueTaskMap.get(issue.number) ?? [];
     const isDone = linkedTasks.some((task) => task.status === "done");
     const hasOngoingTask = linkedTasks.some(
-      (task) => task.status !== "done" && task.status !== "cancelled"
+      (task) => task.status !== "done" && task.status !== "cancelled",
     );
 
     if (isDone) {
@@ -328,7 +320,7 @@ export async function buildPreflightSummary(options: {
       }
 
       const dependencyIssueNumbers = parseDependencyIssueNumbersFromIssueBody(issue.body).filter(
-        (number) => number !== issue.number
+        (number) => number !== issue.number,
       );
       if (dependencyIssueNumbers.length === 0) {
         continue;
@@ -338,18 +330,18 @@ export async function buildPreflightSummary(options: {
         new Set(
           dependencyIssueNumbers
             .map((number) => pickDependencyTaskId(issueTaskMap.get(number) ?? []))
-            .filter((value): value is string => Boolean(value))
-        )
+            .filter((value): value is string => Boolean(value)),
+        ),
       );
 
       const missingIssueNumbers = dependencyIssueNumbers.filter(
-        (number) => !issueTaskMap.has(number)
+        (number) => !issueTaskMap.has(number),
       );
       if (missingIssueNumbers.length > 0) {
         summary.github.warnings.push(
           `Issue #${issue.number} references missing dependencies: ${missingIssueNumbers
             .map((number) => `#${number}`)
-            .join(", ")}`
+            .join(", ")}`,
         );
       }
 
@@ -424,7 +416,9 @@ export async function buildPreflightSummary(options: {
         .returning({ id: tasks.id });
 
       if (!taskRow?.id) {
-        summary.github.warnings.push(`Failed to import open PR #${pull.number} into local backlog.`);
+        summary.github.warnings.push(
+          `Failed to import open PR #${pull.number} into local backlog.`,
+        );
         continue;
       }
 

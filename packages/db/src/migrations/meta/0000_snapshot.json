@@ -59,12 +59,8 @@
           "name": "agents_current_task_id_tasks_id_fk",
           "tableFrom": "agents",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "current_task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["current_task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -130,12 +126,8 @@
           "name": "artifacts_run_id_runs_id_fk",
           "tableFrom": "artifacts",
           "tableTo": "runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -322,12 +314,8 @@
           "name": "leases_task_id_tasks_id_fk",
           "tableFrom": "leases",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -337,9 +325,7 @@
         "leases_task_id_unique": {
           "name": "leases_task_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "task_id"
-          ]
+          "columns": ["task_id"]
         }
       },
       "policies": {},
@@ -414,12 +400,8 @@
           "name": "runs_task_id_tasks_id_fk",
           "tableFrom": "runs",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }

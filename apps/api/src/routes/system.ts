@@ -6,16 +6,9 @@ import { ensureConfigRow } from "../config-store";
 import { getAuthInfo } from "../middleware/index";
 import { createRepo } from "@openTiger/vcs";
 import { obliterateAllQueues } from "@openTiger/queue";
-import {
-  parseBooleanSetting,
-  parseCountSetting,
-  buildPreflightSummary,
-} from "./system-preflight";
+import { parseBooleanSetting, parseCountSetting, buildPreflightSummary } from "./system-preflight";
 import { canControlSystem } from "./system-auth";
-import {
-  readRequirementFile,
-  resolveRequirementPath,
-} from "./system-requirements";
+import { readRequirementFile, resolveRequirementPath } from "./system-requirements";
 import { registerProcessManagerRoutes } from "./system-process-manager";
 
 const systemRoute = new Hono();
@@ -29,10 +22,7 @@ systemRoute.get("/requirements", async (c) => {
   }
 
   try {
-    const requirementPath = await resolveRequirementPath(
-      c.req.query("path"),
-      "requirement.md"
-    );
+    const requirementPath = await resolveRequirementPath(c.req.query("path"), "requirement.md");
     const content = await readRequirementFile(requirementPath);
     return c.json({ path: requirementPath, content });
   } catch (error) {
@@ -50,8 +40,7 @@ systemRoute.post("/github/repo", async (c) => {
   const rawBody = await c.req.json().catch(() => ({}));
   const ownerInput = typeof rawBody?.owner === "string" ? rawBody.owner.trim() : "";
   const repoInput = typeof rawBody?.repo === "string" ? rawBody.repo.trim() : "";
-  const description =
-    typeof rawBody?.description === "string" ? rawBody.description.trim() : "";
+  const description = typeof rawBody?.description === "string" ? rawBody.description.trim() : "";
   const isPrivate = typeof rawBody?.private === "boolean" ? rawBody.private : true;
 
   const configRow = await ensureConfigRow();
@@ -90,9 +79,10 @@ systemRoute.post("/github/repo", async (c) => {
 
     return c.json({ repo: info });
   } catch (error) {
-    const status = typeof error === "object" && error && "status" in error
-      ? Number((error as { status?: number }).status)
-      : undefined;
+    const status =
+      typeof error === "object" && error && "status" in error
+        ? Number((error as { status?: number }).status)
+        : undefined;
     const message = error instanceof Error ? error.message : "Failed to create repo";
     // Return reason to UI for insufficient permissions and prompt configuration
     if (status === 403 && message.includes("Resource not accessible")) {
@@ -102,7 +92,7 @@ systemRoute.post("/github/repo", async (c) => {
             "GitHub token lacks permission to create repositories. " +
             "Ensure the token has repo permissions and org access if needed.",
         },
-        403
+        403,
       );
     }
     return c.json({ error: message }, status === 403 ? 403 : 500);
@@ -119,9 +109,7 @@ systemRoute.post("/preflight", async (c) => {
     const rawBody = await c.req.json().catch(() => ({}));
     const content = typeof rawBody?.content === "string" ? rawBody.content : "";
     const autoCreateIssueTasks =
-      typeof rawBody?.autoCreateIssueTasks === "boolean"
-        ? rawBody.autoCreateIssueTasks
-        : true;
+      typeof rawBody?.autoCreateIssueTasks === "boolean" ? rawBody.autoCreateIssueTasks : true;
     const hasRequirementContent = content.trim().length > 0;
 
     const configRow = await ensureConfigRow();
@@ -142,10 +130,10 @@ systemRoute.post("/preflight", async (c) => {
 
     const hasIssueBacklog = preflight.github.issueTaskBacklogCount > 0;
     const hasLocalTaskBacklog =
-      preflight.local.queuedTaskCount > 0
-      || preflight.local.runningTaskCount > 0
-      || preflight.local.failedTaskCount > 0
-      || preflight.local.blockedTaskCount > 0;
+      preflight.local.queuedTaskCount > 0 ||
+      preflight.local.runningTaskCount > 0 ||
+      preflight.local.failedTaskCount > 0 ||
+      preflight.local.blockedTaskCount > 0;
     const hasJudgeBacklog =
       preflight.github.openPrCount > 0 || preflight.local.pendingJudgeTaskCount > 0;
 
@@ -158,13 +146,10 @@ systemRoute.post("/preflight", async (c) => {
       // Keep Judge running in cycles where execution agents are active
       startJudge: judgeEnabled && (hasJudgeBacklog || startExecutionAgents),
       plannerCount: startPlanner ? plannerCount : 0,
-      judgeCount:
-        judgeEnabled && (hasJudgeBacklog || startExecutionAgents)
-          ? judgeCount
-          : 0,
+      judgeCount: judgeEnabled && (hasJudgeBacklog || startExecutionAgents) ? judgeCount : 0,
       startCycleManager:
-        cycleManagerEnabled
-        && (startExecutionAgents || hasJudgeBacklog || preflight.local.blockedTaskCount > 0),
+        cycleManagerEnabled &&
+        (startExecutionAgents || hasJudgeBacklog || preflight.local.blockedTaskCount > 0),
       workerCount: startExecutionAgents ? workerCount : 0,
       testerCount: startExecutionAgents ? testerCount : 0,
       docserCount: startExecutionAgents ? docserCount : 0,

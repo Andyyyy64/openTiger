@@ -63,7 +63,7 @@ async function reportAnomaly(alert: AnomalyAlert): Promise<void> {
 
 // 失敗率チェック
 export async function checkFailureRate(
-  config: AnomalyConfig = defaultAnomalyConfig
+  config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert | null> {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
@@ -124,7 +124,7 @@ export async function checkFailureRate(
 
 // コスト急増チェック
 export async function checkCostSpike(
-  config: AnomalyConfig = defaultAnomalyConfig
+  config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert | null> {
   const lastHour = await getLastHourCost();
 
@@ -168,11 +168,9 @@ export async function checkCostSpike(
 
 // 停滞タスクチェック
 export async function checkStuckTasks(
-  config: AnomalyConfig = defaultAnomalyConfig
+  config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert[]> {
-  const threshold = new Date(
-    Date.now() - config.stuckTaskMinutes * 60 * 1000
-  );
+  const threshold = new Date(Date.now() - config.stuckTaskMinutes * 60 * 1000);
 
   const stuckRuns = await db
     .select({
@@ -186,9 +184,7 @@ export async function checkStuckTasks(
   const alerts: AnomalyAlert[] = [];
 
   for (const run of stuckRuns) {
-    const durationMinutes = Math.round(
-      (Date.now() - run.startedAt.getTime()) / 60000
-    );
+    const durationMinutes = Math.round((Date.now() - run.startedAt.getTime()) / 60000);
 
     const alert: AnomalyAlert = {
       type: "stuck_task",
@@ -210,22 +206,15 @@ export async function checkStuckTasks(
 
 // 進捗なしチェック
 export async function checkNoProgress(
-  config: AnomalyConfig = defaultAnomalyConfig
+  config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert | null> {
-  const threshold = new Date(
-    Date.now() - config.noProgressMinutes * 60 * 1000
-  );
+  const threshold = new Date(Date.now() - config.noProgressMinutes * 60 * 1000);
 
   // 直近の完了Runを確認
   const [recentCompleted] = await db
     .select({ count: count() })
     .from(runs)
-    .where(
-      and(
-        gte(runs.finishedAt, threshold),
-        eq(runs.status, "success")
-      )
-    );
+    .where(and(gte(runs.finishedAt, threshold), eq(runs.status, "success")));
 
   // アクティブなワーカー数を確認
   const [activeWorkers] = await db
@@ -254,11 +243,9 @@ export async function checkNoProgress(
 
 // エージェントタイムアウトチェック
 export async function checkAgentTimeouts(
-  config: AnomalyConfig = defaultAnomalyConfig
+  config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert[]> {
-  const threshold = new Date(
-    Date.now() - config.agentTimeoutMinutes * 60 * 1000
-  );
+  const threshold = new Date(Date.now() - config.agentTimeoutMinutes * 60 * 1000);
 
   const timedOutAgents = await db
     .select({
@@ -266,12 +253,7 @@ export async function checkAgentTimeouts(
       lastHeartbeat: agents.lastHeartbeat,
     })
     .from(agents)
-    .where(
-      and(
-        eq(agents.status, "busy"),
-        lt(agents.lastHeartbeat, threshold)
-      )
-    );
+    .where(and(eq(agents.status, "busy"), lt(agents.lastHeartbeat, threshold)));
 
   const alerts: AnomalyAlert[] = [];
 
@@ -301,7 +283,7 @@ export async function checkAgentTimeouts(
 
 // 全異常検知を実行
 export async function runAllAnomalyChecks(
-  config: AnomalyConfig = defaultAnomalyConfig
+  config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert[]> {
   const alerts: AnomalyAlert[] = [];
 

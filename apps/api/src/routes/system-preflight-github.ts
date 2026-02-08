@@ -61,9 +61,7 @@ export async function fetchOpenIssues(context: GitHubContext): Promise<OpenIssue
       body: row.body ?? "",
       url: row.html_url,
       labels: row.labels
-        .map((label) =>
-          typeof label === "string" ? label : (label.name ?? "")
-        )
+        .map((label) => (typeof label === "string" ? label : (label.name ?? "")))
         .filter((label): label is string => label.length > 0),
     }));
 }

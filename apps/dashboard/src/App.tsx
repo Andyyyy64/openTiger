@@ -1,18 +1,18 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Layout } from './components/Layout'
-import { OverviewPage } from './pages/Overview'
-import { TasksPage } from './pages/Tasks'
-import { TaskDetailsPage } from './pages/TaskDetails'
-import { CreateTaskPage } from './pages/CreateTask'
-import { RunsPage } from './pages/Runs'
-import { RunDetailsPage } from './pages/RunDetails'
-import { AgentsPage } from './pages/Agents'
-import { PlansPage } from './pages/Plans'
-import { JudgementsPage } from './pages/Judgements'
-import { AgentDetailsPage } from './pages/AgentDetails'
-import { SettingsPage } from './pages/Settings'
-import { StartPage } from './pages/Start'
-import { LogsPage } from './pages/Logs'
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Layout } from "./components/Layout";
+import { OverviewPage } from "./pages/Overview";
+import { TasksPage } from "./pages/Tasks";
+import { TaskDetailsPage } from "./pages/TaskDetails";
+import { CreateTaskPage } from "./pages/CreateTask";
+import { RunsPage } from "./pages/Runs";
+import { RunDetailsPage } from "./pages/RunDetails";
+import { AgentsPage } from "./pages/Agents";
+import { PlansPage } from "./pages/Plans";
+import { JudgementsPage } from "./pages/Judgements";
+import { AgentDetailsPage } from "./pages/AgentDetails";
+import { SettingsPage } from "./pages/Settings";
+import { StartPage } from "./pages/Start";
+import { LogsPage } from "./pages/Logs";
 
 function App() {
   return (
@@ -38,7 +38,7 @@ function App() {
         </Routes>
       </Layout>
     </BrowserRouter>
-  )
+  );
 }
 
-export default App
+export default App;

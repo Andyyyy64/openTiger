@@ -1,32 +1,36 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { tasksApi, runsApi, agentsApi } from '../lib/api';
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { tasksApi, runsApi, agentsApi } from "../lib/api";
 
 export const OverviewPage: React.FC = () => {
-  const { data: tasks } = useQuery({ queryKey: ['tasks'], queryFn: () => tasksApi.list() });
-  const { data: runs } = useQuery({ queryKey: ['runs'], queryFn: () => runsApi.list() });
-  const { data: agents } = useQuery({ queryKey: ['agents'], queryFn: () => agentsApi.list() });
+  const { data: tasks } = useQuery({ queryKey: ["tasks"], queryFn: () => tasksApi.list() });
+  const { data: runs } = useQuery({ queryKey: ["runs"], queryFn: () => runsApi.list() });
+  const { data: agents } = useQuery({ queryKey: ["agents"], queryFn: () => agentsApi.list() });
   const now = Date.now();
-  const queuedTasks = tasks?.filter(t => t.status === 'queued') ?? [];
-  const blockedTasks = tasks?.filter(t => t.status === 'blocked') ?? [];
+  const queuedTasks = tasks?.filter((t) => t.status === "queued") ?? [];
+  const blockedTasks = tasks?.filter((t) => t.status === "blocked") ?? [];
   const retryExhaustedTasks =
-    tasks?.filter(t => (t.status === 'failed' || t.status === 'blocked') && (t.retryCount ?? 0) >= 3) ?? [];
+    tasks?.filter(
+      (t) => (t.status === "failed" || t.status === "blocked") && (t.retryCount ?? 0) >= 3,
+    ) ?? [];
 
   const stats = {
-    activeWorkers: agents?.filter(a => a.status === 'busy').length ?? 0,
+    activeWorkers: agents?.filter((a) => a.status === "busy").length ?? 0,
     pendingTasks: queuedTasks.length,
-    completedTasks: tasks?.filter(t => t.status === 'done').length ?? 0,
-    successRate: runs ? Math.round((runs.filter(r => r.status === 'success').length / runs.length) * 100) : 0,
+    completedTasks: tasks?.filter((t) => t.status === "done").length ?? 0,
+    successRate: runs
+      ? Math.round((runs.filter((r) => r.status === "success").length / runs.length) * 100)
+      : 0,
     oldestQueuedMinutes:
       queuedTasks.length === 0
         ? 0
         : Math.max(
             ...queuedTasks.map((task) =>
-              Math.floor((now - new Date(task.updatedAt).getTime()) / 60000)
-            )
+              Math.floor((now - new Date(task.updatedAt).getTime()) / 60000),
+            ),
           ),
     blockedOver30m: blockedTasks.filter(
-      (task) => now - new Date(task.updatedAt).getTime() > 30 * 60 * 1000
+      (task) => now - new Date(task.updatedAt).getTime() > 30 * 60 * 1000,
     ).length,
     retryExhausted: retryExhaustedTasks.length,
   };
@@ -43,21 +47,9 @@ export const OverviewPage: React.FC = () => {
           value={stats.activeWorkers.toString()}
           subValue={`/ ${agents?.length ?? 0} TOTAL`}
         />
-        <StatCard
-          title="PENDING TASKS"
-          value={stats.pendingTasks.toString()}
-          subValue="IN QUEUE"
-        />
-        <StatCard
-          title="COMPLETED"
-          value={stats.completedTasks.toString()}
-          subValue="FINISHED"
-        />
-        <StatCard
-          title="SUCCESS RATE"
-          value={`${stats.successRate}%`}
-          subValue="LIFETIME"
-        />
+        <StatCard title="PENDING TASKS" value={stats.pendingTasks.toString()} subValue="IN QUEUE" />
+        <StatCard title="COMPLETED" value={stats.completedTasks.toString()} subValue="FINISHED" />
+        <StatCard title="SUCCESS RATE" value={`${stats.successRate}%`} subValue="LIFETIME" />
         <StatCard
           title="QUEUE AGE MAX"
           value={`${stats.oldestQueuedMinutes}m`}
@@ -85,15 +77,22 @@ export const OverviewPage: React.FC = () => {
             <span className="text-xs text-zinc-500">tail -f runs.log</span>
           </div>
           <div className="p-4 space-y-2 font-pixel text-sm max-h-[300px] overflow-y-auto">
-            {runs?.slice(0, 5).map(run => (
-              <div key={run.id} className="flex items-start gap-3 pb-2 border-b border-zinc-800 last:border-0 last:pb-0">
+            {runs?.slice(0, 5).map((run) => (
+              <div
+                key={run.id}
+                className="flex items-start gap-3 pb-2 border-b border-zinc-800 last:border-0 last:pb-0"
+              >
                 <span className="text-zinc-500 text-xs whitespace-nowrap">
                   [{new Date(run.startedAt).toLocaleTimeString()}]
                 </span>
                 <div className="flex-1">
                   <div className="flex justify-between">
-                    <span>Agent <span className="text-term-tiger">{run.agentId}</span> started run</span>
-                    <span className={`text-xs uppercase ${run.status === 'success' ? 'text-term-tiger' : 'text-red-500'}`}>
+                    <span>
+                      Agent <span className="text-term-tiger">{run.agentId}</span> started run
+                    </span>
+                    <span
+                      className={`text-xs uppercase ${run.status === "success" ? "text-term-tiger" : "text-red-500"}`}
+                    >
                       [{run.status}]
                     </span>
                   </div>
@@ -101,7 +100,9 @@ export const OverviewPage: React.FC = () => {
                 </div>
               </div>
             ))}
-            {(!runs || runs.length === 0) && <div className="text-zinc-500 py-4">&gt; No recent activity found</div>}
+            {(!runs || runs.length === 0) && (
+              <div className="text-zinc-500 py-4">&gt; No recent activity found</div>
+            )}
           </div>
         </div>
 
@@ -116,14 +117,17 @@ export const OverviewPage: React.FC = () => {
               <span className="flex-1">COMMAND/TITLE</span>
               <span className="w-20 text-right">STATE</span>
             </div>
-            {tasks?.filter(t => t.status === 'running').slice(0, 5).map(task => (
-              <div key={task.id} className="flex items-center text-xs">
-                <span className="w-20 text-blue-400">{task.id.slice(0, 8)}</span>
-                <span className="flex-1 truncate pr-4 text-zinc-300">{task.title}</span>
-                <span className="w-20 text-right text-term-tiger animate-pulse">RUNNING</span>
-              </div>
-            ))}
-            {tasks?.filter(t => t.status === 'running').length === 0 && (
+            {tasks
+              ?.filter((t) => t.status === "running")
+              .slice(0, 5)
+              .map((task) => (
+                <div key={task.id} className="flex items-center text-xs">
+                  <span className="w-20 text-blue-400">{task.id.slice(0, 8)}</span>
+                  <span className="flex-1 truncate pr-4 text-zinc-300">{task.title}</span>
+                  <span className="w-20 text-right text-term-tiger animate-pulse">RUNNING</span>
+                </div>
+              ))}
+            {tasks?.filter((t) => t.status === "running").length === 0 && (
               <div className="text-zinc-500 py-4">&gt; No active processes</div>
             )}
           </div>
@@ -148,7 +152,9 @@ const StatCard = ({
     <div className="flex justify-between items-start mb-2">
       <h3 className="text-zinc-500 text-xs font-bold uppercase">{title}</h3>
     </div>
-    <p className={`text-3xl font-pixel mb-1 ${alert ? 'text-red-500' : 'text-term-tiger'}`}>{value}</p>
+    <p className={`text-3xl font-pixel mb-1 ${alert ? "text-red-500" : "text-term-tiger"}`}>
+      {value}
+    </p>
     <p className="text-zinc-600 text-xs font-pixel">{subValue}</p>
   </div>
 );

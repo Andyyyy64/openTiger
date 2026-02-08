@@ -146,16 +146,13 @@ export async function persistState(state: SystemState): Promise<void> {
 }
 
 // サイクル統計を更新
-export async function updateCycleStats(
-  cycleId: string,
-  stats: CycleStats
-): Promise<void> {
+export async function updateCycleStats(cycleId: string, stats: CycleStats): Promise<void> {
   await db.update(cycles).set({ stats }).where(eq(cycles.id, cycleId));
 }
 
 // サイクル履歴を取得
 export async function getCycleHistory(
-  limit: number = 10
+  limit: number = 10,
 ): Promise<Array<typeof cycles.$inferSelect>> {
   return db
     .select()
@@ -167,7 +164,7 @@ export async function getCycleHistory(
 // 指定期間のシステムメトリクス
 export async function getSystemMetrics(
   startTime: Date,
-  endTime: Date
+  endTime: Date,
 ): Promise<{
   tasksCompleted: number;
   tasksFailed: number;
@@ -182,12 +179,7 @@ export async function getSystemMetrics(
       totalTokens: sql<number>`COALESCE(SUM(${runs.costTokens}), 0)`,
     })
     .from(runs)
-    .where(
-      and(
-        gte(runs.startedAt, startTime),
-        lte(runs.startedAt, endTime)
-      )
-    )
+    .where(and(gte(runs.startedAt, startTime), lte(runs.startedAt, endTime)))
     .groupBy(runs.status);
 
   let tasksCompleted = 0;
@@ -235,7 +227,10 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
   // DB接続チェック
   let dbHealthy = false;
   try {
-    await db.select({ one: sql`1` }).from(tasks).limit(1);
+    await db
+      .select({ one: sql`1` })
+      .from(tasks)
+      .limit(1);
     dbHealthy = true;
   } catch (error) {
     details.dbError = error instanceof Error ? error.message : "Unknown error";
@@ -247,10 +242,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
     .select({ count: count() })
     .from(agents)
     .where(
-      and(
-        inArray(agents.status, ["idle", "busy"]),
-        gte(agents.lastHeartbeat, agentThreshold)
-      )
+      and(inArray(agents.status, ["idle", "busy"]), gte(agents.lastHeartbeat, agentThreshold)),
     );
   const activeAgentCount = agentCount?.count ?? 0;
   const hasActiveAgents = activeAgentCount > 0;
@@ -261,12 +253,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
   const [stuckCount] = await db
     .select({ count: count() })
     .from(runs)
-    .where(
-      and(
-        eq(runs.status, "running"),
-        sql`${runs.startedAt} < ${oneHourAgo}`
-      )
-    );
+    .where(and(eq(runs.status, "running"), sql`${runs.startedAt} < ${oneHourAgo}`));
   const noStuckTasks = (stuckCount?.count ?? 0) === 0;
   details.stuckTaskCount = stuckCount?.count ?? 0;
 
@@ -275,12 +262,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
   const [queuedSloViolation] = await db
     .select({ count: count() })
     .from(tasks)
-    .where(
-      and(
-        eq(tasks.status, "queued"),
-        lt(tasks.updatedAt, fiveMinutesAgo)
-      )
-    );
+    .where(and(eq(tasks.status, "queued"), lt(tasks.updatedAt, fiveMinutesAgo)));
   const queuedSloViolationCount = queuedSloViolation?.count ?? 0;
   const queueLatencyWithinSlo = queuedSloViolationCount === 0;
   details.queuedOver5mCount = queuedSloViolationCount;
@@ -290,12 +272,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
   const [blockedSloViolation] = await db
     .select({ count: count() })
     .from(tasks)
-    .where(
-      and(
-        eq(tasks.status, "blocked"),
-        lt(tasks.updatedAt, thirtyMinutesAgo)
-      )
-    );
+    .where(and(eq(tasks.status, "blocked"), lt(tasks.updatedAt, thirtyMinutesAgo)));
   const blockedSloViolationCount = blockedSloViolation?.count ?? 0;
   const blockedWithinSlo = blockedSloViolationCount === 0;
   details.blockedOver30mCount = blockedSloViolationCount;
@@ -306,23 +283,14 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
     const [retryExhausted] = await db
       .select({ count: count() })
       .from(tasks)
-      .where(
-        and(
-          inArray(tasks.status, ["failed", "blocked"]),
-          gte(tasks.retryCount, retryLimit)
-        )
-      );
+      .where(and(inArray(tasks.status, ["failed", "blocked"]), gte(tasks.retryCount, retryLimit)));
     retryExhaustedCount = retryExhausted?.count ?? 0;
   }
   const retryExhaustionWithinLimit = retryExhaustedCount === 0;
   details.retryExhaustedCount = retryExhaustedCount;
 
   const healthy =
-    dbHealthy &&
-    hasActiveAgents &&
-    noStuckTasks &&
-    queueLatencyWithinSlo &&
-    blockedWithinSlo;
+    dbHealthy && hasActiveAgents && noStuckTasks && queueLatencyWithinSlo && blockedWithinSlo;
 
   return {
     healthy,

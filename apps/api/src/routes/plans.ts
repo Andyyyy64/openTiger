@@ -64,9 +64,7 @@ plansRoute.get("/", async (c) => {
         const byId = new Map(rows.map((task) => [task.id, task]));
         taskRows = taskIds
           .map((id) => byId.get(id))
-          .filter(
-            (task): task is NonNullable<typeof task> => typeof task !== "undefined"
-          );
+          .filter((task): task is NonNullable<typeof task> => typeof task !== "undefined");
       }
 
       return {
@@ -78,7 +76,7 @@ plansRoute.get("/", async (c) => {
         taskIds,
         tasks: taskRows,
       };
-    })
+    }),
   );
 
   return c.json({ plans });

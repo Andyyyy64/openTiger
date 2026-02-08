@@ -3,11 +3,7 @@ import dotenv from "dotenv";
 import { db, closeDb } from "../packages/db/src/client.ts";
 import { config as configTable } from "../packages/db/src/schema.ts";
 import { eq } from "drizzle-orm";
-import {
-  CONFIG_KEYS,
-  buildConfigRecord,
-  rowToConfig,
-} from "../apps/api/src/system-config.ts";
+import { CONFIG_KEYS, buildConfigRecord, rowToConfig } from "../apps/api/src/system-config.ts";
 import { ensureConfigRow } from "../apps/api/src/config-store.ts";
 
 async function main(): Promise<void> {

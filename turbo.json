@@ -9,11 +9,63 @@
     "dev": {
       "cache": false,
       "persistent": true,
-      "passThroughEnv": ["REPO_URL", "GITHUB_TOKEN", "GITHUB_OWNER", "GITHUB_REPO", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "API_SECRET", "DATABASE_URL", "REDIS_URL"]
+      "passThroughEnv": [
+        "REPO_URL",
+        "GITHUB_TOKEN",
+        "GITHUB_OWNER",
+        "GITHUB_REPO",
+        "GEMINI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "API_SECRET",
+        "DATABASE_URL",
+        "REDIS_URL"
+      ]
     },
-    "dev:2": { "cache": false, "persistent": true, "passThroughEnv": ["REPO_URL", "GITHUB_TOKEN", "GITHUB_OWNER", "GITHUB_REPO", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "API_SECRET", "DATABASE_URL", "REDIS_URL"] },
-    "dev:3": { "cache": false, "persistent": true, "passThroughEnv": ["REPO_URL", "GITHUB_TOKEN", "GITHUB_OWNER", "GITHUB_REPO", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "API_SECRET", "DATABASE_URL", "REDIS_URL"] },
-    "dev:4": { "cache": false, "persistent": true, "passThroughEnv": ["REPO_URL", "GITHUB_TOKEN", "GITHUB_OWNER", "GITHUB_REPO", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "API_SECRET", "DATABASE_URL", "REDIS_URL"] },
+    "dev:2": {
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": [
+        "REPO_URL",
+        "GITHUB_TOKEN",
+        "GITHUB_OWNER",
+        "GITHUB_REPO",
+        "GEMINI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "API_SECRET",
+        "DATABASE_URL",
+        "REDIS_URL"
+      ]
+    },
+    "dev:3": {
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": [
+        "REPO_URL",
+        "GITHUB_TOKEN",
+        "GITHUB_OWNER",
+        "GITHUB_REPO",
+        "GEMINI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "API_SECRET",
+        "DATABASE_URL",
+        "REDIS_URL"
+      ]
+    },
+    "dev:4": {
+      "cache": false,
+      "persistent": true,
+      "passThroughEnv": [
+        "REPO_URL",
+        "GITHUB_TOKEN",
+        "GITHUB_OWNER",
+        "GITHUB_REPO",
+        "GEMINI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "API_SECRET",
+        "DATABASE_URL",
+        "REDIS_URL"
+      ]
+    },
     "test": {
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"],

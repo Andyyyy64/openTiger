@@ -1,11 +1,6 @@
 // 評価器モジュールのエクスポート
 
-export {
-  evaluateCI,
-  getCIStatus,
-  type CIEvaluationResult,
-  type CICheckDetail,
-} from "./ci";
+export { evaluateCI, getCIStatus, type CIEvaluationResult, type CICheckDetail } from "./ci";
 
 export {
   evaluatePolicy,

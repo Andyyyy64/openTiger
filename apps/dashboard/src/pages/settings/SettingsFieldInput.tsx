@@ -1,5 +1,5 @@
-import React from 'react';
-import type { SettingField } from './constants';
+import React from "react";
+import type { SettingField } from "./constants";
 
 type SettingsFieldInputProps = {
   field: SettingField;
@@ -7,9 +7,13 @@ type SettingsFieldInputProps = {
   onChange: (value: string) => void;
 };
 
-export const SettingsFieldInput: React.FC<SettingsFieldInputProps> = ({ field, value, onChange }) => {
-  if (field.type === 'boolean') {
-    const normalized = value.toLowerCase() === 'true' ? 'true' : 'false';
+export const SettingsFieldInput: React.FC<SettingsFieldInputProps> = ({
+  field,
+  value,
+  onChange,
+}) => {
+  if (field.type === "boolean") {
+    const normalized = value.toLowerCase() === "true" ? "true" : "false";
     return (
       <select
         className="w-full bg-black border border-term-border text-sm text-term-fg px-2 py-1 font-mono focus:border-term-tiger focus:outline-none"
@@ -22,7 +26,7 @@ export const SettingsFieldInput: React.FC<SettingsFieldInputProps> = ({ field, v
     );
   }
 
-  if (field.type === 'select' && field.options) {
+  if (field.type === "select" && field.options) {
     return (
       <select
         className="w-full bg-black border border-term-border text-sm text-term-fg px-2 py-1 font-mono focus:border-term-tiger focus:outline-none"
@@ -43,7 +47,7 @@ export const SettingsFieldInput: React.FC<SettingsFieldInputProps> = ({ field, v
 
   return (
     <input
-      type={field.type === 'number' ? 'number' : 'text'}
+      type={field.type === "number" ? "number" : "text"}
       className="w-full bg-black border border-term-border text-sm text-term-fg px-2 py-1 font-mono focus:border-term-tiger focus:outline-none"
       value={value}
       onChange={(e) => onChange(e.target.value)}

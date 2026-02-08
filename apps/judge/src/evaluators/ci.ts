@@ -102,7 +102,7 @@ export async function getCIStatus(prNumber: number): Promise<{
 // Check Runのステータスをマッピング
 function mapCheckStatus(
   status: string,
-  conclusion: string | null
+  conclusion: string | null,
 ): "success" | "failure" | "pending" | "skipped" {
   if (status !== "completed") {
     return "pending";
@@ -124,9 +124,7 @@ function mapCheckStatus(
 }
 
 // Combined Statusのステータスをマッピング
-function mapCombinedStatus(
-  state: string
-): "success" | "failure" | "pending" | "skipped" {
+function mapCombinedStatus(state: string): "success" | "failure" | "pending" | "skipped" {
   switch (state) {
     case "success":
       return "success";

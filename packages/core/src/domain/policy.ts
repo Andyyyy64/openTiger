@@ -15,11 +15,7 @@ export const PolicySchema = z.object({
   maxFilesChanged: z.number().int().positive().default(20),
 
   // 禁止コマンド（正規表現）
-  deniedCommands: z.array(z.string()).default([
-    "rm -rf /",
-    "sudo",
-    "chmod 777",
-  ]),
+  deniedCommands: z.array(z.string()).default(["rm -rf /", "sudo", "chmod 777"]),
 
   // 自動マージの条件
   autoMerge: z

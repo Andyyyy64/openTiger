@@ -1,15 +1,15 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { runsApi, tasksApi } from '../lib/api';
-import { Link, useNavigate } from 'react-router-dom';
-import type { Run } from '@openTiger/core';
-import type { TaskView } from '../lib/api';
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { runsApi, tasksApi } from "../lib/api";
+import { Link, useNavigate } from "react-router-dom";
+import type { Run } from "@openTiger/core";
+import type { TaskView } from "../lib/api";
 import {
   formatQuotaWaitRetryStatus,
   formatTaskRetryStatus,
   getRunStatusColor,
   isWaitingRetryStatus,
-} from '../ui/status';
+} from "../ui/status";
 
 export const RunsPage: React.FC = () => {
   const [now, setNow] = React.useState(Date.now());
@@ -20,12 +20,16 @@ export const RunsPage: React.FC = () => {
     return () => window.clearInterval(timer);
   }, []);
 
-  const { data: runs, isLoading, error } = useQuery({
-    queryKey: ['runs'],
+  const {
+    data: runs,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["runs"],
     queryFn: () => runsApi.list(),
   });
   const { data: tasks } = useQuery({
-    queryKey: ['tasks'],
+    queryKey: ["tasks"],
     queryFn: () => tasksApi.list(),
   });
   const taskById = React.useMemo(() => {
@@ -45,7 +49,9 @@ export const RunsPage: React.FC = () => {
 
       <div className="space-y-6">
         {isLoading ? (
-          <div className="text-center text-zinc-500 py-12 font-mono animate-pulse">&gt; Loading execution values...</div>
+          <div className="text-center text-zinc-500 py-12 font-mono animate-pulse">
+            &gt; Loading execution values...
+          </div>
         ) : error ? (
           <div className="text-center text-red-500 py-12 font-mono">&gt; ERROR LOADING DATA</div>
         ) : groupedRuns.length === 0 ? (
@@ -57,27 +63,35 @@ export const RunsPage: React.FC = () => {
             const latestRun = group.runs[0];
             const retryStatus = formatTaskRetryStatus(task?.retry, now);
             const hasQuotaRetryInfo = Boolean(
-              task?.retry?.autoRetry
-              && task.retry.reason === 'quota_wait'
+              task?.retry?.autoRetry && task.retry.reason === "quota_wait",
             );
             const latestRunQuotaFailure = Boolean(
-              latestRun
-              && latestRun.status === 'failed'
-              && isQuotaErrorMessage(latestRun.errorMessage)
+              latestRun &&
+              latestRun.status === "failed" &&
+              isQuotaErrorMessage(latestRun.errorMessage),
             );
             const isQuotaWaiting = hasQuotaRetryInfo || latestRunQuotaFailure;
             const effectiveRetryStatus = isQuotaWaiting
               ? formatQuotaWaitRetryStatus(task?.retry, now)
               : retryStatus;
             const isRetryWaiting = isWaitingRetryStatus(effectiveRetryStatus);
-            const retryLabel = effectiveRetryStatus !== 'pending' && effectiveRetryStatus !== 'due' && effectiveRetryStatus !== '--'
-              ? (
-                <span className={isRetryWaiting ? 'text-term-tiger font-bold animate-pulse' : 'text-term-tiger font-bold'}>
+            const retryLabel =
+              effectiveRetryStatus !== "pending" &&
+              effectiveRetryStatus !== "due" &&
+              effectiveRetryStatus !== "--" ? (
+                <span
+                  className={
+                    isRetryWaiting
+                      ? "text-term-tiger font-bold animate-pulse"
+                      : "text-term-tiger font-bold"
+                  }
+                >
                   {effectiveRetryStatus}
                 </span>
-              )
-              : (
-                <span className={isRetryWaiting ? 'text-term-tiger animate-pulse' : 'text-zinc-500'}>
+              ) : (
+                <span
+                  className={isRetryWaiting ? "text-term-tiger animate-pulse" : "text-zinc-500"}
+                >
                   {effectiveRetryStatus}
                 </span>
               );
@@ -85,21 +99,22 @@ export const RunsPage: React.FC = () => {
             return (
               <section
                 key={group.taskId}
-                className={`border p-0 ${isQuotaWaiting ? 'border-yellow-500/70 shadow-[0_0_0_1px_rgba(250,204,21,0.2)]' : isRetryWaiting ? 'border-term-tiger/60 animate-pulse' : 'border-term-border'}`}
+                className={`border p-0 ${isQuotaWaiting ? "border-yellow-500/70 shadow-[0_0_0_1px_rgba(250,204,21,0.2)]" : isRetryWaiting ? "border-term-tiger/60 animate-pulse" : "border-term-border"}`}
               >
                 {/* Task Header */}
                 <div className="bg-term-border/10 px-4 py-3 border-b border-term-border flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-1 max-w-[70%]">
                     <div className="flex items-center gap-2 text-xs font-mono">
                       <span className="text-zinc-500">task:</span>
-                      <Link to={`/tasks/${group.taskId}`} className="text-term-tiger hover:underline font-bold">
+                      <Link
+                        to={`/tasks/${group.taskId}`}
+                        className="text-term-tiger hover:underline font-bold"
+                      >
                         {group.taskId.slice(0, 8)}
                       </Link>
                     </div>
                     {task?.title && (
-                      <div className="text-sm font-bold text-term-fg truncate">
-                        {task.title}
-                      </div>
+                      <div className="text-sm font-bold text-term-fg truncate">{task.title}</div>
                     )}
                   </div>
 
@@ -109,18 +124,18 @@ export const RunsPage: React.FC = () => {
                       <span className="text-zinc-600">|</span>
                       <span>latest: {new Date(latestRun.startedAt).toLocaleString()}</span>
                     </div>
-                    <div>
-                      retry: {retryLabel}
-                    </div>
+                    <div>retry: {retryLabel}</div>
                   </div>
                 </div>
 
                 {isQuotaWaiting && (
                   <div className="px-4 py-2 border-b border-yellow-500/40 bg-yellow-500/5 text-xs font-mono flex items-center justify-between gap-4">
-                    <span className="text-yellow-400 font-bold uppercase tracking-wider">[WAITING_QUOTA]</span>
+                    <span className="text-yellow-400 font-bold uppercase tracking-wider">
+                      [WAITING_QUOTA]
+                    </span>
                     <span className="text-yellow-300">
-                      {effectiveRetryStatus === 'quota due'
-                        ? 'retrying now'
+                      {effectiveRetryStatus === "quota due"
+                        ? "retrying now"
                         : `next retry: ${effectiveRetryStatus}`}
                     </span>
                   </div>
@@ -140,10 +155,11 @@ export const RunsPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-term-border">
-                      {group.runs.map((run) => (
+                      {group.runs.map((run) =>
                         (() => {
                           const isLatestRun = run.id === latestRun.id;
-                          const showQuotaWaitStatus = isLatestRun && isQuotaWaiting && run.status === 'failed';
+                          const showQuotaWaitStatus =
+                            isLatestRun && isQuotaWaiting && run.status === "failed";
                           return (
                             <tr
                               key={run.id}
@@ -153,9 +169,7 @@ export const RunsPage: React.FC = () => {
                               <td className="px-4 py-2 align-top text-term-fg">
                                 {run.id.slice(0, 8)}
                               </td>
-                              <td className="px-4 py-2 align-top text-zinc-400">
-                                @{run.agentId}
-                              </td>
+                              <td className="px-4 py-2 align-top text-zinc-400">@{run.agentId}</td>
                               <td className="px-4 py-2 align-top">
                                 {showQuotaWaitStatus ? (
                                   <span className="uppercase text-yellow-400 animate-pulse font-bold">
@@ -168,7 +182,9 @@ export const RunsPage: React.FC = () => {
                                 )}
                               </td>
                               <td className="px-4 py-2 align-top text-zinc-500">
-                                {run.finishedAt ? `${Math.round((new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)}s` : '--'}
+                                {run.finishedAt
+                                  ? `${Math.round((new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)}s`
+                                  : "--"}
                               </td>
                               <td className="px-4 py-2 align-top text-zinc-600">
                                 {new Date(run.startedAt).toLocaleString()}
@@ -180,8 +196,8 @@ export const RunsPage: React.FC = () => {
                               </td>
                             </tr>
                           );
-                        })()
-                      ))}
+                        })(),
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -195,10 +211,12 @@ export const RunsPage: React.FC = () => {
 };
 
 function isQuotaErrorMessage(errorMessage: string | null | undefined): boolean {
-  const normalized = (errorMessage ?? '').toLowerCase();
-  return normalized.includes('quota')
-    || normalized.includes('resource_exhausted')
-    || normalized.includes('429');
+  const normalized = (errorMessage ?? "").toLowerCase();
+  return (
+    normalized.includes("quota") ||
+    normalized.includes("resource_exhausted") ||
+    normalized.includes("429")
+  );
 }
 
 function groupRunsByTask(runs: Run[]): Array<{ taskId: string; runs: Run[] }> {
@@ -220,8 +238,7 @@ function groupRunsByTask(runs: Run[]): Array<{ taskId: string; runs: Run[] }> {
 
   sortedGroups.sort(
     (a, b) =>
-      new Date(b.runs[0]?.startedAt ?? 0).getTime() -
-      new Date(a.runs[0]?.startedAt ?? 0).getTime()
+      new Date(b.runs[0]?.startedAt ?? 0).getTime() - new Date(a.runs[0]?.startedAt ?? 0).getTime(),
   );
 
   return sortedGroups;

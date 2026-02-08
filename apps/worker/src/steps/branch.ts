@@ -21,9 +21,7 @@ export function generateBranchName(agentId: string, taskId: string): string {
 }
 
 // 作業ブランチを作成
-export async function createWorkBranch(
-  options: BranchOptions
-): Promise<BranchResult> {
+export async function createWorkBranch(options: BranchOptions): Promise<BranchResult> {
   const { repoPath, agentId, taskId, baseRef = "main" } = options;
 
   const branchName = generateBranchName(agentId, taskId);

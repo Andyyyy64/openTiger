@@ -1,7 +1,7 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { systemApi, runsApi } from '../lib/api';
+import React from "react";
+import { NavLink } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { systemApi, runsApi } from "../lib/api";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -9,26 +9,28 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { data: health, isError: isHealthError } = useQuery({
-    queryKey: ['system', 'health'],
+    queryKey: ["system", "health"],
     queryFn: () => systemApi.health(),
     refetchInterval: 30000,
     retry: 1,
   });
 
   const { data: stats } = useQuery({
-    queryKey: ['runs', 'stats'],
+    queryKey: ["runs", "stats"],
     queryFn: () => runsApi.stats(),
     refetchInterval: 60000,
   });
 
-  const isHealthy = health?.status === 'ok' && !isHealthError;
+  const isHealthy = health?.status === "ok" && !isHealthError;
 
   return (
     <div className="flex flex-col h-screen font-pixel text-term-fg bg-term-bg overflow-hidden">
       {/* Top Status Bar like a window title or terminal header */}
       <header className="h-10 border-b border-term-border flex items-center justify-between px-4 bg-term-bg shrink-0 select-none">
         <div className="flex items-center gap-4">
-          <span className="font-bold text-term-tiger font-pixel text-lg">root@openTiger:~/dashboard</span>
+          <span className="font-bold text-term-tiger font-pixel text-lg">
+            root@openTiger:~/dashboard
+          </span>
         </div>
         <div className="flex items-center gap-6 text-sm">
           <div className="flex items-center gap-2">
@@ -42,9 +44,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="flex items-center gap-2">
             <span className="text-zinc-500">[TOKENS]</span>
             <span>
-              {stats ? `${(stats.dailyTokens / 1000000).toFixed(1)}M` : '0.0M'}
+              {stats ? `${(stats.dailyTokens / 1000000).toFixed(1)}M` : "0.0M"}
               <span className="text-zinc-600">/</span>
-              {stats ? `${(stats.tokenLimit / 1000000).toFixed(1)}M` : '5.0M'}
+              {stats ? `${(stats.tokenLimit / 1000000).toFixed(1)}M` : "5.0M"}
             </span>
           </div>
         </div>
@@ -53,9 +55,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
         <aside className="w-64 border-r border-term-border flex flex-col pt-4 pb-4">
-          <div className="px-4 mb-4 text-xs text-zinc-500 select-none">
-            EXPLORER
-          </div>
+          <div className="px-4 mb-4 text-xs text-zinc-500 select-none">EXPLORER</div>
           <nav className="flex-1 overflow-y-auto font-pixel text-sm">
             <div className="px-2 space-y-px">
               <NavItem to="/" label="overview" />
@@ -83,9 +83,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         {/* Main Content */}
         <main className="flex-1 overflow-auto bg-term-bg relative">
-          <div className="min-h-full">
-            {children}
-          </div>
+          <div className="min-h-full">{children}</div>
         </main>
       </div>
 
@@ -100,18 +98,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   );
 };
 
-const NavItem = ({ to, label }: { to: string, label: string }) => (
+const NavItem = ({ to, label }: { to: string; label: string }) => (
   <NavLink
     to={to}
     className={({ isActive }) =>
-      `block px-3 py-1.5 transition-colors duration-0 ${isActive
-        ? 'bg-term-tiger text-black font-bold'
-        : 'text-zinc-400 hover:text-term-tiger hover:translate-x-1'
+      `block px-3 py-1.5 transition-colors duration-0 ${
+        isActive
+          ? "bg-term-tiger text-black font-bold"
+          : "text-zinc-400 hover:text-term-tiger hover:translate-x-1"
       }`
     }
   >
     <div className="flex item-center">
-      <span className="mr-2 opacity-50">{'>'}</span>
+      <span className="mr-2 opacity-50">{">"}</span>
       <span>{label}</span>
       {/* Blinking cursor only shown when strictly simpler design or on hover used to be cool but maybe distracting */}
     </div>

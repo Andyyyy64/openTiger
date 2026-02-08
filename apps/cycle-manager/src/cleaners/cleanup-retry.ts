@@ -99,9 +99,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
     };
   }
 
-  if (
-    /no changes were made|no relevant changes were made|no commits between/.test(message)
-  ) {
+  if (/no changes were made|no relevant changes were made|no commits between/.test(message)) {
     return {
       category: "noop",
       retryable: false,
@@ -110,9 +108,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
     };
   }
 
-  if (
-    /policy violation|denied command|outside allowed paths|change to denied path/.test(message)
-  ) {
+  if (/policy violation|denied command|outside allowed paths|change to denied path/.test(message)) {
     return {
       category: "policy",
       retryable: true,
@@ -123,7 +119,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
 
   if (
     /package\.json|pnpm-workspace\.yaml|cannot find module|enoent|command not found|repository not found|authentication failed|permission denied|no commits between|no history in common/.test(
-      message
+      message,
     )
   ) {
     return {
@@ -154,7 +150,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
 
   if (
     /rate limit|429|503|502|timeout|timed out|econnreset|eai_again|temporarily unavailable/.test(
-      message
+      message,
     )
   ) {
     return {
@@ -167,7 +163,7 @@ function classifyFailure(errorMessage: string | null): FailureClassification {
 
   if (
     /doom loop detected|excessive planning chatter detected|unsupported pseudo tool call detected: todo/.test(
-      message
+      message,
     )
   ) {
     return {
@@ -191,19 +187,13 @@ function normalizeBlockReason(reason: string | null): BlockReason | null {
     // legacy互換: needs_humanはawaiting_judgeとして回収する
     return "awaiting_judge";
   }
-  if (
-    reason === "awaiting_judge"
-    || reason === "needs_rework"
-    || reason === "quota_wait"
-  ) {
+  if (reason === "awaiting_judge" || reason === "needs_rework" || reason === "quota_wait") {
     return reason;
   }
   return null;
 }
 
-function normalizeContext(
-  context: unknown
-): {
+function normalizeContext(context: unknown): {
   files?: string[];
   specs?: string;
   notes?: string;
@@ -222,11 +212,7 @@ function normalizeContext(
   };
 }
 
-function isPrReviewTask(params: {
-  title: string;
-  goal: string;
-  context: unknown;
-}): boolean {
+function isPrReviewTask(params: { title: string; goal: string; context: unknown }): boolean {
   if (params.goal.startsWith("Review and process open PR #")) {
     return true;
   }
@@ -258,7 +244,7 @@ function normalizeFailureSignature(errorMessage: string | null): string {
 async function hasRepeatedFailureSignature(
   taskId: string,
   latestErrorMessage: string | null,
-  threshold = 3
+  threshold = 3,
 ): Promise<boolean> {
   if (threshold <= 1) {
     return true;
@@ -280,22 +266,14 @@ async function hasRepeatedFailureSignature(
     return false;
   }
 
-  return recentRuns.every(
-    (run) => normalizeFailureSignature(run.errorMessage) === latestSignature
-  );
+  return recentRuns.every((run) => normalizeFailureSignature(run.errorMessage) === latestSignature);
 }
 
 async function hasPendingJudgeRun(taskId: string): Promise<boolean> {
   const pending = await db
     .select({ id: runs.id })
     .from(runs)
-    .where(
-      and(
-        eq(runs.taskId, taskId),
-        eq(runs.status, "success"),
-        isNull(runs.judgedAt)
-      )
-    )
+    .where(and(eq(runs.taskId, taskId), eq(runs.status, "success"), isNull(runs.judgedAt)))
     .limit(1);
 
   return pending.length > 0;
@@ -310,8 +288,8 @@ async function restoreLatestJudgeRun(taskId: string): Promise<string | null> {
       and(
         eq(runs.taskId, taskId),
         eq(runs.status, "success"),
-        inArray(artifacts.type, ["pr", "worktree"])
-      )
+        inArray(artifacts.type, ["pr", "worktree"]),
+      ),
     )
     .orderBy(desc(runs.startedAt))
     .limit(1);
@@ -320,17 +298,14 @@ async function restoreLatestJudgeRun(taskId: string): Promise<string | null> {
     return null;
   }
 
-  await db
-    .update(runs)
-    .set({ judgedAt: null })
-    .where(eq(runs.id, latestRun.runId));
+  await db.update(runs).set({ judgedAt: null }).where(eq(runs.id, latestRun.runId));
 
   return latestRun.runId;
 }
 
 // 失敗タスクをクールダウン後に再キュー（リトライ回数制限付き）
 export async function requeueFailedTasksWithCooldown(
-  cooldownMs: number = 2 * 60 * 1000 // デフォルト2分に短縮（自己復旧を早める）
+  cooldownMs: number = 2 * 60 * 1000, // デフォルト2分に短縮（自己復旧を早める）
 ): Promise<number> {
   const cutoff = new Date(Date.now() - cooldownMs);
 
@@ -407,12 +382,7 @@ export async function requeueFailedTasksWithCooldown(
         errorMessage: runs.errorMessage,
       })
       .from(runs)
-      .where(
-        and(
-          eq(runs.taskId, task.id),
-          inArray(runs.status, ["failed", "cancelled"])
-        )
-      )
+      .where(and(eq(runs.taskId, task.id), inArray(runs.status, ["failed", "cancelled"])))
       .orderBy(desc(runs.startedAt))
       .limit(1);
 
@@ -424,19 +394,16 @@ export async function requeueFailedTasksWithCooldown(
     const categoryRetryAllowed = isCategoryRetryAllowed(currentRetry, categoryRetryLimit);
     const repeatedFailure = await hasRepeatedFailureSignature(
       task.id,
-      latestRun?.errorMessage ?? null
+      latestRun?.errorMessage ?? null,
     );
 
-    if (
-      !globalRetryAllowed
-      || !failure.retryable
-      || !categoryRetryAllowed
-      || repeatedFailure
-    ) {
+    if (!globalRetryAllowed || !failure.retryable || !categoryRetryAllowed || repeatedFailure) {
       const blockReason: Extract<BlockReason, "needs_rework"> = repeatedFailure
         ? "needs_rework"
         : failure.blockReason;
-      const blockDetailReason = repeatedFailure ? "repeated_same_failure_signature" : failure.reason;
+      const blockDetailReason = repeatedFailure
+        ? "repeated_same_failure_signature"
+        : failure.reason;
       await db
         .update(tasks)
         .set({
@@ -465,7 +432,7 @@ export async function requeueFailedTasksWithCooldown(
         },
       });
       console.log(
-        `[Cleanup] Escalated failed task ${task.id} (${failure.category}, retry=${currentRetry}/${formatRetryLimitDisplay(categoryRetryLimit)}, reason=${blockDetailReason})`
+        `[Cleanup] Escalated failed task ${task.id} (${failure.category}, retry=${currentRetry}/${formatRetryLimitDisplay(categoryRetryLimit)}, reason=${blockDetailReason})`,
       );
       continue;
     }
@@ -490,7 +457,7 @@ export async function requeueFailedTasksWithCooldown(
       },
     });
     console.log(
-      `[Cleanup] Requeued failed task: ${task.id} (${failure.category}, retry=${nextRetryCount}/${formatRetryLimitDisplay(categoryRetryLimit)})`
+      `[Cleanup] Requeued failed task: ${task.id} (${failure.category}, retry=${nextRetryCount}/${formatRetryLimitDisplay(categoryRetryLimit)})`,
     );
     requeued++;
   }
@@ -500,7 +467,7 @@ export async function requeueFailedTasksWithCooldown(
 
 // blockedタスクをクールダウン後に再キュー（リトライ回数制限付き）
 export async function requeueBlockedTasksWithCooldown(
-  cooldownMs: number = 5 * 60 * 1000
+  cooldownMs: number = 5 * 60 * 1000,
 ): Promise<number> {
   const cutoff = new Date(Date.now() - cooldownMs);
 
@@ -576,9 +543,7 @@ export async function requeueBlockedTasksWithCooldown(
             retryCount: nextRetryCount,
           },
         });
-        console.log(
-          `[Cleanup] Routed blocked PR-review task back to awaiting_judge: ${task.id}`
-        );
+        console.log(`[Cleanup] Routed blocked PR-review task back to awaiting_judge: ${task.id}`);
         handled++;
         continue;
       }
@@ -592,9 +557,7 @@ export async function requeueBlockedTasksWithCooldown(
       const [reworkTask] = await db
         .insert(tasks)
         .values({
-          title: task.title.startsWith("[Rework]")
-            ? task.title
-            : `[Rework] ${task.title}`,
+          title: task.title.startsWith("[Rework]") ? task.title : `[Rework] ${task.title}`,
           goal: task.goal,
           context: {
             ...context,
@@ -633,9 +596,7 @@ export async function requeueBlockedTasksWithCooldown(
             retryCount: nextRetryCount,
           },
         });
-        console.log(
-          `[Cleanup] Created rework task ${reworkTask.id} from blocked task ${task.id}`
-        );
+        console.log(`[Cleanup] Created rework task ${reworkTask.id} from blocked task ${task.id}`);
       }
       handled++;
       continue;
@@ -689,11 +650,12 @@ export async function requeueBlockedTasksWithCooldown(
       entityType: "task",
       entityId: task.id,
       payload: {
-        reason: reason === "awaiting_judge"
-          ? "awaiting_judge_timeout_retry"
-          : reason === "quota_wait"
-            ? "quota_wait_retry"
-          : "blocked_cooldown_retry",
+        reason:
+          reason === "awaiting_judge"
+            ? "awaiting_judge_timeout_retry"
+            : reason === "quota_wait"
+              ? "quota_wait_retry"
+              : "blocked_cooldown_retry",
         retryCount: nextRetryCount,
       },
     });

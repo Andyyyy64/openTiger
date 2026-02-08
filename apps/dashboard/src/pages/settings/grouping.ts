@@ -1,10 +1,15 @@
-import { FIELD_DISPLAY_ORDER_BY_GROUP, GROUP_DISPLAY_ORDER, SETTINGS, type SettingField } from './constants';
+import {
+  FIELD_DISPLAY_ORDER_BY_GROUP,
+  GROUP_DISPLAY_ORDER,
+  SETTINGS,
+  type SettingField,
+} from "./constants";
 
 const GROUP_ORDER_INDEX = new Map<string, number>(
-  GROUP_DISPLAY_ORDER.map((group, index) => [group, index])
+  GROUP_DISPLAY_ORDER.map((group, index) => [group, index]),
 );
 const SETTING_KEY_INDEX = new Map<string, number>(
-  SETTINGS.map((field, index) => [field.key, index])
+  SETTINGS.map((field, index) => [field.key, index]),
 );
 
 const sortFieldsInGroup = (group: string, fields: SettingField[]): SettingField[] => {
@@ -38,7 +43,9 @@ const buildGroupedSettings = (): [string, SettingField[]][] => {
       }
       return a[0].localeCompare(b[0]);
     })
-    .map(([group, fields]) => [group, sortFieldsInGroup(group, fields)] as [string, SettingField[]]);
+    .map(
+      ([group, fields]) => [group, sortFieldsInGroup(group, fields)] as [string, SettingField[]],
+    );
 };
 
 // 表示順は固定のため初期化時に一度だけ構築する

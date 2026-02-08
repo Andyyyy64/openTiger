@@ -6,9 +6,7 @@ import { db } from "@openTiger/db";
 import { events } from "@openTiger/db/schema";
 import { eq, desc, and, sql, gte } from "drizzle-orm";
 
-async function computeRequirementHash(
-  requirementPath: string
-): Promise<string | undefined> {
+async function computeRequirementHash(requirementPath: string): Promise<string | undefined> {
   try {
     const content = await readFile(requirementPath, "utf-8");
     return createHash("sha256").update(content).digest("hex");
@@ -74,18 +72,14 @@ export async function computePlanSignature(params: {
     return;
   }
 
-  const repoIdentity = params.repoUrl
-    ? params.repoUrl
-    : `local:${resolve(params.workdir)}`;
+  const repoIdentity = params.repoUrl ? params.repoUrl : `local:${resolve(params.workdir)}`;
   const signaturePayload = {
     requirementHash,
     repoHeadSha,
     repoUrl: repoIdentity,
     baseBranch: params.baseBranch,
   };
-  const signature = createHash("sha256")
-    .update(JSON.stringify(signaturePayload))
-    .digest("hex");
+  const signature = createHash("sha256").update(JSON.stringify(signaturePayload)).digest("hex");
 
   return { signature, requirementHash, repoHeadSha };
 }
@@ -105,17 +99,19 @@ export function resolvePlanDedupeWindowMs(): number {
 export async function wasPlanRecentlyCreated(
   signature: string,
   windowMs: number,
-  database: DbLike = db
+  database: DbLike = db,
 ): Promise<boolean> {
   const since = new Date(Date.now() - windowMs);
   const [row] = await database
     .select({ id: events.id })
     .from(events)
-    .where(and(
-      eq(events.type, "planner.plan_created"),
-      sql`${events.payload} ->> 'signature' = ${signature}`,
-      gte(events.createdAt, since)
-    ))
+    .where(
+      and(
+        eq(events.type, "planner.plan_created"),
+        sql`${events.payload} ->> 'signature' = ${signature}`,
+        gte(events.createdAt, since),
+      ),
+    )
     .orderBy(desc(events.createdAt))
     .limit(1);
   return Boolean(row?.id);
@@ -130,32 +126,28 @@ function parsePgBoolean(value: unknown): boolean {
   }
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
-    return normalized === "t"
-      || normalized === "true"
-      || normalized === "1"
-      || normalized === "y"
-      || normalized === "yes";
+    return (
+      normalized === "t" ||
+      normalized === "true" ||
+      normalized === "1" ||
+      normalized === "y" ||
+      normalized === "yes"
+    );
   }
   return false;
 }
 
-function extractExecuteFirstRow(
-  result: unknown
-): Record<string, unknown> | undefined {
+function extractExecuteFirstRow(result: unknown): Record<string, unknown> | undefined {
   if (Array.isArray(result)) {
     const first = result[0];
-    return (first && typeof first === "object")
-      ? (first as Record<string, unknown>)
-      : undefined;
+    return first && typeof first === "object" ? (first as Record<string, unknown>) : undefined;
   }
 
   if (result && typeof result === "object" && "rows" in result) {
     const rows = (result as { rows?: unknown }).rows;
     if (Array.isArray(rows)) {
       const first = rows[0];
-      return (first && typeof first === "object")
-        ? (first as Record<string, unknown>)
-        : undefined;
+      return first && typeof first === "object" ? (first as Record<string, unknown>) : undefined;
     }
   }
 
@@ -164,11 +156,11 @@ function extractExecuteFirstRow(
 
 export async function tryAcquirePlanSaveLock(
   signature: string,
-  database: DbLike = db
+  database: DbLike = db,
 ): Promise<boolean> {
   // 同一署名の保存を単一トランザクションに限定して、二重起動時の競合と重複保存を防ぐ
   const result = await database.execute(
-    sql`SELECT pg_try_advisory_xact_lock(hashtext(${signature})) AS locked`
+    sql`SELECT pg_try_advisory_xact_lock(hashtext(${signature})) AS locked`,
   );
   const row = extractExecuteFirstRow(result);
   if (!row || !("locked" in row)) {

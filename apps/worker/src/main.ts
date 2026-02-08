@@ -2,16 +2,9 @@ import { db } from "@openTiger/db";
 import { tasks, runs, leases, agents } from "@openTiger/db/schema";
 import { and, eq } from "drizzle-orm";
 import type { Task } from "@openTiger/core";
-import {
-  getRepoMode,
-  getLocalRepoPath,
-} from "@openTiger/core";
+import { getRepoMode, getLocalRepoPath } from "@openTiger/core";
 import "dotenv/config";
-import {
-  createTaskWorker,
-  getTaskQueueName,
-  type TaskJobData,
-} from "@openTiger/queue";
+import { createTaskWorker, getTaskQueueName, type TaskJobData } from "@openTiger/queue";
 import type { Job } from "bullmq";
 import { resolve } from "node:path";
 import { acquireTaskRuntimeLock, releaseTaskRuntimeLock } from "./worker-runtime-lock";
@@ -28,34 +21,32 @@ const activeTaskIds = new Set<string>();
 async function main() {
   const workerIndex = process.env.WORKER_INDEX;
   const agentRole = process.env.AGENT_ROLE ?? "worker";
-  const agentId = process.env.AGENT_ID
-    ?? (workerIndex ? `${agentRole}-${workerIndex}` : `${agentRole}-${Date.now()}`);
+  const agentId =
+    process.env.AGENT_ID ??
+    (workerIndex ? `${agentRole}-${workerIndex}` : `${agentRole}-${Date.now()}`);
   const workspacePath = process.env.WORKSPACE_PATH ?? `/tmp/openTiger-workspace/${agentId}`;
   const repoUrl = process.env.REPO_URL ?? "";
   const baseBranch = process.env.BASE_BRANCH ?? "main";
   const repoMode = getRepoMode();
   const agentModel =
     agentRole === "tester"
-      ? process.env.TESTER_MODEL ?? process.env.OPENCODE_MODEL
+      ? (process.env.TESTER_MODEL ?? process.env.OPENCODE_MODEL)
       : agentRole === "docser"
-        ? process.env.DOCSER_MODEL ?? process.env.OPENCODE_MODEL
-        : process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL;
+        ? (process.env.DOCSER_MODEL ?? process.env.OPENCODE_MODEL)
+        : (process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL);
   const effectiveModel = agentModel ?? "google/gemini-3-flash-preview";
   // 環境変数があればそちらを優先する
   const instructionsPath =
     agentRole === "tester"
-      ? process.env.TESTER_INSTRUCTIONS_PATH
-        ?? resolve(import.meta.dirname, "../instructions/tester.md")
+      ? (process.env.TESTER_INSTRUCTIONS_PATH ??
+        resolve(import.meta.dirname, "../instructions/tester.md"))
       : agentRole === "docser"
-        ? process.env.DOCSER_INSTRUCTIONS_PATH
-          ?? resolve(import.meta.dirname, "../instructions/docser.md")
-        : process.env.WORKER_INSTRUCTIONS_PATH
-          ?? resolve(import.meta.dirname, "../instructions/base.md");
-  const agentLabel = agentRole === "tester"
-    ? "Tester"
-    : agentRole === "docser"
-      ? "Docser"
-      : "Worker";
+        ? (process.env.DOCSER_INSTRUCTIONS_PATH ??
+          resolve(import.meta.dirname, "../instructions/docser.md"))
+        : (process.env.WORKER_INSTRUCTIONS_PATH ??
+          resolve(import.meta.dirname, "../instructions/base.md"));
+  const agentLabel =
+    agentRole === "tester" ? "Tester" : agentRole === "docser" ? "Docser" : "Worker";
 
   if (repoMode === "git" && !repoUrl) {
     console.error("REPO_URL environment variable is required for git mode");
@@ -76,27 +67,28 @@ async function main() {
 
   const recoveredRuns = await recoverInterruptedAgentRuns(agentId);
   if (recoveredRuns > 0) {
-    console.warn(
-      `[Recovery] Requeued ${recoveredRuns} interrupted run(s) for ${agentId}`
-    );
+    console.warn(`[Recovery] Requeued ${recoveredRuns} interrupted run(s) for ${agentId}`);
   }
 
-  await db.insert(agents).values({
-    id: agentId,
-    role: agentRole,
-    status: "idle", // Register as idle at startup
-    lastHeartbeat: new Date(),
-    metadata: {
-      model: effectiveModel, // 役割ごとのモデルを記録する
-      provider: "gemini",
-    },
-  }).onConflictDoUpdate({
-    target: agents.id,
-    set: {
-      status: "idle",
+  await db
+    .insert(agents)
+    .values({
+      id: agentId,
+      role: agentRole,
+      status: "idle", // Register as idle at startup
       lastHeartbeat: new Date(),
-    },
-  });
+      metadata: {
+        model: effectiveModel, // 役割ごとのモデルを記録する
+        provider: "gemini",
+      },
+    })
+    .onConflictDoUpdate({
+      target: agents.id,
+      set: {
+        status: "idle",
+        lastHeartbeat: new Date(),
+      },
+    });
 
   // ハートビート開始
   const heartbeatTimer = startHeartbeat(agentId);
@@ -119,10 +111,7 @@ async function main() {
 
   if (taskId) {
     // 単発実行モード
-    const [taskData] = await db
-      .select()
-      .from(tasks)
-      .where(eq(tasks.id, taskId));
+    const [taskData] = await db.select().from(tasks).where(eq(tasks.id, taskId));
 
     if (!taskData) {
       console.error(`Task not found: ${taskId}`);
@@ -135,19 +124,16 @@ async function main() {
       process.exit(0);
     }
 
-    const result = await runWorker(
-      taskData as unknown as Task,
-      {
-        agentId,
-        role: agentRole,
-        workspacePath,
-        repoUrl,
-        baseBranch,
-        instructionsPath,
-        model: effectiveModel,
-        logPath,
-      }
-    ).finally(async () => {
+    const result = await runWorker(taskData as unknown as Task, {
+      agentId,
+      role: agentRole,
+      workspacePath,
+      repoUrl,
+      baseBranch,
+      instructionsPath,
+      model: effectiveModel,
+      logPath,
+    }).finally(async () => {
       await releaseTaskRuntimeLock(runtimeLock);
     });
 
@@ -160,24 +146,19 @@ async function main() {
 
   queueWorker = createTaskWorker(async (job: Job<TaskJobData>) => {
     if (job.data.agentId && job.data.agentId !== agentId) {
-      throw new Error(
-        `Task ${job.data.taskId} is assigned to ${job.data.agentId}, not ${agentId}`
-      );
+      throw new Error(`Task ${job.data.taskId} is assigned to ${job.data.agentId}, not ${agentId}`);
     }
 
     console.log(`[Queue] Received task ${job.data.taskId} for ${agentId}`);
 
     if (activeTaskIds.has(job.data.taskId)) {
       console.warn(
-        `[Queue] Task ${job.data.taskId} is already running on ${agentId}. Skipping duplicate job.`
+        `[Queue] Task ${job.data.taskId} is already running on ${agentId}. Skipping duplicate job.`,
       );
       return;
     }
 
-    const [taskData] = await db
-      .select()
-      .from(tasks)
-      .where(eq(tasks.id, job.data.taskId));
+    const [taskData] = await db.select().from(tasks).where(eq(tasks.id, job.data.taskId));
 
     if (!taskData) {
       // DB クリーンアップ後の残ジョブは無視する
@@ -200,7 +181,7 @@ async function main() {
         const recentlyUpdated = Date.now() - updatedAtMs < 2 * 60 * 1000;
         if (taskData.status === "running" && recentlyUpdated) {
           console.warn(
-            `[Queue] Task ${job.data.taskId} lock conflict during startup window. Skipping this duplicate job.`
+            `[Queue] Task ${job.data.taskId} lock conflict during startup window. Skipping this duplicate job.`,
           );
           return;
         }
@@ -212,32 +193,29 @@ async function main() {
           .set({ status: "queued", blockReason: null, updatedAt: new Date() })
           .where(eq(tasks.id, job.data.taskId));
         console.warn(
-          `[Queue] Task ${job.data.taskId} lock conflict without running run. Reset to queued for retry.`
+          `[Queue] Task ${job.data.taskId} lock conflict without running run. Reset to queued for retry.`,
         );
         return;
       }
 
       console.warn(
-        `[Queue] Task ${job.data.taskId} is already running on another agent/process. Skipping duplicate dispatch.`
+        `[Queue] Task ${job.data.taskId} is already running on another agent/process. Skipping duplicate dispatch.`,
       );
       return;
     }
 
     activeTaskIds.add(job.data.taskId);
     try {
-      await runWorker(
-        taskData as unknown as Task,
-        {
-          agentId,
-          role: agentRole,
-          workspacePath,
-          repoUrl,
-          baseBranch,
-          instructionsPath,
-          model: effectiveModel,
-          logPath,
-        }
-      );
+      await runWorker(taskData as unknown as Task, {
+        agentId,
+        role: agentRole,
+        workspacePath,
+        repoUrl,
+        baseBranch,
+        instructionsPath,
+        model: effectiveModel,
+        logPath,
+      });
     } finally {
       activeTaskIds.delete(job.data.taskId);
       await releaseTaskRuntimeLock(runtimeLock);

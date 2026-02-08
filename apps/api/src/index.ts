@@ -48,10 +48,7 @@ app.get("/", (c) => {
 });
 
 // Switch port via environment variable to avoid conflicts with target API
-const port = parseInt(
-  process.env.OPENTIGER_API_PORT ?? process.env.API_PORT ?? "4301",
-  10,
-);
+const port = parseInt(process.env.OPENTIGER_API_PORT ?? process.env.API_PORT ?? "4301", 10);
 
 console.log(`openTiger API server starting on port ${port}`);
 

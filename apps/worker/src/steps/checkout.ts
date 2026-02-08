@@ -53,9 +53,7 @@ async function removeDirWithRetry(path: string): Promise<void> {
 }
 
 // リポジトリをチェックアウト
-export async function checkoutRepository(
-  options: CheckoutOptions
-): Promise<CheckoutResult> {
+export async function checkoutRepository(options: CheckoutOptions): Promise<CheckoutResult> {
   const {
     repoUrl,
     workspacePath,
@@ -168,12 +166,7 @@ export async function checkoutRepository(
     } else {
       console.warn("No GitHub token provided for clone");
     }
-    const cloneResult = await cloneRepo(
-      repoUrl,
-      repoPath,
-      baseBranch,
-      githubToken
-    );
+    const cloneResult = await cloneRepo(repoUrl, repoPath, baseBranch, githubToken);
 
     if (!cloneResult.success) {
       return {

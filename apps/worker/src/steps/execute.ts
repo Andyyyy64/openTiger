@@ -19,13 +19,7 @@ export interface ExecuteResult {
 
 // Generate prompt for OpenCode from task
 function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
-  const lines: string[] = [
-    `# Task: ${task.title}`,
-    "",
-    "## Goal",
-    task.goal,
-    "",
-  ];
+  const lines: string[] = [`# Task: ${task.title}`, "", "## Goal", task.goal, ""];
 
   if (task.context) {
     if (task.context.specs) {
@@ -82,7 +76,7 @@ function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
     "- Never use absolute paths outside the repository (forbidden examples: /home/*, /tmp/* from other workspaces)",
     "- If expected files are missing, report the mismatch and stop instead of scanning parent/home directories",
     "- Execute actions directly; do not emit repetitive planning chatter",
-    "- Never call todo/todoread/todowrite pseudo tools"
+    "- Never call todo/todoread/todowrite pseudo tools",
   );
 
   return lines.join("\n");
@@ -91,9 +85,9 @@ function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
 function isDoomLoopFailure(stderr: string): boolean {
   const message = stderr.toLowerCase();
   return (
-    message.includes("doom loop detected")
-    || message.includes("excessive planning chatter detected")
-    || message.includes("unsupported pseudo tool call detected: todo")
+    message.includes("doom loop detected") ||
+    message.includes("excessive planning chatter detected") ||
+    message.includes("unsupported pseudo tool call detected: todo")
   );
 }
 
@@ -166,17 +160,8 @@ function matchDeniedCommand(command: string, deniedCommands: string[]): string |
 }
 
 // Execute OpenCode to complete task
-export async function executeTask(
-  options: ExecuteOptions
-): Promise<ExecuteResult> {
-  const {
-    repoPath,
-    task,
-    instructionsPath,
-    model,
-    retryHints = [],
-    policy,
-  } = options;
+export async function executeTask(options: ExecuteOptions): Promise<ExecuteResult> {
+  const { repoPath, task, instructionsPath, model, retryHints = [], policy } = options;
 
   for (const command of task.commands) {
     const deniedMatch = matchDeniedCommand(command, policy?.deniedCommands ?? []);
@@ -212,13 +197,13 @@ export async function executeTask(
   const taskEnv = await buildOpenCodeEnv(repoPath);
   const timeoutCapSeconds = Number.parseInt(
     process.env.OPENCODE_TASK_TIMEOUT_CAP_SECONDS ?? "1800",
-    10
+    10,
   );
   const safeTimeoutCapSeconds =
     Number.isFinite(timeoutCapSeconds) && timeoutCapSeconds > 0 ? timeoutCapSeconds : 1800;
   const requestedTimeoutSeconds = Math.max(
     Math.min(task.timeboxMinutes * 60, safeTimeoutCapSeconds),
-    60
+    60,
   );
   let openCodeResult = await runOpenCodeWithGuard({
     repoPath,
@@ -229,21 +214,23 @@ export async function executeTask(
     env: taskEnv,
   });
 
-  const enableImmediateRecovery =
-    process.env.WORKER_IMMEDIATE_DOOM_RECOVERY !== "false";
-  if (!openCodeResult.success && enableImmediateRecovery && isDoomLoopFailure(openCodeResult.stderr)) {
+  const enableImmediateRecovery = process.env.WORKER_IMMEDIATE_DOOM_RECOVERY !== "false";
+  if (
+    !openCodeResult.success &&
+    enableImmediateRecovery &&
+    isDoomLoopFailure(openCodeResult.stderr)
+  ) {
     console.warn("[OpenCode] Doom loop detected. Retrying once in immediate recovery mode...");
     const recoveryTimeoutRaw = Number.parseInt(
       process.env.OPENCODE_RECOVERY_TIMEOUT_SECONDS ?? "420",
-      10
+      10,
     );
-    const recoveryTimeoutSeconds = Number.isFinite(recoveryTimeoutRaw) && recoveryTimeoutRaw > 0
-      ? Math.min(requestedTimeoutSeconds, recoveryTimeoutRaw)
-      : Math.min(requestedTimeoutSeconds, 420);
+    const recoveryTimeoutSeconds =
+      Number.isFinite(recoveryTimeoutRaw) && recoveryTimeoutRaw > 0
+        ? Math.min(requestedTimeoutSeconds, recoveryTimeoutRaw)
+        : Math.min(requestedTimeoutSeconds, 420);
     const recoveryModel =
-      process.env.WORKER_RECOVERY_MODEL
-      ?? process.env.WORKER_MODEL
-      ?? workerModel;
+      process.env.WORKER_RECOVERY_MODEL ?? process.env.WORKER_MODEL ?? workerModel;
     const recoveryPrompt = `${prompt}
 
 ## Recovery Mode

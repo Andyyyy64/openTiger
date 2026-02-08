@@ -1,6 +1,6 @@
-import React from 'react';
-import type { SettingField } from './constants';
-import { SettingsFieldInput } from './SettingsFieldInput';
+import React from "react";
+import type { SettingField } from "./constants";
+import { SettingsFieldInput } from "./SettingsFieldInput";
 
 type SettingsConfigSectionsProps = {
   grouped: [string, SettingField[]][];
@@ -18,7 +18,9 @@ export const SettingsConfigSections: React.FC<SettingsConfigSectionsProps> = ({
       {grouped.map(([group, fields]) => (
         <section key={group} className="border border-term-border p-0">
           <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
-            <h2 className="text-sm font-bold uppercase tracking-wider">Config_Section: [{group}]</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wider">
+              Config_Section: [{group}]
+            </h2>
           </div>
 
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
@@ -31,7 +33,7 @@ export const SettingsConfigSections: React.FC<SettingsConfigSectionsProps> = ({
 
                 <SettingsFieldInput
                   field={field}
-                  value={values[field.key] ?? ''}
+                  value={values[field.key] ?? ""}
                   onChange={(value) => onChange(field.key, value)}
                 />
                 <div className="text-[10px] text-zinc-600 truncate">{field.description}</div>

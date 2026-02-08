@@ -7,10 +7,7 @@ export function resolveRepoRoot(): string {
 
 function isSubPath(baseDir: string, targetDir: string): boolean {
   const relativePath = relative(baseDir, targetDir);
-  return (
-    relativePath === ""
-    || (!relativePath.startsWith("..") && !isAbsolute(relativePath))
-  );
+  return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
 }
 
 function resolvePathInRepo(rawPath: string): string {
@@ -26,13 +23,14 @@ function resolvePathInRepo(rawPath: string): string {
 export async function resolveRequirementPath(
   input?: string,
   fallback?: string,
-  options: { allowMissing?: boolean } = {}
+  options: { allowMissing?: boolean } = {},
 ): Promise<string> {
   // Handle UI input and environment variables uniformly
-  const candidate = input?.trim()
-    || process.env.REQUIREMENT_PATH
-    || process.env.REPLAN_REQUIREMENT_PATH
-    || fallback;
+  const candidate =
+    input?.trim() ||
+    process.env.REQUIREMENT_PATH ||
+    process.env.REPLAN_REQUIREMENT_PATH ||
+    fallback;
   if (!candidate) {
     throw new Error("Requirement file path is required");
   }

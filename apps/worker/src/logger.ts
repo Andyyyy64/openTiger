@@ -56,16 +56,9 @@ export class Logger {
   }
 
   // ログエントリを出力
-  private log(
-    level: LogLevel,
-    message: string,
-    metadata?: Record<string, unknown>
-  ): void {
+  private log(level: LogLevel, message: string, metadata?: Record<string, unknown>): void {
     // ログレベルのフィルタリング
-    if (
-      LOG_LEVEL_PRIORITY[level] <
-      LOG_LEVEL_PRIORITY[this.config.minLevel ?? "info"]
-    ) {
+    if (LOG_LEVEL_PRIORITY[level] < LOG_LEVEL_PRIORITY[this.config.minLevel ?? "info"]) {
       return;
     }
 
@@ -87,7 +80,7 @@ export class Logger {
       // 人間が読みやすい形式で出力
       const prefix = this.formatPrefix(entry);
       const metaStr = metadata ? ` ${JSON.stringify(metadata)}` : "";
-      
+
       switch (level) {
         case "error":
           console.error(`${prefix} ${message}${metaStr}`);
@@ -106,10 +99,8 @@ export class Logger {
     const time = entry.timestamp.split("T")[1]?.slice(0, 8) ?? "";
     const level = entry.level.toUpperCase().padEnd(5);
     const component = entry.component;
-    const context = entry.taskId
-      ? `[${entry.taskId.slice(0, 8)}]`
-      : "";
-    
+    const context = entry.taskId ? `[${entry.taskId.slice(0, 8)}]` : "";
+
     return `${time} ${level} [${component}]${context}`;
   }
 
@@ -189,11 +180,7 @@ export class Logger {
 }
 
 // デフォルトのWorkerロガーを作成
-export function createWorkerLogger(
-  agentId: string,
-  taskId?: string,
-  runId?: string
-): Logger {
+export function createWorkerLogger(agentId: string, taskId?: string, runId?: string): Logger {
   return new Logger({
     component: "worker",
     agentId,

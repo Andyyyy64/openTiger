@@ -13,12 +13,7 @@ const user = data.user as User;
 
 // OK: 適切な型ガードを使用
 function isUser(data: unknown): data is User {
-  return (
-    typeof data === "object" &&
-    data !== null &&
-    "id" in data &&
-    "name" in data
-  );
+  return typeof data === "object" && data !== null && "id" in data && "name" in data;
 }
 
 if (isUser(data)) {
@@ -73,13 +68,13 @@ function process(data: Data | null) {
 
 ### 命名規則
 
-| 種類 | 規則 | 例 |
-|------|------|-----|
-| 変数・関数 | camelCase | `getUserById`, `isValid` |
-| 定数 | UPPER_SNAKE_CASE | `MAX_RETRIES`, `DEFAULT_TIMEOUT` |
-| 型・インターフェース | PascalCase | `User`, `TaskConfig` |
-| Enumの値 | PascalCase | `Status.Running`, `Role.Admin` |
-| ファイル名 | kebab-case | `user-service.ts`, `api-client.ts` |
+| 種類                 | 規則             | 例                                 |
+| -------------------- | ---------------- | ---------------------------------- |
+| 変数・関数           | camelCase        | `getUserById`, `isValid`           |
+| 定数                 | UPPER_SNAKE_CASE | `MAX_RETRIES`, `DEFAULT_TIMEOUT`   |
+| 型・インターフェース | PascalCase       | `User`, `TaskConfig`               |
+| Enumの値             | PascalCase       | `Status.Running`, `Role.Admin`     |
+| ファイル名           | kebab-case       | `user-service.ts`, `api-client.ts` |
 
 ### 型定義
 
@@ -108,7 +103,7 @@ function createTask(
   priority: number,
   allowedPaths: string[],
   commands: string[],
-  dependencies?: string[]
+  dependencies?: string[],
 ) {}
 
 // OK
@@ -130,20 +125,17 @@ function createTask(options: CreateTaskOptions) {}
 // async/awaitを使用
 async function fetchUser(id: string): Promise<User> {
   const response = await fetch(`/api/users/${id}`);
-  
+
   if (!response.ok) {
     throw new Error(`Failed to fetch user: ${response.status}`);
   }
-  
+
   const data = await response.json();
   return UserSchema.parse(data);
 }
 
 // 並列実行が可能な場合はPromise.allを使用
-const [user, tasks] = await Promise.all([
-  fetchUser(userId),
-  fetchTasks(userId),
-]);
+const [user, tasks] = await Promise.all([fetchUser(userId), fetchTasks(userId)]);
 ```
 
 ## コメント規約
@@ -154,17 +146,17 @@ const [user, tasks] = await Promise.all([
 // ユーザーのセッションを検証し、有効期限が切れている場合は更新する
 async function validateSession(sessionId: string): Promise<Session> {
   const session = await getSession(sessionId);
-  
+
   // セッションが存在しない場合はエラー
   if (!session) {
     throw new SessionNotFoundError(sessionId);
   }
-  
+
   // 有効期限が近い場合は更新
   if (isExpiringSoon(session)) {
     return await refreshSession(session);
   }
-  
+
   return session;
 }
 ```
@@ -178,9 +170,7 @@ async function validateSession(sessionId: string): Promise<Session> {
  * @returns 作成されたタスク
  * @throws {ValidationError} 入力が不正な場合
  */
-export async function createTask(
-  options: CreateTaskOptions
-): Promise<Task> {
+export async function createTask(options: CreateTaskOptions): Promise<Task> {
   // 実装
 }
 ```
@@ -206,10 +196,10 @@ describe("UserService", () => {
     it("有効な入力でユーザーを作成できる", async () => {
       // Arrange
       const input = { name: "Test", email: "test@example.com" };
-      
+
       // Act
       const user = await userService.createUser(input);
-      
+
       // Assert
       expect(user.name).toBe("Test");
       expect(user.id).toBeDefined();
@@ -217,10 +207,8 @@ describe("UserService", () => {
 
     it("無効なメールアドレスでエラーを投げる", async () => {
       const input = { name: "Test", email: "invalid" };
-      
-      await expect(userService.createUser(input)).rejects.toThrow(
-        ValidationError
-      );
+
+      await expect(userService.createUser(input)).rejects.toThrow(ValidationError);
     });
   });
 });

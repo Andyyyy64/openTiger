@@ -104,7 +104,7 @@ async function resolveDefaultOpenCodeConfigPath(cwd: string): Promise<string | u
 }
 
 export async function getProjectEnvSummary(
-  cwd: string
+  cwd: string,
 ): Promise<{ hasEnvFile: boolean; keys: string[] }> {
   try {
     const content = await readFile(join(cwd, ".env"), "utf-8");
@@ -115,9 +115,7 @@ export async function getProjectEnvSummary(
   }
 }
 
-export async function buildTaskEnv(
-  cwd: string
-): Promise<Record<string, string>> {
+export async function buildTaskEnv(cwd: string): Promise<Record<string, string>> {
   // Don't pass h1ve-specific environment variables to execution target
   const baseEnv: Record<string, string> = {};
   for (const [key, value] of Object.entries(process.env)) {
@@ -165,9 +163,7 @@ async function loadConfigFromDb(): Promise<Record<string, string>> {
   }
 }
 
-export async function buildOpenCodeEnv(
-  cwd: string
-): Promise<Record<string, string>> {
+export async function buildOpenCodeEnv(cwd: string): Promise<Record<string, string>> {
   // Inherit target's .env and only allow LLM-related keys
   const env = await buildTaskEnv(cwd);
 

@@ -36,10 +36,7 @@ export const DEFAULT_CONFIG: JudgeConfig = {
 export const JUDGE_AUTO_FIX_ON_FAIL = process.env.JUDGE_AUTO_FIX_ON_FAIL !== "false";
 
 function resolveJudgeAutoFixMaxAttempts(): number {
-  const parsed = Number.parseInt(
-    process.env.JUDGE_AUTO_FIX_MAX_ATTEMPTS ?? "-1",
-    10
-  );
+  const parsed = Number.parseInt(process.env.JUDGE_AUTO_FIX_MAX_ATTEMPTS ?? "-1", 10);
   if (!Number.isFinite(parsed)) {
     return -1;
   }
@@ -60,32 +57,30 @@ export function formatJudgeAutoFixLimit(maxAttempts: number): string {
 export const JUDGE_AUTO_FIX_MAX_ATTEMPTS = resolveJudgeAutoFixMaxAttempts();
 export const JUDGE_AWAITING_RETRY_COOLDOWN_MS = Number.parseInt(
   process.env.JUDGE_AWAITING_RETRY_COOLDOWN_MS ?? "120000",
-  10
+  10,
 );
 export const JUDGE_PR_MERGEABLE_PRECHECK_RETRIES = Number.parseInt(
   process.env.JUDGE_PR_MERGEABLE_PRECHECK_RETRIES ?? "3",
-  10
+  10,
 );
 export const JUDGE_PR_MERGEABLE_PRECHECK_DELAY_MS = Number.parseInt(
   process.env.JUDGE_PR_MERGEABLE_PRECHECK_DELAY_MS ?? "1000",
-  10
+  10,
 );
 export const JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES = Number.parseInt(
   process.env.JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES ?? "2",
-  10
+  10,
 );
 export const JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES = Number.parseInt(
   process.env.JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES ?? "2",
-  10
+  10,
 );
 
 const BASE_REPO_RECOVERY_MODES = ["none", "stash", "llm"] as const;
 
 export function resolveBaseRepoRecoveryMode(): "none" | "stash" | "llm" {
   const value = process.env.JUDGE_LOCAL_BASE_REPO_RECOVERY;
-  return BASE_REPO_RECOVERY_MODES.includes(
-    value as (typeof BASE_REPO_RECOVERY_MODES)[number]
-  )
+  return BASE_REPO_RECOVERY_MODES.includes(value as (typeof BASE_REPO_RECOVERY_MODES)[number])
     ? (value as (typeof BASE_REPO_RECOVERY_MODES)[number])
     : "llm";
 }
@@ -146,7 +141,7 @@ function resolveBaseRepoRecoveryLevel(policy: Policy): BaseRepoRecoveryLevel {
 
 export function resolveBaseRepoRecoveryRules(
   policy: Policy,
-  config: JudgeConfig
+  config: JudgeConfig,
 ): BaseRepoRecoveryRules {
   const level = resolveBaseRepoRecoveryLevel(policy);
   const defaults = BASE_REPO_RECOVERY_RULES[level];

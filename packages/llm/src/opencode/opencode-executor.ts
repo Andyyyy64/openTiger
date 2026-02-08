@@ -25,17 +25,14 @@ import {
 } from "./opencode-helpers";
 
 export async function executeOpenCodeOnce(
-  options: OpenCodeOptions
+  options: OpenCodeOptions,
 ): Promise<Omit<OpenCodeResult, "retryCount">> {
   const startTime = Date.now();
-  const resolvedIdleTimeoutSeconds = Number.isFinite(DEFAULT_IDLE_TIMEOUT_SECONDS)
-    && DEFAULT_IDLE_TIMEOUT_SECONDS > 0
-    ? DEFAULT_IDLE_TIMEOUT_SECONDS
-    : 900;
-  const idleTimeoutMs = Math.min(
-    options.timeoutSeconds * 1000,
-    resolvedIdleTimeoutSeconds * 1000
-  );
+  const resolvedIdleTimeoutSeconds =
+    Number.isFinite(DEFAULT_IDLE_TIMEOUT_SECONDS) && DEFAULT_IDLE_TIMEOUT_SECONDS > 0
+      ? DEFAULT_IDLE_TIMEOUT_SECONDS
+      : 900;
+  const idleTimeoutMs = Math.min(options.timeoutSeconds * 1000, resolvedIdleTimeoutSeconds * 1000);
   const idleTimeoutEnabled = idleTimeoutMs > 0;
   let lastOutputAt = startTime;
   let lastVisibleProgressAt = startTime;
@@ -134,7 +131,7 @@ export async function executeOpenCodeOnce(
     if (idleMs >= idleTimeoutMs && !idleTimedOut) {
       idleTimedOut = true;
       process.stderr.write(
-        `\n[OpenCode] Idle timeout exceeded (${Math.round(idleTimeoutMs / 1000)}s without visible progress)\n`
+        `\n[OpenCode] Idle timeout exceeded (${Math.round(idleTimeoutMs / 1000)}s without visible progress)\n`,
       );
       terminateOpenCode("SIGTERM");
       setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
@@ -143,9 +140,7 @@ export async function executeOpenCodeOnce(
   const progressTimer = setInterval(() => {
     const elapsed = Math.round((Date.now() - startTime) / 1000);
     const idleSec = Math.round((Date.now() - lastVisibleProgressAt) / 1000);
-    process.stdout.write(
-      `[OpenCode] Running... elapsed=${elapsed}s idle=${idleSec}s\n`
-    );
+    process.stdout.write(`[OpenCode] Running... elapsed=${elapsed}s idle=${idleSec}s\n`);
   }, PROGRESS_LOG_INTERVAL_MS);
 
   let stdout = "";
@@ -205,17 +200,17 @@ export async function executeOpenCodeOnce(
       return;
     }
     const normalizedChunk = normalizeForPromptDetection(chunk);
-    const hasPromptHint = normalizedChunk.includes("external_directory")
-      && EXTERNAL_PERMISSION_HINTS.some((hint) => normalizedChunk.includes(hint));
+    const hasPromptHint =
+      normalizedChunk.includes("external_directory") &&
+      EXTERNAL_PERMISSION_HINTS.some((hint) => normalizedChunk.includes(hint));
     if (!EXTERNAL_PERMISSION_PROMPT.test(normalizedChunk) && !hasPromptHint) {
       return;
     }
 
     permissionPromptBlocked = true;
-    stderr +=
-      "\n[OpenCode] Non-interactive run blocked by external_directory permission prompt";
+    stderr += "\n[OpenCode] Non-interactive run blocked by external_directory permission prompt";
     process.stderr.write(
-      "\n[OpenCode] external_directory permission prompt detected. Aborting non-interactive run.\n"
+      "\n[OpenCode] external_directory permission prompt detected. Aborting non-interactive run.\n",
     );
     terminateOpenCode("SIGTERM");
     setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
@@ -237,8 +232,8 @@ export async function executeOpenCodeOnce(
         continue;
       }
       if (
-        /\[tool_call:\s*bash\b/i.test(line)
-        && /\b(?:pnpm|npm|yarn|bun)\b.*\b(?:dev|watch|start)\b/i.test(line)
+        /\[tool_call:\s*bash\b/i.test(line) &&
+        /\b(?:pnpm|npm|yarn|bun)\b.*\b(?:dev|watch|start)\b/i.test(line)
       ) {
         stderr += "\n[OpenCode] Long-running dev/watch/start command detected in tool call";
         markDoomLoopAndTerminate();
@@ -318,28 +313,24 @@ export async function executeOpenCodeOnce(
 
       return {
         success:
-          !timedOut
-          && !idleTimedOut
-          && !quotaExceeded
-          && !doomLoopDetected
-          && !permissionPromptBlocked
-          && code === 0,
+          !timedOut &&
+          !idleTimedOut &&
+          !quotaExceeded &&
+          !doomLoopDetected &&
+          !permissionPromptBlocked &&
+          code === 0,
         exitCode:
-          timedOut
-          || idleTimedOut
-          || quotaExceeded
-          || doomLoopDetected
-          || permissionPromptBlocked
+          timedOut || idleTimedOut || quotaExceeded || doomLoopDetected || permissionPromptBlocked
             ? -1
-            : code ?? -1,
+            : (code ?? -1),
         stdout,
         stderr:
-          stderr
-          + timeoutMessage
-          + idleTimeoutMessage
-          + quotaMessage
-          + doomLoopMessage
-          + permissionPromptMessage,
+          stderr +
+          timeoutMessage +
+          idleTimeoutMessage +
+          quotaMessage +
+          doomLoopMessage +
+          permissionPromptMessage,
         durationMs,
         tokenUsage,
       };

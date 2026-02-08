@@ -104,15 +104,10 @@ function isVerificationOnlyCommands(commands: string[]): boolean {
   ];
 
   // 検証コマンドのみで構成されていれば変更なしを許可する
-  return commands.every((command) =>
-    verificationPatterns.some((pattern) => pattern.test(command))
-  );
+  return commands.every((command) => verificationPatterns.some((pattern) => pattern.test(command)));
 }
 
-export async function validateExpectedFiles(
-  repoPath: string,
-  task: Task
-): Promise<string[]> {
+export async function validateExpectedFiles(repoPath: string, task: Task): Promise<string[]> {
   // タスクの期待ファイルが存在するか事前に確認する
   const files = task.context?.files ?? [];
   if (files.length === 0) {

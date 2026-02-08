@@ -12,12 +12,7 @@ export async function resetOfflineAgents(): Promise<number> {
   const offlineAgents = await db
     .select({ id: agents.id })
     .from(agents)
-    .where(
-      and(
-        not(eq(agents.status, "offline")),
-        lt(agents.lastHeartbeat, threshold)
-      )
-    );
+    .where(and(not(eq(agents.status, "offline")), lt(agents.lastHeartbeat, threshold)));
 
   if (offlineAgents.length === 0) {
     return 0;

@@ -1,13 +1,13 @@
-import React from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { tasksApi, runsApi } from '../lib/api';
+import React from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { tasksApi, runsApi } from "../lib/api";
 import {
   getRunStatusColor,
   getTaskRiskColor,
   getTaskStatusColor,
   formatTaskRetryStatus,
-} from '../ui/status';
+} from "../ui/status";
 
 export const TaskDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,23 +20,36 @@ export const TaskDetailsPage: React.FC = () => {
   }, []);
 
   const { data: task, isLoading: isTaskLoading } = useQuery({
-    queryKey: ['tasks', id],
+    queryKey: ["tasks", id],
     queryFn: () => tasksApi.get(id!),
     enabled: !!id,
   });
 
   const { data: runs, isLoading: isRunsLoading } = useQuery({
-    queryKey: ['tasks', id, 'runs'],
+    queryKey: ["tasks", id, "runs"],
     queryFn: () => runsApi.list(id!),
     enabled: !!id,
   });
 
-  if (isTaskLoading) return <div className="p-8 text-center text-zinc-500 font-mono animate-pulse">&gt; Loading task data...</div>;
-  if (!task) return <div className="p-8 text-center text-red-500 font-mono">&gt; ERR: Task not found in registry</div>;
+  if (isTaskLoading)
+    return (
+      <div className="p-8 text-center text-zinc-500 font-mono animate-pulse">
+        &gt; Loading task data...
+      </div>
+    );
+  if (!task)
+    return (
+      <div className="p-8 text-center text-red-500 font-mono">
+        &gt; ERR: Task not found in registry
+      </div>
+    );
 
   return (
     <div className="p-6 max-w-5xl mx-auto text-term-fg font-mono">
-      <Link to="/tasks" className="inline-block text-xs text-zinc-500 hover:text-term-tiger mb-6 group">
+      <Link
+        to="/tasks"
+        className="inline-block text-xs text-zinc-500 hover:text-term-tiger mb-6 group"
+      >
         &lt; cd ..
       </Link>
 
@@ -67,7 +80,9 @@ export const TaskDetailsPage: React.FC = () => {
           {/* Goal Section */}
           <section className="border border-term-border p-0">
             <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
-              <h2 className="text-sm font-bold uppercase tracking-wider">01_Objective_&_Criteria</h2>
+              <h2 className="text-sm font-bold uppercase tracking-wider">
+                01_Objective_&_Criteria
+              </h2>
             </div>
             <div className="p-4">
               <p className="text-zinc-300 text-sm whitespace-pre-wrap leading-relaxed">
@@ -84,7 +99,9 @@ export const TaskDetailsPage: React.FC = () => {
             <div className="p-4 space-y-4">
               {task.context?.specs && (
                 <div>
-                  <h3 className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wide">Specifications</h3>
+                  <h3 className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wide">
+                    Specifications
+                  </h3>
                   <div className="border-l-2 border-zinc-700 pl-2 text-zinc-400 text-xs">
                     {task.context.specs}
                   </div>
@@ -92,10 +109,15 @@ export const TaskDetailsPage: React.FC = () => {
               )}
               {task.context?.files && task.context.files.length > 0 && (
                 <div>
-                  <h3 className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wide">Related Files</h3>
+                  <h3 className="text-xs font-bold text-zinc-500 mb-1 uppercase tracking-wide">
+                    Related Files
+                  </h3>
                   <div className="flex flex-wrap gap-2">
                     {task.context.files.map((file, i) => (
-                      <span key={i} className="text-xs text-zinc-300 bg-zinc-900 px-2 py-0.5 border border-zinc-800">
+                      <span
+                        key={i}
+                        className="text-xs text-zinc-300 bg-zinc-900 px-2 py-0.5 border border-zinc-800"
+                      >
                         {file}
                       </span>
                     ))}
@@ -112,9 +134,13 @@ export const TaskDetailsPage: React.FC = () => {
             </div>
             <div className="overflow-x-auto">
               {isRunsLoading ? (
-                <div className="p-8 text-center text-zinc-500 animate-pulse">&gt; Fetching history...</div>
+                <div className="p-8 text-center text-zinc-500 animate-pulse">
+                  &gt; Fetching history...
+                </div>
               ) : runs?.length === 0 ? (
-                <div className="p-8 text-center text-zinc-500 italic">// No execution history found.</div>
+                <div className="p-8 text-center text-zinc-500 italic">
+                  // No execution history found.
+                </div>
               ) : (
                 <table className="w-full text-left text-xs">
                   <thead className="text-zinc-500 border-b border-term-border">
@@ -132,14 +158,18 @@ export const TaskDetailsPage: React.FC = () => {
                         onClick={() => navigate(`/runs/${run.id}`)}
                         className="hover:bg-term-fg/5 transition-colors cursor-pointer group"
                       >
-                        <td className="px-4 py-2 text-term-fg group-hover:text-term-tiger">{run.agentId}</td>
+                        <td className="px-4 py-2 text-term-fg group-hover:text-term-tiger">
+                          {run.agentId}
+                        </td>
                         <td className="px-4 py-2">
-                            <span className={`font-bold ${getRunStatusColor(run.status)}`}>
-                              [{run.status.toUpperCase()}]
-                            </span>
+                          <span className={`font-bold ${getRunStatusColor(run.status)}`}>
+                            [{run.status.toUpperCase()}]
+                          </span>
                         </td>
                         <td className="px-4 py-2 text-zinc-400">
-                          {run.finishedAt ? `${Math.round((new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)}s` : '-'}
+                          {run.finishedAt
+                            ? `${Math.round((new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) / 1000)}s`
+                            : "-"}
                         </td>
                         <td className="px-4 py-2 text-zinc-500">
                           {new Date(run.startedAt).toLocaleString()}
@@ -162,7 +192,9 @@ export const TaskDetailsPage: React.FC = () => {
             <div className="p-4 space-y-3 text-xs">
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">RISK_LEVEL</span>
-                <span className={`font-bold ${getTaskRiskColor(task.riskLevel)}`}>{task.riskLevel.toUpperCase()}</span>
+                <span className={`font-bold ${getTaskRiskColor(task.riskLevel)}`}>
+                  {task.riskLevel.toUpperCase()}
+                </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">PRIORITY</span>
@@ -170,7 +202,7 @@ export const TaskDetailsPage: React.FC = () => {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">ROLE</span>
-                <span className="text-term-fg">{task.role?.toUpperCase() ?? 'WORKER'}</span>
+                <span className="text-term-fg">{task.role?.toUpperCase() ?? "WORKER"}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">TIMEBOX</span>
@@ -183,9 +215,8 @@ export const TaskDetailsPage: React.FC = () => {
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">RETRY_COUNT</span>
                 <span className="text-term-fg">
-                  {task.retry?.retryCount ?? task.retryCount}/{
-                    task.retry?.retryLimit === -1 ? '∞' : (task.retry?.retryLimit ?? '-')
-                  }
+                  {task.retry?.retryCount ?? task.retryCount}/
+                  {task.retry?.retryLimit === -1 ? "∞" : (task.retry?.retryLimit ?? "-")}
                 </span>
               </div>
             </div>
@@ -202,7 +233,9 @@ export const TaskDetailsPage: React.FC = () => {
                   - {path}
                 </div>
               ))}
-              {task.allowedPaths.length === 0 && <div className="text-xs text-zinc-600 italic">// No paths defined</div>}
+              {task.allowedPaths.length === 0 && (
+                <div className="text-xs text-zinc-600 italic">// No paths defined</div>
+              )}
             </div>
           </section>
 
@@ -217,7 +250,9 @@ export const TaskDetailsPage: React.FC = () => {
                   $ {cmd}
                 </div>
               ))}
-              {task.commands.length === 0 && <div className="text-xs text-zinc-600 italic">// No commands defined</div>}
+              {task.commands.length === 0 && (
+                <div className="text-xs text-zinc-600 italic">// No commands defined</div>
+              )}
             </div>
           </section>
 

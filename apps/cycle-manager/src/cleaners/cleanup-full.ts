@@ -16,7 +16,7 @@ interface CleanupResult {
 
 // サイクル終了時のフルクリーンアップ
 export async function performFullCleanup(
-  preserveTaskState: boolean = true
+  preserveTaskState: boolean = true,
 ): Promise<CleanupResult> {
   console.log("[Cleanup] Starting full cleanup...");
 
@@ -83,7 +83,7 @@ export async function performFullCleanup(
       `${result.leasesReleased} leases, ` +
       `${result.agentsReset} agents, ` +
       `${result.tasksReset} tasks, ` +
-      `${result.runsCancelled} runs`
+      `${result.runsCancelled} runs`,
   );
 
   await recordEvent({

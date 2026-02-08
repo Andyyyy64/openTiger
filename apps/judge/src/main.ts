@@ -23,11 +23,7 @@ import {
   getPRDiffStats,
 } from "./evaluators/index";
 
-import {
-  makeJudgement,
-  reviewAndAct,
-  type EvaluationSummary,
-} from "./pr-reviewer";
+import { makeJudgement, reviewAndAct, type EvaluationSummary } from "./pr-reviewer";
 import {
   DEFAULT_CONFIG,
   resolveBaseRepoRecoveryMode,
@@ -40,8 +36,9 @@ import { runJudgeLoop } from "./judge-loops";
 import { runLocalJudgeLoop } from "./judge-local-loop";
 
 async function loadPolicyConfig(): Promise<Policy> {
-  const policyPath = process.env.POLICY_PATH
-    ?? resolve(import.meta.dirname, "../../../packages/policies/default/policy.json");
+  const policyPath =
+    process.env.POLICY_PATH ??
+    resolve(import.meta.dirname, "../../../packages/policies/default/policy.json");
 
   try {
     const raw = await readFile(policyPath, "utf-8");
@@ -56,10 +53,7 @@ async function loadPolicyConfig(): Promise<Policy> {
 }
 
 // 単一PRをレビュー（CLIモード）
-async function reviewSinglePR(
-  prNumber: number,
-  config: JudgeConfig
-): Promise<void> {
+async function reviewSinglePR(prNumber: number, config: JudgeConfig): Promise<void> {
   console.log("=".repeat(60));
   console.log(`openTiger Judge - Reviewing PR #${prNumber}`);
   console.log("=".repeat(60));
@@ -94,7 +88,7 @@ async function reviewSinglePR(
       instructionsPath: config.instructionsPath,
     });
     console.log(
-      `LLM Review: ${llmResult.pass ? "PASS" : "FAIL"} (confidence: ${Math.round(llmResult.confidence * 100)}%)`
+      `LLM Review: ${llmResult.pass ? "PASS" : "FAIL"} (confidence: ${Math.round(llmResult.confidence * 100)}%)`,
     );
     for (const issue of llmResult.codeIssues) {
       console.log(`  - ${issue.severity}: ${issue.message}`);
@@ -207,22 +201,25 @@ async function main(): Promise<void> {
   const judgeModel = process.env.JUDGE_MODEL ?? "google/gemini-3-pro-preview";
   await db.delete(agents).where(eq(agents.id, agentId));
 
-  await db.insert(agents).values({
-    id: agentId,
-    role: "judge",
-    status: "idle",
-    lastHeartbeat: new Date(),
-    metadata: {
-      model: judgeModel, // Judgeは高精度モデルでレビュー品質を優先する
-      provider: "gemini",
-    },
-  }).onConflictDoUpdate({
-    target: agents.id,
-    set: {
+  await db
+    .insert(agents)
+    .values({
+      id: agentId,
+      role: "judge",
       status: "idle",
       lastHeartbeat: new Date(),
-    },
-  });
+      metadata: {
+        model: judgeModel, // Judgeは高精度モデルでレビュー品質を優先する
+        provider: "gemini",
+      },
+    })
+    .onConflictDoUpdate({
+      target: agents.id,
+      set: {
+        status: "idle",
+        lastHeartbeat: new Date(),
+      },
+    });
 
   // ハートビート開始
   const heartbeatTimer = startHeartbeat(agentId);

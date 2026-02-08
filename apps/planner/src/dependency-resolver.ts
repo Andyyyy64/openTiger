@@ -13,9 +13,7 @@ export interface DependencyResolution {
 }
 
 // タスク間の依存関係を推定
-export function inferDependencies(
-  tasks: CreateTaskInput[]
-): DependencyResolution[] {
+export function inferDependencies(tasks: CreateTaskInput[]): DependencyResolution[] {
   const resolutions: DependencyResolution[] = [];
 
   for (let i = 0; i < tasks.length; i++) {
@@ -34,9 +32,7 @@ export function inferDependencies(
       // 1. ファイルパスの重複: 前のタスクが変更するファイルを後のタスクが参照
       const prevPaths = prevTask.allowedPaths;
       const currPaths = task.allowedPaths;
-      const pathOverlap = prevPaths.some((p) =>
-        currPaths.some((c) => pathsOverlap(p, c))
-      );
+      const pathOverlap = prevPaths.some((p) => currPaths.some((c) => pathsOverlap(p, c)));
 
       if (pathOverlap) {
         dependsOnIndices.push(j);
@@ -58,9 +54,7 @@ export function inferDependencies(
       // 3. タイトルや説明からのキーワードマッチング
       const prevKeywords = extractKeywords(prevTask.title + " " + prevTask.goal);
       const currKeywords = extractKeywords(task.title + " " + task.goal);
-      const keywordOverlap = prevKeywords.filter((k) =>
-        currKeywords.includes(k)
-      );
+      const keywordOverlap = prevKeywords.filter((k) => currKeywords.includes(k));
 
       if (keywordOverlap.length >= 2) {
         dependsOnIndices.push(j);
@@ -100,12 +94,56 @@ function pathsOverlap(path1: string, path2: string): boolean {
 function extractKeywords(text: string): string[] {
   // 一般的な単語を除外
   const stopWords = new Set([
-    "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
-    "of", "with", "by", "from", "as", "is", "was", "are", "were", "been",
-    "be", "have", "has", "had", "do", "does", "did", "will", "would",
-    "could", "should", "may", "might", "must", "shall", "can",
-    "this", "that", "these", "those", "it", "its",
-    "add", "update", "fix", "create", "implement", "remove", "delete",
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "but",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "with",
+    "by",
+    "from",
+    "as",
+    "is",
+    "was",
+    "are",
+    "were",
+    "been",
+    "be",
+    "have",
+    "has",
+    "had",
+    "do",
+    "does",
+    "did",
+    "will",
+    "would",
+    "could",
+    "should",
+    "may",
+    "might",
+    "must",
+    "shall",
+    "can",
+    "this",
+    "that",
+    "these",
+    "those",
+    "it",
+    "its",
+    "add",
+    "update",
+    "fix",
+    "create",
+    "implement",
+    "remove",
+    "delete",
   ]);
 
   return text
@@ -118,7 +156,7 @@ function extractKeywords(text: string): string[] {
 // インデックスからタスクIDへの変換
 export async function resolveIndicesToIds(
   resolutions: DependencyResolution[],
-  taskIds: string[]
+  taskIds: string[],
 ): Promise<DependencyResolution[]> {
   return resolutions.map((r) => ({
     ...r,
@@ -138,9 +176,7 @@ export interface DuplicateDetection {
 }
 
 // 新規タスクと既存タスクの重複をチェック
-export async function detectDuplicates(
-  newTasks: CreateTaskInput[]
-): Promise<DuplicateDetection[]> {
+export async function detectDuplicates(newTasks: CreateTaskInput[]): Promise<DuplicateDetection[]> {
   const detections: DuplicateDetection[] = [];
 
   // 既存のキュー済み・実行中タスクを取得
@@ -148,11 +184,7 @@ export async function detectDuplicates(
     .select()
     .from(tasks)
     .where(
-      or(
-        eq(tasks.status, "queued"),
-        eq(tasks.status, "running"),
-        eq(tasks.status, "blocked")
-      )
+      or(eq(tasks.status, "queued"), eq(tasks.status, "running"), eq(tasks.status, "blocked")),
     );
 
   for (let i = 0; i < newTasks.length; i++) {
@@ -161,7 +193,7 @@ export async function detectDuplicates(
 
     // 同一タイトルチェック
     const sameTitleTask = existingTasks.find(
-      (t) => t.title.toLowerCase() === newTask.title.toLowerCase()
+      (t) => t.title.toLowerCase() === newTask.title.toLowerCase(),
     );
 
     if (sameTitleTask) {
@@ -194,7 +226,7 @@ export async function detectDuplicates(
     // 同一ファイルパスと類似タイトルの組み合わせ
     const pathOverlapTask = existingTasks.find((t) => {
       const pathMatch = t.allowedPaths.some((p) =>
-        newTask.allowedPaths.some((np) => pathsOverlap(p, np))
+        newTask.allowedPaths.some((np) => pathsOverlap(p, np)),
       );
       const titleSimilarity = calculateSimilarity(t.title, newTask.title);
       return pathMatch && titleSimilarity > 0.6;
@@ -230,7 +262,7 @@ export async function detectDuplicates(
 
       const similarity = calculateSimilarity(
         task1.title + " " + task1.goal,
-        task2.title + " " + task2.goal
+        task2.title + " " + task2.goal,
       );
 
       if (similarity > 0.8) {
@@ -267,7 +299,7 @@ function calculateSimilarity(str1: string, str2: string): number {
 export function filterDuplicateTasks(
   tasks: CreateTaskInput[],
   detections: DuplicateDetection[],
-  similarityThreshold: number = 0.8
+  similarityThreshold: number = 0.8,
 ): {
   uniqueTasks: CreateTaskInput[];
   skippedIndices: number[];

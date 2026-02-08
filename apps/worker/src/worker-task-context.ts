@@ -22,12 +22,14 @@ export function resolveTaskPrContext(task: Task): TaskPrContext | null {
   if (typeof number !== "number" || !Number.isFinite(number) || number <= 0) {
     return null;
   }
-  const headRef = typeof prRecord.headRef === "string" && prRecord.headRef.trim().length > 0
-    ? prRecord.headRef.trim()
-    : undefined;
-  const baseRef = typeof prRecord.baseRef === "string" && prRecord.baseRef.trim().length > 0
-    ? prRecord.baseRef.trim()
-    : undefined;
+  const headRef =
+    typeof prRecord.headRef === "string" && prRecord.headRef.trim().length > 0
+      ? prRecord.headRef.trim()
+      : undefined;
+  const baseRef =
+    typeof prRecord.baseRef === "string" && prRecord.baseRef.trim().length > 0
+      ? prRecord.baseRef.trim()
+      : undefined;
   return { number, headRef, baseRef };
 }
 
@@ -43,7 +45,7 @@ export function buildPrFetchRefspecs(prContext: TaskPrContext | null): string[] 
 
 export function resolveBranchBaseRef(
   prContext: TaskPrContext | null,
-  fallbackBaseBranch: string
+  fallbackBaseBranch: string,
 ): string {
   if (!prContext) {
     return fallbackBaseBranch;

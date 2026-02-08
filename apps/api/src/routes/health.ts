@@ -22,14 +22,14 @@ async function checkRedisReady(): Promise<{ ok: boolean; error?: string }> {
     quit: () => Promise<unknown>;
     disconnect: () => void;
   };
-  const { default: RedisCtor } = await import("ioredis") as unknown as {
+  const { default: RedisCtor } = (await import("ioredis")) as unknown as {
     default: new (
       url: string,
       options: {
         lazyConnect: boolean;
         maxRetriesPerRequest: number;
         enableOfflineQueue: boolean;
-      }
+      },
     ) => RedisClient;
   };
   const redisClient = new RedisCtor(redisUrl, {
@@ -70,10 +70,7 @@ healthRoute.get("/", (c) => {
 
 // Detailed health check (DB connection verification, etc.)
 healthRoute.get("/ready", async (c) => {
-  const [database, redis] = await Promise.all([
-    checkDatabaseReady(),
-    checkRedisReady(),
-  ]);
+  const [database, redis] = await Promise.all([checkDatabaseReady(), checkRedisReady()]);
   const isReady = database.ok && redis.ok;
 
   return c.json(
@@ -89,6 +86,6 @@ healthRoute.get("/ready", async (c) => {
       },
       timestamp: new Date().toISOString(),
     },
-    isReady ? 200 : 503
+    isReady ? 200 : 503,
   );
 });

@@ -19,10 +19,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function createLLMFailureResult(
-  reason: string,
-  suggestions: string[]
-): LLMEvaluationResult {
+export function createLLMFailureResult(reason: string, suggestions: string[]): LLMEvaluationResult {
   return {
     pass: false,
     confidence: 0,
@@ -71,7 +68,7 @@ async function getPRMergeabilitySnapshot(prNumber: number): Promise<PRMergeabili
 }
 
 async function tryUpdatePRBranch(
-  prNumber: number
+  prNumber: number,
 ): Promise<{ requested: boolean; reason: string }> {
   try {
     const octokit = getOctokit();
@@ -88,9 +85,7 @@ async function tryUpdatePRBranch(
   }
 }
 
-export async function precheckPRMergeability(
-  prNumber: number
-): Promise<PRMergeabilityPrecheck> {
+export async function precheckPRMergeability(prNumber: number): Promise<PRMergeabilityPrecheck> {
   try {
     const snapshot = await getPRMergeabilitySnapshot(prNumber);
 
@@ -107,10 +102,9 @@ export async function precheckPRMergeability(
       const sync = await tryUpdatePRBranch(prNumber);
       return {
         shouldSkipLLM: true,
-        llmFallback: createLLMFailureResult(
-          `LLM skipped: pr_base_behind (${sync.reason})`,
-          ["Wait for branch sync and retry judge review."]
-        ),
+        llmFallback: createLLMFailureResult(`LLM skipped: pr_base_behind (${sync.reason})`, [
+          "Wait for branch sync and retry judge review.",
+        ]),
       };
     }
 
@@ -119,9 +113,10 @@ export async function precheckPRMergeability(
     const message = error instanceof Error ? error.message : String(error);
     return {
       shouldSkipLLM: true,
-      llmFallback: createLLMFailureResult(`LLM skipped: mergeability_precheck_failed (${message})`, [
-        "Retry judge review after precheck error cooldown.",
-      ]),
+      llmFallback: createLLMFailureResult(
+        `LLM skipped: mergeability_precheck_failed (${message})`,
+        ["Retry judge review after precheck error cooldown."],
+      ),
     };
   }
 }

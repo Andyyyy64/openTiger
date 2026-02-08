@@ -37,10 +37,7 @@ export async function createIssue(options: CreateIssueOptions): Promise<IssueInf
 }
 
 // Issueに関連情報を追記する
-export async function addIssueComment(
-  issueNumber: number,
-  body: string
-): Promise<void> {
+export async function addIssueComment(issueNumber: number, body: string): Promise<void> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
 

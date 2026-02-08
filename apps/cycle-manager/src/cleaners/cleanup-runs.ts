@@ -5,7 +5,7 @@ import { recordEvent } from "../monitors/event-logger";
 
 // 実行中だが進行していないRunをキャンセル
 export async function cancelStuckRuns(
-  maxDurationMs: number = parseInt(process.env.STUCK_RUN_TIMEOUT_MS ?? "900000", 10) // デフォルト15分
+  maxDurationMs: number = parseInt(process.env.STUCK_RUN_TIMEOUT_MS ?? "900000", 10), // デフォルト15分
 ): Promise<number> {
   const threshold = new Date(Date.now() - maxDurationMs);
 

@@ -40,13 +40,13 @@ export async function gitCloneRepo(
   repoUrl: string,
   destPath: string,
   token?: string,
-  baseBranch?: string
+  baseBranch?: string,
 ): Promise<{ success: boolean; stderr: string }> {
   let authenticatedUrl = repoUrl;
   if (token && repoUrl.startsWith("https://github.com/")) {
     authenticatedUrl = repoUrl.replace(
       "https://github.com/",
-      `https://x-access-token:${token}@github.com/`
+      `https://x-access-token:${token}@github.com/`,
     );
   }
 
@@ -90,9 +90,7 @@ export async function gitCloneRepo(
     return result;
   }
 
-  console.warn(
-    `[Planner] Failed to clone branch ${baseBranch}, retrying default branch`
-  );
+  console.warn(`[Planner] Failed to clone branch ${baseBranch}, retrying default branch`);
 
   return runClone(["clone", "--depth", "1", authenticatedUrl, destPath]);
 }

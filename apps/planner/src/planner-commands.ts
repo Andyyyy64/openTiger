@@ -14,7 +14,7 @@ export async function hasRootCheckScript(workdir: string): Promise<boolean> {
 }
 
 export async function resolveCheckVerificationCommand(
-  workdir: string
+  workdir: string,
 ): Promise<string | undefined> {
   if (!(await hasRootCheckScript(workdir))) {
     return undefined;
@@ -36,17 +36,13 @@ async function getRootDevScript(workdir: string): Promise<string | undefined> {
   try {
     const raw = await readFile(join(workdir, "package.json"), "utf-8");
     const parsed = JSON.parse(raw);
-    return typeof parsed?.scripts?.dev === "string"
-      ? parsed.scripts.dev
-      : undefined;
+    return typeof parsed?.scripts?.dev === "string" ? parsed.scripts.dev : undefined;
   } catch {
     return undefined;
   }
 }
 
-export async function resolveDevVerificationCommand(
-  workdir: string
-): Promise<string | undefined> {
+export async function resolveDevVerificationCommand(workdir: string): Promise<string | undefined> {
   const devScript = await getRootDevScript(workdir);
   if (!devScript) {
     return undefined;
@@ -54,8 +50,8 @@ export async function resolveDevVerificationCommand(
   // turbo設定が無いのに `turbo ...` を検証で実行すると高確率で失敗するため除外
   if (/\bturbo\b/.test(devScript)) {
     const hasTurboConfig =
-      await pathIsFile(join(workdir, "turbo.json"))
-      || await pathIsFile(join(workdir, "turbo.jsonc"));
+      (await pathIsFile(join(workdir, "turbo.json"))) ||
+      (await pathIsFile(join(workdir, "turbo.jsonc")));
     if (!hasTurboConfig) {
       return undefined;
     }
@@ -72,9 +68,7 @@ export async function resolveDevVerificationCommand(
   return "npm run dev";
 }
 
-export async function resolveE2EVerificationCommand(
-  workdir: string
-): Promise<string | undefined> {
+export async function resolveE2EVerificationCommand(workdir: string): Promise<string | undefined> {
   if (await pathIsFile(join(workdir, "pnpm-lock.yaml"))) {
     return "pnpm run e2e";
   }

@@ -16,7 +16,9 @@ export function isQuotaExceededError(message: string): boolean {
 }
 
 export function extractQuotaRetryDelayMs(message: string): number | undefined {
-  const retryInfoMatch = message.match(/retrydelay["']?\s*[:=]\s*["']?([0-9]+(?:\.[0-9]+)?)s["']?/i);
+  const retryInfoMatch = message.match(
+    /retrydelay["']?\s*[:=]\s*["']?([0-9]+(?:\.[0-9]+)?)s["']?/i,
+  );
   if (retryInfoMatch?.[1]) {
     const seconds = Number.parseFloat(retryInfoMatch[1]);
     if (Number.isFinite(seconds) && seconds > 0) {
@@ -36,11 +38,7 @@ export function extractQuotaRetryDelayMs(message: string): number | undefined {
 }
 
 export function normalizeChunkLine(line: string): string {
-  return line
-    .replace(ANSI_ESCAPE_REGEX, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 200);
+  return line.replace(ANSI_ESCAPE_REGEX, "").replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
 export function normalizeForPromptDetection(text: string): string {

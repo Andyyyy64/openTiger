@@ -11,11 +11,7 @@ import {
   getLocalDiffStats,
   getLocalDiffText,
 } from "./evaluators/index";
-import {
-  makeJudgement,
-  type EvaluationSummary,
-  type JudgeResult,
-} from "./pr-reviewer";
+import { makeJudgement, type EvaluationSummary, type JudgeResult } from "./pr-reviewer";
 import { precheckPRMergeability, createLLMFailureResult } from "./judge-precheck";
 import type { JudgeConfig } from "./judge-config";
 
@@ -26,7 +22,7 @@ export async function judgeSinglePR(
     taskRiskLevel: "low" | "medium" | "high";
     allowedPaths: string[];
   },
-  config: JudgeConfig
+  config: JudgeConfig,
 ): Promise<{ result: JudgeResult; summary: EvaluationSummary }> {
   console.log(`\n[Evaluating PR #${pr.prNumber}]`);
   const evaluationPolicy = config.policy;
@@ -39,11 +35,7 @@ export async function judgeSinglePR(
   // 2. ポリシー評価
   console.log("  - Checking policy compliance...");
   const diffStats = await getPRDiffStats(pr.prNumber);
-  const policyResult = await evaluatePolicy(
-    pr.prNumber,
-    evaluationPolicy,
-    pr.allowedPaths
-  );
+  const policyResult = await evaluatePolicy(pr.prNumber, evaluationPolicy, pr.allowedPaths);
   console.log(`    Policy: ${policyResult.pass ? "PASS" : "FAIL"}`);
 
   // 計算されたリスクレベル
@@ -55,10 +47,11 @@ export async function judgeSinglePR(
   if (config.useLlm && ciResult.pass && policyResult.pass) {
     const precheck = await precheckPRMergeability(pr.prNumber);
     if (precheck.shouldSkipLLM) {
-      llmResult = precheck.llmFallback ?? createLLMFailureResult(
-        "LLM skipped: mergeability_precheck_blocked",
-        ["Retry judge review after mergeability precheck."]
-      );
+      llmResult =
+        precheck.llmFallback ??
+        createLLMFailureResult("LLM skipped: mergeability_precheck_blocked", [
+          "Retry judge review after mergeability precheck.",
+        ]);
       console.log(`    LLM: SKIPPED (${llmResult.reasons.join("; ")})`);
     } else {
       console.log("  - Running LLM code review...");
@@ -67,7 +60,7 @@ export async function judgeSinglePR(
         instructionsPath: config.instructionsPath,
       });
       console.log(
-        `    LLM: ${llmResult.pass ? "PASS" : "FAIL"} (confidence: ${Math.round(llmResult.confidence * 100)}%)`
+        `    LLM: ${llmResult.pass ? "PASS" : "FAIL"} (confidence: ${Math.round(llmResult.confidence * 100)}%)`,
       );
     }
   } else {
@@ -84,9 +77,7 @@ export async function judgeSinglePR(
   // 判定（計算されたリスクと自己申告リスクのうち、高い方を採用）
   const riskPriority = { low: 0, medium: 1, high: 2 };
   const effectiveRisk =
-    riskPriority[computedRisk] > riskPriority[pr.taskRiskLevel]
-      ? computedRisk
-      : pr.taskRiskLevel;
+    riskPriority[computedRisk] > riskPriority[pr.taskRiskLevel] ? computedRisk : pr.taskRiskLevel;
 
   const result = makeJudgement(summary, config.policy, effectiveRisk);
 
@@ -108,7 +99,7 @@ export async function judgeSingleWorktree(
     taskRiskLevel: "low" | "medium" | "high";
     allowedPaths: string[];
   },
-  config: JudgeConfig
+  config: JudgeConfig,
 ): Promise<{ result: JudgeResult; summary: EvaluationSummary; diffFiles: string[] }> {
   console.log(`\n[Evaluating Worktree ${target.worktreePath}]`);
   const evaluationPolicy = config.policy;
@@ -118,7 +109,7 @@ export async function judgeSingleWorktree(
   const diffStats = await getLocalDiffStats(
     target.worktreePath,
     target.baseBranch,
-    target.branchName
+    target.branchName,
   );
   const diffFiles = diffStats.files.map((file) => file.filename);
 
@@ -127,7 +118,7 @@ export async function judgeSingleWorktree(
     target.baseBranch,
     target.branchName,
     evaluationPolicy,
-    target.allowedPaths
+    target.allowedPaths,
   );
 
   const computedRisk = evaluateRiskLevel(diffStats, evaluationPolicy);
@@ -137,7 +128,7 @@ export async function judgeSingleWorktree(
     const diffText = await getLocalDiffText(
       target.worktreePath,
       target.baseBranch,
-      target.branchName
+      target.branchName,
     );
     llmResult = await evaluateLLMDiff(diffText, target.taskGoal, {
       instructionsPath: config.instructionsPath,
@@ -162,10 +153,7 @@ export async function judgeSingleWorktree(
   return { result, summary, diffFiles };
 }
 
-export function buildJudgeFailureMessage(
-  result: JudgeResult,
-  actionError?: unknown
-): string {
+export function buildJudgeFailureMessage(result: JudgeResult, actionError?: unknown): string {
   const parts = [`Judge verdict: ${result.verdict}`];
   if (result.reasons.length > 0) {
     parts.push(`Reasons: ${result.reasons.slice(0, 3).join(" / ")}`);
@@ -200,15 +188,15 @@ export function isNonActionableLLMFailure(summary: EvaluationSummary): boolean {
     return summary.llm.confidence <= 0;
   }
   return (
-    summary.llm.confidence <= 0
-    || reasonText.includes("quota")
-    || reasonText.includes("rate limit")
-    || reasonText.includes("resource_exhausted")
-    || reasonText.includes("pr_merge_conflict_detected")
-    || reasonText.includes("pr_base_behind")
-    || reasonText.includes("mergeability_precheck_failed")
-    || reasonText.includes("llm review failed")
-    || reasonText.includes("encountered an error")
-    || reasonText.includes("manual review recommended")
+    summary.llm.confidence <= 0 ||
+    reasonText.includes("quota") ||
+    reasonText.includes("rate limit") ||
+    reasonText.includes("resource_exhausted") ||
+    reasonText.includes("pr_merge_conflict_detected") ||
+    reasonText.includes("pr_base_behind") ||
+    reasonText.includes("mergeability_precheck_failed") ||
+    reasonText.includes("llm review failed") ||
+    reasonText.includes("encountered an error") ||
+    reasonText.includes("manual review recommended")
   );
 }

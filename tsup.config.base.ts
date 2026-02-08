@@ -22,10 +22,7 @@ const readPackageJson = (): PackageJson => {
 const getExternalDeps = (): string[] => {
   // 依存を外部化してバンドルの差分を抑える
   const pkg = readPackageJson();
-  return [
-    ...Object.keys(pkg.dependencies ?? {}),
-    ...Object.keys(pkg.peerDependencies ?? {}),
-  ];
+  return [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.peerDependencies ?? {})];
 };
 
 export const createNodeConfig = ({

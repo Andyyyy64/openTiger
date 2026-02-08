@@ -36,7 +36,7 @@ Meaning of common warnings:
 - `done` for direct/no-review completion
 
 5. Judge evaluates successful run
-2. Task moves to:
+6. Task moves to:
 
 - `done`
 - `blocked(awaiting_judge)` (retry/recovery)

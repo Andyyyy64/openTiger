@@ -70,10 +70,7 @@ const DEFAULT_CONFIG: DispatcherConfig = {
 
 function isSubPath(baseDir: string, targetDir: string): boolean {
   const relativePath = relative(baseDir, targetDir);
-  return (
-    relativePath === ""
-    || (!relativePath.startsWith("..") && !isAbsolute(relativePath))
-  );
+  return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
 }
 
 function resolveWorkspacePath(config: DispatcherConfig): string {
@@ -90,9 +87,7 @@ function resolveWorkspacePath(config: DispatcherConfig): string {
       return resolved;
     }
     // プロセス起動時は外部ディレクトリを避ける
-    console.warn(
-      "[Dispatcher] WORKSPACE_PATH is outside repo. Using local workspace instead."
-    );
+    console.warn("[Dispatcher] WORKSPACE_PATH is outside repo. Using local workspace instead.");
     return fallbackPath;
   }
 
@@ -114,7 +109,7 @@ function resolveLocalWorktreeRoot(config: DispatcherConfig): string | undefined 
     }
     // プロセス起動時は外部ディレクトリを避ける
     console.warn(
-      "[Dispatcher] LOCAL_WORKTREE_ROOT is outside repo. Using local worktrees instead."
+      "[Dispatcher] LOCAL_WORKTREE_ROOT is outside repo. Using local worktrees instead.",
     );
     return fallbackPath;
   }
@@ -140,7 +135,7 @@ async function dispatchTask(
   task: Awaited<ReturnType<typeof getAvailableTasks>>[0],
   agentId: string,
   agentRole: string,
-  config: DispatcherConfig
+  config: DispatcherConfig,
 ): Promise<boolean> {
   // 同一タスクの重複実行を避ける: 実行中Runが残っている場合は再配布しない
   const runningRuns = await db
@@ -209,9 +204,9 @@ async function dispatchTask(
     return false;
   }
 
-    console.log(
-      `[Dispatch] Task "${task.title}" dispatched to agent ${agentId} (${agentRole}, ${config.launchMode} mode)`
-    );
+  console.log(
+    `[Dispatch] Task "${task.title}" dispatched to agent ${agentId} (${agentRole}, ${config.launchMode} mode)`,
+  );
   return true;
 }
 
@@ -223,10 +218,8 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
   console.log(`Poll interval: ${config.pollIntervalMs}ms`);
   console.log(
     `Max concurrent workers: ${
-      Number.isFinite(config.maxConcurrentWorkers)
-        ? config.maxConcurrentWorkers
-        : "unlimited"
-    }`
+      Number.isFinite(config.maxConcurrentWorkers) ? config.maxConcurrentWorkers : "unlimited"
+    }`,
   );
   console.log(`Launch mode: ${config.launchMode}`);
   console.log(`Repo mode: ${config.repoMode}`);
@@ -270,7 +263,9 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
         const availableTasks = await getAvailableTasks();
 
         if (availableTasks.length > 0) {
-          console.log(`[Dispatch] Found ${availableTasks.length} available tasks, ${availableSlots} slots available`);
+          console.log(
+            `[Dispatch] Found ${availableTasks.length} available tasks, ${availableSlots} slots available`,
+          );
 
           // 利用可能なスロット分だけディスパッチ
           const tasksToDispatch = availableTasks.slice(0, availableSlots);
@@ -293,7 +288,9 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
             const selectedAgent = availableAgentsList[0];
 
             if (!selectedAgent) {
-              console.log(`[Dispatch] No idle ${requiredRole} agent for task ${task.id}. Skipping.`);
+              console.log(
+                `[Dispatch] No idle ${requiredRole} agent for task ${task.id}. Skipping.`,
+              );
               continue;
             }
 
@@ -307,9 +304,7 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
       if (Math.random() < 0.1) {
         const stats = await getAgentStats();
         const queueStats = taskQueues.size
-          ? await Promise.all(
-              Array.from(taskQueues.values()).map((queue) => getQueueStats(queue))
-            )
+          ? await Promise.all(Array.from(taskQueues.values()).map((queue) => getQueueStats(queue)))
           : [];
         const aggregatedStats = queueStats.reduce(
           (acc, stat) => ({
@@ -319,11 +314,11 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
             failed: acc.failed + stat.failed,
             total: acc.total + stat.total,
           }),
-          { waiting: 0, active: 0, completed: 0, failed: 0, total: 0 }
+          { waiting: 0, active: 0, completed: 0, failed: 0, total: 0 },
         );
         console.log(
           `[Stats] Agents: ${stats.busy} busy, ${stats.idle} idle, ${stats.offline} offline | ` +
-          `Queue: ${aggregatedStats.waiting} waiting, ${aggregatedStats.active} active`
+            `Queue: ${aggregatedStats.waiting} waiting, ${aggregatedStats.active} active`,
         );
       }
     } catch (error) {
@@ -362,9 +357,7 @@ function setupSignalHandlers(): void {
 
     // キューを閉じる
     if (taskQueues.size > 0) {
-      await Promise.all(
-        Array.from(taskQueues.values()).map((queue) => queue.close())
-      );
+      await Promise.all(Array.from(taskQueues.values()).map((queue) => queue.close()));
     }
 
     console.log("[Shutdown] Dispatcher stopped");

@@ -61,7 +61,7 @@ ${issue.labels.length > 0 ? issue.labels.join(", ") : "(none)"}
 ${issue.body || "(empty)"}
 
 ### Allowed Paths
-${allowedPaths.map(p => `- ${p}`).join("\n")}
+${allowedPaths.map((p) => `- ${p}`).join("\n")}
 
 ## 出力形式
 
@@ -107,21 +107,19 @@ ${allowedPaths.map(p => `- ${p}`).join("\n")}
 
 // ラベルからリスクレベルを推定
 function inferRiskFromLabels(labels: string[]): "low" | "medium" | "high" {
-  const lowercaseLabels = labels.map(l => l.toLowerCase());
+  const lowercaseLabels = labels.map((l) => l.toLowerCase());
 
-  if (lowercaseLabels.some(l => 
-    l.includes("critical") || 
-    l.includes("security") || 
-    l.includes("breaking")
-  )) {
+  if (
+    lowercaseLabels.some(
+      (l) => l.includes("critical") || l.includes("security") || l.includes("breaking"),
+    )
+  ) {
     return "high";
   }
 
-  if (lowercaseLabels.some(l => 
-    l.includes("bug") || 
-    l.includes("fix") || 
-    l.includes("important")
-  )) {
+  if (
+    lowercaseLabels.some((l) => l.includes("bug") || l.includes("fix") || l.includes("important"))
+  ) {
     return "medium";
   }
 
@@ -153,7 +151,7 @@ export async function generateTasksFromIssue(
     allowedPaths: string[];
     instructionsPath?: string;
     timeoutSeconds?: number;
-  }
+  },
 ): Promise<IssueAnalysisResult> {
   const prompt = buildPromptFromIssue(issue, options.allowedPaths);
   const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
@@ -225,7 +223,7 @@ export async function generateTasksFromIssue(
 // IssueからシンプルにタスクをLLMなしで生成（フォールバック用）
 export function generateSimpleTaskFromIssue(
   issue: GitHubIssue,
-  allowedPaths: string[]
+  allowedPaths: string[],
 ): IssueAnalysisResult {
   const riskLevel = inferRiskFromLabels(issue.labels);
 
