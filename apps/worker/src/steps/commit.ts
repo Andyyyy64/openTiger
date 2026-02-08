@@ -16,6 +16,17 @@ export interface CommitResult {
   error?: string;
 }
 
+const FORBIDDEN_COMMIT_PATH_PATTERNS: RegExp[] = [
+  /^apps\/judge\/test-repo(?:\/|$)/,
+  /^apps\/judge\/repro(?:\/|$)/,
+];
+
+function findForbiddenChangedFiles(changedFiles: string[]): string[] {
+  return changedFiles.filter((file) =>
+    FORBIDDEN_COMMIT_PATH_PATTERNS.some((pattern) => pattern.test(file))
+  );
+}
+
 function isNonFastForwardPush(stderr: string, stdout: string): boolean {
   const message = `${stderr}\n${stdout}`.toLowerCase();
   return message.includes("fetch first")
@@ -52,6 +63,16 @@ export async function commitAndPush(
 ): Promise<CommitResult> {
   const { repoPath, branchName, task, changedFiles } = options;
   const repoMode = getRepoMode();
+  const forbiddenFiles = findForbiddenChangedFiles(changedFiles);
+
+  if (forbiddenFiles.length > 0) {
+    return {
+      success: false,
+      committed: false,
+      commitMessage: "",
+      error: `Refusing to commit forbidden paths: ${forbiddenFiles.join(", ")}`,
+    };
+  }
 
   console.log("Staging changes...");
 

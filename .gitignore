@@ -42,6 +42,8 @@ pnpm-debug.log*
 tmp/
 temp/
 .cache/
+apps/judge/test-repo/
+apps/judge/repro/
 
 # データベース（ローカル開発用）
 *.db

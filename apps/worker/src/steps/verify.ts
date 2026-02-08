@@ -64,6 +64,11 @@ const GENERATED_PATHS = [
   "**/coverage/**",
   "**/playwright-report/**",
   "**/test-results/**",
+  // Never treat judge scratch repos as task outputs
+  "apps/judge/test-repo",
+  "apps/judge/test-repo/**",
+  "apps/judge/repro",
+  "apps/judge/repro/**",
 ];
 const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
 const ENV_EXAMPLE_PATHS = ["**/.env.example"];
