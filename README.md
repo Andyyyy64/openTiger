@@ -4,9 +4,13 @@
 
 **Autonomous development that never stalls. Failures still converge to completion.**
 
+
 An orchestration system that coordinates multiple AI agents to autonomously run from requirements to implementation, judgement, and retries.  
 Completion rate in long-running operation is the first priority, with recovery and convergence built around inevitable failures.  
 Design principles are based on [Cursor Research: Scaling Long-Running Autonomous Coding](https://cursor.com/ja/blog/scaling-agents).
+
+![openTiger UI](assets/ui.png)
+
 
 ---
 
