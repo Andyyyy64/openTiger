@@ -1,56 +1,51 @@
 # openTiger
 
-**AI Agent Orchestration System for Autonomous Coding**
+**Autonomous development that never stalls. Failures still converge to completion.**
 
-複数のAIエージェントを協調させ、要件から実装・判定・再試行までを自律運転するオーケストレーションシステム。  
-設計思想は [Cursor Research: Scaling Long-Running Autonomous Coding](https://cursor.com/ja/blog/scaling-agents) をベースにしている。
-
----
-
-## 思想
-
-- 役割分離（Planner / Dispatcher / Worker / Judge / Cycle Manager）
-- 機械判定可能な完了条件
-- リース中心の並列制御
-- 冪等性と回復性を優先した長時間運用
+An orchestration system that coordinates multiple AI agents to autonomously run from requirements to implementation, judgement, and retries.  
+Completion rate in long-running operation is the first priority, with recovery and convergence built around inevitable failures.  
+Design principles are based on [Cursor Research: Scaling Long-Running Autonomous Coding](https://cursor.com/ja/blog/scaling-agents).
 
 ---
 
-## 主要コンポーネント
+Docs · [Index](docs/README.md) · [Flow](docs/flow.md) · [Modes](docs/mode.md) · [Agents](docs/agent)
+
+---
+
+## Highlights
+
+- Completion-first orchestration with recovery and convergence
+- Lease-centric parallel control for long-running workloads
+- Idempotent judgement with machine-judgable completion criteria
+- Non-destructive verification that avoids mutating project state
+- Role-separated agents with operational visibility in the Dashboard
+
+---
+
+## How it works (short)
+
+Requirements → Planner → Dispatcher → Workers/Testers/Docser → Judge → Cycle Manager (requeue/recover)
+
+---
+
+## Core Components
 
 - Planner
-  - requirement から task を生成
+  - Generate tasks from requirements
 - Dispatcher
-  - task 割り当てと並列制御
+  - Task assignment and parallel control
 - Worker / Tester / Docser
-  - 実装、テスト、ドキュメント更新
+  - Implementation, testing, and documentation updates
 - Judge
-  - 判定と遷移制御
+  - Judgement and transition control
 - Cycle Manager
-  - stuck回復、再投入、メトリクス管理
+  - Stuck recovery, requeueing, and metrics management
 
 ---
 
-## 最近の重要変更（2026-02-06）
+## Environment
 
-- Judge冪等化
-  - `runs.judged_at` / `judgement_version` を導入
-- `blockReason` 導入
-  - `awaiting_judge` / `needs_rework` / `needs_human`
-- failed/blocked の適応リトライ
-  - 失敗を `env/setup/policy/test/flaky/model` に分類
-- concurrency制御の一本化
-  - busy agent ベース
-- verifyの非破壊化
-  - verify中の `package.json` 自動編集を廃止
-- deniedCommands の二重防御
-  - verify前 + OpenCode実行前
-
----
-
-## 環境構築
-
-### 前提
+### Prerequisites
 
 - Node.js 20+
 - pnpm 9+
@@ -59,7 +54,7 @@
 - Redis
 - OpenCode CLI
 
-### セットアップ
+### Setup
 
 ```bash
 git clone git@github.com:Andyyyy64/openTiger.git
@@ -71,24 +66,22 @@ pnpm restart
 
 ---
 
-## クイックスタート
+## Quick Start
 
-1. requirement を用意
-2. Planner で task 生成
-3. Dispatcher/Worker/Judge/Cycle Manager を起動
-4. Dashboard で `QUEUE AGE MAX` / `BLOCKED > 30M` / `RETRY EXHAUSTED` を監視
-
----
-
-## ドキュメント
-
-- `docs/README.md` (索引)
-- `docs/flow.md` (状態遷移)
-- `docs/mode.md` (運用モード)
-- `docs/nonhumanoriented.md` (長時間運用原則)
-- `docs/task.md` (実装状況)
-- `docs/agent/*.md` (エージェント仕様)
+1. Prepare a requirement
+2. Generate tasks with the Planner
+3. Start Dispatcher/Worker/Judge/Cycle Manager
+4. Monitor `QUEUE AGE MAX` / `BLOCKED > 30M` / `RETRY EXHAUSTED` in the Dashboard
 
 ---
 
-最終更新: 2026-02-06
+## Documentation
+
+- `docs/README.md` (Index)
+- `docs/flow.md` (State transitions)
+- `docs/mode.md` (Operating modes)
+- `docs/nonhumanoriented.md` (Long-running operation principles)
+- `docs/task.md` (Implementation status)
+- `docs/agent/*.md` (Agent specifications)
+
+---
