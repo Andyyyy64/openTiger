@@ -3,13 +3,13 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@openTiger/db";
 import { config as configTable } from "@openTiger/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   CONFIG_KEYS,
-  DEFAULT_CONFIG,
   buildConfigRecord,
   rowToConfig,
 } from "../system-config.js";
+import { ensureConfigRow } from "../config-store.js";
 
 export const configRoute = new Hono();
 
@@ -18,74 +18,6 @@ const ALLOWED_KEYS = new Set(CONFIG_KEYS);
 const updateSchema = z.object({
   updates: z.record(z.string()),
 });
-
-async function ensureConfigRow() {
-  // Self-repair required columns so system_config works even if migration history is corrupted
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_wait_on_quota" text DEFAULT 'true' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_quota_retry_delay_ms" text DEFAULT '30000' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_count" text DEFAULT '1' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_count" text DEFAULT '1' NOT NULL`
-  );
-
-  const existing = await db.select().from(configTable).limit(1);
-  const current = existing[0];
-  if (current) {
-    const shouldNormalizeMaxConcurrentWorkers = (current.maxConcurrentWorkers ?? "").trim() === "10";
-    const shouldNormalizeDailyTokenLimit = (current.dailyTokenLimit ?? "").trim() === "50000000";
-    const shouldNormalizeHourlyTokenLimit = (current.hourlyTokenLimit ?? "").trim() === "5000000";
-    const shouldNormalizeTaskTokenLimit = (current.taskTokenLimit ?? "").trim() === "1000000";
-
-    if (
-      shouldNormalizeMaxConcurrentWorkers
-      || shouldNormalizeDailyTokenLimit
-      || shouldNormalizeHourlyTokenLimit
-      || shouldNormalizeTaskTokenLimit
-    ) {
-      const patch: Partial<typeof configTable.$inferInsert> = {
-        updatedAt: new Date(),
-      };
-      if (shouldNormalizeMaxConcurrentWorkers) {
-        patch.maxConcurrentWorkers = "-1";
-      }
-      if (shouldNormalizeDailyTokenLimit) {
-        patch.dailyTokenLimit = "-1";
-      }
-      if (shouldNormalizeHourlyTokenLimit) {
-        patch.hourlyTokenLimit = "-1";
-      }
-      if (shouldNormalizeTaskTokenLimit) {
-        patch.taskTokenLimit = "-1";
-      }
-
-      const [updated] = await db
-        .update(configTable)
-        .set(patch)
-        .where(eq(configTable.id, current.id))
-        .returning();
-      return updated ?? current;
-    }
-    return current;
-  }
-  const created = await db
-    .insert(configTable)
-    .values(buildConfigRecord(DEFAULT_CONFIG, { includeDefaults: true }))
-    .returning();
-  const row = created[0];
-  if (!row) {
-    throw new Error("Failed to create config");
-  }
-  return row;
-}
 
 configRoute.get("/", async (c) => {
   try {

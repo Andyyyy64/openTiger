@@ -47,14 +47,15 @@ function verifyWebhookSignature(
 async function recordWebhookEvent(
   eventType: string,
   action: string | undefined,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  deliveryId: string | undefined
 ): Promise<string> {
   const [event] = await db
     .insert(events)
     .values({
       type: `webhook.${eventType}${action ? `.${action}` : ""}`,
       entityType: "webhook",
-      entityId: String(payload.delivery ?? "unknown"),
+      entityId: deliveryId ?? "unknown",
       payload: {
         action,
         sender: payload.sender,
@@ -76,6 +77,8 @@ function extractTaskIdFromIssue(body: string | undefined): string | null {
 // GitHub Webhook receiving endpoint
 webhookRoute.post("/github", async (c) => {
   const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET;
+  const eventType = c.req.header("X-GitHub-Event")?.trim() || undefined;
+  const deliveryId = c.req.header("X-GitHub-Delivery")?.trim() || undefined;
 
   // Verify signature (only if secret is configured)
   if (webhookSecret) {
@@ -91,23 +94,24 @@ webhookRoute.post("/github", async (c) => {
     // In Hono, body can only be read once, so parse manually
     try {
       const payload = JSON.parse(rawBody) as Record<string, unknown>;
-      return await handleWebhookPayload(c, payload);
+      return await handleWebhookPayload(c, payload, { eventType, deliveryId });
     } catch {
       return c.json({ error: "Invalid JSON payload" }, 400);
     }
   }
 
-    // Parse directly if secret is not configured
+  // Parse directly if secret is not configured
   const payload = (await c.req.json()) as Record<string, unknown>;
-  return await handleWebhookPayload(c, payload);
+  return await handleWebhookPayload(c, payload, { eventType, deliveryId });
 });
 
 // Process webhook payload
 async function handleWebhookPayload(
   c: { json: (data: unknown, status?: number) => Response },
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  metadata: { eventType?: string; deliveryId?: string }
 ): Promise<Response> {
-  const eventType = payload["X-GitHub-Event"] as string | undefined;
+  const eventType = metadata.eventType;
   const action = payload.action as string | undefined;
 
   console.log(`[Webhook] Received: ${eventType ?? "unknown"} ${action ?? ""}`);
@@ -116,7 +120,8 @@ async function handleWebhookPayload(
   const eventId = await recordWebhookEvent(
     eventType ?? "unknown",
     action,
-    payload
+    payload,
+    metadata.deliveryId
   );
 
   // Process according to event type

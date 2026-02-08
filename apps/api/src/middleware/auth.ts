@@ -17,7 +17,7 @@ interface AuthConfig {
 
 // Default configuration
 const defaultConfig: AuthConfig = {
-  skipPaths: [/^\/health/, /^\/api\/webhook\/github/],
+  skipPaths: [/^\/health/, /^\/(?:api\/)?webhook\/github/],
   apiKeys: process.env.API_KEYS?.split(",").map((k) => k.trim()) ?? [],
 };
 

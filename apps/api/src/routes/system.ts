@@ -14,10 +14,20 @@ import {
   leases,
   agents,
 } from "@openTiger/db/schema";
-import { configToEnv, DEFAULT_CONFIG, buildConfigRecord } from "../system-config.js";
+import { configToEnv } from "../system-config.js";
+import { ensureConfigRow } from "../config-store.js";
 import { getAuthInfo } from "../middleware/index.js";
 import { createRepo, getOctokit, getRepoInfo } from "@openTiger/vcs";
 import { obliterateAllQueues } from "@openTiger/queue";
+import {
+  parseAllowedPathsFromIssueBody,
+  parseDependencyIssueNumbersFromIssueBody,
+  inferRoleFromLabels,
+  inferRiskFromLabels,
+  inferPriorityFromLabels,
+  parseLinkedIssueNumbersFromPr,
+  extractIssueNumberFromTaskContext,
+} from "./system-issue-utils.js";
 
 type RestartStatus = {
   status: "idle" | "running" | "completed" | "failed";
@@ -112,7 +122,6 @@ const AUTO_RESTART_MAX_ATTEMPTS = Number.parseInt(
   process.env.SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS ?? "-1",
   10
 );
-const DEFAULT_REPLAN_COMMAND = "pnpm --filter @openTiger/planner run start:fresh";
 
 type GitHubContext = {
   token: string;
@@ -195,13 +204,7 @@ function canControlSystem(method: string): boolean {
   if (method === "api-key" || method === "bearer") {
     return true;
   }
-  // Allow UI operations when authentication is disabled
-  const hasApiSecret = Boolean(process.env.API_SECRET?.trim());
-  const hasApiKeys = Boolean(process.env.API_KEYS?.trim());
-  if (!hasApiSecret && !hasApiKeys) {
-    return true;
-  }
-  // Minimal safety valve to allow testing from UI in development environment
+  // Explicit safety valve for local/dev-only operation
   return process.env.OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL === "true";
 }
 
@@ -269,182 +272,6 @@ function resolveGitHubContext(configRow: ConfigRow): GitHubContext | null {
     return null;
   }
   return { token, owner, repo };
-}
-
-function normalizeAllowedPathToken(token: string): string[] {
-  let value = token.trim();
-  value = value.replace(/^`+|`+$/g, "");
-  value = value.replace(/^"+|"+$/g, "");
-  value = value.replace(/^'+|'+$/g, "");
-  value = value.replace(/^\.\//, "");
-  value = value.trim();
-
-  if (!value || value === "." || value === "/" || value === "./") {
-    return ["**"];
-  }
-  if (value.includes("*")) {
-    return [value];
-  }
-  if (value.endsWith("/")) {
-    value = value.slice(0, -1);
-  }
-
-  const basename = value.split("/").pop() ?? value;
-  const looksLikeFile = basename.includes(".");
-  if (looksLikeFile) {
-    return [value];
-  }
-  return [value, `${value}/**`];
-}
-
-function parseAllowedPathsFromIssueBody(body: string): string[] {
-  if (!body) {
-    return ["**"];
-  }
-  const lines = body.split(/\r?\n/);
-  const tokens: string[] = [];
-  let inSection = false;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (/^#{1,6}\s*allowed\s*paths?\b/i.test(trimmed)) {
-      inSection = true;
-      continue;
-    }
-    if (inSection && /^#{1,6}\s+/.test(trimmed)) {
-      break;
-    }
-    if (!inSection) {
-      continue;
-    }
-
-    const bulletMatch = trimmed.match(/^[-*]\s+(.+)$/);
-    if (bulletMatch?.[1]) {
-      tokens.push(bulletMatch[1]);
-      continue;
-    }
-    if (trimmed.length > 0) {
-      tokens.push(trimmed);
-    }
-  }
-
-  if (tokens.length === 0) {
-    const inlineMatch = body.match(/allowed\s*paths?\s*:\s*([^\n]+)/i);
-    if (inlineMatch?.[1]) {
-      tokens.push(...inlineMatch[1].split(","));
-    }
-  }
-
-  const normalized = new Set<string>();
-  for (const token of tokens) {
-    for (const value of normalizeAllowedPathToken(token)) {
-      normalized.add(value);
-    }
-  }
-
-  if (normalized.size === 0) {
-    normalized.add("**");
-  }
-  return Array.from(normalized);
-}
-
-function parseIssueNumberRefs(text: string): number[] {
-  const numbers = new Set<number>();
-  for (const match of text.matchAll(/(?:#|\/issues\/)(\d{1,10})\b/g)) {
-    const parsed = Number.parseInt(match[1] ?? "", 10);
-    if (Number.isInteger(parsed) && parsed > 0) {
-      numbers.add(parsed);
-    }
-  }
-  return Array.from(numbers);
-}
-
-function parseDependencyIssueNumbersFromIssueBody(body: string): number[] {
-  if (!body) {
-    return [];
-  }
-
-  const numbers = new Set<number>();
-  const lines = body.split(/\r?\n/);
-  let inDependencySection = false;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.length === 0) {
-      continue;
-    }
-
-    if (/^#{1,6}\s*(dependencies?|depends\s*on|blocked\s*by|dependency|依存関係)\b/i.test(trimmed)) {
-      inDependencySection = true;
-      continue;
-    }
-    if (inDependencySection && /^#{1,6}\s+/.test(trimmed)) {
-      inDependencySection = false;
-    }
-
-    if (inDependencySection) {
-      for (const number of parseIssueNumberRefs(trimmed)) {
-        numbers.add(number);
-      }
-      continue;
-    }
-
-    if (/(depends?\s*on|blocked\s*by|requires?|dependency|依存)/i.test(trimmed)) {
-      for (const number of parseIssueNumberRefs(trimmed)) {
-        numbers.add(number);
-      }
-    }
-  }
-
-  return Array.from(numbers);
-}
-
-function inferRoleFromLabels(labels: string[]): "worker" | "tester" | "docser" {
-  const lower = labels.map((label) => label.toLowerCase());
-  if (lower.some((label) => label.includes("docs") || label.includes("docser"))) {
-    return "docser";
-  }
-  if (lower.some((label) => label.includes("test") || label.includes("qa") || label.includes("e2e"))) {
-    return "tester";
-  }
-  return "worker";
-}
-
-function inferRiskFromLabels(labels: string[]): "low" | "medium" | "high" {
-  const lower = labels.map((label) => label.toLowerCase());
-  if (lower.some((label) => label.includes("critical") || label.includes("security") || label.includes("urgent"))) {
-    return "high";
-  }
-  if (lower.some((label) => label.includes("bug") || label.includes("important") || label.includes("fix"))) {
-    return "medium";
-  }
-  return "low";
-}
-
-function inferPriorityFromLabels(labels: string[]): number {
-  const lower = labels.map((label) => label.toLowerCase());
-  if (lower.some((label) => label.includes("priority:high") || label.includes("p0") || label.includes("p1"))) {
-    return 90;
-  }
-  if (lower.some((label) => label.includes("priority:medium") || label.includes("p2"))) {
-    return 60;
-  }
-  return 40;
-}
-
-function extractIssueNumberFromTaskContext(context: unknown): number | null {
-  if (!context || typeof context !== "object") {
-    return null;
-  }
-  const issue = (context as { issue?: unknown }).issue;
-  if (!issue || typeof issue !== "object") {
-    return null;
-  }
-  const number = (issue as { number?: unknown }).number;
-  if (typeof number !== "number" || !Number.isInteger(number)) {
-    return null;
-  }
-  return number;
 }
 
 async function resolveIssueTaskCommands(): Promise<string[]> {
@@ -529,39 +356,6 @@ async function fetchOpenPrCount(context: GitHubContext): Promise<OpenPrSnapshot>
       url: row.html_url,
     })),
   };
-}
-
-function parseLinkedIssueNumbersFromPr(title: string, body: string): number[] {
-  const numbers = new Set<number>();
-  const lines = `${title}\n${body}`.split(/\r?\n/);
-
-  for (const line of lines) {
-    const normalized = line.trim();
-    if (!normalized) {
-      continue;
-    }
-
-    if (
-      /\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?|refs?|related|issue|closes|fixes|resolves)\b/i.test(
-        normalized
-      )
-    ) {
-      for (const issueNumber of parseIssueNumberRefs(normalized)) {
-        numbers.add(issueNumber);
-      }
-    }
-  }
-
-  // Handle cases where multiple closing keywords appear on one line
-  for (const match of `${title}\n${body}`.matchAll(
-    /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b([^\n]+)/gi
-  )) {
-    for (const issueNumber of parseIssueNumberRefs(match[1] ?? "")) {
-      numbers.add(issueNumber);
-    }
-  }
-
-  return Array.from(numbers);
 }
 
 async function createTaskFromIssue(
@@ -1609,85 +1403,6 @@ function startRestart(): RestartStatus {
 
   child.unref();
   return restartStatus;
-}
-
-async function ensureConfigRow() {
-  // Complement required columns at system startup even if migration history is corrupted
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_wait_on_quota" text DEFAULT 'true' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_quota_retry_delay_ms" text DEFAULT '30000' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_count" text DEFAULT '1' NOT NULL`
-  );
-  await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_count" text DEFAULT '1' NOT NULL`
-  );
-
-  const existing = await db.select().from(configTable).limit(1);
-  const current = existing[0];
-  if (current) {
-    const legacyReplanCommands = new Set([
-      "",
-      "pnpm --filter @openTiger/planner start",
-      "pnpm --filter @sebastian-code/planner start",
-    ]);
-    const shouldNormalizeReplanCommand = legacyReplanCommands.has(
-      (current.replanCommand ?? "").trim()
-    );
-    const shouldNormalizeMaxConcurrentWorkers = (current.maxConcurrentWorkers ?? "").trim() === "10";
-    const shouldNormalizeDailyTokenLimit = (current.dailyTokenLimit ?? "").trim() === "50000000";
-    const shouldNormalizeHourlyTokenLimit = (current.hourlyTokenLimit ?? "").trim() === "5000000";
-    const shouldNormalizeTaskTokenLimit = (current.taskTokenLimit ?? "").trim() === "1000000";
-
-    if (
-      shouldNormalizeReplanCommand
-      || shouldNormalizeMaxConcurrentWorkers
-      || shouldNormalizeDailyTokenLimit
-      || shouldNormalizeHourlyTokenLimit
-      || shouldNormalizeTaskTokenLimit
-    ) {
-      const patch: Partial<typeof configTable.$inferInsert> = {
-        updatedAt: new Date(),
-      };
-      if (shouldNormalizeReplanCommand) {
-        patch.replanCommand = DEFAULT_REPLAN_COMMAND;
-      }
-      if (shouldNormalizeMaxConcurrentWorkers) {
-        patch.maxConcurrentWorkers = "-1";
-      }
-      if (shouldNormalizeDailyTokenLimit) {
-        patch.dailyTokenLimit = "-1";
-      }
-      if (shouldNormalizeHourlyTokenLimit) {
-        patch.hourlyTokenLimit = "-1";
-      }
-      if (shouldNormalizeTaskTokenLimit) {
-        patch.taskTokenLimit = "-1";
-      }
-      const [updated] = await db
-        .update(configTable)
-        .set(patch)
-        .where(eq(configTable.id, current.id))
-        .returning();
-      return updated ?? current;
-    }
-    return current;
-  }
-  const created = await db
-    .insert(configTable)
-    .values(buildConfigRecord(DEFAULT_CONFIG, { includeDefaults: true }))
-    .returning();
-  const row = created[0];
-  if (!row) {
-    throw new Error("Failed to create config");
-  }
-  return row;
 }
 
 systemRoute.get("/restart", (c) => {
