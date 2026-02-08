@@ -10,9 +10,9 @@ export const JudgementsPage: React.FC = () => {
   });
 
   return (
-    <div className="p-6 text-[var(--color-term-fg)]">
+    <div className="p-6 text-term-fg">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
+        <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
           &gt; Judge_Audit_Log
         </h1>
         <span className="text-xs text-zinc-500">
@@ -62,9 +62,9 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
   const diffErrorMessage = diffError instanceof Error ? diffError.message : 'Could not retrieve diff data.';
 
   return (
-    <section className="border border-[var(--color-term-border)] p-0 font-mono">
+    <section className="border border-term-border p-0 font-mono">
       {/* Event Header */}
-      <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex flex-wrap items-center justify-between gap-2">
+      <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-4 text-xs">
           <span className="text-zinc-500">{new Date(event.createdAt).toLocaleString()}</span>
           <div className={`font-bold ${getVerdictColor(verdict)}`}>
@@ -73,7 +73,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
 
           <div className="flex items-center gap-2 text-zinc-400">
             <span>TASK:</span>
-            <Link to={`/tasks/${event.taskId}`} className="text-[var(--color-term-tiger)] hover:underline">
+            <Link to={`/tasks/${event.taskId}`} className="text-term-tiger hover:underline">
               {event.taskId.slice(0, 8)}
             </Link>
           </div>
@@ -92,17 +92,17 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
           <div className={`${getStatusColor(ciStatus)}`}>
             CI:{ciStatus.toUpperCase()}
           </div>
-          <div className={policyPass ? 'text-[var(--color-term-tiger)]' : 'text-red-500'}>
+          <div className={policyPass ? 'text-term-tiger' : 'text-red-500'}>
             POLICY:{policyPass ? 'PASS' : 'FAIL'}
           </div>
-          <div className={llmPass ? 'text-[var(--color-term-tiger)]' : 'text-yellow-500'}>
+          <div className={llmPass ? 'text-term-tiger' : 'text-yellow-500'}>
             LLM:{llmPass ? 'PASS' : 'REV'}
           </div>
         </div>
       </div>
 
       {/* Info Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-[var(--color-term-border)] text-xs">
+      <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-term-border text-xs">
         {/* Merge Info */}
         <div className="p-4 space-y-2">
           <div className="text-zinc-500 uppercase font-bold tracking-wider mb-2">Merge_Status</div>
@@ -129,7 +129,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
             {payload.mergeResult && (
               <>
                 <span className="text-zinc-500">LOCAL_MERGE</span>
-                <span className={payload.mergeResult.success ? 'text-[var(--color-term-tiger)]' : 'text-red-500'}>
+                <span className={payload.mergeResult.success ? 'text-term-tiger' : 'text-red-500'}>
                   {payload.mergeResult.success ? 'SUCCESS' : 'FAILED'}
                 </span>
               </>
@@ -167,10 +167,10 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
       </div>
 
       {/* Diff Toggle Bar */}
-      <div className="border-t border-[var(--color-term-border)] bg-[var(--color-term-border)]/5 px-4 py-2">
+      <div className="border-t border-term-border bg-term-border/5 px-4 py-2">
         <button
           onClick={() => setShowDiff(!showDiff)}
-          className="text-xs text-zinc-400 hover:text-[var(--color-term-fg)] flex items-center gap-2 hover:underline"
+          className="text-xs text-zinc-400 hover:text-term-fg flex items-center gap-2 hover:underline"
         >
           {showDiff ? '[-] HIDE_DIFF' : '[+] SHOW_DIFF'}
           <span className="text-zinc-600 ml-2">
@@ -181,7 +181,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
 
       {/* Diff Viewer */}
       {showDiff && (
-        <div className="border-t border-[var(--color-term-border)] p-4 bg-black">
+        <div className="border-t border-term-border p-4 bg-black">
           <div className="mb-2 text-xs text-zinc-500 flex justify-between">
             <span>SOURCE: {diffData?.source || 'unknown'}</span>
             {diffData?.truncated && <span className="text-yellow-500">[ TRUNCATED ]</span>}
@@ -205,7 +205,7 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
 const getVerdictColor = (verdict: string) => {
   switch (verdict) {
     case 'approve':
-      return 'text-[var(--color-term-tiger)]';
+      return 'text-term-tiger';
     case 'request_changes':
       return 'text-red-500';
     case 'needs_human':
@@ -218,7 +218,7 @@ const getVerdictColor = (verdict: string) => {
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'success':
-      return 'text-[var(--color-term-tiger)]';
+      return 'text-term-tiger';
     case 'failure':
     case 'error':
       return 'text-red-500';

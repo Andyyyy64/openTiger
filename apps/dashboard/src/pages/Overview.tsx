@@ -32,8 +32,8 @@ export const OverviewPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 text-[var(--color-term-fg)]">
-      <h1 className="text-xl font-bold mb-8 uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
+    <div className="p-6 text-term-fg">
+      <h1 className="text-xl font-bold mb-8 uppercase tracking-widest text-term-tiger font-pixel">
         &gt; System_Overview_
       </h1>
 
@@ -79,8 +79,8 @@ export const OverviewPage: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <div className="border border-[var(--color-term-border)] p-0">
-          <div className="border-b border-[var(--color-term-border)] bg-[var(--color-term-border)]/10 px-4 py-2 flex items-center justify-between">
+        <div className="border border-term-border p-0">
+          <div className="border-b border-term-border bg-term-border/10 px-4 py-2 flex items-center justify-between">
             <h2 className="text-sm font-bold uppercase tracking-wider">Recent Activity Log</h2>
             <span className="text-xs text-zinc-500">tail -f runs.log</span>
           </div>
@@ -92,8 +92,8 @@ export const OverviewPage: React.FC = () => {
                 </span>
                 <div className="flex-1">
                   <div className="flex justify-between">
-                    <span>Agent <span className="text-[var(--color-term-tiger)]">{run.agentId}</span> started run</span>
-                    <span className={`text-xs uppercase ${run.status === 'success' ? 'text-[var(--color-term-tiger)]' : 'text-red-500'}`}>
+                    <span>Agent <span className="text-term-tiger">{run.agentId}</span> started run</span>
+                    <span className={`text-xs uppercase ${run.status === 'success' ? 'text-term-tiger' : 'text-red-500'}`}>
                       [{run.status}]
                     </span>
                   </div>
@@ -105,8 +105,8 @@ export const OverviewPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="border border-[var(--color-term-border)] p-0">
-          <div className="border-b border-[var(--color-term-border)] bg-[var(--color-term-border)]/10 px-4 py-2 flex items-center justify-between">
+        <div className="border border-term-border p-0">
+          <div className="border-b border-term-border bg-term-border/10 px-4 py-2 flex items-center justify-between">
             <h2 className="text-sm font-bold uppercase tracking-wider">Process List (Tasks)</h2>
             <span className="text-xs text-zinc-500">top</span>
           </div>
@@ -120,7 +120,7 @@ export const OverviewPage: React.FC = () => {
               <div key={task.id} className="flex items-center text-xs">
                 <span className="w-20 text-blue-400">{task.id.slice(0, 8)}</span>
                 <span className="flex-1 truncate pr-4 text-zinc-300">{task.title}</span>
-                <span className="w-20 text-right text-[var(--color-term-tiger)] animate-pulse">RUNNING</span>
+                <span className="w-20 text-right text-term-tiger animate-pulse">RUNNING</span>
               </div>
             ))}
             {tasks?.filter(t => t.status === 'running').length === 0 && (
@@ -144,11 +144,11 @@ const StatCard = ({
   subValue: string;
   alert?: boolean;
 }) => (
-  <div className="border border-[var(--color-term-border)] p-4 hover:bg-[var(--color-term-border)]/10 transition-colors cursor-default">
+  <div className="border border-term-border p-4 hover:bg-term-border/10 transition-colors cursor-default">
     <div className="flex justify-between items-start mb-2">
       <h3 className="text-zinc-500 text-xs font-bold uppercase">{title}</h3>
     </div>
-    <p className={`text-3xl font-pixel mb-1 ${alert ? 'text-red-500' : 'text-[var(--color-term-tiger)]'}`}>{value}</p>
+    <p className={`text-3xl font-pixel mb-1 ${alert ? 'text-red-500' : 'text-term-tiger'}`}>{value}</p>
     <p className="text-zinc-600 text-xs font-pixel">{subValue}</p>
   </div>
 );

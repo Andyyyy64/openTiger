@@ -27,9 +27,9 @@ export const AgentsPage: React.FC = () => {
     idleWorkers.length > 0;
 
   return (
-    <div className="p-6 text-[var(--color-term-fg)]">
+    <div className="p-6 text-term-fg">
       <div className="flex items-center justify-between mb-8">
-        <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
+        <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
           &gt; Connected_Nodes (Agents)
         </h1>
         <span className="text-xs text-zinc-500">{agents?.length ?? 0} NODES ONLINE</span>
@@ -43,8 +43,8 @@ export const AgentsPage: React.FC = () => {
         </div>
       )}
 
-      <div className="border border-[var(--color-term-border)]">
-        <div className="grid grid-cols-12 gap-4 px-4 py-2 border-b border-[var(--color-term-border)] bg-[var(--color-term-border)]/10 text-xs font-bold text-zinc-500 uppercase">
+      <div className="border border-term-border">
+        <div className="grid grid-cols-12 gap-4 px-4 py-2 border-b border-term-border bg-term-border/10 text-xs font-bold text-zinc-500 uppercase">
           <div className="col-span-3">Node ID / Type</div>
           <div className="col-span-2">Status</div>
           <div className="col-span-2">Provider</div>
@@ -59,15 +59,15 @@ export const AgentsPage: React.FC = () => {
         ) : agents?.length === 0 ? (
           <div className="py-12 text-center text-zinc-500 font-mono">&gt; No nodes detected</div>
         ) : (
-          <div className="divide-y divide-[var(--color-term-border)] font-mono text-sm">
+          <div className="divide-y divide-term-border font-mono text-sm">
             {agents?.map((agent) => (
               <Link
                 key={agent.id}
                 to={`/agents/${agent.id}`}
-                className="grid grid-cols-12 gap-4 px-4 py-3 hover:bg-[var(--color-term-tiger)]/5 transition-colors group items-center"
+                className="grid grid-cols-12 gap-4 px-4 py-3 hover:bg-term-tiger/5 transition-colors group items-center"
               >
                 <div className="col-span-3 overflow-hidden">
-                  <div className="font-bold text-[var(--color-term-fg)] group-hover:text-[var(--color-term-tiger)] truncate">
+                  <div className="font-bold text-term-fg group-hover:text-term-tiger truncate">
                     {agent.id}
                   </div>
                   <div className="text-xs text-zinc-500 uppercase flex gap-2 mt-1">
@@ -76,7 +76,7 @@ export const AgentsPage: React.FC = () => {
                 </div>
 
                 <div className="col-span-2">
-                  <span className={`text-xs uppercase px-1 ${agent.status === 'busy' ? 'bg-[var(--color-term-tiger)] text-black font-bold animate-pulse' : 'text-zinc-500'}`}>
+                  <span className={`text-xs uppercase px-1 ${agent.status === 'busy' ? 'bg-term-tiger text-black font-bold animate-pulse' : 'text-zinc-500'}`}>
                     {agent.status === 'busy' ? 'PROCESSING' : 'IDLE'}
                   </span>
                 </div>
@@ -90,11 +90,11 @@ export const AgentsPage: React.FC = () => {
                   {agent.status === 'busy' ? (
                     <div className="w-full">
                       <div className="flex justify-between mb-1">
-                        <span className="text-[var(--color-term-tiger)]">EXEC_TASK</span>
+                        <span className="text-term-tiger">EXEC_TASK</span>
                         <span className="text-zinc-500">{agent.currentTaskId?.slice(0, 8)}</span>
                       </div>
                       <div className="w-full bg-zinc-800 h-2">
-                        <div className="h-full bg-[var(--color-term-tiger)] w-[60%] repeating-linear-gradient-animation"></div>
+                        <div className="h-full bg-term-tiger w-[60%] repeating-linear-gradient-animation"></div>
                       </div>
                     </div>
                   ) : (

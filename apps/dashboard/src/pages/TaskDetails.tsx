@@ -30,8 +30,8 @@ export const TaskDetailsPage: React.FC = () => {
   if (!task) return <div className="p-8 text-center text-red-500 font-mono">&gt; ERR: Task not found in registry</div>;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto text-[var(--color-term-fg)] font-mono">
-      <Link to="/tasks" className="inline-block text-xs text-zinc-500 hover:text-[var(--color-term-tiger)] mb-6 group">
+    <div className="p-6 max-w-5xl mx-auto text-term-fg font-mono">
+      <Link to="/tasks" className="inline-block text-xs text-zinc-500 hover:text-term-tiger mb-6 group">
         &lt; cd ..
       </Link>
 
@@ -43,15 +43,15 @@ export const TaskDetailsPage: React.FC = () => {
             </span>
             <span className="text-zinc-500 text-xs">ID: {task.id}</span>
           </div>
-          <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
+          <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
             &gt; Task: {task.title}
           </h1>
         </div>
         <div className="flex gap-4">
-          <button className="text-zinc-400 hover:text-[var(--color-term-fg)] border border-zinc-700 hover:border-[var(--color-term-fg)] px-4 py-1 text-xs font-bold uppercase transition-all">
+          <button className="text-zinc-400 hover:text-term-fg border border-zinc-700 hover:border-term-fg px-4 py-1 text-xs font-bold uppercase transition-all">
             [ EDIT_CONFIG ]
           </button>
-          <button className="text-[var(--color-term-tiger)] border border-[var(--color-term-tiger)] hover:bg-[var(--color-term-tiger)] hover:text-black px-4 py-1 text-xs font-bold uppercase transition-all">
+          <button className="text-term-tiger border border-term-tiger hover:bg-term-tiger hover:text-black px-4 py-1 text-xs font-bold uppercase transition-all">
             [ EXECUTE_RUN ]
           </button>
         </div>
@@ -60,8 +60,8 @@ export const TaskDetailsPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           {/* Goal Section */}
-          <section className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <section className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <h2 className="text-sm font-bold uppercase tracking-wider">01_Objective_&_Criteria</h2>
             </div>
             <div className="p-4">
@@ -72,8 +72,8 @@ export const TaskDetailsPage: React.FC = () => {
           </section>
 
           {/* Context Section */}
-          <section className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <section className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <h2 className="text-sm font-bold uppercase tracking-wider">02_Context_Data</h2>
             </div>
             <div className="p-4 space-y-4">
@@ -101,8 +101,8 @@ export const TaskDetailsPage: React.FC = () => {
           </section>
 
           {/* Execution History */}
-          <section className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <section className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <h2 className="text-sm font-bold uppercase tracking-wider">Execution_Log</h2>
             </div>
             <div className="overflow-x-auto">
@@ -112,7 +112,7 @@ export const TaskDetailsPage: React.FC = () => {
                 <div className="p-8 text-center text-zinc-500 italic">// No execution history found.</div>
               ) : (
                 <table className="w-full text-left text-xs">
-                  <thead className="text-zinc-500 border-b border-[var(--color-term-border)]">
+                  <thead className="text-zinc-500 border-b border-term-border">
                     <tr>
                       <th className="px-4 py-2 font-normal uppercase">Agent_ID</th>
                       <th className="px-4 py-2 font-normal uppercase">Status</th>
@@ -120,16 +120,16 @@ export const TaskDetailsPage: React.FC = () => {
                       <th className="px-4 py-2 font-normal uppercase">Started_At</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[var(--color-term-border)]">
+                  <tbody className="divide-y divide-term-border">
                     {runs?.map((run) => (
                       <tr
                         key={run.id}
                         onClick={() => navigate(`/runs/${run.id}`)}
-                        className="hover:bg-[var(--color-term-fg)]/5 transition-colors cursor-pointer group"
+                        className="hover:bg-term-fg/5 transition-colors cursor-pointer group"
                       >
-                        <td className="px-4 py-2 text-[var(--color-term-fg)] group-hover:text-[var(--color-term-tiger)]">{run.agentId}</td>
+                        <td className="px-4 py-2 text-term-fg group-hover:text-term-tiger">{run.agentId}</td>
                         <td className="px-4 py-2">
-                          <span className={`font-bold ${run.status === 'success' ? 'text-[var(--color-term-tiger)]' : run.status === 'failed' ? 'text-red-500' : 'text-blue-400'}`}>
+                          <span className={`font-bold ${run.status === 'success' ? 'text-term-tiger' : run.status === 'failed' ? 'text-red-500' : 'text-blue-400'}`}>
                             [{run.status.toUpperCase()}]
                           </span>
                         </td>
@@ -150,8 +150,8 @@ export const TaskDetailsPage: React.FC = () => {
 
         <div className="space-y-6">
           {/* Configuration Card */}
-          <section className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <section className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <h2 className="text-sm font-bold uppercase tracking-wider">Params</h2>
             </div>
             <div className="p-4 space-y-3 text-xs">
@@ -161,23 +161,23 @@ export const TaskDetailsPage: React.FC = () => {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">PRIORITY</span>
-                <span className="text-[var(--color-term-fg)]">{task.priority}</span>
+                <span className="text-term-fg">{task.priority}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">ROLE</span>
-                <span className="text-[var(--color-term-fg)]">{task.role?.toUpperCase() ?? 'WORKER'}</span>
+                <span className="text-term-fg">{task.role?.toUpperCase() ?? 'WORKER'}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">TIMEBOX</span>
-                <span className="text-[var(--color-term-fg)]">{task.timeboxMinutes}m</span>
+                <span className="text-term-fg">{task.timeboxMinutes}m</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">RETRY</span>
-                <span className="text-[var(--color-term-fg)]">{formatRetrySummary(task.retry, now)}</span>
+                <span className="text-term-fg">{formatRetrySummary(task.retry, now)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 uppercase">RETRY_COUNT</span>
-                <span className="text-[var(--color-term-fg)]">
+                <span className="text-term-fg">
                   {task.retry?.retryCount ?? task.retryCount}/{
                     task.retry?.retryLimit === -1 ? '∞' : (task.retry?.retryLimit ?? '-')
                   }
@@ -187,8 +187,8 @@ export const TaskDetailsPage: React.FC = () => {
           </section>
 
           {/* Allowed Paths */}
-          <section className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <section className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <h2 className="text-sm font-bold uppercase tracking-wider">Scope: Allowed_Paths</h2>
             </div>
             <div className="p-4 space-y-1">
@@ -202,8 +202,8 @@ export const TaskDetailsPage: React.FC = () => {
           </section>
 
           {/* Commands */}
-          <section className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <section className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <h2 className="text-sm font-bold uppercase tracking-wider">Verification_Cmds</h2>
             </div>
             <div className="p-4 space-y-1">
@@ -217,8 +217,8 @@ export const TaskDetailsPage: React.FC = () => {
           </section>
 
           {/* Dependencies */}
-          <section className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <section className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <h2 className="text-sm font-bold uppercase tracking-wider">Dependencies</h2>
             </div>
             <div className="p-4">
@@ -228,7 +228,7 @@ export const TaskDetailsPage: React.FC = () => {
                     <Link
                       key={dependencyId}
                       to={`/tasks/${dependencyId}`}
-                      className="block text-xs font-mono text-[var(--color-term-fg)] hover:text-[var(--color-term-tiger)] hover:underline break-all"
+                      className="block text-xs font-mono text-term-fg hover:text-term-tiger hover:underline break-all"
                     >
                       &gt; {dependencyId}
                     </Link>
@@ -247,7 +247,7 @@ export const TaskDetailsPage: React.FC = () => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'done': return 'text-[var(--color-term-tiger)]';
+    case 'done': return 'text-term-tiger';
     case 'running': return 'text-blue-400 animate-pulse';
     case 'failed': return 'text-red-500';
     case 'blocked': return 'text-yellow-500';
@@ -259,7 +259,7 @@ const getRiskColor = (risk: string) => {
   switch (risk) {
     case 'high': return 'text-red-500 font-bold';
     case 'medium': return 'text-yellow-500';
-    default: return 'text-[var(--color-term-tiger)]';
+    default: return 'text-term-tiger';
   }
 };
 

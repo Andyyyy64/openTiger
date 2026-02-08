@@ -42,34 +42,34 @@ export const AgentDetailsPage: React.FC = () => {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 text-[var(--color-term-fg)]">
-      <Link to="/agents" className="inline-block text-xs font-mono text-zinc-500 hover:text-[var(--color-term-tiger)] mb-2 group">
+    <div className="p-6 max-w-5xl mx-auto space-y-6 text-term-fg">
+      <Link to="/agents" className="inline-block text-xs font-mono text-zinc-500 hover:text-term-tiger mb-2 group">
         &lt; cd ..
       </Link>
 
-      <section className="border border-[var(--color-term-border)] p-0">
-        <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex flex-wrap items-center justify-between gap-4">
+      <section className="border border-term-border p-0">
+        <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold uppercase text-[var(--color-term-fg)] tracking-wide">
+            <h1 className="text-xl font-bold uppercase text-term-fg tracking-wide">
               Node@{agent.id}
             </h1>
             <div className="flex gap-4 mt-1 text-xs font-mono text-zinc-500">
               <span>ROLE: {agent.role.toUpperCase()}</span>
-              <span>STATUS: <span className={agent.status === 'idle' ? 'text-zinc-500' : 'text-[var(--color-term-tiger)]'}>{agent.status.toUpperCase()}</span></span>
+              <span>STATUS: <span className={agent.status === 'idle' ? 'text-zinc-500' : 'text-term-tiger'}>{agent.status.toUpperCase()}</span></span>
             </div>
           </div>
 
           <div className="text-right text-xs font-mono text-zinc-500">
             <div>LAST_HEARTBEAT</div>
-            <div className="text-[var(--color-term-fg)]">
+            <div className="text-term-fg">
               {agent.lastHeartbeat ? new Date(agent.lastHeartbeat).toLocaleString() : 'NEVER'}
             </div>
           </div>
         </div>
       </section>
 
-      <section className="border border-[var(--color-term-border)] p-0 flex flex-col h-[600px]">
-        <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex items-center justify-between">
+      <section className="border border-term-border p-0 flex flex-col h-[600px]">
+        <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex items-center justify-between">
           <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
             Console_Output (tail -n {LOG_LINES})
           </span>
@@ -90,7 +90,7 @@ export const AgentDetailsPage: React.FC = () => {
           {!isLogLoading && !logError && !logData?.log && (
             <div className="text-zinc-600 italic">// Console output is empty.</div>
           )}
-          <div className="mt-2 w-2 h-4 bg-[var(--color-term-tiger)] animate-[pulse_1s_infinite]"></div>
+          <div className="mt-2 w-2 h-4 bg-term-tiger animate-[pulse_1s_infinite]"></div>
         </div>
       </section>
     </div>

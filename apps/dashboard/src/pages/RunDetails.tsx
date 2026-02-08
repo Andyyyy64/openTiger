@@ -33,8 +33,8 @@ export const RunDetailsPage: React.FC = () => {
   const { run, artifacts } = data;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto text-[var(--color-term-fg)] font-mono">
-      <Link to="/runs" className="inline-block text-xs text-zinc-500 hover:text-[var(--color-term-tiger)] mb-6 group">
+    <div className="p-6 max-w-5xl mx-auto text-term-fg font-mono">
+      <Link to="/runs" className="inline-block text-xs text-zinc-500 hover:text-term-tiger mb-6 group">
         &lt; cd ..
       </Link>
 
@@ -46,11 +46,11 @@ export const RunDetailsPage: React.FC = () => {
             </span>
             <span className="text-zinc-500 text-xs">ID: {run.id}</span>
           </div>
-          <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
+          <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
             &gt; Exec_Trace@{run.agentId}
           </h1>
           <p className="text-zinc-500 text-xs mt-1">
-            TARGET_TASK: <Link to={`/tasks/${run.taskId}`} className="hover:text-[var(--color-term-fg)] underline">{run.taskId}</Link>
+            TARGET_TASK: <Link to={`/tasks/${run.taskId}`} className="hover:text-term-fg underline">{run.taskId}</Link>
           </p>
         </div>
       </div>
@@ -70,8 +70,8 @@ export const RunDetailsPage: React.FC = () => {
           )}
 
           {/* Logs / Output */}
-          <section className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <section className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">System_Log_Output</span>
             </div>
             <div
@@ -91,31 +91,31 @@ export const RunDetailsPage: React.FC = () => {
 
         <div className="space-y-6">
           {/* Run Stats */}
-          <div className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <div className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <h2 className="text-sm font-bold uppercase tracking-widest">Metrics</h2>
             </div>
             <div className="p-4 space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-zinc-500">TOKEN_USAGE</span>
-                <span className="text-[var(--color-term-fg)]">{run.costTokens ?? 0}</span>
+                <span className="text-term-fg">{run.costTokens ?? 0}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-zinc-500">INIT_TIME</span>
-                <span className="text-[var(--color-term-fg)]">{new Date(run.startedAt).toLocaleTimeString()}</span>
+                <span className="text-term-fg">{new Date(run.startedAt).toLocaleTimeString()}</span>
               </div>
               {run.finishedAt && (
                 <div className="flex justify-between">
                   <span className="text-zinc-500">EXIT_TIME</span>
-                  <span className="text-[var(--color-term-fg)]">{new Date(run.finishedAt).toLocaleTimeString()}</span>
+                  <span className="text-term-fg">{new Date(run.finishedAt).toLocaleTimeString()}</span>
                 </div>
               )}
             </div>
           </div>
 
           {/* Artifacts */}
-          <div className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <div className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <h2 className="text-sm font-bold uppercase tracking-widest">Generated_Artifacts</h2>
             </div>
             <div className="p-4 space-y-2">
@@ -124,11 +124,11 @@ export const RunDetailsPage: React.FC = () => {
               ) : (
                 artifacts?.map((artifact: Artifact) => (
                   <div key={artifact.id} className="flex items-center justify-between group">
-                    <span className="text-xs text-[var(--color-term-fg)]">
+                    <span className="text-xs text-term-fg">
                       - {artifact.type.toUpperCase()}
                     </span>
                     {artifact.url && (
-                      <a href={artifact.url} target="_blank" rel="noreferrer" className="text-xs text-[var(--color-term-tiger)] hover:underline">
+                      <a href={artifact.url} target="_blank" rel="noreferrer" className="text-xs text-term-tiger hover:underline">
                         [OPEN]
                       </a>
                     )}
@@ -139,11 +139,11 @@ export const RunDetailsPage: React.FC = () => {
           </div>
 
           {/* Judge Review */}
-          <div className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <div className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <h2 className="text-sm font-bold uppercase tracking-widest">Audit_Log (Judgements)</h2>
             </div>
-            <div className="divide-y divide-[var(--color-term-border)]">
+            <div className="divide-y divide-term-border">
               {(judgements ?? []).length === 0 && (
                 <div className="p-4 text-xs text-zinc-600 italic">// No audit records</div>
               )}
@@ -160,7 +160,7 @@ export const RunDetailsPage: React.FC = () => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'success': return 'text-[var(--color-term-tiger)]';
+    case 'success': return 'text-term-tiger';
     case 'failed': return 'text-red-500';
     case 'running': return 'text-blue-400 animate-pulse';
     default: return 'text-zinc-500';
@@ -174,7 +174,7 @@ const JudgeReviewItem = ({ review }: { review: JudgementEvent }) => {
   const ciStatus = payload.summary?.ci?.status ?? (payload.summary?.ci?.pass ? 'success' : 'unknown');
 
   return (
-    <div className="p-3 space-y-1 hover:bg-[var(--color-term-fg)]/5 transition-colors">
+    <div className="p-3 space-y-1 hover:bg-term-fg/5 transition-colors">
       <div className="flex items-center justify-between">
         <span className={`text-xs font-bold ${getVerdictColor(verdict)}`}>
           [{verdict.toUpperCase()}]
@@ -200,7 +200,7 @@ const JudgeReviewItem = ({ review }: { review: JudgementEvent }) => {
 const getVerdictColor = (verdict: string) => {
   switch (verdict) {
     case 'approve':
-      return 'text-[var(--color-term-tiger)]';
+      return 'text-term-tiger';
     case 'request_changes':
       return 'text-red-500';
     case 'needs_human':

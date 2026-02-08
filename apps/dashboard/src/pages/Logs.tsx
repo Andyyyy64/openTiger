@@ -69,21 +69,21 @@ export const LogsPage: React.FC = () => {
   }, [allLogs]);
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto space-y-6 text-[var(--color-term-fg)]">
-      <section className="border border-[var(--color-term-border)] p-0">
-        <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
-          <h1 className="text-lg font-bold uppercase tracking-wider text-[var(--color-term-tiger)] font-pixel">
+    <div className="p-6 max-w-[1400px] mx-auto space-y-6 text-term-fg">
+      <section className="border border-term-border p-0">
+        <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
+          <h1 className="text-lg font-bold uppercase tracking-wider text-term-tiger font-pixel">
             &gt; Logs_Console
           </h1>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 p-4 border-b border-[var(--color-term-border)]">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 p-4 border-b border-term-border">
           <label className="text-xs uppercase text-zinc-500">
             cycle lines
             <input
               value={cycleLinesInput}
               onChange={(e) => setCycleLinesInput(e.target.value)}
-              className="mt-1 w-full bg-black border border-[var(--color-term-border)] px-2 py-1 text-zinc-200"
+              className="mt-1 w-full bg-black border border-term-border px-2 py-1 text-zinc-200"
             />
           </label>
 
@@ -92,7 +92,7 @@ export const LogsPage: React.FC = () => {
             <input
               value={allLimitInput}
               onChange={(e) => setAllLimitInput(e.target.value)}
-              className="mt-1 w-full bg-black border border-[var(--color-term-border)] px-2 py-1 text-zinc-200"
+              className="mt-1 w-full bg-black border border-term-border px-2 py-1 text-zinc-200"
             />
           </label>
 
@@ -102,7 +102,7 @@ export const LogsPage: React.FC = () => {
               value={sinceMinutesInput}
               onChange={(e) => setSinceMinutesInput(e.target.value)}
               placeholder="empty = all"
-              className="mt-1 w-full bg-black border border-[var(--color-term-border)] px-2 py-1 text-zinc-200"
+              className="mt-1 w-full bg-black border border-term-border px-2 py-1 text-zinc-200"
             />
           </label>
 
@@ -112,14 +112,14 @@ export const LogsPage: React.FC = () => {
               value={sourceFilterInput}
               onChange={(e) => setSourceFilterInput(e.target.value)}
               placeholder="worker-1 / tasks/"
-              className="mt-1 w-full bg-black border border-[var(--color-term-border)] px-2 py-1 text-zinc-200"
+              className="mt-1 w-full bg-black border border-term-border px-2 py-1 text-zinc-200"
             />
           </label>
         </div>
       </section>
 
-      <section className="border border-[var(--color-term-border)] p-0">
-        <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex items-center justify-between">
+      <section className="border border-term-border p-0">
+        <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">
             cycle-manager.log (tail -n {cycleLines})
           </span>
@@ -137,8 +137,8 @@ export const LogsPage: React.FC = () => {
         </div>
       </section>
 
-      <section className="border border-[var(--color-term-border)] p-0">
-        <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex items-center justify-between">
+      <section className="border border-term-border p-0">
+        <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-widest text-zinc-500">
             all logs (time ordered)
           </span>

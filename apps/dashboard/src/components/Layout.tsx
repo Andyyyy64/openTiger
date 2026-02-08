@@ -24,17 +24,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isHealthy = health?.status === 'ok' && !isHealthError;
 
   return (
-    <div className="flex flex-col h-screen font-pixel text-[var(--color-term-fg)] bg-[var(--color-term-bg)] overflow-hidden">
+    <div className="flex flex-col h-screen font-pixel text-term-fg bg-term-bg overflow-hidden">
       {/* Top Status Bar like a window title or terminal header */}
-      <header className="h-10 border-b border-[var(--color-term-border)] flex items-center justify-between px-4 bg-[var(--color-term-bg)] shrink-0 select-none">
+      <header className="h-10 border-b border-term-border flex items-center justify-between px-4 bg-term-bg shrink-0 select-none">
         <div className="flex items-center gap-4">
-          <span className="font-bold text-[var(--color-term-tiger)] font-pixel text-lg">root@openTiger:~/dashboard</span>
+          <span className="font-bold text-term-tiger font-pixel text-lg">root@openTiger:~/dashboard</span>
         </div>
         <div className="flex items-center gap-6 text-sm">
           <div className="flex items-center gap-2">
             <span className="text-zinc-500">[STATUS]</span>
             {isHealthy ? (
-              <span className="text-[var(--color-term-tiger)]">ONLINE</span>
+              <span className="text-term-tiger">ONLINE</span>
             ) : (
               <span className="text-red-500 animate-pulse">OFFLINE</span>
             )}
@@ -52,7 +52,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar */}
-        <aside className="w-64 border-r border-[var(--color-term-border)] flex flex-col pt-4 pb-4">
+        <aside className="w-64 border-r border-term-border flex flex-col pt-4 pb-4">
           <div className="px-4 mb-4 text-xs text-zinc-500 select-none">
             EXPLORER
           </div>
@@ -70,19 +70,19 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </nav>
 
           <div className="px-2 mb-2">
-            <div className="h-px bg-[var(--color-term-border)] mx-3 my-2 opacity-50" />
+            <div className="h-px bg-term-border mx-3 my-2 opacity-50" />
             <NavItem to="/system" label="system_config" />
           </div>
 
           <div className="px-4">
-            <div className="border-t border-[var(--color-term-border)] pt-4 text-[10px] text-zinc-600">
+            <div className="border-t border-term-border pt-4 text-[10px] text-zinc-600">
               <p>OPENTIGER v0.1.0</p>
             </div>
           </div>
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto bg-[var(--color-term-bg)] relative">
+        <main className="flex-1 overflow-auto bg-term-bg relative">
           <div className="min-h-full">
             {children}
           </div>
@@ -90,7 +90,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
 
       {/* Bottom Status Line (Optional Decor) */}
-      <div className="h-6 border-t border-[var(--color-term-border)] bg-[#000] flex items-center px-4 text-[10px] text-zinc-500 gap-4 shrink-0 select-none">
+      <div className="h-6 border-t border-term-border bg-black flex items-center px-4 text-[10px] text-zinc-500 gap-4 shrink-0 select-none">
         <span>MODE: COMMAND</span>
         <span className="flex-1"></span>
         <span>UTF-8</span>
@@ -105,8 +105,8 @@ const NavItem = ({ to, label }: { to: string, label: string }) => (
     to={to}
     className={({ isActive }) =>
       `block px-3 py-1.5 transition-colors duration-0 ${isActive
-        ? 'bg-[var(--color-term-tiger)] text-black font-bold'
-        : 'text-zinc-400 hover:text-[var(--color-term-tiger)] hover:translate-x-1'
+        ? 'bg-term-tiger text-black font-bold'
+        : 'text-zinc-400 hover:text-term-tiger hover:translate-x-1'
       }`
     }
   >

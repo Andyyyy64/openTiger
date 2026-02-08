@@ -32,8 +32,8 @@ export const RunsPage: React.FC = () => {
   const groupedRuns = React.useMemo(() => groupRunsByTask(runs ?? []), [runs]);
 
   return (
-    <div className="p-6 text-[var(--color-term-fg)]">
-      <h1 className="text-xl font-bold mb-8 uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
+    <div className="p-6 text-term-fg">
+      <h1 className="text-xl font-bold mb-8 uppercase tracking-widest text-term-tiger font-pixel">
         &gt; Execution_Values (Runs)
       </h1>
 
@@ -55,18 +55,18 @@ export const RunsPage: React.FC = () => {
               : <span className="text-zinc-500">{retryStatus}</span>;
 
             return (
-              <section key={group.taskId} className="border border-[var(--color-term-border)] p-0">
+              <section key={group.taskId} className="border border-term-border p-0">
                 {/* Task Header */}
-                <div className="bg-[var(--color-term-border)]/10 px-4 py-3 border-b border-[var(--color-term-border)] flex flex-wrap items-start justify-between gap-4">
+                <div className="bg-term-border/10 px-4 py-3 border-b border-term-border flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-1 max-w-[70%]">
                     <div className="flex items-center gap-2 text-xs font-mono">
                       <span className="text-zinc-500">task:</span>
-                      <Link to={`/tasks/${group.taskId}`} className="text-[var(--color-term-tiger)] hover:underline font-bold">
+                      <Link to={`/tasks/${group.taskId}`} className="text-term-tiger hover:underline font-bold">
                         {group.taskId.slice(0, 8)}
                       </Link>
                     </div>
                     {task?.title && (
-                      <div className="text-sm font-bold text-[var(--color-term-fg)] truncate">
+                      <div className="text-sm font-bold text-term-fg truncate">
                         {task.title}
                       </div>
                     )}
@@ -87,7 +87,7 @@ export const RunsPage: React.FC = () => {
                 {/* Runs Table */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-left bg-transparent font-mono text-xs">
-                    <thead className="text-zinc-500 uppercase border-b border-[var(--color-term-border)] bg-[var(--color-term-bg)]">
+                    <thead className="text-zinc-500 uppercase border-b border-term-border bg-term-bg">
                       <tr>
                         <th className="px-4 py-2 font-normal w-32">Run ID</th>
                         <th className="px-4 py-2 font-normal w-32">Agent</th>
@@ -97,14 +97,14 @@ export const RunsPage: React.FC = () => {
                         <th className="px-4 py-2 font-normal text-right">Action</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[var(--color-term-border)]">
+                    <tbody className="divide-y divide-term-border">
                       {group.runs.map((run) => (
                         <tr
                           key={run.id}
                           onClick={() => navigate(`/runs/${run.id}`)}
-                          className="hover:bg-[var(--color-term-fg)]/5 transition-colors group cursor-pointer"
+                          className="hover:bg-term-fg/5 transition-colors group cursor-pointer"
                         >
-                          <td className="px-4 py-2 align-top text-[var(--color-term-fg)]">
+                          <td className="px-4 py-2 align-top text-term-fg">
                             {run.id.slice(0, 8)}
                           </td>
                           <td className="px-4 py-2 align-top text-zinc-400">
@@ -122,7 +122,7 @@ export const RunsPage: React.FC = () => {
                             {new Date(run.startedAt).toLocaleString()}
                           </td>
                           <td className="px-4 py-2 align-top text-right">
-                            <span className="text-[var(--color-term-tiger)] text-[10px] opacity-60 group-hover:opacity-100 hover:underline">
+                            <span className="text-term-tiger text-[10px] opacity-60 group-hover:opacity-100 hover:underline">
                               OPEN &gt;
                             </span>
                           </td>
@@ -142,7 +142,7 @@ export const RunsPage: React.FC = () => {
 
 const getStatusColor = (status: string) => {
   switch (status) {
-    case 'success': return 'text-[var(--color-term-tiger)]';
+    case 'success': return 'text-term-tiger';
     case 'failed': return 'text-red-500';
     case 'running': return 'text-blue-400 animate-pulse';
     default: return 'text-zinc-500';

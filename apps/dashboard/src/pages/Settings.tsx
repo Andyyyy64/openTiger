@@ -442,10 +442,10 @@ export const SettingsPage: React.FC = () => {
   }, [isStopAllSuccess, resetStopAll]);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 text-[var(--color-term-fg)]">
+    <div className="p-6 max-w-5xl mx-auto space-y-6 text-term-fg">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold uppercase tracking-widest text-[var(--color-term-tiger)] font-pixel">
+          <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
             &gt; System_Configuration
           </h1>
           <p className="text-xs text-zinc-500 mt-1 font-mono">
@@ -455,7 +455,7 @@ export const SettingsPage: React.FC = () => {
         <button
           onClick={handleSave}
           disabled={mutation.isPending}
-          className="border border-[var(--color-term-tiger)] text-[var(--color-term-tiger)] hover:bg-[var(--color-term-tiger)] hover:text-black px-4 py-2 text-sm font-bold uppercase transition-colors disabled:opacity-50"
+          className="border border-term-tiger text-term-tiger hover:bg-term-tiger hover:text-black px-4 py-2 text-sm font-bold uppercase transition-colors disabled:opacity-50"
         >
           {mutation.isPending ? '[ SAVING... ]' : '[ SAVE_CONFIG ]'}
         </button>
@@ -463,15 +463,15 @@ export const SettingsPage: React.FC = () => {
 
       {/* System Control Panel */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <section className="border border-[var(--color-term-border)] p-0">
-          <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between">
+        <section className="border border-term-border p-0">
+          <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">
             <h2 className="text-sm font-bold uppercase tracking-wider">System_Restart</h2>
             <span className="text-xs text-zinc-500">sudo reboot</span>
           </div>
           <div className="p-4 space-y-3 font-mono text-sm">
             <div className="flex justify-between items-center">
               <span className="text-zinc-500">CURRENT_STATUS</span>
-              <span className={restartStatus === 'running' ? 'text-[var(--color-term-tiger)] animate-pulse' : 'text-zinc-300'}>
+              <span className={restartStatus === 'running' ? 'text-term-tiger animate-pulse' : 'text-zinc-300'}>
                 [{restartStatusLabel}]
               </span>
             </div>
@@ -484,7 +484,7 @@ export const SettingsPage: React.FC = () => {
             <button
               onClick={() => restartMutation.mutate()}
               disabled={restartMutation.isPending || restartStatus === 'running'}
-              className="w-full border border-[var(--color-term-border)] hover:bg-[var(--color-term-fg)] hover:text-black py-2 mt-2 text-xs uppercase transition-colors disabled:opacity-50"
+              className="w-full border border-term-border hover:bg-term-fg hover:text-black py-2 mt-2 text-xs uppercase transition-colors disabled:opacity-50"
             >
               {restartMutation.isPending || restartStatus === 'running' ? '> REBOOTING...' : '> EXECUTE REBOOT'}
             </button>
@@ -495,8 +495,8 @@ export const SettingsPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="border border-[var(--color-term-border)] p-0">
-          <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between">
+        <section className="border border-term-border p-0">
+          <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">
             <h2 className="text-sm font-bold uppercase tracking-wider">DB_Maintenance</h2>
             <span className="text-xs text-zinc-500">rm -rf /var/db/*</span>
           </div>
@@ -515,13 +515,13 @@ export const SettingsPage: React.FC = () => {
             </button>
 
             {cleanupMutation.isSuccess && (
-              <div className="text-[var(--color-term-tiger)] text-xs mt-2">&gt; SUCCESS: Database purged.</div>
+              <div className="text-term-tiger text-xs mt-2">&gt; SUCCESS: Database purged.</div>
             )}
           </div>
         </section>
 
-        <section className="border border-[var(--color-term-border)] p-0">
-          <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)] flex justify-between">
+        <section className="border border-term-border p-0">
+          <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">
             <h2 className="text-sm font-bold uppercase tracking-wider">Process_Control</h2>
             <span className="text-xs text-zinc-500">killall -9</span>
           </div>
@@ -540,7 +540,7 @@ export const SettingsPage: React.FC = () => {
             </button>
 
             {stopAllProcessesMutation.isSuccess && (
-              <div className="text-[var(--color-term-tiger)] text-xs mt-2">
+              <div className="text-term-tiger text-xs mt-2">
                 &gt; SUCCESS: {stopAllProcessesMutation.data?.message || 'Processes stopped.'}
               </div>
             )}
@@ -553,8 +553,8 @@ export const SettingsPage: React.FC = () => {
 
       <div className="space-y-6">
         {grouped.map(([group, fields]) => (
-          <section key={group} className="border border-[var(--color-term-border)] p-0">
-            <div className="bg-[var(--color-term-border)]/10 px-4 py-2 border-b border-[var(--color-term-border)]">
+          <section key={group} className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
               <h2 className="text-sm font-bold uppercase tracking-wider">Config_Section: [{group}]</h2>
             </div>
 
@@ -562,13 +562,13 @@ export const SettingsPage: React.FC = () => {
               {fields.map((field) => (
                 <div key={field.key} className="space-y-1">
                   <div className="flex justify-between items-baseline mb-1">
-                    <label className="text-xs text-[var(--color-term-tiger)] font-mono">{field.label}</label>
+                    <label className="text-xs text-term-tiger font-mono">{field.label}</label>
                     <span className="text-[10px] text-zinc-600 uppercase">{field.type}</span>
                   </div>
 
                   {field.type === 'boolean' ? (
                     <select
-                      className="w-full bg-black border border-[var(--color-term-border)] text-sm text-[var(--color-term-fg)] px-2 py-1 font-mono focus:border-[var(--color-term-tiger)] focus:outline-none"
+                      className="w-full bg-black border border-term-border text-sm text-term-fg px-2 py-1 font-mono focus:border-term-tiger focus:outline-none"
                       value={(values[field.key] ?? '').toLowerCase() === 'true' ? 'true' : 'false'}
                       onChange={(e) => updateValue(field.key, e.target.value)}
                     >
@@ -577,7 +577,7 @@ export const SettingsPage: React.FC = () => {
                     </select>
                   ) : field.type === 'select' && field.options ? (
                     <select
-                      className="w-full bg-black border border-[var(--color-term-border)] text-sm text-[var(--color-term-fg)] px-2 py-1 font-mono focus:border-[var(--color-term-tiger)] focus:outline-none"
+                      className="w-full bg-black border border-term-border text-sm text-term-fg px-2 py-1 font-mono focus:border-term-tiger focus:outline-none"
                       value={values[field.key] ?? ''}
                       onChange={(e) => updateValue(field.key, e.target.value)}
                     >
@@ -589,7 +589,7 @@ export const SettingsPage: React.FC = () => {
                   ) : (
                     <input
                       type={field.type === 'number' ? 'number' : 'text'}
-                      className="w-full bg-black border border-[var(--color-term-border)] text-sm text-[var(--color-term-fg)] px-2 py-1 font-mono focus:border-[var(--color-term-tiger)] focus:outline-none"
+                      className="w-full bg-black border border-term-border text-sm text-term-fg px-2 py-1 font-mono focus:border-term-tiger focus:outline-none"
                       value={values[field.key] ?? ''}
                       onChange={(e) => updateValue(field.key, e.target.value)}
                     />
