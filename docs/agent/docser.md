@@ -37,7 +37,7 @@ Docser は Worker 基盤上の `AGENT_ROLE=docser` として動作する。
 - `AGENT_ROLE=docser`
 - `DOCSER_MODEL`
 - `DOCSER_INSTRUCTIONS_PATH`
-- `SEBASTIAN_LOG_DIR`
+- `OPENTIGER_LOG_DIR`
 
 ## 7. 改善余地
 

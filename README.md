@@ -1,4 +1,4 @@
-# Sebastian-code（セバスチャン・コード）
+# openTiger
 
 **AI Agent Orchestration System for Autonomous Coding**
 
@@ -62,8 +62,8 @@
 ### セットアップ
 
 ```bash
-git clone git@github.com:Andyyyy64/SebastianCode.git
-cd SebastianCode
+git clone git@github.com:Andyyyy64/openTiger.git
+cd openTiger
 pnpm install
 cp .env.example .env
 pnpm restart
