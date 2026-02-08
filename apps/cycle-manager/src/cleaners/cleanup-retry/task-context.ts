@@ -18,11 +18,7 @@ export function normalizeContext(context: unknown): NormalizedContext {
   return context as NormalizedContext;
 }
 
-export function isPrReviewTask(params: {
-  title: string;
-  goal: string;
-  context: unknown;
-}): boolean {
+export function isPrReviewTask(params: { title: string; goal: string; context: unknown }): boolean {
   if (params.goal.startsWith("Review and process open PR #")) {
     return true;
   }

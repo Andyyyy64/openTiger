@@ -4,12 +4,7 @@ import { tasks, runs } from "@openTiger/db/schema";
 import { and, eq } from "drizzle-orm";
 import { getRepoMode, getLocalRepoPath, getLocalWorktreeRoot } from "@openTiger/core";
 import { setupProcessLogging } from "@openTiger/core/process-logging";
-import {
-  createTaskQueue,
-  enqueueTask,
-  getQueueStats,
-  getTaskQueueName,
-} from "@openTiger/queue";
+import { createTaskQueue, enqueueTask, getQueueStats, getTaskQueueName } from "@openTiger/queue";
 
 import {
   cleanupExpiredLeases,

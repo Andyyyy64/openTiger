@@ -59,4 +59,3 @@ export async function isGeneratedTypeScriptOutput(
 
   return (await fileExists(tsPath)) || (await fileExists(tsxPath));
 }
-

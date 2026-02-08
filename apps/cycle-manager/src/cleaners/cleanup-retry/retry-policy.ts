@@ -35,10 +35,7 @@ export function resolveCategoryRetryLimit(category: FailureCategory): number {
   return Math.min(categoryLimit, MAX_RETRY_COUNT);
 }
 
-export function isCategoryRetryAllowed(
-  retryCount: number,
-  categoryRetryLimit: number,
-): boolean {
+export function isCategoryRetryAllowed(retryCount: number, categoryRetryLimit: number): boolean {
   return categoryRetryLimit < 0 || retryCount < categoryRetryLimit;
 }
 

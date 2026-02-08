@@ -34,10 +34,7 @@ function shouldForceCi(command: string): boolean {
   return /\b(pnpm|npm|yarn|bun)\b[^\n]*\btest\b/.test(command);
 }
 
-export function matchDeniedCommand(
-  command: string,
-  deniedCommands: string[],
-): string | undefined {
+export function matchDeniedCommand(command: string, deniedCommands: string[]): string | undefined {
   const target = command.trim();
   const lowerTarget = target.toLowerCase();
 
