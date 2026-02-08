@@ -26,6 +26,21 @@ export const AgentsPage: React.FC = () => {
     queuedBlockedByDeps.length === queuedTasks.length &&
     idleWorkers.length > 0;
 
+  const sortedAgents = React.useMemo(() => {
+    if (!agents) return [];
+    return [...agents].sort((a, b) => {
+      // 1. Busy agents first
+      if (a.status === 'busy' && b.status !== 'busy') return -1;
+      if (a.status !== 'busy' && b.status === 'busy') return 1;
+
+      // 2. Sort by role
+      if (a.role !== b.role) return a.role.localeCompare(b.role);
+
+      // 3. Sort by ID
+      return a.id.localeCompare(b.id);
+    });
+  }, [agents]);
+
   return (
     <div className="p-6 text-term-fg">
       <div className="flex items-center justify-between mb-8">
@@ -60,7 +75,7 @@ export const AgentsPage: React.FC = () => {
           <div className="py-12 text-center text-zinc-500 font-mono">&gt; No nodes detected</div>
         ) : (
           <div className="divide-y divide-term-border font-mono text-sm">
-            {agents?.map((agent) => (
+            {sortedAgents.map((agent) => (
               <Link
                 key={agent.id}
                 to={`/agents/${agent.id}`}
