@@ -1,5 +1,5 @@
 {
-  "name": "@sebastian-code/db",
+  "name": "@openTiger/db",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -28,7 +28,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@sebastian-code/core": "workspace:*",
+    "@openTiger/core": "workspace:*",
     "drizzle-orm": "^0.38.4",
     "postgres": "^3.4.5"
   },

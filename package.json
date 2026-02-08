@@ -1,5 +1,5 @@
 {
-  "name": "sebastian-code",
+  "name": "openTiger",
   "version": "0.1.0",
   "private": true,
   "description": "AI Agent Orchestration System for Autonomous Coding",
@@ -8,9 +8,9 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "ui": "pnpm --filter @sebastian-code/dashboard dev",
-    "server": "pnpm --filter @sebastian-code/api dev",
-    "up": "docker compose up -d postgres redis && pnpm db:push && pnpm config:export && pnpm -r --filter @sebastian-code/api --filter @sebastian-code/dashboard dev",
+    "ui": "pnpm --filter @openTiger/dashboard dev",
+    "server": "pnpm --filter @openTiger/api dev",
+    "up": "docker compose up -d postgres redis && pnpm db:push && pnpm config:export && pnpm -r --filter @openTiger/api --filter @openTiger/dashboard dev",
     "dev": "turbo run dev dev:2 dev:3 dev:4 --concurrency 30",
     "dev:all": "turbo run dev dev:1 dev:2 dev:3 dev:4 --concurrency 30",
     "build": "turbo build",
@@ -29,12 +29,12 @@
     "logs:all:30m": "tsx ops/scripts/all-logs.ts --since-minutes 30",
     "logs:all:latest": "tsx ops/scripts/all-logs.ts --limit 500",
     "clean": "turbo clean && rm -rf node_modules",
-    "db:generate": "pnpm --filter @sebastian-code/db generate",
-    "db:migrate": "pnpm --filter @sebastian-code/db migrate",
-    "db:push": "pnpm --filter @sebastian-code/db push",
-    "db:studio": "pnpm --filter @sebastian-code/db studio",
-    "requeue": "pnpm --filter @sebastian-code/cycle-manager exec tsx src/utils/requeue-failed-tasks.ts",
-    "restart": "pnpm build && docker compose down -v && docker compose up -d postgres redis && sleep 3 && pnpm db:push && sleep 3 && pnpm dev & pnpm --filter @sebastian-code/worker dev:tester & pnpm --filter @sebastian-code/worker dev:tester:2 & pnpm --filter @sebastian-code/worker dev:docser"
+    "db:generate": "pnpm --filter @openTiger/db generate",
+    "db:migrate": "pnpm --filter @openTiger/db migrate",
+    "db:push": "pnpm --filter @openTiger/db push",
+    "db:studio": "pnpm --filter @openTiger/db studio",
+    "requeue": "pnpm --filter @openTiger/cycle-manager exec tsx src/utils/requeue-failed-tasks.ts",
+    "restart": "pnpm build && docker compose down -v && docker compose up -d postgres redis && sleep 3 && pnpm db:push && sleep 3 && pnpm dev & pnpm --filter @openTiger/worker dev:tester & pnpm --filter @openTiger/worker dev:tester:2 & pnpm --filter @openTiger/worker dev:docser"
   },
   "devDependencies": {
     "@types/node": "^20.17.14",
