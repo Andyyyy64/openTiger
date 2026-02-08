@@ -31,13 +31,17 @@ Meaning of common warnings:
 2. Dispatcher acquires lease and sets task `running`
 3. Worker role executes task and verify commands
 4. On success:
-  - usually `blocked(awaiting_judge)` if review is needed
-  - `done` for direct/no-review completion
+
+- usually `blocked(awaiting_judge)` if review is needed
+- `done` for direct/no-review completion
+
 5. Judge evaluates successful run
-6. Task moves to:
-  - `done`
-  - `blocked(awaiting_judge)` (retry/recovery)
-  - `blocked(needs_rework)` (split/autofix path)
+2. Task moves to:
+
+- `done`
+- `blocked(awaiting_judge)` (retry/recovery)
+- `blocked(needs_rework)` (split/autofix path)
+
 7. Cycle Manager continuously requeues/rebuilds until convergence
 
 ## 3. Blocked Reasons Used in Recovery
