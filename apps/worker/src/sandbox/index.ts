@@ -7,4 +7,4 @@ export {
   checkImageExists,
   type DockerExecOptions,
   type DockerExecResult,
-} from "./docker.js";
+} from "./docker";

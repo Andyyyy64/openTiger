@@ -29,7 +29,7 @@ import {
   registerAgent,
   getAvailableAgents,
   type LaunchMode,
-} from "./scheduler/index.js";
+} from "./scheduler/index";
 
 // ディスパッチャー設定
 interface DispatcherConfig {

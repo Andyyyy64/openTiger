@@ -2,7 +2,7 @@ import { db } from "@openTiger/db";
 import { agents } from "@openTiger/db/schema";
 import { and, eq, inArray, lt, not } from "drizzle-orm";
 import { SYSTEM_ENTITY_ID } from "@openTiger/core";
-import { recordEvent } from "../monitors/event-logger.js";
+import { recordEvent } from "../monitors/event-logger";
 
 // オフラインエージェントをリセット
 export async function resetOfflineAgents(): Promise<number> {

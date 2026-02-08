@@ -1,6 +1,6 @@
 import type { Task, Policy } from "@openTiger/core";
 import { runOpenCode, type OpenCodeResult } from "@openTiger/llm";
-import { buildOpenCodeEnv } from "../env.js";
+import { buildOpenCodeEnv } from "../env";
 
 export interface ExecuteOptions {
   repoPath: string;

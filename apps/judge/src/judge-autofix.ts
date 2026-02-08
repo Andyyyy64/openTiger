@@ -7,8 +7,8 @@ import {
   JUDGE_AUTO_FIX_MAX_ATTEMPTS,
   formatJudgeAutoFixLimit,
   isJudgeAutoFixUnlimited,
-} from "./judge-config.js";
-import type { EvaluationSummary } from "./pr-reviewer.js";
+} from "./judge-config";
+import type { EvaluationSummary } from "./pr-reviewer";
 
 export function escapeSqlLikePattern(input: string): string {
   return input

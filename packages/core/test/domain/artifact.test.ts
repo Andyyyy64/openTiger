@@ -3,7 +3,7 @@ import {
   ArtifactSchema,
   ArtifactType,
   CreateArtifactInput,
-} from "../../src/domain/artifact.js";
+} from "../../src/domain/artifact";
 
 describe("ArtifactType", () => {
   it("すべての有効なタイプを受け入れる", () => {

@@ -5,11 +5,11 @@ export {
   generateSimpleTasks,
   type PlannedTaskInput,
   type TaskGenerationResult,
-} from "./from-requirement.js";
+} from "./from-requirement";
 
 export {
   generateTasksFromIssue,
   generateSimpleTaskFromIssue,
   type GitHubIssue,
   type IssueAnalysisResult,
-} from "./from-issue.js";
+} from "./from-issue";

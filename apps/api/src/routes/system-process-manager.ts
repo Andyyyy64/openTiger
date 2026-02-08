@@ -10,16 +10,16 @@ import {
   runs,
   tasks,
 } from "@openTiger/db/schema";
-import { configToEnv } from "../system-config.js";
-import { ensureConfigRow } from "../config-store.js";
-import { getAuthInfo } from "../middleware/index.js";
-import { buildPreflightSummary } from "./system-preflight.js";
-import { canControlSystem } from "./system-auth.js";
+import { configToEnv } from "../system-config";
+import { ensureConfigRow } from "../config-store";
+import { getAuthInfo } from "../middleware/index";
+import { buildPreflightSummary } from "./system-preflight";
+import { canControlSystem } from "./system-auth";
 import {
   resolveRepoRoot,
   resolveRequirementPath,
   writeRequirementFile,
-} from "./system-requirements.js";
+} from "./system-requirements";
 
 type RestartStatus = {
   status: "idle" | "running" | "completed" | "failed";

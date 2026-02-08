@@ -16,13 +16,13 @@ import {
   inferRiskFromLabels,
   inferPriorityFromLabels,
   extractIssueNumberFromTaskContext,
-} from "./system-issue-utils.js";
+} from "./system-issue-utils";
 import {
   resolveGitHubContext,
   fetchOpenIssues,
   fetchOpenPrCount,
   type OpenIssueSnapshot,
-} from "./system-preflight-github.js";
+} from "./system-preflight-github";
 
 export function parseBooleanSetting(value: string | undefined, fallback: boolean): boolean {
   if (!value) return fallback;

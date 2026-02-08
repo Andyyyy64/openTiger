@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { OpenCodeTokenUsage } from "./parse.js";
+import type { OpenCodeTokenUsage } from "./parse";
 
 // OpenCode execution options
 export const OpenCodeOptions = z.object({

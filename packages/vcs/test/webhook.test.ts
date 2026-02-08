@@ -5,7 +5,7 @@ import {
   type PullRequestPayload,
   type IssuePayload,
   type WebhookPayload,
-} from "../src/webhook.js";
+} from "../src/webhook";
 
 describe("verifyGitHubWebhookSignature", () => {
   const secret = "test-webhook-secret";

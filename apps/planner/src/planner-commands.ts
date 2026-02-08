@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { pathIsFile } from "./planner-utils.js";
+import { pathIsFile } from "./planner-utils";
 
 export async function hasRootCheckScript(workdir: string): Promise<boolean> {
   // ルートのpackage.jsonにcheckスクリプトがあるか確認する

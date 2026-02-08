@@ -1,6 +1,6 @@
 import { addPRComment, mergePR, getOctokit, getRepoInfo } from "@openTiger/vcs";
 import type { Policy } from "@openTiger/core";
-import type { CIEvaluationResult, PolicyEvaluationResult, LLMEvaluationResult, CodeIssue } from "./evaluators/index.js";
+import type { CIEvaluationResult, PolicyEvaluationResult, LLMEvaluationResult, CodeIssue } from "./evaluators/index";
 
 const ALLOW_LLM_FAIL_AUTOMERGE = process.env.JUDGE_ALLOW_LLM_FAIL_AUTOMERGE !== "false";
 

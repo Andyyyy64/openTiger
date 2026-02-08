@@ -21,23 +21,23 @@ import {
   evaluateSimple,
   evaluateRiskLevel,
   getPRDiffStats,
-} from "./evaluators/index.js";
+} from "./evaluators/index";
 
 import {
   makeJudgement,
   reviewAndAct,
   type EvaluationSummary,
-} from "./pr-reviewer.js";
+} from "./pr-reviewer";
 import {
   DEFAULT_CONFIG,
   resolveBaseRepoRecoveryMode,
   resolveBaseRepoRecoveryConfidence,
   resolveBaseRepoRecoveryDiffLimit,
   type JudgeConfig,
-} from "./judge-config.js";
-import { startHeartbeat } from "./judge-agent.js";
-import { runJudgeLoop } from "./judge-loops.js";
-import { runLocalJudgeLoop } from "./judge-local-loop.js";
+} from "./judge-config";
+import { startHeartbeat } from "./judge-agent";
+import { runJudgeLoop } from "./judge-loops";
+import { runLocalJudgeLoop } from "./judge-local-loop";
 
 async function loadPolicyConfig(): Promise<Policy> {
   const policyPath = process.env.POLICY_PATH

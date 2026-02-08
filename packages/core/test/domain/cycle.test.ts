@@ -9,7 +9,7 @@ import {
   CycleEndEventSchema,
   AnomalyAlertSchema,
   NewCycleSchema,
-} from "../../src/domain/cycle.js";
+} from "../../src/domain/cycle";
 
 describe("CycleStatusSchema", () => {
   it("すべての有効なステータスを受け入れる", () => {

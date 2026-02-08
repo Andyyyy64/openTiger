@@ -1,4 +1,4 @@
-import type { OpenCodeOptions, OpenCodeResult } from "./opencode-types.js";
+import type { OpenCodeOptions, OpenCodeResult } from "./opencode-types";
 import {
   DEFAULT_FALLBACK_MODEL,
   DEFAULT_MAX_QUOTA_WAITS,
@@ -8,23 +8,23 @@ import {
   DEFAULT_RETRY_DELAY_MS,
   DEFAULT_WAIT_ON_QUOTA,
   THOUGHT_SIGNATURE_ERROR,
-} from "./opencode-constants.js";
+} from "./opencode-constants";
 import {
   extractQuotaRetryDelayMs,
   isQuotaExceededError,
   isRetryableError,
   calculateBackoffDelay,
   delay,
-} from "./opencode-helpers.js";
+} from "./opencode-helpers";
 import {
   parseBooleanEnvValue,
   parseIntegerEnvValue,
   readRuntimeEnv,
-} from "./opencode-env.js";
-import { executeOpenCodeOnce } from "./opencode-executor.js";
+} from "./opencode-env";
+import { executeOpenCodeOnce } from "./opencode-executor";
 
-export { OpenCodeOptions } from "./opencode-types.js";
-export type { OpenCodeResult } from "./opencode-types.js";
+export { OpenCodeOptions } from "./opencode-types";
+export type { OpenCodeResult } from "./opencode-types";
 
 export async function runOpenCode(
   options: OpenCodeOptions

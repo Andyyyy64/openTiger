@@ -10,14 +10,14 @@ export {
   getAgentLeases,
   getAllActiveLeases,
   type LeaseResult,
-} from "./lease.js";
+} from "./lease";
 
 export {
   getAvailableTasks,
   buildDependencyGraph,
   detectCycles,
   type AvailableTask,
-} from "./priority.js";
+} from "./priority";
 
 export {
   launchWorker,
@@ -28,7 +28,7 @@ export {
   type LaunchMode,
   type WorkerLaunchConfig,
   type LaunchResult,
-} from "./worker-launcher.js";
+} from "./worker-launcher";
 
 export {
   checkAgentHealth,
@@ -40,4 +40,4 @@ export {
   registerAgent,
   getAgentStats,
   type AgentHealth,
-} from "./heartbeat.js";
+} from "./heartbeat";

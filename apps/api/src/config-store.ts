@@ -1,7 +1,7 @@
 import { db } from "@openTiger/db";
 import { config as configTable } from "@openTiger/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { DEFAULT_CONFIG, buildConfigRecord } from "./system-config.js";
+import { DEFAULT_CONFIG, buildConfigRecord } from "./system-config";
 
 const LEGACY_REPLAN_COMMANDS = new Set([
   "",

@@ -3,8 +3,8 @@ import { tasks, events } from "@openTiger/db/schema";
 import { and, eq } from "drizzle-orm";
 import { SYSTEM_ENTITY_ID, getRepoMode } from "@openTiger/core";
 import { createIssue } from "@openTiger/vcs";
-import type { Requirement } from "./parser.js";
-import type { PlannedTaskInput, TaskGenerationResult } from "./strategies/index.js";
+import type { Requirement } from "./parser";
+import type { PlannedTaskInput, TaskGenerationResult } from "./strategies/index";
 
 type DbLike = typeof db;
 

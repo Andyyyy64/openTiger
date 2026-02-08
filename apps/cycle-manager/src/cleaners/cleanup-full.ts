@@ -2,9 +2,9 @@ import { db } from "@openTiger/db";
 import { tasks, runs, agents, leases } from "@openTiger/db/schema";
 import { eq, not } from "drizzle-orm";
 import { SYSTEM_ENTITY_ID } from "@openTiger/core";
-import { recordEvent } from "../monitors/event-logger.js";
-import { cleanupExpiredLeases } from "./cleanup-leases.js";
-import { resetOfflineAgents } from "./cleanup-agents.js";
+import { recordEvent } from "../monitors/event-logger";
+import { cleanupExpiredLeases } from "./cleanup-leases";
+import { resetOfflineAgents } from "./cleanup-agents";
 
 // クリーンアップ結果
 interface CleanupResult {

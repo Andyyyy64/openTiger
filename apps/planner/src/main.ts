@@ -4,12 +4,12 @@ import { db, closeDb } from "@openTiger/db";
 import { agents } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
 import { setupProcessLogging } from "@openTiger/core/process-logging";
-import { DEFAULT_CONFIG } from "./planner-config.js";
-import { planFromRequirement } from "./planner-runner.js";
-import { preparePlannerWorkdir } from "./planner-workdir.js";
-import { startHeartbeat } from "./planner-heartbeat.js";
+import { DEFAULT_CONFIG } from "./planner-config";
+import { planFromRequirement } from "./planner-runner";
+import { preparePlannerWorkdir } from "./planner-workdir";
+import { startHeartbeat } from "./planner-heartbeat";
 
-export { planFromContent } from "./planner-runner.js";
+export { planFromContent } from "./planner-runner";
 
 // ヘルプを表示
 function showHelp(): void {

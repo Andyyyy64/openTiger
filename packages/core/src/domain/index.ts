@@ -1,8 +1,8 @@
 // ドメインモデルのエクスポート
-export * from "./task.js";
-export * from "./run.js";
-export * from "./artifact.js";
-export * from "./lease.js";
-export * from "./policy.js";
-export * from "./agent.js";
-export * from "./cycle.js";
+export * from "./task";
+export * from "./run";
+export * from "./artifact";
+export * from "./lease";
+export * from "./policy";
+export * from "./agent";
+export * from "./cycle";

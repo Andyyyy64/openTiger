@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { db } from "@openTiger/db";
 import { events, tasks } from "@openTiger/db/schema";
 import { and, eq } from "drizzle-orm";
-import { getLocalDiffStats, getPRDiffStats } from "./evaluators/index.js";
+import { getLocalDiffStats, getPRDiffStats } from "./evaluators/index";
 
 const DOCSER_ALLOWED_PATHS = ["docs/**", "ops/runbooks/**", "README.md"];
 const DOCSER_PATH_PREFIXES = ["docs/", "ops/runbooks/"];

@@ -1,8 +1,8 @@
 // @openTiger/vcs パッケージのエントリポイント
-export * from "./client.js";
-export * from "./pr.js";
-export * from "./issue.js";
-export * from "./repo.js";
-export * from "./git.js";
-export * from "./webhook.js";
-export * from "./rate-limit.js";
+export * from "./client";
+export * from "./pr";
+export * from "./issue";
+export * from "./repo";
+export * from "./git";
+export * from "./webhook";
+export * from "./rate-limit";

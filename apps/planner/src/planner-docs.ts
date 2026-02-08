@@ -3,10 +3,10 @@ import { join } from "node:path";
 import { db } from "@openTiger/db";
 import { tasks } from "@openTiger/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
-import { DOCSER_ALLOWED_PATHS } from "./task-policies.js";
-import { pathIsDirectory, pathIsFile } from "./planner-utils.js";
-import type { Requirement } from "./parser.js";
-import type { PlannedTaskInput } from "./strategies/index.js";
+import { DOCSER_ALLOWED_PATHS } from "./task-policies";
+import { pathIsDirectory, pathIsFile } from "./planner-utils";
+import type { Requirement } from "./parser";
+import type { PlannedTaskInput } from "./strategies/index";
 
 type DocGapInfo = {
   docsMissing: boolean;

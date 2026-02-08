@@ -1,9 +1,9 @@
 import { getOctokit, getRepoInfo } from "@openTiger/vcs";
-import type { LLMEvaluationResult } from "./evaluators/index.js";
+import type { LLMEvaluationResult } from "./evaluators/index";
 import {
   JUDGE_PR_MERGEABLE_PRECHECK_RETRIES,
   JUDGE_PR_MERGEABLE_PRECHECK_DELAY_MS,
-} from "./judge-config.js";
+} from "./judge-config";
 
 interface PRMergeabilitySnapshot {
   mergeable: boolean | null;

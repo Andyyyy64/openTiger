@@ -1,7 +1,7 @@
 import { db } from "@openTiger/db";
 import { tasks, leases } from "@openTiger/db/schema";
 import { and, eq, inArray, lt } from "drizzle-orm";
-import { recordEvent } from "../monitors/event-logger.js";
+import { recordEvent } from "../monitors/event-logger";
 
 // 期限切れリースをクリーンアップ
 export async function cleanupExpiredLeases(): Promise<number> {

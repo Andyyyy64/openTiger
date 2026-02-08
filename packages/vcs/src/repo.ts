@@ -1,5 +1,5 @@
 import { Octokit } from "@octokit/rest";
-import { getOctokit, getRepoInfo } from "./client.js";
+import { getOctokit, getRepoInfo } from "./client";
 
 export interface CreateRepoOptions {
   token: string;

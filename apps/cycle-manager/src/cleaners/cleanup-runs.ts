@@ -1,7 +1,7 @@
 import { db } from "@openTiger/db";
 import { runs, tasks } from "@openTiger/db/schema";
 import { and, eq, inArray, lt } from "drizzle-orm";
-import { recordEvent } from "../monitors/event-logger.js";
+import { recordEvent } from "../monitors/event-logger";
 
 // 実行中だが進行していないRunをキャンセル
 export async function cancelStuckRuns(

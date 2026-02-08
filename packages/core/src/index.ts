@@ -1,5 +1,5 @@
 // @openTiger/core パッケージのエントリポイント
-export * from "./domain/index.js";
-export * from "./repo-mode.js";
-export * from "./policy-overrides.js";
-export * from "./system.js";
+export * from "./domain/index";
+export * from "./repo-mode";
+export * from "./policy-overrides";
+export * from "./system";

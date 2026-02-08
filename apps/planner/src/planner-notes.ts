@@ -1,9 +1,9 @@
 import { db } from "@openTiger/db";
 import { tasks, events } from "@openTiger/db/schema";
 import { desc, eq, inArray } from "drizzle-orm";
-import type { Requirement } from "./parser.js";
-import type { TaskGenerationResult } from "./strategies/index.js";
-import { clipText, normalizeStringList, extractIssueMessages } from "./planner-utils.js";
+import type { Requirement } from "./parser";
+import type { TaskGenerationResult } from "./strategies/index";
+import { clipText, normalizeStringList, extractIssueMessages } from "./planner-utils";
 
 function formatJudgeFeedbackEntry(payload: Record<string, unknown>): string | undefined {
   const rawPrNumber = payload.prNumber;

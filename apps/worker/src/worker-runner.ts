@@ -17,21 +17,21 @@ import {
   commitAndPush,
   createTaskPR,
   ensureRemoteBaseBranch,
-} from "./steps/index.js";
-import { generateBranchName } from "./steps/branch.js";
+} from "./steps/index";
+import { generateBranchName } from "./steps/branch";
 import {
   buildPrFetchRefspecs,
   resolveBranchBaseRef,
   resolveTaskPrContext,
-} from "./worker-task-context.js";
+} from "./worker-task-context";
 import {
   isNoCommitsBetweenError,
   isQuotaFailure,
   sanitizeRetryHint,
   shouldAllowNoChanges,
   validateExpectedFiles,
-} from "./worker-task-helpers.js";
-import { buildTaskLogPath, setTaskLogPath } from "./worker-logging.js";
+} from "./worker-task-helpers";
+import { buildTaskLogPath, setTaskLogPath } from "./worker-logging";
 
 // Workerの実行設定
 export interface WorkerConfig {

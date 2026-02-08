@@ -1,6 +1,6 @@
 import { getOctokit, getRepoInfo } from "@openTiger/vcs";
 import { config as configTable } from "@openTiger/db/schema";
-import { parseLinkedIssueNumbersFromPr } from "./system-issue-utils.js";
+import { parseLinkedIssueNumbersFromPr } from "./system-issue-utils";
 
 export type GitHubContext = {
   token: string;

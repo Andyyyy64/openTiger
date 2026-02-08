@@ -17,8 +17,8 @@ import {
   abortMerge,
   cleanUntracked,
 } from "@openTiger/vcs";
-import { evaluateLLMDiff } from "./evaluators/index.js";
-import type { BaseRepoRecoveryRules } from "./judge-config.js";
+import { evaluateLLMDiff } from "./evaluators/index";
+import type { BaseRepoRecoveryRules } from "./judge-config";
 
 export async function recoverDirtyBaseRepo(options: {
   baseRepoPath: string;

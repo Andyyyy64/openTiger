@@ -7,7 +7,7 @@ import {
   TaskRole,
   TaskStatus,
   TaskContext,
-} from "../../src/domain/task.js";
+} from "../../src/domain/task";
 
 describe("TaskSchema", () => {
   const validTask = {

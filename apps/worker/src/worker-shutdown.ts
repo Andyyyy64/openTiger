@@ -1,5 +1,5 @@
 import { createTaskWorker } from "@openTiger/queue";
-import { markAgentOffline, recoverInterruptedAgentRuns } from "./worker-agent-state.js";
+import { markAgentOffline, recoverInterruptedAgentRuns } from "./worker-agent-state";
 
 export function setupWorkerShutdownHandlers(params: {
   agentId: string;

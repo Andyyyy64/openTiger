@@ -1,6 +1,6 @@
 import { runOpenCode } from "@openTiger/llm";
 import type { CreateTaskInput } from "@openTiger/core";
-import { getPlannerOpenCodeEnv } from "../opencode-config.js";
+import { getPlannerOpenCodeEnv } from "../opencode-config";
 
 // GitHub Issue情報
 export interface GitHubIssue {

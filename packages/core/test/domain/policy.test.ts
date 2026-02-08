@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PolicySchema, DEFAULT_POLICY } from "../../src/domain/policy.js";
+import { PolicySchema, DEFAULT_POLICY } from "../../src/domain/policy";
 
 describe("PolicySchema", () => {
   it("完全なポリシーを検証できる", () => {

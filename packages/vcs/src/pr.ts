@@ -1,4 +1,4 @@
-import { getOctokit, getRepoInfo } from "./client.js";
+import { getOctokit, getRepoInfo } from "./client";
 
 // PR検索オプション
 export interface SearchPROptions {

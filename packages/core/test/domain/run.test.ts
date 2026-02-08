@@ -4,7 +4,7 @@ import {
   RunStatus,
   StartRunInput,
   CompleteRunInput,
-} from "../../src/domain/run.js";
+} from "../../src/domain/run";
 
 describe("RunStatus", () => {
   it("すべての有効なステータスを受け入れる", () => {

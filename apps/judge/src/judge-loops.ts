@@ -1,30 +1,30 @@
 import { db } from "@openTiger/db";
 import { tasks } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
-import { reviewAndAct } from "./pr-reviewer.js";
-import { createDocserTaskForPR } from "./docser.js";
+import { reviewAndAct } from "./pr-reviewer";
+import { createDocserTaskForPR } from "./docser";
 import {
   JUDGE_AUTO_FIX_MAX_ATTEMPTS,
   JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES,
   JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES,
   formatJudgeAutoFixLimit,
   type JudgeConfig,
-} from "./judge-config.js";
-import { getPendingPRs } from "./judge-pending.js";
-import { safeSetJudgeAgentState } from "./judge-agent.js";
-import { recordJudgeReview } from "./judge-events.js";
+} from "./judge-config";
+import { getPendingPRs } from "./judge-pending";
+import { safeSetJudgeAgentState } from "./judge-agent";
+import { recordJudgeReview } from "./judge-events";
 import {
   judgeSinglePR,
   buildJudgeFailureMessage,
   hasActionableLLMFailures,
   isDoomLoopFailure,
   isNonActionableLLMFailure,
-} from "./judge-evaluate.js";
+} from "./judge-evaluate";
 import {
   createAutoFixTaskForPr,
   createConflictAutoFixTaskForPr,
   hasMergeConflictSignals,
-} from "./judge-autofix.js";
+} from "./judge-autofix";
 import {
   requeueTaskAfterJudge,
   getTaskRetryCount,
@@ -32,7 +32,7 @@ import {
   isImportedPrReviewTask,
   recoverAwaitingJudgeBacklog,
   claimRunForJudgement,
-} from "./judge-retry.js";
+} from "./judge-retry";
 
 export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log("=".repeat(60));

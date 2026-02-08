@@ -14,13 +14,13 @@ import {
 } from "@openTiger/queue";
 import type { Job } from "bullmq";
 import { resolve } from "node:path";
-import { acquireTaskRuntimeLock, releaseTaskRuntimeLock } from "./worker-runtime-lock.js";
-import { recoverInterruptedAgentRuns, startHeartbeat } from "./worker-agent-state.js";
-import { setupWorkerShutdownHandlers } from "./worker-shutdown.js";
-import { setupProcessLogging } from "./worker-logging.js";
-import { runWorker } from "./worker-runner.js";
+import { acquireTaskRuntimeLock, releaseTaskRuntimeLock } from "./worker-runtime-lock";
+import { recoverInterruptedAgentRuns, startHeartbeat } from "./worker-agent-state";
+import { setupWorkerShutdownHandlers } from "./worker-shutdown";
+import { setupProcessLogging } from "./worker-logging";
+import { runWorker } from "./worker-runner";
 
-export { runWorker, type WorkerConfig, type WorkerResult } from "./worker-runner.js";
+export { runWorker, type WorkerConfig, type WorkerResult } from "./worker-runner";
 
 const activeTaskIds = new Set<string>();
 

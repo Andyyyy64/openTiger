@@ -1,2 +1,2 @@
 // クリーンアップモジュールのエクスポート
-export * from "./cleanup.js";
+export * from "./cleanup";

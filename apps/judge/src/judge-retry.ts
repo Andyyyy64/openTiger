@@ -1,7 +1,7 @@
 import { db } from "@openTiger/db";
 import { artifacts, runs, tasks, events } from "@openTiger/db/schema";
 import { and, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
-import { JUDGE_AWAITING_RETRY_COOLDOWN_MS } from "./judge-config.js";
+import { JUDGE_AWAITING_RETRY_COOLDOWN_MS } from "./judge-config";
 
 export async function requeueTaskAfterJudge(params: {
   taskId: string;

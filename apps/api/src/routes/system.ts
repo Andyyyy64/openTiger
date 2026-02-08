@@ -2,21 +2,21 @@ import { Hono } from "hono";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@openTiger/db";
 import { config as configTable } from "@openTiger/db/schema";
-import { ensureConfigRow } from "../config-store.js";
-import { getAuthInfo } from "../middleware/index.js";
+import { ensureConfigRow } from "../config-store";
+import { getAuthInfo } from "../middleware/index";
 import { createRepo } from "@openTiger/vcs";
 import { obliterateAllQueues } from "@openTiger/queue";
 import {
   parseBooleanSetting,
   parseCountSetting,
   buildPreflightSummary,
-} from "./system-preflight.js";
-import { canControlSystem } from "./system-auth.js";
+} from "./system-preflight";
+import { canControlSystem } from "./system-auth";
 import {
   readRequirementFile,
   resolveRequirementPath,
-} from "./system-requirements.js";
-import { registerProcessManagerRoutes } from "./system-process-manager.js";
+} from "./system-requirements";
+import { registerProcessManagerRoutes } from "./system-process-manager";
 
 const systemRoute = new Hono();
 

@@ -2,9 +2,9 @@ import { spawn } from "node:child_process";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { extractOpenCodeTokenUsage } from "./parse.js";
-import type { OpenCodeOptions, OpenCodeResult } from "./opencode-types.js";
-import { buildOpenCodePrompt } from "./opencode-prompt.js";
+import { extractOpenCodeTokenUsage } from "./parse";
+import type { OpenCodeOptions, OpenCodeResult } from "./opencode-types";
+import { buildOpenCodePrompt } from "./opencode-prompt";
 import {
   DEFAULT_IDLE_TIMEOUT_SECONDS,
   DEFAULT_MODEL,
@@ -16,13 +16,13 @@ import {
   MAX_CONSECUTIVE_PLANNING_LINES,
   PARENT_SHUTDOWN_SIGNALS,
   PROGRESS_LOG_INTERVAL_MS,
-} from "./opencode-constants.js";
+} from "./opencode-constants";
 import {
   hasRepeatedPattern,
   isQuotaExceededError,
   normalizeChunkLine,
   normalizeForPromptDetection,
-} from "./opencode-helpers.js";
+} from "./opencode-helpers";
 
 export async function executeOpenCodeOnce(
   options: OpenCodeOptions

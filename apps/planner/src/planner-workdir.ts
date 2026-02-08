@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
-import type { PlannerConfig } from "./planner-config.js";
+import type { PlannerConfig } from "./planner-config";
 
 // Plannerが参照する作業ディレクトリを用意
 export async function preparePlannerWorkdir(config: PlannerConfig): Promise<{

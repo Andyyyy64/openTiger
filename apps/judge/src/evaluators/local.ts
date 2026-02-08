@@ -1,6 +1,6 @@
 import type { Policy } from "@openTiger/core";
-import type { CIEvaluationResult } from "./ci.js";
-import type { PolicyEvaluationResult, PolicyViolation } from "./policy.js";
+import type { CIEvaluationResult } from "./ci";
+import type { PolicyEvaluationResult, PolicyViolation } from "./policy";
 import { getDiffBetweenRefs, getDiffStatsBetweenRefs } from "@openTiger/vcs";
 
 export interface LocalDiffStats {

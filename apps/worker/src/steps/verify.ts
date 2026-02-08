@@ -13,7 +13,7 @@ import {
 } from "@openTiger/vcs";
 import type { Policy } from "@openTiger/core";
 import { minimatch } from "minimatch";
-import { buildTaskEnv } from "../env.js";
+import { buildTaskEnv } from "../env";
 
 export interface VerifyOptions {
   repoPath: string;

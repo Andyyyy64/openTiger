@@ -4,7 +4,7 @@ import {
   AcquireLeaseInput,
   isLeaseValid,
   getLeaseRemainingMs,
-} from "../../src/domain/lease.js";
+} from "../../src/domain/lease";
 
 describe("LeaseSchema", () => {
   const validLease = {

@@ -2,8 +2,8 @@ import { readdir, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { spawn } from "node:child_process";
 import { runOpenCode } from "@openTiger/llm";
-import type { Requirement } from "./parser.js";
-import { getPlannerOpenCodeEnv } from "./opencode-config.js";
+import type { Requirement } from "./parser";
+import { getPlannerOpenCodeEnv } from "./opencode-config";
 
 export interface CodebaseInspection {
   summary: string;

@@ -1,7 +1,7 @@
 import { db } from "@openTiger/db";
 import { tasks, runs, artifacts } from "@openTiger/db/schema";
 import { eq, inArray, and, isNull, desc } from "drizzle-orm";
-import { recordEvent } from "../monitors/event-logger.js";
+import { recordEvent } from "../monitors/event-logger";
 
 // 失敗したタスクを再キューイング（即時、全件）
 export async function requeueFailedTasks(): Promise<number> {

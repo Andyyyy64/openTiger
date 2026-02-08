@@ -1,6 +1,6 @@
 import { db } from "@openTiger/db";
 import { events } from "@openTiger/db/schema";
-import type { EvaluationSummary, JudgeResult } from "./pr-reviewer.js";
+import type { EvaluationSummary, JudgeResult } from "./pr-reviewer";
 
 export async function recordJudgeReview(
   pr: {

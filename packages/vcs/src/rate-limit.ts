@@ -1,4 +1,4 @@
-import { getOctokit } from "./client.js";
+import { getOctokit } from "./client";
 
 // Rate Limit情報
 export interface RateLimitInfo {

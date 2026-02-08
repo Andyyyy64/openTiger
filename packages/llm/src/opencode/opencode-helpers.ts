@@ -4,7 +4,7 @@ import {
   DOOM_LOOP_PATTERN_REPEAT_THRESHOLD,
   QUOTA_EXCEEDED_ERRORS,
   RETRYABLE_ERRORS,
-} from "./opencode-constants.js";
+} from "./opencode-constants";
 
 export function isRetryableError(stderr: string, exitCode: number): boolean {
   if (exitCode === 1 && !stderr) return false;

@@ -4,17 +4,17 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { setupProcessLogging } from "@openTiger/core/process-logging";
 import "dotenv/config";
-import { tasksRoute } from "./routes/tasks.js";
-import { runsRoute } from "./routes/runs.js";
-import { agentsRoute } from "./routes/agents.js";
-import { healthRoute } from "./routes/health.js";
-import { webhookRoute } from "./routes/webhook.js";
-import { plansRoute } from "./routes/plans.js";
-import { judgementsRoute } from "./routes/judgements.js";
-import { logsRoute } from "./routes/logs.js";
-import { configRoute } from "./routes/config.js";
-import { systemRoute } from "./routes/system.js";
-import { authMiddleware, rateLimitMiddleware } from "./middleware/index.js";
+import { tasksRoute } from "./routes/tasks";
+import { runsRoute } from "./routes/runs";
+import { agentsRoute } from "./routes/agents";
+import { healthRoute } from "./routes/health";
+import { webhookRoute } from "./routes/webhook";
+import { plansRoute } from "./routes/plans";
+import { judgementsRoute } from "./routes/judgements";
+import { logsRoute } from "./routes/logs";
+import { configRoute } from "./routes/config";
+import { systemRoute } from "./routes/system";
+import { authMiddleware, rateLimitMiddleware } from "./middleware/index";
 
 setupProcessLogging(process.env.OPENTIGER_LOG_NAME ?? "api", { label: "API" });
 

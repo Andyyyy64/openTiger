@@ -15,7 +15,7 @@ import {
   getCycleState,
   updateConfig,
   calculateCycleStats,
-} from "./cycle-controller.js";
+} from "./cycle-controller";
 import {
   performFullCleanup,
   cleanupExpiredLeases,
@@ -23,7 +23,7 @@ import {
   cancelStuckRuns,
   requeueFailedTasksWithCooldown,
   requeueBlockedTasksWithCooldown,
-} from "./cleaners/index.js";
+} from "./cleaners/index";
 import {
   recordEvent,
   getCostSummary,
@@ -31,14 +31,14 @@ import {
   checkCostLimits,
   getDetectedAnomalies,
   clearAnomalies,
-} from "./monitors/index.js";
+} from "./monitors/index";
 import {
   captureSystemState,
   persistState,
   updateCycleStats,
   performHealthCheck,
-} from "./state-manager.js";
-import type { SystemState } from "./state-manager.js";
+} from "./state-manager";
+import type { SystemState } from "./state-manager";
 
 // Cycle Manager設定
 interface CycleManagerConfig {

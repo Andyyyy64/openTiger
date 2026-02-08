@@ -1,8 +1,8 @@
 import { runOpenCode } from "@openTiger/llm";
 import type { CreateTaskInput } from "@openTiger/core";
-import type { Requirement } from "../parser.js";
-import type { CodebaseInspection } from "../inspection.js";
-import { getPlannerOpenCodeEnv } from "../opencode-config.js";
+import type { Requirement } from "../parser";
+import type { CodebaseInspection } from "../inspection";
+import { getPlannerOpenCodeEnv } from "../opencode-config";
 
 // タスク生成結果
 export interface PlannedTaskInput extends CreateTaskInput {

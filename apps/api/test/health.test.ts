@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Hono } from "hono";
-import { healthRoute } from "../src/routes/health.js";
+import { healthRoute } from "../src/routes/health";
 
 describe("healthRoute", () => {
   it("returns basic health status", async () => {

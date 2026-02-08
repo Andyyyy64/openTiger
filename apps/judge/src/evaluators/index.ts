@@ -5,7 +5,7 @@ export {
   getCIStatus,
   type CIEvaluationResult,
   type CICheckDetail,
-} from "./ci.js";
+} from "./ci";
 
 export {
   evaluatePolicy,
@@ -13,7 +13,7 @@ export {
   evaluateRiskLevel,
   type PolicyEvaluationResult,
   type PolicyViolation,
-} from "./policy.js";
+} from "./policy";
 
 export {
   evaluateLLM,
@@ -21,7 +21,7 @@ export {
   evaluateSimple,
   type LLMEvaluationResult,
   type CodeIssue,
-} from "./llm.js";
+} from "./llm";
 
 export {
   getLocalDiffStats,
@@ -29,4 +29,4 @@ export {
   evaluateLocalCI,
   evaluateLocalPolicy,
   type LocalDiffStats,
-} from "./local.js";
+} from "./local";

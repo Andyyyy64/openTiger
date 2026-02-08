@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import type { OpenCodeOptions } from "./opencode-types.js";
+import type { OpenCodeOptions } from "./opencode-types";
 
 export async function buildOpenCodePrompt(options: OpenCodeOptions): Promise<string> {
   if (!options.instructionsPath) {

@@ -2,7 +2,7 @@ import { db } from "@openTiger/db";
 import { runs, tasks } from "@openTiger/db/schema";
 import { eq, and, gte, lte, sql, count, sum, avg } from "drizzle-orm";
 import { SYSTEM_ENTITY_ID } from "@openTiger/core";
-import { recordEvent } from "./event-logger.js";
+import { recordEvent } from "./event-logger";
 
 // コスト追跡設定
 interface CostConfig {

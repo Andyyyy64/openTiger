@@ -2,8 +2,8 @@ import { db } from "@openTiger/db";
 import { runs, tasks, agents, leases } from "@openTiger/db/schema";
 import { eq, and, gte, lt, count, sql } from "drizzle-orm";
 import { SYSTEM_ENTITY_ID, type AnomalyAlert } from "@openTiger/core";
-import { recordEvent } from "./event-logger.js";
-import { getLastHourCost, getTodayCost } from "./cost-tracker.js";
+import { recordEvent } from "./event-logger";
+import { getLastHourCost, getTodayCost } from "./cost-tracker";
 
 // 異常検知設定
 interface AnomalyConfig {

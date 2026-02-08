@@ -1,5 +1,5 @@
-import type { Requirement } from "./parser.js";
-import type { PlannedTaskInput, TaskGenerationResult } from "./strategies/index.js";
+import type { Requirement } from "./parser";
+import type { PlannedTaskInput, TaskGenerationResult } from "./strategies/index";
 
 // 初期化タスクで変更を許可するルート設定ファイル
 export const INIT_ALLOWED_PATHS = [

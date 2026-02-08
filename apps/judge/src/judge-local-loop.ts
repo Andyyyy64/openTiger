@@ -1,17 +1,17 @@
 import { db } from "@openTiger/db";
 import { tasks } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
-import { createDocserTaskForLocal } from "./docser.js";
-import { resolveBaseRepoRecoveryRules, type JudgeConfig } from "./judge-config.js";
-import { getPendingWorktrees } from "./judge-pending.js";
-import { safeSetJudgeAgentState } from "./judge-agent.js";
-import { recordLocalReview } from "./judge-events.js";
-import { judgeSingleWorktree, buildJudgeFailureMessage } from "./judge-evaluate.js";
-import { mergeLocalBranch } from "./judge-local-merge.js";
+import { createDocserTaskForLocal } from "./docser";
+import { resolveBaseRepoRecoveryRules, type JudgeConfig } from "./judge-config";
+import { getPendingWorktrees } from "./judge-pending";
+import { safeSetJudgeAgentState } from "./judge-agent";
+import { recordLocalReview } from "./judge-events";
+import { judgeSingleWorktree, buildJudgeFailureMessage } from "./judge-evaluate";
+import { mergeLocalBranch } from "./judge-local-merge";
 import {
   requeueTaskAfterJudge,
   claimRunForJudgement,
-} from "./judge-retry.js";
+} from "./judge-retry";
 
 export async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log("=".repeat(60));

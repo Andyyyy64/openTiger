@@ -4,7 +4,7 @@ import {
   extractTokenUsage,
   parseClaudeCodeOutput,
   extractErrorReason,
-} from "../../src/claude-code/parse.js";
+} from "../../src/claude-code/parse";
 
 describe("FileChange schema", () => {
   it("有効なファイル変更を検証できる", () => {

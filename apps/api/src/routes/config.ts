@@ -8,8 +8,8 @@ import {
   CONFIG_KEYS,
   buildConfigRecord,
   rowToConfig,
-} from "../system-config.js";
-import { ensureConfigRow } from "../config-store.js";
+} from "../system-config";
+import { ensureConfigRow } from "../config-store";
 
 export const configRoute = new Hono();
 

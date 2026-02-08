@@ -4,7 +4,7 @@ import {
   AgentRole,
   AgentStatus,
   RegisterAgentInput,
-} from "../../src/domain/agent.js";
+} from "../../src/domain/agent";
 
 describe("AgentRole", () => {
   it("すべての有効な役割を受け入れる", () => {

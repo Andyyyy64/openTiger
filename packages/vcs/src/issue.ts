@@ -1,4 +1,4 @@
-import { getOctokit, getRepoInfo } from "./client.js";
+import { getOctokit, getRepoInfo } from "./client";
 
 export interface CreateIssueOptions {
   title: string;

@@ -1,4 +1,4 @@
-import type { OpenCodeOptions } from "./opencode-types.js";
+import type { OpenCodeOptions } from "./opencode-types";
 
 export function readRuntimeEnv(
   options: OpenCodeOptions,

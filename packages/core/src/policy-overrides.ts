@@ -1,5 +1,5 @@
-import type { Policy } from "./domain/policy.js";
-import { getRepoMode } from "./repo-mode.js";
+import type { Policy } from "./domain/policy";
+import { getRepoMode } from "./repo-mode";
 
 export function applyRepoModePolicyOverrides(
   policy: Policy,

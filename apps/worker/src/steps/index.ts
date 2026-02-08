@@ -1,7 +1,7 @@
 // Workerステップのエクスポート
-export * from "./checkout.js";
-export * from "./branch.js";
-export * from "./execute.js";
-export * from "./verify.js";
-export * from "./commit.js";
-export * from "./pr.js";
+export * from "./checkout";
+export * from "./branch";
+export * from "./execute";
+export * from "./verify";
+export * from "./commit";
+export * from "./pr";

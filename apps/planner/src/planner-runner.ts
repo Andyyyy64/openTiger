@@ -5,14 +5,14 @@ import {
   parseRequirementContent,
   validateRequirement,
   type Requirement,
-} from "./parser.js";
+} from "./parser";
 import {
   generateTasksFromRequirement,
   generateSimpleTasks,
   type TaskGenerationResult,
-} from "./strategies/index.js";
-import { inspectCodebase, formatInspectionNotes } from "./inspection.js";
-import type { CodebaseInspection } from "./inspection.js";
+} from "./strategies/index";
+import { inspectCodebase, formatInspectionNotes } from "./inspection";
+import type { CodebaseInspection } from "./inspection";
 import {
   normalizeGeneratedTasks,
   applyTaskRolePolicy,
@@ -23,18 +23,18 @@ import {
   sanitizeTaskDependencyIndexes,
   reduceRedundantDependencyIndexes,
   ensureInitializationTaskForUninitializedRepo,
-} from "./task-policies.js";
+} from "./task-policies";
 import {
   hasRootCheckScript,
   resolveCheckVerificationCommand,
   resolveDevVerificationCommand,
   resolveE2EVerificationCommand,
-} from "./planner-commands.js";
+} from "./planner-commands";
 import {
   detectDocGap,
   hasPendingDocserTask,
   buildDocserTaskForGap,
-} from "./planner-docs.js";
+} from "./planner-docs";
 import {
   attachExistingTasksToRequirement,
   attachInspectionToRequirement,
@@ -43,21 +43,21 @@ import {
   attachJudgeFeedbackToTasks,
   loadExistingTaskHints,
   loadJudgeFeedback,
-} from "./planner-notes.js";
-import { clipText, getErrorMessage, isRepoUninitialized } from "./planner-utils.js";
+} from "./planner-notes";
+import { clipText, getErrorMessage, isRepoUninitialized } from "./planner-utils";
 import {
   computePlanSignature,
   resolvePlanDedupeWindowMs,
   tryAcquirePlanSaveLock,
   wasPlanRecentlyCreated,
-} from "./planner-signature.js";
+} from "./planner-signature";
 import {
   createIssuesForTasks,
   recordPlannerPlanEvent,
   resolveDependencies,
   saveTasks,
-} from "./planner-tasks.js";
-import { DEFAULT_CONFIG, type PlannerConfig } from "./planner-config.js";
+} from "./planner-tasks";
+import { DEFAULT_CONFIG, type PlannerConfig } from "./planner-config";
 
 function appendPlannerWarning(
   result: TaskGenerationResult,

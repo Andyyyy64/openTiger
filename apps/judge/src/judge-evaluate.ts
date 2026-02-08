@@ -10,14 +10,14 @@ import {
   evaluateLocalPolicy,
   getLocalDiffStats,
   getLocalDiffText,
-} from "./evaluators/index.js";
+} from "./evaluators/index";
 import {
   makeJudgement,
   type EvaluationSummary,
   type JudgeResult,
-} from "./pr-reviewer.js";
-import { precheckPRMergeability, createLLMFailureResult } from "./judge-precheck.js";
-import type { JudgeConfig } from "./judge-config.js";
+} from "./pr-reviewer";
+import { precheckPRMergeability, createLLMFailureResult } from "./judge-precheck";
+import type { JudgeConfig } from "./judge-config";
 
 export async function judgeSinglePR(
   pr: {

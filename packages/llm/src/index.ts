@@ -1,3 +1,3 @@
-export * from "./claude-code/parse.js";
-export * from "./opencode/run.js";
-export * from "./opencode/parse.js";
+export * from "./claude-code/parse";
+export * from "./opencode/run";
+export * from "./opencode/parse";
