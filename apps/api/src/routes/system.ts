@@ -66,6 +66,7 @@ type ProcessRuntime = {
   restartAttempts?: number;
   restartWindowStartedAt?: number;
   restartScheduled?: boolean;
+  restartTimer?: ReturnType<typeof setTimeout>;
 };
 
 type StartPayload = {
@@ -96,6 +97,7 @@ const systemRoute = new Hono();
 let restartProcess: ChildProcess | null = null;
 let restartStatus: RestartStatus = { status: "idle" };
 const managedProcesses = new Map<string, ProcessRuntime>();
+const processStartPromises = new Map<string, Promise<ProcessInfo>>();
 const processStartLocks = new Set<string>();
 const AUTO_RESTART_ENABLED = process.env.SYSTEM_PROCESS_AUTO_RESTART !== "false";
 const AUTO_RESTART_DELAY_MS = Number.parseInt(
@@ -110,6 +112,7 @@ const AUTO_RESTART_MAX_ATTEMPTS = Number.parseInt(
   process.env.SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS ?? "-1",
   10
 );
+const DEFAULT_REPLAN_COMMAND = "pnpm --filter @openTiger/planner run start:fresh";
 
 type GitHubContext = {
   token: string;
@@ -1172,6 +1175,10 @@ async function scheduleProcessAutoRestart(
   definition: ProcessDefinition,
   runtime: ProcessRuntime
 ): Promise<void> {
+  if (runtime.restartTimer) {
+    clearTimeout(runtime.restartTimer);
+  }
+
   const now = Date.now();
   const windowMs = Number.isFinite(AUTO_RESTART_WINDOW_MS) && AUTO_RESTART_WINDOW_MS > 0
     ? AUTO_RESTART_WINDOW_MS
@@ -1210,29 +1217,37 @@ async function scheduleProcessAutoRestart(
     restartAttempts: nextAttempts,
     restartWindowStartedAt: nextWindowStart,
     restartScheduled: true,
+    restartTimer: undefined,
     message: `Auto-restart scheduled (${attemptLabel}, delay=${nextDelayMs}ms)`,
   });
 
-  setTimeout(async () => {
+  const restartTimer = setTimeout(async () => {
     const latest = managedProcesses.get(definition.name);
     if (!latest) {
       return;
     }
-    if (latest.stopRequested || latest.status === "running") {
+    const latestWithoutTimer: ProcessRuntime = {
+      ...latest,
+      restartTimer: undefined,
+    };
+    managedProcesses.set(definition.name, latestWithoutTimer);
+    if (latestWithoutTimer.stopRequested || latestWithoutTimer.status === "running") {
       managedProcesses.set(definition.name, {
-        ...latest,
+        ...latestWithoutTimer,
         restartScheduled: false,
+        restartTimer: undefined,
       });
       return;
     }
 
     try {
-      await startManagedProcess(definition, latest.lastPayload ?? {});
+      await startManagedProcess(definition, latestWithoutTimer.lastPayload ?? {});
       const refreshed = managedProcesses.get(definition.name);
       if (refreshed) {
         managedProcesses.set(definition.name, {
           ...refreshed,
           restartScheduled: false,
+          restartTimer: undefined,
           message: `Auto-restarted (${attemptLabel})`,
         });
       }
@@ -1244,107 +1259,143 @@ async function scheduleProcessAutoRestart(
         managedProcesses.set(definition.name, {
           ...updated,
           restartScheduled: false,
+          restartTimer: undefined,
           message: `Auto-restart failed: ${message}`,
         });
       }
       console.error(`[System] Auto-restart failed for ${definition.name}: ${message}`);
     }
   }, nextDelayMs);
+  if (typeof restartTimer.unref === "function") {
+    restartTimer.unref();
+  }
+  const updated = managedProcesses.get(definition.name);
+  if (updated) {
+    managedProcesses.set(definition.name, {
+      ...updated,
+      restartTimer,
+    });
+  }
 }
 
 async function startManagedProcess(
   definition: ProcessDefinition,
   payload: StartPayload
 ): Promise<ProcessInfo> {
-  const existing = managedProcesses.get(definition.name);
-  if (existing?.status === "running") {
-    return buildProcessInfo(definition, existing);
+  const inFlightStart = processStartPromises.get(definition.name);
+  if (inFlightStart) {
+    return inFlightStart;
   }
 
-  const configRow = await ensureConfigRow();
-  const configEnv = configToEnv(configRow);
-  const command = await definition.buildStart(payload);
-  const startedAt = new Date().toISOString();
-  const logDir = resolveLogDir();
-  mkdirSync(logDir, { recursive: true });
-  const logPath = join(logDir, `system-${definition.name}-${Date.now()}.log`);
-  const logStream = createWriteStream(logPath, { flags: "a" });
-
-  const child = spawn(command.command, command.args, {
-    cwd: command.cwd ?? resolveRepoRoot(),
-    env: {
-      ...process.env,
-      ...configEnv,
-      ...command.env,
-      OPENTIGER_LOG_DIR: logDir,
-    },
-    detached: true,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  // Stream logs to file for tracking
-  child.stdout?.pipe(logStream);
-  child.stderr?.pipe(logStream);
-
-  const runtime: ProcessRuntime = {
-    status: "running",
-    startedAt,
-    pid: child.pid,
-    logPath,
-    lastCommand: describeCommand(command),
-    process: child,
-    stopRequested: false,
-    lastPayload: payload,
-    restartScheduled: false,
-    restartAttempts: existing?.restartAttempts,
-    restartWindowStartedAt: existing?.restartWindowStartedAt,
-  };
-  managedProcesses.set(definition.name, runtime);
-
-  // Update state when process exits
-  child.on("exit", (code, signal) => {
-    const latest = managedProcesses.get(definition.name);
-    if (!latest) return;
-    const status = latest.stopRequested
-      ? "stopped"
-      : code === 0
-        ? "completed"
-        : "failed";
-    const nextRuntime: ProcessRuntime = {
-      ...latest,
-      status,
-      finishedAt: new Date().toISOString(),
-      exitCode: code,
-      signal,
-      process: null,
-    };
-    managedProcesses.set(definition.name, nextRuntime);
-    logStream.end();
-
-    if (canAutoRestart(definition, nextRuntime)) {
-      void scheduleProcessAutoRestart(definition, nextRuntime);
+  const startPromise = (async () => {
+    const existing = managedProcesses.get(definition.name);
+    if (existing?.status === "running") {
+      return buildProcessInfo(definition, existing);
     }
-  });
-
-  child.on("error", (error) => {
-    const latest = managedProcesses.get(definition.name);
-    if (!latest) return;
-    const nextRuntime: ProcessRuntime = {
-      ...latest,
-      status: "failed",
-      finishedAt: new Date().toISOString(),
-      message: error.message,
-      process: null,
-    };
-    managedProcesses.set(definition.name, nextRuntime);
-    logStream.end();
-
-    if (canAutoRestart(definition, nextRuntime)) {
-      void scheduleProcessAutoRestart(definition, nextRuntime);
+    if (existing?.restartTimer) {
+      clearTimeout(existing.restartTimer);
+      managedProcesses.set(definition.name, {
+        ...existing,
+        restartTimer: undefined,
+        restartScheduled: false,
+      });
     }
-  });
 
-  child.unref();
-  return buildProcessInfo(definition, runtime);
+    const configRow = await ensureConfigRow();
+    const configEnv = configToEnv(configRow);
+    const command = await definition.buildStart(payload);
+    const startedAt = new Date().toISOString();
+    const logDir = resolveLogDir();
+    mkdirSync(logDir, { recursive: true });
+    const logPath = join(logDir, `system-${definition.name}-${Date.now()}.log`);
+    const logStream = createWriteStream(logPath, { flags: "a" });
+
+    const child = spawn(command.command, command.args, {
+      cwd: command.cwd ?? resolveRepoRoot(),
+      env: {
+        ...process.env,
+        ...configEnv,
+        ...command.env,
+        OPENTIGER_LOG_DIR: logDir,
+      },
+      detached: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    // Stream logs to file for tracking
+    child.stdout?.pipe(logStream);
+    child.stderr?.pipe(logStream);
+
+    const runtime: ProcessRuntime = {
+      status: "running",
+      startedAt,
+      pid: child.pid,
+      logPath,
+      lastCommand: describeCommand(command),
+      process: child,
+      stopRequested: false,
+      lastPayload: payload,
+      restartScheduled: false,
+      restartTimer: undefined,
+      restartAttempts: existing?.restartAttempts,
+      restartWindowStartedAt: existing?.restartWindowStartedAt,
+    };
+    managedProcesses.set(definition.name, runtime);
+
+    // Update state when process exits
+    child.on("exit", (code, signal) => {
+      const latest = managedProcesses.get(definition.name);
+      if (!latest) return;
+      const status = latest.stopRequested
+        ? "stopped"
+        : code === 0
+          ? "completed"
+          : "failed";
+      const nextRuntime: ProcessRuntime = {
+        ...latest,
+        status,
+        finishedAt: new Date().toISOString(),
+        exitCode: code,
+        signal,
+        process: null,
+      };
+      managedProcesses.set(definition.name, nextRuntime);
+      logStream.end();
+
+      if (canAutoRestart(definition, nextRuntime)) {
+        void scheduleProcessAutoRestart(definition, nextRuntime);
+      }
+    });
+
+    child.on("error", (error) => {
+      const latest = managedProcesses.get(definition.name);
+      if (!latest) return;
+      const nextRuntime: ProcessRuntime = {
+        ...latest,
+        status: "failed",
+        finishedAt: new Date().toISOString(),
+        message: error.message,
+        process: null,
+      };
+      managedProcesses.set(definition.name, nextRuntime);
+      logStream.end();
+
+      if (canAutoRestart(definition, nextRuntime)) {
+        void scheduleProcessAutoRestart(definition, nextRuntime);
+      }
+    });
+
+    child.unref();
+    return buildProcessInfo(definition, runtime);
+  })();
+
+  processStartPromises.set(definition.name, startPromise);
+  try {
+    return await startPromise;
+  } finally {
+    if (processStartPromises.get(definition.name) === startPromise) {
+      processStartPromises.delete(definition.name);
+    }
+  }
 }
 
 function stopManagedProcess(
@@ -1354,11 +1405,24 @@ function stopManagedProcess(
   if (!runtime) {
     return buildProcessInfo(definition, { status: "idle" });
   }
+  if (runtime.restartTimer) {
+    clearTimeout(runtime.restartTimer);
+  }
   if (runtime.status !== "running" || !runtime.process) {
-    return buildProcessInfo(definition, runtime);
+    const nextRuntime: ProcessRuntime = {
+      ...runtime,
+      stopRequested: true,
+      restartScheduled: false,
+      restartTimer: undefined,
+      message: "停止要求済み",
+    };
+    managedProcesses.set(definition.name, nextRuntime);
+    return buildProcessInfo(definition, nextRuntime);
   }
 
   runtime.stopRequested = true;
+  runtime.restartScheduled = false;
+  runtime.restartTimer = undefined;
   runtime.message = "停止要求済み";
   managedProcesses.set(definition.name, runtime);
 
@@ -1470,6 +1534,22 @@ async function ensureConfigRow() {
   const existing = await db.select().from(configTable).limit(1);
   const current = existing[0];
   if (current) {
+    const legacyReplanCommands = new Set([
+      "",
+      "pnpm --filter @openTiger/planner start",
+      "pnpm --filter @sebastian-code/planner start",
+    ]);
+    if (legacyReplanCommands.has((current.replanCommand ?? "").trim())) {
+      const [updated] = await db
+        .update(configTable)
+        .set({
+          replanCommand: DEFAULT_REPLAN_COMMAND,
+          updatedAt: new Date(),
+        })
+        .where(eq(configTable.id, current.id))
+        .returning();
+      return updated ?? current;
+    }
     return current;
   }
   const created = await db
@@ -1830,7 +1910,7 @@ systemRoute.post("/processes/stop-all", async (c) => {
     }
 
     const runtime = managedProcesses.get(definition.name);
-    if (runtime?.status === "running" && runtime.process) {
+    if (runtime) {
       stopManagedProcess(definition);
       stopped.push(definition.name);
     } else {

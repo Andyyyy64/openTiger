@@ -44,7 +44,7 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "AUTO_REPLAN", column: "autoReplan", defaultValue: "true" },
   { key: "REPLAN_REQUIREMENT_PATH", column: "replanRequirementPath", defaultValue: "requirement.md" },
   { key: "REPLAN_INTERVAL_MS", column: "replanIntervalMs", defaultValue: "60000" },
-  { key: "REPLAN_COMMAND", column: "replanCommand", defaultValue: "pnpm --filter @openTiger/planner start" },
+  { key: "REPLAN_COMMAND", column: "replanCommand", defaultValue: "pnpm --filter @openTiger/planner run start:fresh" },
   { key: "REPLAN_WORKDIR", column: "replanWorkdir", defaultValue: "" },
   { key: "REPLAN_REPO_URL", column: "replanRepoUrl", defaultValue: "" },
   { key: "GITHUB_TOKEN", column: "githubToken", defaultValue: "" },
