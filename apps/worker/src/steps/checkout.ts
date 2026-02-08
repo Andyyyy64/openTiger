@@ -9,6 +9,7 @@ import {
   ensureBranchExists,
   cloneRepo,
   fetchLatest,
+  fetchRefspecs,
   resetHard,
   cleanUntracked,
   removeWorktree,
@@ -30,6 +31,7 @@ export interface CheckoutOptions {
   localRepoPath?: string;
   localWorktreeRoot?: string;
   branchName?: string;
+  extraFetchRefs?: string[];
 }
 
 export interface CheckoutResult {
@@ -64,6 +66,7 @@ export async function checkoutRepository(
     localRepoPath = getLocalRepoPath(),
     localWorktreeRoot = getLocalWorktreeRoot(),
     branchName,
+    extraFetchRefs = [],
   } = options;
 
   // Working directory per task
@@ -181,6 +184,18 @@ export async function checkoutRepository(
     }
 
     console.log("Repository cloned successfully");
+
+    if (extraFetchRefs.length > 0) {
+      console.log(`[Checkout] Fetching additional refs: ${extraFetchRefs.join(", ")}`);
+      const fetchRefsResult = await fetchRefspecs(repoPath, extraFetchRefs);
+      if (!fetchRefsResult.success) {
+        return {
+          success: false,
+          repoPath,
+          error: `Failed to fetch required refs: ${fetchRefsResult.stderr}`,
+        };
+      }
+    }
 
     return {
       success: true,

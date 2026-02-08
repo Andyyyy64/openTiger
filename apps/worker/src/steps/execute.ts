@@ -37,6 +37,20 @@ function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
     if (task.context.notes) {
       lines.push("## Notes", task.context.notes, "");
     }
+    if (task.context.pr?.number) {
+      lines.push("## PR Context");
+      lines.push(`- PR: #${task.context.pr.number}`);
+      if (task.context.pr.url) {
+        lines.push(`- URL: ${task.context.pr.url}`);
+      }
+      if (task.context.pr.headRef) {
+        lines.push(`- Head Ref: ${task.context.pr.headRef}`);
+      }
+      if (task.context.pr.baseRef) {
+        lines.push(`- Base Ref: ${task.context.pr.baseRef}`);
+      }
+      lines.push("");
+    }
   }
 
   if (retryHints.length > 0) {
@@ -65,6 +79,7 @@ function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
     "- Do not run any git operations (no commit/push/checkout/branch/rebase)",
     "- Do not run long-running dev/watch/start servers (forbidden: dev, watch, start, next dev, vite, turbo dev)",
     "- Never access files/directories outside the current repository working directory",
+    "- Never use absolute paths outside the repository (forbidden examples: /home/*, /tmp/* from other workspaces)",
     "- If expected files are missing, report the mismatch and stop instead of scanning parent/home directories",
     "- Execute actions directly; do not emit repetitive planning chatter",
     "- Never call todo/todoread/todowrite pseudo tools"

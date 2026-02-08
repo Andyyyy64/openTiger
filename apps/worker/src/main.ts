@@ -266,6 +266,69 @@ export interface WorkerResult {
   costTokens?: number;
 }
 
+interface TaskPrContext {
+  number: number;
+  headRef?: string;
+  baseRef?: string;
+}
+
+function resolveTaskPrContext(task: Task): TaskPrContext | null {
+  if (!task.context || typeof task.context !== "object") {
+    return null;
+  }
+  const contextRecord = task.context as Record<string, unknown>;
+  const pr = contextRecord.pr;
+  if (!pr || typeof pr !== "object") {
+    return null;
+  }
+  const prRecord = pr as Record<string, unknown>;
+  const number = prRecord.number;
+  if (typeof number !== "number" || !Number.isFinite(number) || number <= 0) {
+    return null;
+  }
+  const headRef = typeof prRecord.headRef === "string" && prRecord.headRef.trim().length > 0
+    ? prRecord.headRef.trim()
+    : undefined;
+  const baseRef = typeof prRecord.baseRef === "string" && prRecord.baseRef.trim().length > 0
+    ? prRecord.baseRef.trim()
+    : undefined;
+  return { number, headRef, baseRef };
+}
+
+function buildPrFetchRefspecs(prContext: TaskPrContext | null): string[] {
+  if (!prContext) {
+    return [];
+  }
+  if (prContext.headRef) {
+    return [`+refs/heads/${prContext.headRef}:refs/remotes/origin/${prContext.headRef}`];
+  }
+  return [`+refs/pull/${prContext.number}/head:refs/remotes/origin/pull/${prContext.number}`];
+}
+
+function resolveBranchBaseRef(prContext: TaskPrContext | null, fallbackBaseBranch: string): string {
+  if (!prContext) {
+    return fallbackBaseBranch;
+  }
+  if (prContext.headRef) {
+    return `origin/${prContext.headRef}`;
+  }
+  return `origin/pull/${prContext.number}`;
+}
+
+function sanitizeRetryHint(message: string): string {
+  return message
+    .replace(/\x1B\[[0-9;]*m/g, "")
+    .replace(/\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+/g, "<path>")
+    .replace(/external_directory\s*\([^)]*\)/gi, "external_directory(<path>)")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isNoCommitsBetweenError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("no commits between");
+}
+
 // Worker main processing
 export async function runWorker(
   taskData: Task,
@@ -284,6 +347,7 @@ export async function runWorker(
   } = config;
   const repoMode = getRepoMode();
   const effectivePolicy = applyRepoModePolicyOverrides(policy);
+  const taskPrContext = repoMode === "git" ? resolveTaskPrContext(taskData) : null;
 
   const taskId = taskData.id;
   const agentLabel = role === "tester"
@@ -295,6 +359,12 @@ export async function runWorker(
   console.log("=".repeat(60));
   console.log(`${agentLabel} ${agentId} starting task: ${taskData.title}`);
   console.log("=".repeat(60));
+  if (taskPrContext) {
+    console.log(
+      `[Worker] Using PR context: #${taskPrContext.number}` +
+      (taskPrContext.headRef ? ` (head=${taskPrContext.headRef})` : "")
+    );
+  }
 
   // Create execution record
   const runRecords = await db
@@ -341,6 +411,7 @@ export async function runWorker(
       localRepoPath: getLocalRepoPath(),
       localWorktreeRoot: `${getLocalWorktreeRoot()}/${agentId}`,
       branchName: localBranchName,
+      extraFetchRefs: buildPrFetchRefspecs(taskPrContext),
     });
 
     if (!checkoutResult.success) {
@@ -361,7 +432,7 @@ export async function runWorker(
         repoPath,
         agentId,
         taskId,
-        baseBranch,
+        baseRef: resolveBranchBaseRef(taskPrContext, baseBranch),
       });
 
       if (!branchResult.success) {
@@ -414,9 +485,7 @@ export async function runWorker(
     const retryHints = previousFailures
       .map((row) => {
         const status = row.status === "cancelled" ? "cancelled" : "failed";
-        const reason = (row.errorMessage ?? "No detailed error message")
-          .replace(/\s+/g, " ")
-          .trim()
+        const reason = sanitizeRetryHint(row.errorMessage ?? "No detailed error message")
           .slice(0, 240);
         return `${status} on ${row.agentId}: ${reason}`;
       });
@@ -524,6 +593,47 @@ export async function runWorker(
       throw new Error(commitResult.error);
     }
 
+    if (!commitResult.committed) {
+      console.log("\n[7/7] Skipping PR...");
+      console.log("[Worker] Commit step produced no new commit. Marking task as no-op success.");
+
+      await db
+        .update(runs)
+        .set({
+          status: "success",
+          finishedAt: new Date(),
+          costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+        })
+        .where(eq(runs.id, runId));
+
+      await db
+        .update(tasks)
+        .set({
+          status: "done",
+          blockReason: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(tasks.id, taskId));
+
+      await db.delete(leases).where(eq(leases.taskId, taskId));
+
+      await db
+        .update(agents)
+        .set({ status: "idle", currentTaskId: null })
+        .where(eq(agents.id, agentId));
+
+      console.log("\n" + "=".repeat(60));
+      console.log("Task completed successfully (no-op after commit check).");
+      console.log("No commit was created, so PR creation was skipped.");
+      console.log("=".repeat(60));
+
+      return {
+        success: true,
+        taskId,
+        runId,
+      };
+    }
+
     // Record commit as artifact
     await db.insert(artifacts).values({
       runId,
@@ -559,6 +669,41 @@ export async function runWorker(
     });
 
     if (!prResult.success) {
+      if (isNoCommitsBetweenError(prResult.error ?? "")) {
+        console.warn("[Worker] No commits between base/head at PR creation. Treating as no-op success.");
+
+        await db
+          .update(runs)
+          .set({
+            status: "success",
+            finishedAt: new Date(),
+            costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+            errorMessage: "No commits between branches; PR creation skipped as no-op.",
+          })
+          .where(eq(runs.id, runId));
+
+        await db
+          .update(tasks)
+          .set({
+            status: "done",
+            blockReason: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, taskId));
+
+        await db.delete(leases).where(eq(leases.taskId, taskId));
+
+        await db
+          .update(agents)
+          .set({ status: "idle", currentTaskId: null })
+          .where(eq(agents.id, agentId));
+
+        return {
+          success: true,
+          taskId,
+          runId,
+        };
+      }
       throw new Error(prResult.error);
     }
 
