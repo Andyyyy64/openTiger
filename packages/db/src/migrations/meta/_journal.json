@@ -85,6 +85,13 @@
       "when": 1770547671111,
       "tag": "0011_long_invaders",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1770835200000,
+      "tag": "0012_planner_use_remote_default",
+      "breakpoints": true
     }
   ]
 }

@@ -154,7 +154,7 @@ export const config = pgTable("config", {
   plannerModel: text("planner_model").default("google/gemini-3-pro-preview").notNull(),
   judgeModel: text("judge_model").default("google/gemini-3-pro-preview").notNull(),
   workerModel: text("worker_model").default("google/gemini-3-flash-preview").notNull(),
-  plannerUseRemote: text("planner_use_remote").default("false").notNull(),
+  plannerUseRemote: text("planner_use_remote").default("true").notNull(),
   plannerRepoUrl: text("planner_repo_url").default("").notNull(),
   autoReplan: text("auto_replan").default("true").notNull(),
   replanRequirementPath: text("replan_requirement_path").default("requirement.md").notNull(),
