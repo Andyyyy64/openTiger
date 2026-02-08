@@ -1,6 +1,6 @@
 import { runOpenCode } from "@openTiger/llm";
 import type { CreateTaskInput } from "@openTiger/core";
-import { PLANNER_OPENCODE_CONFIG_PATH } from "../opencode-config.js";
+import { getPlannerOpenCodeEnv } from "../opencode-config.js";
 
 // GitHub Issue情報
 export interface GitHubIssue {
@@ -165,7 +165,7 @@ export async function generateTasksFromIssue(
     model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
     timeoutSeconds: options.timeoutSeconds ?? 300,
     // Plannerはプロンプト内の情報だけで判断するためツールを使わない
-    env: { OPENCODE_CONFIG: PLANNER_OPENCODE_CONFIG_PATH },
+    env: getPlannerOpenCodeEnv(),
   });
 
   if (!result.success) {

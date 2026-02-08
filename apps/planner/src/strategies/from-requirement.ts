@@ -2,7 +2,7 @@ import { runOpenCode } from "@openTiger/llm";
 import type { CreateTaskInput } from "@openTiger/core";
 import type { Requirement } from "../parser.js";
 import type { CodebaseInspection } from "../inspection.js";
-import { PLANNER_OPENCODE_CONFIG_PATH } from "../opencode-config.js";
+import { getPlannerOpenCodeEnv } from "../opencode-config.js";
 
 // タスク生成結果
 export interface PlannedTaskInput extends CreateTaskInput {
@@ -212,7 +212,7 @@ export async function generateTasksFromRequirement(
     model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
     timeoutSeconds: options.timeoutSeconds ?? 300,
     // Plannerはプロンプト内の情報だけで判断するためツールを使わない
-    env: { OPENCODE_CONFIG: PLANNER_OPENCODE_CONFIG_PATH },
+    env: getPlannerOpenCodeEnv(),
   });
 
   if (!result.success) {

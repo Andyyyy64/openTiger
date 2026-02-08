@@ -3,7 +3,7 @@ import { extname, join } from "node:path";
 import { spawn } from "node:child_process";
 import { runOpenCode } from "@openTiger/llm";
 import type { Requirement } from "./parser.js";
-import { PLANNER_OPENCODE_CONFIG_PATH } from "./opencode-config.js";
+import { getPlannerOpenCodeEnv } from "./opencode-config.js";
 
 export interface CodebaseInspection {
   summary: string;
@@ -365,8 +365,16 @@ function extractJsonFromResponse(response: string): unknown {
 
 // 1回あたりのLLM呼び出しタイムアウト（秒）
 const PER_ATTEMPT_TIMEOUT_SECONDS = 120;
-// 応答がない場合のリトライ上限
-const INSPECTION_MAX_RETRIES = 3;
+// 応答がない場合のリトライ上限（-1で無制限）
+const INSPECTION_MAX_RETRIES = (() => {
+  const parsed = Number.parseInt(process.env.PLANNER_INSPECT_MAX_RETRIES ?? "-1", 10);
+  return Number.isFinite(parsed) ? parsed : -1;
+})();
+// クォータ超過時の待機時間（復旧を止めないため一定間隔で再試行する）
+const INSPECTION_QUOTA_RETRY_DELAY_MS = (() => {
+  const parsed = Number.parseInt(process.env.PLANNER_INSPECT_QUOTA_RETRY_DELAY_MS ?? "30000", 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30000;
+})();
 
 // runOpenCode が内部でハングした場合に備えて Promise.race で強制打ち切りする
 function withHardTimeout<T>(
@@ -391,6 +399,21 @@ function isQuotaExceededMessage(message: string): boolean {
   );
 }
 
+function isUnlimitedInspectionRetry(): boolean {
+  return INSPECTION_MAX_RETRIES < 0;
+}
+
+function formatInspectionRetryLimit(): string {
+  if (isUnlimitedInspectionRetry()) {
+    return "inf";
+  }
+  return String(Math.max(0, INSPECTION_MAX_RETRIES - 1));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function inspectCodebase(
   requirement: Requirement,
   options: {
@@ -403,25 +426,31 @@ export async function inspectCodebase(
 
   const model = process.env.PLANNER_INSPECT_MODEL ?? process.env.PLANNER_MODEL;
   const totalTimeout = options.timeoutSeconds ?? 180;
+  const hasDeadline = Number.isFinite(totalTimeout) && totalTimeout > 0;
   // 1回あたりのタイムアウトを全体枠に収まるように調整する
-  const perAttemptTimeout = Math.min(
-    PER_ATTEMPT_TIMEOUT_SECONDS,
-    Math.floor(totalTimeout / 2)
-  );
-  const deadline = Date.now() + totalTimeout * 1000;
+  const perAttemptTimeout = hasDeadline
+    ? Math.min(PER_ATTEMPT_TIMEOUT_SECONDS, Math.floor(totalTimeout / 2))
+    : PER_ATTEMPT_TIMEOUT_SECONDS;
+  const deadline = hasDeadline ? Date.now() + totalTimeout * 1000 : null;
 
   let lastError = "";
-  for (let attempt = 0; attempt < INSPECTION_MAX_RETRIES; attempt++) {
-    const remaining = Math.floor((deadline - Date.now()) / 1000);
-    if (remaining <= 10) {
+  let attempts = 0;
+  for (let attempt = 0; isUnlimitedInspectionRetry() || attempt < INSPECTION_MAX_RETRIES; attempt++) {
+    const remaining = deadline ? Math.floor((deadline - Date.now()) / 1000) : null;
+    if (remaining !== null && remaining <= 10) {
       console.warn("[Planner] Inspection deadline reached, giving up.");
       break;
     }
 
-    const attemptTimeout = Math.min(perAttemptTimeout, remaining);
+    const attemptTimeout = remaining !== null
+      ? Math.min(perAttemptTimeout, remaining)
+      : perAttemptTimeout;
     if (attempt > 0) {
-      console.log(`[Planner] Inspection retry ${attempt}/${INSPECTION_MAX_RETRIES - 1} (timeout: ${attemptTimeout}s)`);
+      console.log(
+        `[Planner] Inspection retry ${attempt}/${formatInspectionRetryLimit()} (timeout: ${attemptTimeout}s)`
+      );
     }
+    attempts = attempt + 1;
 
     try {
       // opencode プロセスが SIGTERM/SIGKILL を無視してハングする場合に備え、
@@ -436,7 +465,7 @@ export async function inspectCodebase(
           // runOpenCode内部のリトライは無効化し、ここで制御する
           maxRetries: 0,
           // Gemini 3系のfunction calling制約を避けるためツールを無効化する
-          env: { OPENCODE_CONFIG: PLANNER_OPENCODE_CONFIG_PATH },
+          env: getPlannerOpenCodeEnv(),
         }),
         hardTimeoutMs,
         "Inspection"
@@ -448,21 +477,25 @@ export async function inspectCodebase(
 
       lastError = result.stderr || `exit code ${result.exitCode}`;
       if (isQuotaExceededMessage(lastError)) {
-        console.warn("[Planner] クォータ上限のため差分点検を中断します。");
-        break;
+        console.warn("[Planner] クォータ上限のため差分点検を待機再試行します。");
+        await sleep(INSPECTION_QUOTA_RETRY_DELAY_MS);
+        continue;
       }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       if (isQuotaExceededMessage(lastError)) {
-        console.warn("[Planner] クォータ上限のため差分点検を中断します。");
-        break;
+        console.warn("[Planner] クォータ上限のため差分点検を待機再試行します。");
+        await sleep(INSPECTION_QUOTA_RETRY_DELAY_MS);
+        continue;
       }
     }
 
     console.warn(`[Planner] Inspection attempt ${attempt + 1} failed: ${lastError.slice(0, 200)}`);
   }
 
-  console.warn(`[Planner] Codebase inspection failed after ${INSPECTION_MAX_RETRIES} attempts: ${lastError.slice(0, 200)}`);
+  console.warn(
+    `[Planner] Codebase inspection failed after ${attempts} attempts: ${lastError.slice(0, 200)}`
+  );
   return;
 }
 

@@ -770,6 +770,23 @@ function clipText(text: string, maxLength: number): string {
   return `${text.slice(0, maxLength)}...`;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+function appendPlannerWarning(
+  result: TaskGenerationResult,
+  warning: string
+): TaskGenerationResult {
+  return {
+    ...result,
+    warnings: [...result.warnings, warning],
+  };
+}
+
 function normalizeStringList(items: unknown, maxItems: number): string[] {
   if (!Array.isArray(items)) {
     return [];
@@ -1669,18 +1686,31 @@ async function planFromRequirement(
       console.log(`[Planner] Inspection finished in ${elapsed}s`);
     }
     if (!inspection) {
-      console.error("[Planner] 差分点検に失敗したためタスク生成を中断します。");
-      throw new Error("Inspection failed");
+      console.warn("[Planner] 差分点検に失敗したため、点検なしモードで続行します。");
+      const inspectionUnavailableNote = [
+        "コードベース差分点検:",
+        "概要: 差分点検が失敗したため未実施",
+        "補足:",
+        "- LLMクォータ/タイムアウト時でもPlannerを停止しないため、簡易計画へフォールバックします。",
+      ].join("\n");
+      inspectionNotes = inspectionUnavailableNote;
+      requirement = attachInspectionToRequirement(requirement, inspectionUnavailableNote);
+    } else {
+      inspectionResult = inspection;
+      inspectionNotes = formatInspectionNotes(inspection);
+      requirement = attachInspectionToRequirement(requirement, inspectionNotes);
     }
-    inspectionResult = inspection;
-    inspectionNotes = formatInspectionNotes(inspection);
-    requirement = attachInspectionToRequirement(requirement, inspectionNotes);
   }
 
   // タスクを生成
   let result: TaskGenerationResult;
 
-  if (config.useLlm) {
+  const canUseLlmPlanning = config.useLlm && (repoUninitialized || Boolean(inspectionResult));
+  if (config.useLlm && !canUseLlmPlanning) {
+    console.warn("[Planner] 差分点検結果がないためLLM計画をスキップし、簡易計画へフォールバックします。");
+  }
+
+  if (canUseLlmPlanning) {
     console.log(`\n[Generating tasks with LLM...] (timeout: ${config.timeoutSeconds}s)`);
     const genStart = Date.now();
     const genHeartbeat = setInterval(() => {
@@ -1688,20 +1718,32 @@ async function planFromRequirement(
       console.log(`[Planner] Task generation in progress... (${elapsed}s elapsed)`);
     }, 30000);
     try {
-      result = await generateTasksFromRequirement(requirement, {
-        workdir: config.workdir,
-        instructionsPath: config.instructionsPath,
-        timeoutSeconds: config.timeoutSeconds,
-        inspection: inspectionResult,
-      });
+      try {
+        result = await generateTasksFromRequirement(requirement, {
+          workdir: config.workdir,
+          instructionsPath: config.instructionsPath,
+          timeoutSeconds: config.timeoutSeconds,
+          inspection: inspectionResult,
+        });
+      } catch (error) {
+        const message = clipText(getErrorMessage(error), 220);
+        console.warn(`[Planner] LLM task generation failed: ${message}`);
+        result = appendPlannerWarning(
+          generateSimpleTasks(requirement),
+          `LLM task generation failed; fallback used: ${message}`
+        );
+      }
     } finally {
       clearInterval(genHeartbeat);
       const elapsed = Math.round((Date.now() - genStart) / 1000);
       console.log(`[Planner] Task generation finished in ${elapsed}s`);
     }
   } else {
-    console.log("\n[Generating tasks without LLM...]");
-    result = generateSimpleTasks(requirement);
+    console.log("\n[Generating tasks without LLM (fallback mode)...]");
+    result = appendPlannerWarning(
+      generateSimpleTasks(requirement),
+      "LLM planning skipped because inspection was unavailable."
+    );
   }
 
   result = ensureInitializationTaskForUninitializedRepo(
@@ -2032,11 +2074,20 @@ export async function planFromContent(
       timeoutSeconds: fullConfig.inspectionTimeoutSeconds,
     });
     if (!inspection) {
-      throw new Error("差分点検に失敗したためタスク生成を中断します。");
+      console.warn("[Planner] 差分点検に失敗したため、点検なしモードで続行します。");
+      const inspectionUnavailableNote = [
+        "コードベース差分点検:",
+        "概要: 差分点検が失敗したため未実施",
+        "補足:",
+        "- LLMクォータ/タイムアウト時でもPlannerを停止しないため、簡易計画へフォールバックします。",
+      ].join("\n");
+      inspectionNotes = inspectionUnavailableNote;
+      requirement = attachInspectionToRequirement(requirement, inspectionUnavailableNote);
+    } else {
+      inspectionResult = inspection;
+      inspectionNotes = formatInspectionNotes(inspection);
+      requirement = attachInspectionToRequirement(requirement, inspectionNotes);
     }
-    inspectionResult = inspection;
-    inspectionNotes = formatInspectionNotes(inspection);
-    requirement = attachInspectionToRequirement(requirement, inspectionNotes);
   }
 
   if (repoUninitialized) {
@@ -2064,13 +2115,28 @@ export async function planFromContent(
     );
   }
 
-  if (fullConfig.useLlm) {
-    let result = await generateTasksFromRequirement(requirement, {
-      workdir: fullConfig.workdir,
-      instructionsPath: fullConfig.instructionsPath,
-      timeoutSeconds: fullConfig.timeoutSeconds,
-      inspection: inspectionResult,
-    });
+  const canUseLlmPlanning = fullConfig.useLlm && (repoUninitialized || Boolean(inspectionResult));
+  if (fullConfig.useLlm && !canUseLlmPlanning) {
+    console.warn("[Planner] 差分点検結果がないためLLM計画をスキップし、簡易計画へフォールバックします。");
+  }
+
+  if (canUseLlmPlanning) {
+    let result: TaskGenerationResult;
+    try {
+      result = await generateTasksFromRequirement(requirement, {
+        workdir: fullConfig.workdir,
+        instructionsPath: fullConfig.instructionsPath,
+        timeoutSeconds: fullConfig.timeoutSeconds,
+        inspection: inspectionResult,
+      });
+    } catch (error) {
+      const message = clipText(getErrorMessage(error), 220);
+      console.warn(`[Planner] LLM task generation failed: ${message}`);
+      result = appendPlannerWarning(
+        generateSimpleTasks(requirement),
+        `LLM task generation failed; fallback used: ${message}`
+      );
+    }
     const docGap = !repoUninitialized ? await detectDocGap(fullConfig.workdir) : undefined;
     if (docGap?.hasGap && !(await hasPendingDocserTask())) {
       const dependsOnIndexes = result.tasks.map((_, index) => index);
@@ -2117,7 +2183,12 @@ export async function planFromContent(
             applyTaskRolePolicy(
               normalizeGeneratedTasks(
                 reduceRedundantDependencyIndexes(
-                  sanitizeTaskDependencyIndexes(generateSimpleTasks(requirement))
+                  sanitizeTaskDependencyIndexes(
+                    appendPlannerWarning(
+                      generateSimpleTasks(requirement),
+                      "LLM planning skipped because inspection was unavailable."
+                    )
+                  )
                 )
               )
             ),
@@ -2153,7 +2224,9 @@ Environment Variables:
   PLANNER_TIMEOUT=300   LLM timeout in seconds
   PLANNER_MODEL=xxx     Planner LLM model
   PLANNER_INSPECT=false 差分点検は必須のため無視される
-  PLANNER_INSPECT_TIMEOUT=180  LLM inspection timeout in seconds
+  PLANNER_INSPECT_TIMEOUT=180  LLM inspection timeout in seconds (<=0で無制限)
+  PLANNER_INSPECT_MAX_RETRIES=-1  Inspection retry limit (-1で無制限)
+  PLANNER_INSPECT_QUOTA_RETRY_DELAY_MS=30000  Quota wait before retry
 
 Example:
   pnpm --filter @openTiger/planner start docs/requirements/feature-x.md
@@ -2245,6 +2318,5 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error("Planner crashed:", error);
-  process.exit(1);
+  console.error("[Planner] Run ended with error (process keeps recoverable):", error);
 });
