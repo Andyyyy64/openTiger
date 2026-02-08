@@ -947,6 +947,33 @@ function hasMergeConflictSignals(params: {
   );
 }
 
+async function getPrBranchContext(prNumber: number): Promise<{
+  headRef?: string;
+  headSha?: string;
+  baseRef?: string;
+}> {
+  try {
+    const octokit = getOctokit();
+    const { owner, repo } = getRepoInfo();
+    const response = await octokit.pulls.get({
+      owner,
+      repo,
+      pull_number: prNumber,
+    });
+    return {
+      headRef: response.data.head.ref ?? undefined,
+      headSha: response.data.head.sha ?? undefined,
+      baseRef: response.data.base.ref ?? undefined,
+    };
+  } catch (error) {
+    console.warn(
+      `[Judge] Failed to resolve PR branch context for #${prNumber}:`,
+      error
+    );
+    return {};
+  }
+}
+
 async function createAutoFixTaskForPr(params: {
   prNumber: number;
   prUrl: string;
@@ -1004,6 +1031,7 @@ async function createAutoFixTaskForPr(params: {
   );
   const summarizedIssues = summarizeLLMIssuesForTask(params.summary);
   const nextAttempt = attemptCount + 1;
+  const prBranchContext = await getPrBranchContext(params.prNumber);
 
   const [taskRow] = await db
     .insert(tasks)
@@ -1023,6 +1051,9 @@ async function createAutoFixTaskForPr(params: {
           url: params.prUrl,
           sourceTaskId: params.sourceTaskId,
           sourceRunId: params.sourceRunId,
+          headRef: prBranchContext.headRef,
+          headSha: prBranchContext.headSha,
+          baseRef: prBranchContext.baseRef,
         },
       },
       allowedPaths: params.allowedPaths.length > 0 ? params.allowedPaths : ["**"],
@@ -1112,6 +1143,7 @@ async function createConflictAutoFixTaskForPr(params: {
     ? params.summary.llm.reasons.map((reason) => `- ${reason}`).join("\n")
     : "- (none)";
   const nextAttempt = attemptCount + 1;
+  const prBranchContext = await getPrBranchContext(params.prNumber);
 
   const [taskRow] = await db
     .insert(tasks)
@@ -1135,6 +1167,9 @@ async function createConflictAutoFixTaskForPr(params: {
           url: params.prUrl,
           sourceTaskId: params.sourceTaskId,
           sourceRunId: params.sourceRunId,
+          headRef: prBranchContext.headRef,
+          headSha: prBranchContext.headSha,
+          baseRef: prBranchContext.baseRef,
         },
       },
       allowedPaths: params.allowedPaths.length > 0 ? params.allowedPaths : ["**"],
