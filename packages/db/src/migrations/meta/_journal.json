@@ -78,6 +78,13 @@
       "when": 1770531497493,
       "tag": "0010_military_hex",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1770547671111,
+      "tag": "0011_long_invaders",
+      "breakpoints": true
     }
   ]
 }
