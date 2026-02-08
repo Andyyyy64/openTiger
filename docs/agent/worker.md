@@ -1,42 +1,40 @@
 # Worker Agent
 
-最終更新: 2026-02-06
+## 1. Role
 
-## 1. 役割
+Implement tasks and produce artifacts through verification.
 
-task を実装し、検証を通して成果物を生成する。
-
-`AGENT_ROLE` により実体は次に分かれる。
+The role is determined by `AGENT_ROLE`:
 
 - `worker`
 - `tester`
 - `docser`
 
-## 2. 実行フロー
+## 2. Execution Flow
 
-1. run レコード作成
-2. checkout / branch 準備
-3. OpenCode 実行
-4. verify 実行
+1. Create run record
+2. Prepare checkout / branch
+3. Run OpenCode
+4. Run verify
 5. commit/push or local commit
-6. PR作成（git mode）
-7. run/task/artifact 更新
+6. Create PR (git mode)
+7. Update run/task/artifact
 
-## 3. 重要仕様
+## 3. Key Specifications
 
-- 同一task重複実行を lock で防止
-- run成功時は task を `blocked(awaiting_judge)` へ遷移
-- run失敗時は task を `failed`
-- `costTokens` は OpenCode token usage を保存
-- retry時は過去失敗のヒントをプロンプトに注入
+- Prevent duplicate task execution with a lock
+- On run success, transition task to `blocked(awaiting_judge)`
+- On run failure, transition task to `failed`
+- Store OpenCode token usage in `costTokens`
+- Inject hints from past failures into the prompt on retry
 
-## 4. セーフティ
+## 4. Safety
 
-- denyコマンドは OpenCode 実行前に拒否
-- verify 実行前にも deny 判定
-- verify は非破壊（repo状態を書き換えない）
+- Denylisted commands are rejected before OpenCode execution
+- Deny checks also run before verify
+- Verify is non-destructive (does not mutate repo state)
 
-## 5. 主な設定
+## 5. Main Settings
 
 - `AGENT_ID`
 - `AGENT_ROLE`
@@ -46,8 +44,8 @@ task を実装し、検証を通して成果物を生成する。
 - `REPO_MODE`, `LOCAL_REPO_PATH`, `LOCAL_WORKTREE_ROOT`
 - `OPENTIGER_TASK_LOCK_DIR`
 
-## 6. 失敗時
+## 6. On Failure
 
-- `runs.errorMessage` に原因を保存
-- task は `failed` に遷移
-- Cycle Manager の分類ベース再試行へ委譲
+- Save the cause to `runs.errorMessage`
+- Transition task to `failed`
+- Delegate to Cycle Manager classification-based retries

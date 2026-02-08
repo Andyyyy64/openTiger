@@ -1,22 +1,20 @@
-# 運用モード
+# Operating Modes
 
-最終更新: 2026-02-06
+Operating mode is defined by three axes.
 
-運用モードは3軸で決まる。
-
-- リポジトリ運用: `REPO_MODE`
-- Judge実行: `JUDGE_MODE`
-- Worker起動: `LAUNCH_MODE`
+- Repository operation: `REPO_MODE`
+- Judge execution: `JUDGE_MODE`
+- Worker launch: `LAUNCH_MODE`
 
 ## 1. REPO_MODE
 
 ### `REPO_MODE=git`
 
-- remote repo を clone して作業
-- push と PR 作成を行う
-- Judge は PRベース判定が基本
+- Work by cloning a remote repo
+- Push and create PRs
+- Judge is primarily PR-based
 
-必要な主設定:
+Required settings:
 
 - `REPO_URL`
 - `BASE_BRANCH`
@@ -24,11 +22,11 @@
 
 ### `REPO_MODE=local`
 
-- `LOCAL_REPO_PATH` を基点に `git worktree` で並列作業
-- push と PR は行わない
-- Judge は local diff 評価を行う
+- Use `git worktree` in parallel based on `LOCAL_REPO_PATH`
+- Do not push or create PRs
+- Judge evaluates local diffs
 
-必要な主設定:
+Required settings:
 
 - `LOCAL_REPO_PATH`
 - `LOCAL_WORKTREE_ROOT`
@@ -37,13 +35,13 @@
 ## 2. JUDGE_MODE
 
 - `JUDGE_MODE=git`
-  - 強制的にPRモード
+  - Force PR mode
 - `JUDGE_MODE=local`
-  - 強制的にlocalモード
-- `JUDGE_MODE=auto` または未指定
-  - `REPO_MODE` に追従
+  - Force local mode
+- `JUDGE_MODE=auto` or unset
+  - Follow `REPO_MODE`
 
-補助設定:
+Supporting settings:
 
 - `JUDGE_MERGE_ON_APPROVE` (default: true)
 - `JUDGE_REQUEUE_ON_NON_APPROVE` (default: true)
@@ -52,31 +50,31 @@
 ## 3. LAUNCH_MODE
 
 - `LAUNCH_MODE=process`
-  - 常駐workerにキュー配信
-  - 実運用での推奨デフォルト
+  - Dispatch queues to resident workers
+  - Recommended default for production
 - `LAUNCH_MODE=docker`
-  - タスクごとにDockerコンテナ実行
-  - 隔離強化が必要な環境向け
+  - Run one Docker container per task
+  - For environments that require stronger isolation
 
-## 4. 推奨組み合わせ
+## 4. Recommended Combinations
 
-- CI/PR中心運用:
+- CI/PR-centric operation:
   - `REPO_MODE=git`
   - `JUDGE_MODE=auto`
   - `LAUNCH_MODE=process`
-- ローカル高速検証:
+- Fast local verification:
   - `REPO_MODE=local`
   - `JUDGE_MODE=auto`
   - `LAUNCH_MODE=process`
-- 厳格隔離運用:
-  - `REPO_MODE=git` または `local`
+- Strict isolation:
+  - `REPO_MODE=git` or `local`
   - `LAUNCH_MODE=docker`
 
-## 5. 重要な再試行設定
+## 5. Critical Retry Settings
 
 - `FAILED_TASK_RETRY_COOLDOWN_MS`
 - `FAILED_TASK_MAX_RETRY_COUNT`
 - `BLOCKED_TASK_RETRY_COOLDOWN_MS`
 - `DISPATCH_RETRY_DELAY_MS`
 
-上記は「止まらず並列で完走」の挙動に直結する。
+These directly determine the "never stall, finish in parallel" behavior.

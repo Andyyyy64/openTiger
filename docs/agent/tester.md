@@ -1,40 +1,38 @@
 # Tester Agent
 
-最終更新: 2026-02-06
+## 1. Role
 
-## 1. 役割
+A dedicated worker role for test-related tasks.
 
-テスト関連taskを担当する専用workerロール。
+It uses the same execution foundation as Worker and runs with `AGENT_ROLE=tester`.
 
-実体は Worker と同じ実行基盤を使い、`AGENT_ROLE=tester` で動作する。
+## 2. Expected Work
 
-## 2. 期待される仕事
+- Prepare verification commands for existing implementations
+- Add unit/integration/E2E tests
+- Summarize failure logs
 
-- 既存実装に対する検証コマンド整備
-- 単体/統合/E2Eテストの追加
-- 失敗ログの要約
+## 3. Current Design Policy
 
-## 3. 現在の設計方針
+- Test tasks are tagged with `role=tester` by Planner
+- Dispatcher routes to tester agents based on role
+- Use verify commands that finish non-interactively
 
-- テストtaskは Planner 側で `role=tester` を付与
-- Dispatcher は role に応じて tester agent へ配布
-- verifyコマンドは non-interactive で終了するものを使う
+## 4. Recommended Operation
 
-## 4. 推奨運用
+- Use `vitest run` (no watch mode)
+- Run E2E on a dedicated port
+- Store results in run/artifacts so Judge can track them
 
-- `vitest run` を使う（watch禁止）
-- E2Eは専用ポートで起動
-- 結果は run/artifact に残し、Judge が追跡できるようにする
-
-## 5. 主な設定
+## 5. Main Settings
 
 - `AGENT_ROLE=tester`
 - `TESTER_MODEL`
 - `TESTER_INSTRUCTIONS_PATH`
 - `OPENTIGER_E2E_PORT`
 
-## 6. 未実装/改善余地
+## 6. Not Implemented / Improvement Areas
 
-- flake の自動判定精度向上
-- 変更差分に応じたテスト範囲推定
-- E2E成果物保存の標準化
+- Improve flake auto-detection accuracy
+- Estimate test scope based on diff
+- Standardize E2E artifact retention

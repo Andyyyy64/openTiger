@@ -1,42 +1,40 @@
 # Judge Agent
 
-最終更新: 2026-02-06
+## 1. Role
 
-## 1. 役割
+Evaluate successful runs and transition tasks to done, re-execution, or isolation.
 
-成功runを評価して、task を完了・再実行・隔離へ遷移させる。
+## 2. Inputs
 
-## 2. 入力
+- Run (`status=success`)
+- PR info (git mode) or local diff (local mode)
+- CI/policy/LLM evaluation results
 
-- run（`status=success`）
-- PR情報（git mode）または local diff（local mode）
-- CI/policy/LLM評価結果
+Launch triggers (Start preflight):
 
-起動トリガ（Start preflight）:
+- There is a GitHub open PR
+- Or there is a `blocked(awaiting_judge)` task backlog
 
-- GitHub open PR がある
-- または `blocked(awaiting_judge)` のtask backlog がある
-
-## 3. 判定
+## 3. Verdicts
 
 - `approve`
 - `request_changes`
 - `needs_human`
 
-## 4. 重要仕様
+## 4. Key Specifications
 
-- 冪等性:
-  - `runs.judgedAt IS NULL` のrunのみ対象
-  - claim時に `judgementVersion` をインクリメント
-- 対象task:
-  - `status=blocked` のみ
-- 非承認時:
-  - 既定で task を `queued` へ戻す
-  - requeue無効時は `blocked(needs_rework|needs_human)` を維持
-- approveだがmerge不可:
-  - 停滞防止のため再キュー
+- Idempotency:
+  - Only runs with `runs.judgedAt IS NULL`
+  - Increment `judgementVersion` on claim
+- Target tasks:
+  - Only `status=blocked`
+- On non-approval:
+  - Default is requeue to `queued`
+  - When requeue is disabled, keep `blocked(needs_rework|needs_human)`
+- Approve but merge fails:
+  - Requeue to avoid stalling
 
-## 5. 主な設定
+## 5. Main Settings
 
 - `JUDGE_MODE=git|local|auto`
 - `JUDGE_MODEL`
@@ -46,9 +44,9 @@
 - `JUDGE_LOCAL_BASE_REPO_RECOVERY_CONFIDENCE`
 - `JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT`
 
-## 6. 出力
+## 6. Outputs
 
-- `events` へ review/requeue 記録
-- run更新（失敗理由含む）
-- task更新（`done`/`queued`/`blocked`）
-- 必要に応じて docser task 生成
+- Write review/requeue records to `events`
+- Update run (including failure reasons)
+- Update task (`done`/`queued`/`blocked`)
+- Create docser tasks when needed

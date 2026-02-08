@@ -1,42 +1,40 @@
 # Planner Agent
 
-最終更新: 2026-02-06
+## 1. Role
 
-## 1. 役割
+Split requirements into executable tasks and save them to `tasks`.
 
-要件を実行可能な task 群へ分割して `tasks` に保存する。
+Notes:
 
-補足:
+- If Start preflight detects an issue backlog, Planner is not started with priority
+- In that case, issue-derived tasks run first
 
-- Start preflight で Issue backlog が検出された場合、Planner は優先起動されない
-- この場合は Issue 由来 task の実行を先に進める
+## 2. Inputs
 
-## 2. 入力
+- Requirement file
+- Existing task state
+- Policy / allowed paths
 
-- requirement ファイル
-- 既存 task 状態
-- policy / allowed paths
+Primary conditions for Planner to start after preflight:
 
-preflight 後に Planner が起動される主条件:
+- Requirement text exists
+- There is no open issue backlog
 
-- requirement テキストがある
-- open Issue backlog がない
+## 3. Outputs
 
-## 3. 出力
+- Task creation
+- Dependencies
+- Priority
+- Risk level
 
-- task作成
-- 依存関係
-- 優先度
-- リスクレベル
+## 4. Key Specifications
 
-## 4. 重要仕様
+- Tasks must have machine-judgable goals
+- Fix circular or forward dependencies
+- Auto-inject initialization tasks for uninitialized repos
+- Use a dedupe window to avoid duplicate plans
 
-- task は機械判定可能な goal を必須とする
-- 依存関係は循環・未来参照を補正する
-- 未初期化repoでは初期化taskを自動注入する
-- 重複計画を避けるため dedupe window を使う
-
-## 5. 主な設定
+## 5. Main Settings
 
 - `PLANNER_MODEL`
 - `PLANNER_USE_REMOTE`
@@ -46,13 +44,13 @@ preflight 後に Planner が起動される主条件:
 - `PLANNER_INSPECT_TIMEOUT`
 - `PLANNER_DEDUPE_WINDOW_MS`
 
-## 6. 失敗時
+## 6. On Failure
 
-- requirement パース不能はエラー記録
-- 生成結果が不正なら sanitize して保存
-- 重大失敗時は既存taskを壊さず終了
+- Record errors when requirement parsing fails
+- Sanitize and save invalid outputs
+- On critical failure, exit without breaking existing tasks
 
-## 7. 運用メモ
+## 7. Operational Notes
 
-- Planner は「最適化」より「詰まらない分割」を優先する
-- 依存が濃すぎる計画より、小さく再実行可能な計画を選ぶ
+- Planner prioritizes "non-stalling splits" over optimization
+- Prefer small, re-runnable plans over tightly coupled dependencies

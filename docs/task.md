@@ -1,74 +1,72 @@
-# 実装状況と優先バックログ
+# Implementation Status and Priority Backlog
 
-最終更新: 2026-02-06
+## 1. Current Milestone
 
-## 1. 現在の到達点
+Core infrastructure changes for the goal "never stall, finish in parallel" are complete.
 
-「止まらず並列で完走」を目標にした基盤修正は完了。
-
-完了済み:
+Completed:
 
 - [x] Start preflight
-  - 起動前に GitHub open Issue/open PR とローカル backlog を確認
-- [x] Issue 直投入フロー
-  - open Issue を planner 経由ではなく task として自動生成
-- [x] Judge 起動判定の明確化
-  - open PR または `awaiting_judge` backlog で judge を起動
-- [x] Judge冪等化
+  - Check GitHub open issues/open PRs and local backlog before startup
+- [x] Direct issue injection flow
+  - Auto-generate tasks directly from open issues instead of going through the planner
+- [x] Clarified Judge startup conditions
+  - Start Judge when there is an open PR or `awaiting_judge` backlog
+- [x] Judge idempotency
   - `runs.judged_at` / `judgement_version`
-- [x] blocked reason 導入
+- [x] Introduced blocked reason
   - `awaiting_judge` / `needs_rework` / `needs_human`
-- [x] blocked 自動解消
-  - reason別遷移
-- [x] concurrency制御の一本化
-  - busy agent ベース
-- [x] verify の非破壊化
-  - verify中の自動ファイル修正を廃止
-- [x] deniedCommands 二重防御
-  - verify前 + OpenCode前
-- [x] 失敗分類と適応リトライ
+- [x] Automatic blocked resolution
+  - Reason-based transitions
+- [x] Unified concurrency control
+  - Busy-agent based
+- [x] Non-destructive verify
+  - Removed auto file edits during verify
+- [x] Double defense for deniedCommands
+  - Before verify + before OpenCode
+- [x] Failure classification and adaptive retries
   - `env/setup/policy/test/flaky/model`
-- [x] 観測性改善
-  - queue age / blocked age / retry exhaustion
+- [x] Observability improvements
+  - Queue age / blocked age / retry exhaustion
 
-## 2. まだ残っている重要タスク
+## 2. Remaining Critical Tasks
 
-### 2.1 needs_human の運用実装
+### 2.1 needs_human operations
 
-- [ ] 隔離イベントだけでなく専用キュー/ステータスを実装
-- [ ] ダッシュボードから再開・差し戻しを操作可能にする
+- [ ] Implement dedicated queue/status, not just isolation events
+- [ ] Allow resume/rollback controls in the Dashboard
 
-### 2.2 health/ready の実体化
+### 2.2 Implement health/ready
 
-- [ ] DB接続チェックの実装
-- [ ] Redis接続チェックの実装
-- [ ] Queue疎通チェックの実装
+- [ ] DB connectivity checks
+- [ ] Redis connectivity checks
+- [ ] Queue connectivity checks
 
-### 2.3 統合テスト強化
+### 2.3 Strengthen integration tests
 
-- [ ] retry分類ロジックのテスト
-- [ ] blocked reason 別遷移のテスト
-- [ ] Judge claim（冪等性）の競合テスト
+- [ ] Tests for retry classification logic
+- [ ] Tests for blocked reason transitions
+- [ ] Race tests for Judge claim (idempotency)
 
-### 2.4 運用自動化
+### 2.4 Operations automation
 
-- [ ] triager ロール導入
-- [ ] planner 再帰分割
-- [ ] docser 更新ルールの機械化
+- [ ] Introduce triager role
+- [ ] Planner recursive splitting
+- [ ] Mechanize docser update rules
 
-## 3. 運用SLO
+## 3. Operational SLO
 
-- [x] 定義済み
-- [ ] SLO逸脱時の自動アクションをさらに強化
+- [x] Defined
+- [ ] Strengthen automatic actions on SLO violations
 
 SLO:
 
-- queued -> running: 5分以内
-- blocked: 30分以内に処理
-- retry exhaustion: 常時監視
+- queued -> running: within 5 minutes
+- blocked: handled within 30 minutes
+- retry exhaustion: always monitored
 
-## 4. リリース判定の最低条件
+## 4. Minimum Release Criteria
 
-- [ ] `pnpm run check` が安定して通る
-- [ ] 主要シナリオで E2E が通る
-- [ ] 24時間運転で SLO逸脱が閾値内
+- [ ] `pnpm run check` passes consistently
+- [ ] E2E passes on core scenarios
+- [ ] 24-hour run stays within SLO violation thresholds

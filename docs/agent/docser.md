@@ -1,46 +1,44 @@
 # Docser Agent
 
-最終更新: 2026-02-06
+## 1. Role
 
-## 1. 役割
+Update documentation to follow code changes and prevent drift between implementation and operations.
 
-コード変更に追従してドキュメントを更新し、実装と運用手順のズレを防ぐ。
+Docser runs on the Worker foundation as `AGENT_ROLE=docser`.
 
-Docser は Worker 基盤上の `AGENT_ROLE=docser` として動作する。
+## 2. Triggers
 
-## 2. トリガ
+- Automatically create docser tasks after Judge approval
+- Triggers in both local mode and git mode
 
-- Judge 承認後に docser task を自動生成
-- local mode / git mode の両方で発火可能
+## 3. Inputs
 
-## 3. 入力
+- Diff information for the target run
+- Goal/context from the original task
+- Target documents to update
 
-- 対象runの差分情報
-- 元taskの goal / context
-- 更新対象ドキュメント
+## 4. Outputs
 
-## 4. 出力
+- Docs update diffs
+- Verification results
+- Run/task/event records
 
-- docs更新差分
-- 検証結果
-- run/task/event 記録
+## 5. Key Policies
 
-## 5. 重要方針
+- Write only factual implementation details
+- Do not expand specs based on assumptions
+- Strictly obey allowed paths
+- Keep changes small and easy to review
 
-- 実装事実のみ書く
-- 推測で仕様を増やさない
-- allowed paths を厳守する
-- 変更規模は小さく、レビューしやすく保つ
-
-## 6. 主な設定
+## 6. Main Settings
 
 - `AGENT_ROLE=docser`
 - `DOCSER_MODEL`
 - `DOCSER_INSTRUCTIONS_PATH`
 - `OPENTIGER_LOG_DIR`
 
-## 7. 改善余地
+## 7. Improvement Areas
 
-- 変更種別ごとのテンプレート化
-- doc不足検知の精度改善
-- README/docs/task.md の機械集計更新
+- Templates by change type
+- Improve doc-missing detection accuracy
+- Automated aggregation updates for README/docs/task.md

@@ -1,61 +1,59 @@
-# アイデアメモ（次フェーズ）
+# Idea Notes (Next Phase)
 
-最終更新: 2026-02-06
+The current implementation has reached "parallel execution that rarely stalls."
+The next phase focuses on quality and operational experience.
 
-現状の実装は「止まりにくい並列実行」まで到達した。
-次は品質と運用体験を高めるフェーズに進む。
+## 1. Short-term (Priority)
 
-## 1. 短期（優先）
+### 1.1 Dedicated queue for needs_human
 
-### 1.1 needs_human 専用キューの実体化
+- Currently only an isolation event exists
+- Add dedicated status/queue/UI to make operations explicit
 
-- 現在は隔離イベントのみ
-- 専用ステータス/キュー/UIを追加して運用を明確化する
+### 1.2 Introduce a triager role
 
-### 1.2 triager ロールの導入
+- Connect failure classification directly to task splitting and replanning
+- A dedicated role that assists Cycle Manager recovery
 
-- 失敗分類を task 分割・再計画へ直接つなぐ
-- Cycle Manager の回復処理を補助する専任ロール
+### 1.3 Expand health API
 
-### 1.3 health API 拡張
+- Real checks for DB/Redis/Queue via `/health/ready`
+- Return SLO violation counts
 
-- `/health/ready` で DB/Redis/Queue の実チェック
-- SLO逸脱数も返せるようにする
+## 2. Mid-term
 
-## 2. 中期
+### 2.1 Strengthen tester
 
-### 2.1 tester 強化
-
-- 差分に応じたテスト選択
+- Select tests based on diffs
   - unit / integration / e2e
-- flake検知と自動隔離
+- Flake detection and automatic isolation
 
-### 2.2 docser 強化
+### 2.2 Strengthen docser
 
-- docs不足検知の精度向上
-- 変更種別ごとの更新テンプレート化
+- Improve doc-missing detection accuracy
+- Template updates by change type
 
-### 2.3 planner の再帰分割
+### 2.3 Recursive planning for planner
 
-- 大規模要件で sub-planner を展開
-- 衝突領域を先に推定して task 生成時に回避
+- Spawn sub-planners for large requirements
+- Predict conflict areas early and avoid them during task generation
 
-## 3. 長期
+## 3. Long-term
 
-### 3.1 deployer + observer
+### 3.1 Deployer + observer
 
-- staging/prod 反映と自動ロールバック
-- 運用メトリクス起点で修正タスク自動生成
+- Promote to staging/prod and auto rollback
+- Generate fix tasks based on operational metrics
 
-### 3.2 requirement interview
+### 3.2 Requirement interview
 
-- 要件の曖昧点を自動質問して確定化
-- 要件自体の履歴管理・差分管理
+- Ask questions automatically to resolve ambiguities
+- Version and diff management for requirements
 
-## 4. 目標指標
+## 4. Target Metrics
 
-- 実行成功率
-- 平均 task 完了時間
-- retry exhaustion 発生率
-- blocked 30分超件数
-- queued 5分超件数
+- Execution success rate
+- Average task completion time
+- Retry exhaustion rate
+- Count of blocked over 30 minutes
+- Count of queued over 5 minutes

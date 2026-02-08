@@ -1,22 +1,21 @@
-# docs index
+# Docs Index
 
-openTiger の設計・運用・エージェント仕様の索引。
-最終更新: 2026-02-06
+Index of openTiger design, operations, and agent specifications.
 
-## 1. 全体
+## 1. Overview
 
 - `docs/flow.md`
-  - 要件生成から実装、Judge、再試行、クリーンアップまでの状態遷移
+  - State transitions from requirement generation to implementation, Judge, retries, and cleanup
 - `docs/mode.md`
-  - `REPO_MODE` / `JUDGE_MODE` / `LAUNCH_MODE` の運用モード
+  - Operating modes for `REPO_MODE` / `JUDGE_MODE` / `LAUNCH_MODE`
 - `docs/nonhumanoriented.md`
-  - 人手介入を最小化するための原則とSLO
+  - Principles and SLOs to minimize human intervention
 - `docs/task.md`
-  - 実装状況と優先バックログ
+  - Implementation status and priority backlog
 - `docs/idea.md`
-  - 次フェーズの構想と拡張案
+  - Next-phase ideas and extension proposals
 
-## 2. エージェント別
+## 2. By Agent
 
 - `docs/agent/planner.md`
 - `docs/agent/worker.md`
@@ -24,25 +23,25 @@ openTiger の設計・運用・エージェント仕様の索引。
 - `docs/agent/judge.md`
 - `docs/agent/docser.md`
 
-## 3. 2026-02-06 の重要更新
+## 3. Major Updates on 2026-02-06
 
-- Start preflight 導入
-  - 起動前に GitHub の open Issue / open PR とローカル task 状態を確認
-- Issue バックログ処理を自動化
-  - open Issue は planner 経由ではなく task として直接投入
-- Judge 起動条件を明確化
-  - open PR または `awaiting_judge` backlog がある場合に judge を起動
-- Judge 冪等化
-  - `runs.judged_at` / `judgement_version` を導入し、同一runの再レビューを防止
-- blocked reason 導入
-  - `awaiting_judge` / `needs_rework` / `needs_human` を運用
-- concurrency制御の一本化
-  - Dispatcher の同時実行枠を busy agent 数ベースに変更
-- verify の非破壊化
-  - verify中の `package.json` 自動修正を廃止
-- deniedCommands の二重防御
-  - verify前 + OpenCode実行前の両方で拒否判定
-- 失敗分類と適応リトライ
-  - `env/setup/policy/test/flaky/model` に分類して再試行戦略を変更
-- 観測性改善
-  - `queued->running 5分` / `blocked 30分` / `retry exhaustion` を可視化
+- Introduced Start preflight
+  - Check GitHub open issues/open PRs and local task state before startup
+- Automated issue backlog handling
+  - Open issues are injected directly as tasks instead of going through the planner
+- Clarified Judge startup conditions
+  - Start Judge when there is an open PR or `awaiting_judge` backlog
+- Judge idempotency
+  - Introduced `runs.judged_at` / `judgement_version` to prevent re-reviewing the same run
+- Introduced blocked reason
+  - Operate with `awaiting_judge` / `needs_rework` / `needs_human`
+- Unified concurrency control
+  - Dispatcher concurrency now based on busy agent count
+- Non-destructive verify
+  - Removed auto-fixes to `package.json` during verify
+- Double defense for deniedCommands
+  - Reject both before verify and before OpenCode execution
+- Failure classification and adaptive retries
+  - Classify as `env/setup/policy/test/flaky/model` and adjust retry strategy
+- Observability improvements
+  - Visualize `queued->running 5m` / `blocked 30m` / `retry exhaustion`
