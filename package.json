@@ -17,6 +17,7 @@
     "lint": "turbo lint",
     "lint:ci": "turbo lint:ci",
     "check": "turbo lint && turbo typecheck",
+    "check:all": "pnpm run check && pnpm run format && pnpm run build",
     "typecheck": "turbo typecheck",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
