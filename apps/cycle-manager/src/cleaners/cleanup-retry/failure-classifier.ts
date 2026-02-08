@@ -3,6 +3,9 @@ import { runs } from "@openTiger/db/schema";
 import { eq, inArray, and, desc } from "drizzle-orm";
 import type { FailureClassification } from "./types";
 
+// ANSIエスケープを除去して失敗メッセージを安定化する
+const ANSI_ESCAPE_REGEX = new RegExp("\\x1B\\[[0-9;]*m", "g");
+
 export function classifyFailure(errorMessage: string | null): FailureClassification {
   const message = (errorMessage ?? "").toLowerCase();
 
@@ -103,7 +106,7 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
 function normalizeFailureSignature(errorMessage: string | null): string {
   return (errorMessage ?? "")
     .toLowerCase()
-    .replace(/\x1B\[[0-9;]*m/g, "")
+    .replace(ANSI_ESCAPE_REGEX, "")
     .replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, "<uuid>")
     .replace(/\/(?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+/g, "<path>")
     .replace(/\d+/g, "<n>")
