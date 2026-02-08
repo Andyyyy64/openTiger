@@ -7,7 +7,7 @@ Sustain long-running, parallel execution without human intervention.
 The goal is evaluated by three criteria:
 
 - Never stall
-- Never repeat the same failure endlessly
+- Keep recovering by changing strategy for repeated failures
 - Never break under parallelism
 
 ## 2. Design Principles
@@ -43,7 +43,7 @@ Failure classification:
 
 - `env/setup/policy/test/flaky/model`
 
-Adjust retry limits per category to stop blind retries.
+Adjust retry limits per category to switch recovery strategy without stopping.
 
 ### 3.4 Unified parallel control
 
@@ -55,20 +55,14 @@ Adjust retry limits per category to stop blind retries.
 
 - `queued -> running` within 5 minutes
 - Do not leave `blocked` beyond 30 minutes
-- Visualize retry exhaustion
+- Visualize recovery escalation
 
 ## 5. Boundary of Human Intervention
 
-Conditions to stop automation:
+Automation does not stop; it changes recovery strategies when needed:
 
-- High-risk changes with persistent `needs_human`
-- Repeated policy violations
-- External dependencies (auth/infra) that cannot be resolved automatically
-
-Conditions to keep automation running:
-
-- Flaky or transient failures
-- Temporary errors like merge API failures
+- Persistent `needs_human` or policy violations trigger rework/splitting rather than halting
+- External dependency failures are isolated but still retried with recovery context
 
 ## 6. Operational Notes
 

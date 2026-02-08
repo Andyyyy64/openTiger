@@ -12,7 +12,7 @@
 6. On success, task transitions to `blocked(awaiting_judge)` and waits for Judge
 7. Judge evaluates the run and moves it to `done` / `queued` / `blocked`
 8. Cycle Manager performs stuck recovery, failed/blocked requeue, and metrics updates
-9. Continue until all tasks are complete or stop conditions are met
+9. Continue until all tasks are complete (no automatic stop unless explicitly shut down)
 
 ## 1.1 Start preflight launch decisions
 
@@ -76,7 +76,7 @@ This prevents re-reviewing the same run.
   - Mark task as `done`
 - `request_changes` / `needs_human`:
   - Default is requeue to `queued`
-  - When requeue is disabled, keep `blocked(needs_rework|needs_human)`
+  - Even when requeue is disabled, Cycle Manager recovers via `needs_rework` or `awaiting_judge`
 - `approve but merge failed`:
   - Requeue to `queued` to avoid stalling
 
@@ -95,7 +95,7 @@ Cycle Manager periodically executes:
 - Reason-based handling for blocked tasks
   - `awaiting_judge`: requeue if there is no pending judge run
   - `needs_rework`: generate split tasks
-  - `needs_human`: isolate (no automatic retry)
+  - `needs_human`: normalize to `awaiting_judge` and keep recovery running
 
 ## 7. Failure Classification (Adaptive Retry)
 
@@ -114,7 +114,7 @@ This prevents blind repetition of the same cause and moves to `blocked` when lim
 
 - SLO1: `queued -> running` within 5 minutes
 - SLO2: Do not leave `blocked` beyond 30 minutes
-- SLO3: Visualize retry exhaustion
+- SLO3: Visualize recovery escalation
 
 Dashboard Overview shows:
 

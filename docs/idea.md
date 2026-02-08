@@ -54,6 +54,6 @@ The next phase focuses on quality and operational experience.
 
 - Execution success rate
 - Average task completion time
-- Retry exhaustion rate
+- Recovery escalation rate
 - Count of blocked over 30 minutes
 - Count of queued over 5 minutes

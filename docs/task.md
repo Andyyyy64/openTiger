@@ -27,13 +27,13 @@ Completed:
 - [x] Failure classification and adaptive retries
   - `env/setup/policy/test/flaky/model`
 - [x] Observability improvements
-  - Queue age / blocked age / retry exhaustion
+  - Queue age / blocked age / recovery escalation
 
 ## 2. Remaining Critical Tasks
 
 ### 2.1 needs_human operations
 
-- [ ] Implement dedicated queue/status, not just isolation events
+- [ ] Implement dedicated queue/status for visibility (recovery stays running)
 - [ ] Allow resume/rollback controls in the Dashboard
 
 ### 2.2 Implement health/ready
@@ -63,7 +63,7 @@ SLO:
 
 - queued -> running: within 5 minutes
 - blocked: handled within 30 minutes
-- retry exhaustion: always monitored
+- recovery escalation: always monitored
 
 ## 4. Minimum Release Criteria
 

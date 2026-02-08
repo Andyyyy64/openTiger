@@ -2,7 +2,7 @@
 
 ## 1. Role
 
-Evaluate successful runs and transition tasks to done, re-execution, or isolation.
+Evaluate successful runs and transition tasks to done or recovery paths that keep execution moving.
 
 ## 2. Inputs
 
@@ -30,7 +30,7 @@ Launch triggers (Start preflight):
   - Only `status=blocked`
 - On non-approval:
   - Default is requeue to `queued`
-  - When requeue is disabled, keep `blocked(needs_rework|needs_human)`
+  - When requeue is disabled, Cycle Manager still recovers via `needs_rework` or `awaiting_judge`
 - Approve but merge fails:
   - Requeue to avoid stalling
 

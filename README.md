@@ -33,8 +33,8 @@ Docs · [Index](docs/README.md) · [Flow](docs/flow.md) · [Modes](docs/mode.md)
 - Planner and Cycle Manager are started via `start:fresh` (clean + build + start) to avoid stale `dist` artifacts
 - Worker shutdown must always recover interrupted runs and clear `busy` state
 - OpenCode child processes must be terminated when parent processes receive shutdown signals
-- Judge non-approve retries use a circuit breaker to avoid infinite requeue loops
-  - escalate to `AutoFix` or `needs_rework` instead of retrying forever
+- Judge non-approve retries switch recovery strategy to avoid blind loops
+  - keep recovery running by escalating to `AutoFix` or `needs_rework`
 - System process auto-restart uses backoff and defaults to unlimited retries (`SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS=-1`)
 
 ---
