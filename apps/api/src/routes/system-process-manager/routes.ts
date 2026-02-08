@@ -1,0 +1,366 @@
+import type { Hono } from "hono";
+import { and, eq, inArray } from "drizzle-orm";
+import { db } from "@openTiger/db";
+import { agents, leases, runs, tasks } from "@openTiger/db/schema";
+import { ensureConfigRow } from "../../config-store";
+import { getAuthInfo } from "../../middleware/index";
+import { buildPreflightSummary } from "../system-preflight";
+import { canControlSystem } from "../system-auth";
+import { listProcessDefinitions, resolveProcessDefinition } from "./definitions";
+import { startRestart } from "./restart";
+import { buildProcessInfo, startManagedProcess, stopManagedProcess } from "./runtime";
+import { managedProcesses, processStartLocks, restartState } from "./state";
+import type { ProcessRuntime, StartPayload } from "./types";
+
+const AGENT_LIVENESS_WINDOW_MS = Number.parseInt(
+  process.env.SYSTEM_AGENT_LIVENESS_WINDOW_MS ?? "120000",
+  10,
+);
+
+function resolveBoundAgentId(processName: string): string | null {
+  if (processName === "planner") {
+    return "planner-1";
+  }
+  if (processName === "judge") {
+    return "judge-1";
+  }
+  if (/^(judge|worker|tester|docser)-\d+$/.test(processName)) {
+    return processName;
+  }
+  return null;
+}
+
+async function detectLiveBoundAgent(processName: string): Promise<{
+  alive: boolean;
+  agentId?: string;
+  lastHeartbeat?: string;
+}> {
+  const agentId = resolveBoundAgentId(processName);
+  if (!agentId) {
+    return { alive: false };
+  }
+
+  const [agent] = await db
+    .select({
+      id: agents.id,
+      status: agents.status,
+      lastHeartbeat: agents.lastHeartbeat,
+    })
+    .from(agents)
+    .where(eq(agents.id, agentId))
+    .limit(1);
+
+  if (!agent?.lastHeartbeat) {
+    return { alive: false, agentId };
+  }
+
+  const livenessWindowMs =
+    Number.isFinite(AGENT_LIVENESS_WINDOW_MS) && AGENT_LIVENESS_WINDOW_MS > 0
+      ? AGENT_LIVENESS_WINDOW_MS
+      : 120000;
+  const alive =
+    agent.status !== "offline" && agent.lastHeartbeat.getTime() >= Date.now() - livenessWindowMs;
+
+  return {
+    alive,
+    agentId,
+    lastHeartbeat: agent.lastHeartbeat.toISOString(),
+  };
+}
+
+// APIルートの公開窓口
+export function registerProcessManagerRoutes(systemRoute: Hono): void {
+  systemRoute.get("/restart", (c) => {
+    const auth = getAuthInfo(c);
+    if (!canControlSystem(auth.method)) {
+      return c.json({ error: "Admin access required" }, 403);
+    }
+    return c.json(restartState.status);
+  });
+
+  systemRoute.post("/restart", (c) => {
+    const auth = getAuthInfo(c);
+    if (!canControlSystem(auth.method)) {
+      return c.json({ error: "Admin access required" }, 403);
+    }
+
+    if (restartState.process) {
+      return c.json(
+        {
+          error: "Restart already running",
+          status: restartState.status,
+        },
+        409,
+      );
+    }
+
+    try {
+      const status = startRestart();
+      return c.json(status);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to restart";
+      restartState.status = { status: "failed", message };
+      restartState.process = null;
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  systemRoute.get("/processes", (c) => {
+    const auth = getAuthInfo(c);
+    if (!canControlSystem(auth.method)) {
+      return c.json({ error: "Admin access required" }, 403);
+    }
+    const processes = listProcessDefinitions().map((definition) =>
+      buildProcessInfo(definition, managedProcesses.get(definition.name)),
+    );
+    return c.json({ processes });
+  });
+
+  systemRoute.get("/processes/:name", (c) => {
+    const auth = getAuthInfo(c);
+    if (!canControlSystem(auth.method)) {
+      return c.json({ error: "Admin access required" }, 403);
+    }
+    const name = c.req.param("name");
+    const definition = resolveProcessDefinition(name);
+    if (!definition) {
+      return c.json({ error: "Process not found" }, 404);
+    }
+    const info = buildProcessInfo(definition, managedProcesses.get(definition.name));
+    return c.json({ process: info });
+  });
+
+  systemRoute.post("/processes/:name/start", async (c) => {
+    const auth = getAuthInfo(c);
+    if (!canControlSystem(auth.method)) {
+      return c.json({ error: "Admin access required" }, 403);
+    }
+
+    const name = c.req.param("name");
+    const definition = resolveProcessDefinition(name);
+    if (!definition) {
+      return c.json({ error: "Process not found" }, 404);
+    }
+
+    const discoveredAgent = await detectLiveBoundAgent(name);
+    if (discoveredAgent.alive) {
+      const existingRuntime = managedProcesses.get(definition.name);
+      const runtime: ProcessRuntime = {
+        ...(existingRuntime ?? { status: "running" as const }),
+        status: "running",
+        finishedAt: undefined,
+        exitCode: null,
+        signal: null,
+        stopRequested: false,
+        message:
+          `Detected existing live agent ${discoveredAgent.agentId}` +
+          (discoveredAgent.lastHeartbeat ? ` (heartbeat=${discoveredAgent.lastHeartbeat})` : ""),
+      };
+      managedProcesses.set(definition.name, runtime);
+      return c.json({
+        process: buildProcessInfo(definition, runtime),
+        alreadyRunning: true,
+        discovered: true,
+      });
+    }
+
+    const runtimeKey = definition.name;
+    const existing = managedProcesses.get(runtimeKey);
+    const shouldRejectDuplicateStart = definition.kind === "planner";
+    if (shouldRejectDuplicateStart) {
+      // Planner tends to save multiple plans from the same requirement when started multiple times, so exclude duplicate start requests
+      if (existing?.status === "running") {
+        return c.json(
+          {
+            error: "Planner already running",
+            process: buildProcessInfo(definition, existing),
+          },
+          409,
+        );
+      }
+      if (processStartLocks.has(runtimeKey)) {
+        return c.json(
+          {
+            error: "Planner start already in progress",
+            process: buildProcessInfo(definition, managedProcesses.get(runtimeKey)),
+          },
+          409,
+        );
+      }
+      processStartLocks.add(runtimeKey);
+    } else if (existing?.status === "running") {
+      return c.json({
+        process: buildProcessInfo(definition, existing),
+        alreadyRunning: true,
+      });
+    }
+
+    try {
+      const rawBody = await c.req.json().catch(() => ({}));
+      const rawContent = typeof rawBody?.content === "string" ? rawBody.content : undefined;
+      if (rawContent !== undefined && rawContent.trim().length === 0) {
+        return c.json({ error: "Requirement content is empty" }, 400);
+      }
+      if (definition.kind === "planner") {
+        const configRow = await ensureConfigRow();
+        const preflight = await buildPreflightSummary({
+          configRow,
+          autoCreateIssueTasks: false,
+          autoCreatePrJudgeTasks: false,
+        });
+        const hasJudgeBacklog =
+          preflight.github.openPrCount > 0 || preflight.local.pendingJudgeTaskCount > 0;
+        if (hasJudgeBacklog) {
+          return c.json(
+            {
+              error:
+                `Planner start blocked: pending PR/judge backlog exists ` +
+                `(openPR=${preflight.github.openPrCount}, awaitingJudge=${preflight.local.pendingJudgeTaskCount}). ` +
+                "Start judge first and clear PR backlog.",
+            },
+            409,
+          );
+        }
+      }
+      const payload: StartPayload = {
+        requirementPath:
+          typeof rawBody?.requirementPath === "string" ? rawBody.requirementPath : undefined,
+        content: rawContent,
+      };
+      const processInfo = await startManagedProcess(definition, payload);
+      return c.json({ process: processInfo });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to start process";
+      return c.json({ error: message }, 400);
+    } finally {
+      if (shouldRejectDuplicateStart) {
+        processStartLocks.delete(runtimeKey);
+      }
+    }
+  });
+
+  systemRoute.post("/processes/:name/stop", (c) => {
+    const auth = getAuthInfo(c);
+    if (!canControlSystem(auth.method)) {
+      return c.json({ error: "Admin access required" }, 403);
+    }
+
+    const name = c.req.param("name");
+    const definition = resolveProcessDefinition(name);
+    if (!definition) {
+      return c.json({ error: "Process not found" }, 404);
+    }
+
+    if (!definition.supportsStop) {
+      return c.json({ error: "Process cannot be stopped" }, 400);
+    }
+
+    const info = stopManagedProcess(definition);
+    return c.json({ process: info });
+  });
+
+  systemRoute.post("/processes/stop-all", async (c) => {
+    const auth = getAuthInfo(c);
+    if (!canControlSystem(auth.method)) {
+      return c.json({ error: "Admin access required" }, 403);
+    }
+
+    const stopped: string[] = [];
+    const skipped: string[] = [];
+
+    for (const definition of listProcessDefinitions()) {
+      // Only stop processes other than ui and server
+      // ui and server are started by pnpm run up and are not managed by system.ts
+      if (
+        definition.name === "ui" ||
+        definition.name === "server" ||
+        definition.name === "dashboard" ||
+        definition.name === "api"
+      ) {
+        continue;
+      }
+
+      if (!definition.supportsStop) {
+        skipped.push(definition.name);
+        continue;
+      }
+
+      const runtime = managedProcesses.get(definition.name);
+      if (runtime) {
+        stopManagedProcess(definition);
+        stopped.push(definition.name);
+      } else {
+        skipped.push(definition.name);
+      }
+    }
+
+    let cancelledRuns = 0;
+    let requeuedTasks = 0;
+    try {
+      const runningRows = await db
+        .select({
+          runId: runs.id,
+          taskId: runs.taskId,
+        })
+        .from(runs)
+        .where(eq(runs.status, "running"));
+
+      if (runningRows.length > 0) {
+        const runningRunIds = runningRows.map((row) => row.runId);
+        const runningTaskIds = Array.from(new Set(runningRows.map((row) => row.taskId)));
+
+        cancelledRuns = runningRunIds.length;
+        requeuedTasks = runningTaskIds.length;
+
+        await db
+          .update(runs)
+          .set({
+            status: "cancelled",
+            finishedAt: new Date(),
+            errorMessage: "System stop-all requested",
+          })
+          .where(inArray(runs.id, runningRunIds));
+
+        await db
+          .update(tasks)
+          .set({
+            status: "queued",
+            blockReason: null,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(tasks.status, "running"), inArray(tasks.id, runningTaskIds)));
+
+        await db.delete(leases).where(inArray(leases.taskId, runningTaskIds));
+      }
+
+      await db
+        .update(agents)
+        .set({
+          status: "offline",
+          currentTaskId: null,
+          lastHeartbeat: new Date(),
+        })
+        .where(
+          inArray(agents.role, [
+            "planner",
+            "judge",
+            "worker",
+            "tester",
+            "docser",
+            "dispatcher",
+            "cycle-manager",
+          ]),
+        );
+    } catch (error) {
+      console.error("[System] stop-all cleanup failed:", error);
+    }
+
+    return c.json({
+      stopped,
+      skipped,
+      cancelledRuns,
+      requeuedTasks,
+      message: `Stopped ${stopped.length} process(es)`,
+    });
+  });
+}
