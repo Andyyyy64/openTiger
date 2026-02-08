@@ -1,5 +1,7 @@
 # openTiger
 
+![openTiger](assets/avator.png)
+
 **Autonomous development that never stalls. Failures still converge to completion.**
 
 An orchestration system that coordinates multiple AI agents to autonomously run from requirements to implementation, judgement, and retries.  
