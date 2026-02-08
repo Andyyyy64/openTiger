@@ -60,10 +60,18 @@ export function createTaskWorker(
   // タスクが長時間実行される可能性があるため、lockDurationを十分長く設定する
   const maxTaskTimeoutSeconds = parseInt(process.env.TASK_TIMEOUT_SECONDS ?? "3600", 10);
   const lockDurationMs = (maxTaskTimeoutSeconds + 600) * 1000; // タイムアウト + 10分のバッファ
+  // 常駐エージェントは単一ジョブ実行を既定にする（1 agent = 1 task）
+  const configuredConcurrency = Number.parseInt(
+    process.env.TASK_QUEUE_WORKER_CONCURRENCY ?? "1",
+    10
+  );
+  const workerConcurrency = Number.isFinite(configuredConcurrency) && configuredConcurrency > 0
+    ? configuredConcurrency
+    : 1;
   
   return new Worker(queueName, processor, {
     connection: getConnectionConfig(),
-    concurrency: parseInt(process.env.MAX_CONCURRENT_WORKERS ?? "5", 10),
+    concurrency: workerConcurrency,
     lockDuration: lockDurationMs, // ジョブのロック期間を延長してstalled判定を防ぐ
   });
 }
