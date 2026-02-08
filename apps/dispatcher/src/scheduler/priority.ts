@@ -1,6 +1,6 @@
 import { db } from "@openTiger/db";
 import { tasks, leases, runs, artifacts } from "@openTiger/db/schema";
-import { eq, and, inArray, gt, count, isNull } from "drizzle-orm";
+import { eq, and, inArray, gt, count, isNull, desc } from "drizzle-orm";
 
 // タスク選択結果
 export interface AvailableTask {
@@ -25,6 +25,11 @@ const BLOCK_ON_AWAITING_JUDGE_BACKLOG =
 let lastObservedJudgeBacklog = -1;
 let lastObservedPendingJudgeRun = false;
 let lastObservedJudgeBacklogBlocked = false;
+
+function isQuotaFailureMessage(message: string): boolean {
+  return /quota exceeded|resource has been exhausted|resource_exhausted|quota limit reached|generate_requests_per_model_per_day|generate_content_paid_tier_input_token_count|retryinfo/i
+    .test(message);
+}
 
 function getRetryDelayMs(): number {
   const raw = process.env.DISPATCH_RETRY_DELAY_MS ?? String(DEFAULT_RETRY_DELAY_MS);
@@ -146,6 +151,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
         taskId: runs.taskId,
         status: runs.status,
         errorMessage: runs.errorMessage,
+        finishedAt: runs.finishedAt,
       })
       .from(runs)
       .where(
@@ -154,9 +160,17 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
           inArray(runs.status, ["failed", "cancelled"]),
           gt(runs.finishedAt, cutoff)
         )
-      );
+      )
+      .orderBy(desc(runs.finishedAt));
 
+    const latestFailureByTaskId = new Map<string, (typeof recentFailures)[number]>();
     for (const run of recentFailures) {
+      if (!latestFailureByTaskId.has(run.taskId)) {
+        latestFailureByTaskId.set(run.taskId, run);
+      }
+    }
+
+    for (const run of latestFailureByTaskId.values()) {
       // エージェント再起動時の自動回復キャンセルは即時再配布を許可する
       const message = (run.errorMessage ?? "").toLowerCase();
 
@@ -166,8 +180,9 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
       const isWorkspaceCleanupRace =
         message.includes("enotempty")
         || message.includes("directory not empty");
+      const isQuotaFailure = run.status === "failed" && isQuotaFailureMessage(message);
 
-      if (isAgentRestartRecoveryCancel || isWorkspaceCleanupRace) {
+      if (isAgentRestartRecoveryCancel || isWorkspaceCleanupRace || isQuotaFailure) {
         continue;
       }
       cooldownBlockedIds.add(run.taskId);

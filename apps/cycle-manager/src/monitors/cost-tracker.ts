@@ -11,8 +11,8 @@ interface CostConfig {
 }
 
 const defaultCostConfig: CostConfig = {
-  dailyTokenLimit: parseInt(process.env.DAILY_TOKEN_LIMIT ?? "50000000", 10),
-  hourlyTokenLimit: parseInt(process.env.HOURLY_TOKEN_LIMIT ?? "5000000", 10),
+  dailyTokenLimit: parseInt(process.env.DAILY_TOKEN_LIMIT ?? "-1", 10),
+  hourlyTokenLimit: parseInt(process.env.HOURLY_TOKEN_LIMIT ?? "-1", 10),
   warningThreshold: 0.8, // 80%で警告
 };
 
@@ -107,38 +107,45 @@ export async function checkCostLimits(
 
   const warnings: string[] = [];
 
-  // 日次制限チェック
-  const dailyUsageRatio = todayCost.totalTokens / config.dailyTokenLimit;
-  if (dailyUsageRatio >= 1) {
-    warnings.push(
-      `Daily token limit exceeded: ${todayCost.totalTokens}/${config.dailyTokenLimit}`
-    );
-  } else if (dailyUsageRatio >= config.warningThreshold) {
-    warnings.push(
-      `Daily token usage at ${(dailyUsageRatio * 100).toFixed(1)}%`
-    );
+  const dailyLimit = config.dailyTokenLimit;
+  const hourlyLimit = config.hourlyTokenLimit;
+
+  // 制限が0以下のときは無制限として扱う
+  const dailyUsageRatio = dailyLimit > 0 ? todayCost.totalTokens / dailyLimit : 0;
+  if (dailyLimit > 0) {
+    if (dailyUsageRatio >= 1) {
+      warnings.push(
+        `Daily token limit exceeded: ${todayCost.totalTokens}/${dailyLimit}`
+      );
+    } else if (dailyUsageRatio >= config.warningThreshold) {
+      warnings.push(
+        `Daily token usage at ${(dailyUsageRatio * 100).toFixed(1)}%`
+      );
+    }
   }
 
-  // 時間制限チェック
-  const hourlyUsageRatio = hourCost.totalTokens / config.hourlyTokenLimit;
-  if (hourlyUsageRatio >= 1) {
-    warnings.push(
-      `Hourly token limit exceeded: ${hourCost.totalTokens}/${config.hourlyTokenLimit}`
-    );
-  } else if (hourlyUsageRatio >= config.warningThreshold) {
-    warnings.push(
-      `Hourly token usage at ${(hourlyUsageRatio * 100).toFixed(1)}%`
-    );
+  const hourlyUsageRatio = hourlyLimit > 0 ? hourCost.totalTokens / hourlyLimit : 0;
+  if (hourlyLimit > 0) {
+    if (hourlyUsageRatio >= 1) {
+      warnings.push(
+        `Hourly token limit exceeded: ${hourCost.totalTokens}/${hourlyLimit}`
+      );
+    } else if (hourlyUsageRatio >= config.warningThreshold) {
+      warnings.push(
+        `Hourly token usage at ${(hourlyUsageRatio * 100).toFixed(1)}%`
+      );
+    }
   }
 
-  const isWithinLimits = dailyUsageRatio < 1 && hourlyUsageRatio < 1;
+  const isWithinLimits = (dailyLimit <= 0 || dailyUsageRatio < 1)
+    && (hourlyLimit <= 0 || hourlyUsageRatio < 1);
 
   return {
     isWithinLimits,
     dailyUsage: todayCost.totalTokens,
-    dailyLimit: config.dailyTokenLimit,
+    dailyLimit,
     hourlyUsage: hourCost.totalTokens,
-    hourlyLimit: config.hourlyTokenLimit,
+    hourlyLimit,
     warnings,
   };
 }

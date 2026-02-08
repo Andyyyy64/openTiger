@@ -79,10 +79,21 @@ interface DispatcherConfig {
   localWorktreeRoot?: string;
 }
 
+function parseMaxConcurrentWorkers(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed)) {
+    return 5;
+  }
+  if (parsed <= 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return parsed;
+}
+
 // デフォルト設定
 const DEFAULT_CONFIG: DispatcherConfig = {
   pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS ?? "5000", 10),
-  maxConcurrentWorkers: parseInt(process.env.MAX_CONCURRENT_WORKERS ?? "5", 10),
+  maxConcurrentWorkers: parseMaxConcurrentWorkers(process.env.MAX_CONCURRENT_WORKERS),
   launchMode: (process.env.LAUNCH_MODE as LaunchMode) ?? "process",
   repoMode: getRepoMode(),
   repoUrl: process.env.REPO_URL ?? "",
@@ -245,7 +256,13 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
   console.log("openTiger Dispatcher started");
   console.log("=".repeat(60));
   console.log(`Poll interval: ${config.pollIntervalMs}ms`);
-  console.log(`Max concurrent workers: ${config.maxConcurrentWorkers}`);
+  console.log(
+    `Max concurrent workers: ${
+      Number.isFinite(config.maxConcurrentWorkers)
+        ? config.maxConcurrentWorkers
+        : "unlimited"
+    }`
+  );
   console.log(`Launch mode: ${config.launchMode}`);
   console.log(`Repo mode: ${config.repoMode}`);
   console.log(`Repository: ${config.repoUrl}`);
@@ -279,7 +296,9 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
 
       // busyエージェント数を基準に同時実行上限を適用（queue/process両対応）
       const busyAgentCount = await getBusyAgentCount();
-      const availableSlots = Math.max(0, config.maxConcurrentWorkers - busyAgentCount);
+      const availableSlots = Number.isFinite(config.maxConcurrentWorkers)
+        ? Math.max(0, config.maxConcurrentWorkers - busyAgentCount)
+        : Number.MAX_SAFE_INTEGER;
 
       if (availableSlots > 0) {
         // 利用可能なタスクを取得

@@ -57,9 +57,32 @@ export function createTaskWorker(
   processor: (job: Job<TaskJobData>) => Promise<void>,
   queueName = TASK_QUEUE_NAME
 ): Worker<TaskJobData> {
-  // タスクが長時間実行される可能性があるため、lockDurationを十分長く設定する
-  const maxTaskTimeoutSeconds = parseInt(process.env.TASK_TIMEOUT_SECONDS ?? "3600", 10);
-  const lockDurationMs = (maxTaskTimeoutSeconds + 600) * 1000; // タイムアウト + 10分のバッファ
+  // lockDuration は短めにして、プロセスクラッシュ時のactiveジョブ停滞を早く自己回復させる。
+  // 正常実行中はBullMQがロック更新するため、長時間タスクでも継続できる。
+  const configuredLockDurationMs = Number.parseInt(
+    process.env.TASK_QUEUE_LOCK_DURATION_MS ?? "120000",
+    10
+  );
+  const lockDurationMs = Number.isFinite(configuredLockDurationMs)
+    && configuredLockDurationMs >= 30000
+    ? configuredLockDurationMs
+    : 120000;
+  const configuredStalledIntervalMs = Number.parseInt(
+    process.env.TASK_QUEUE_STALLED_INTERVAL_MS ?? "30000",
+    10
+  );
+  const stalledIntervalMs = Number.isFinite(configuredStalledIntervalMs)
+    && configuredStalledIntervalMs >= 5000
+    ? configuredStalledIntervalMs
+    : 30000;
+  const configuredMaxStalledCount = Number.parseInt(
+    process.env.TASK_QUEUE_MAX_STALLED_COUNT ?? "1",
+    10
+  );
+  const maxStalledCount = Number.isFinite(configuredMaxStalledCount)
+    && configuredMaxStalledCount >= 0
+    ? configuredMaxStalledCount
+    : 1;
   // 常駐エージェントは単一ジョブ実行を既定にする（1 agent = 1 task）
   const configuredConcurrency = Number.parseInt(
     process.env.TASK_QUEUE_WORKER_CONCURRENCY ?? "1",
@@ -72,7 +95,9 @@ export function createTaskWorker(
   return new Worker(queueName, processor, {
     connection: getConnectionConfig(),
     concurrency: workerConcurrency,
-    lockDuration: lockDurationMs, // ジョブのロック期間を延長してstalled判定を防ぐ
+    lockDuration: lockDurationMs,
+    stalledInterval: stalledIntervalMs,
+    maxStalledCount,
   });
 }
 

@@ -22,7 +22,7 @@ runsRoute.get("/stats", async (c) => {
 
   return c.json({
     dailyTokens: Number(result[0]?.totalTokens ?? 0),
-    tokenLimit: parseInt(process.env.DAILY_TOKEN_LIMIT ?? "50000000", 10),
+    tokenLimit: parseInt(process.env.DAILY_TOKEN_LIMIT ?? "-1", 10),
   });
 });
 

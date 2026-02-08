@@ -237,7 +237,7 @@ export async function requeueFailedTasks(): Promise<number> {
 
 type BlockReason = "awaiting_judge" | "needs_rework" | "quota_wait";
 
-// 最大リトライ回数（-1でカテゴリ上限のみ適用）
+// 最大リトライ回数（-1で無制限。上限超過時は再作業へ切り替えて復旧を止めない）
 const MAX_RETRY_COUNT = (() => {
   const parsed = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1", 10);
   return Number.isFinite(parsed) ? parsed : -1;
@@ -282,10 +282,20 @@ function isRetryAllowed(retryCount: number): boolean {
 }
 
 function resolveCategoryRetryLimit(category: FailureCategory): number {
+  const categoryLimit = CATEGORY_RETRY_LIMIT[category];
   if (isUnlimitedRetry()) {
-    return CATEGORY_RETRY_LIMIT[category];
+    // 無制限モードでも非リトライカテゴリは再作業へ切り替える判断材料として残す
+    return categoryLimit <= 0 ? 0 : -1;
   }
-  return Math.min(CATEGORY_RETRY_LIMIT[category], MAX_RETRY_COUNT);
+  return Math.min(categoryLimit, MAX_RETRY_COUNT);
+}
+
+function isCategoryRetryAllowed(retryCount: number, categoryRetryLimit: number): boolean {
+  return categoryRetryLimit < 0 || retryCount < categoryRetryLimit;
+}
+
+function formatRetryLimitDisplay(categoryRetryLimit: number): string {
+  return categoryRetryLimit < 0 ? "inf" : String(categoryRetryLimit);
 }
 
 function classifyFailure(errorMessage: string | null): FailureClassification {
@@ -624,6 +634,7 @@ export async function requeueFailedTasksWithCooldown(
     const currentRetry = task.retryCount ?? 0;
     const nextRetryCount = currentRetry + 1;
     const globalRetryAllowed = isRetryAllowed(currentRetry);
+    const categoryRetryAllowed = isCategoryRetryAllowed(currentRetry, categoryRetryLimit);
     const repeatedFailure = await hasRepeatedFailureSignature(
       task.id,
       latestRun?.errorMessage ?? null
@@ -632,7 +643,7 @@ export async function requeueFailedTasksWithCooldown(
     if (
       !globalRetryAllowed
       || !failure.retryable
-      || currentRetry >= categoryRetryLimit
+      || !categoryRetryAllowed
       || repeatedFailure
     ) {
       const blockReason: Extract<BlockReason, "needs_rework"> = repeatedFailure
@@ -649,22 +660,25 @@ export async function requeueFailedTasksWithCooldown(
         .where(eq(tasks.id, task.id));
 
       await recordEvent({
-        type: "task.retry_exhausted",
+        // 再試行上限に達しても止めずに再作業へ切り替える
+        type: "task.recovery_escalated",
         entityType: "task",
         entityId: task.id,
         payload: {
           category: failure.category,
           retryable: failure.retryable,
           retryCount: currentRetry,
-          retryLimit: categoryRetryLimit,
+          retryLimit: categoryRetryLimit < 0 ? null : categoryRetryLimit,
+          retryLimitUnlimited: categoryRetryLimit < 0,
           reason: blockDetailReason,
           blockReason,
           globalRetryAllowed,
+          categoryRetryAllowed,
           repeatedFailure,
         },
       });
       console.log(
-        `[Cleanup] Blocked failed task ${task.id} (${failure.category}, retry=${currentRetry}/${categoryRetryLimit}, reason=${blockDetailReason})`
+        `[Cleanup] Escalated failed task ${task.id} (${failure.category}, retry=${currentRetry}/${formatRetryLimitDisplay(categoryRetryLimit)}, reason=${blockDetailReason})`
       );
       continue;
     }
@@ -689,7 +703,7 @@ export async function requeueFailedTasksWithCooldown(
       },
     });
     console.log(
-      `[Cleanup] Requeued failed task: ${task.id} (${failure.category}, retry=${nextRetryCount}/${categoryRetryLimit})`
+      `[Cleanup] Requeued failed task: ${task.id} (${failure.category}, retry=${nextRetryCount}/${formatRetryLimitDisplay(categoryRetryLimit)})`
     );
     requeued++;
   }
@@ -730,13 +744,13 @@ export async function requeueBlockedTasksWithCooldown(
   let handled = 0;
 
   for (const task of blockedTasks) {
+    const reason = normalizeBlockReason(task.blockReason);
     const cooldownPassed = task.updatedAt < cutoff;
-    const retryAllowed = isRetryAllowed(task.retryCount ?? 0);
-    if (!cooldownPassed || !retryAllowed) {
+    // 復旧を止めないため、上限に関わらずcooldownだけで再処理する
+    if (!cooldownPassed) {
       continue;
     }
 
-    const reason = normalizeBlockReason(task.blockReason);
     const nextRetryCount = (task.retryCount ?? 0) + 1;
 
     if (reason === "needs_rework") {

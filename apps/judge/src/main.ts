@@ -172,10 +172,29 @@ const DEFAULT_CONFIG: JudgeConfig = {
 };
 
 const JUDGE_AUTO_FIX_ON_FAIL = process.env.JUDGE_AUTO_FIX_ON_FAIL !== "false";
-const JUDGE_AUTO_FIX_MAX_ATTEMPTS = Number.parseInt(
-  process.env.JUDGE_AUTO_FIX_MAX_ATTEMPTS ?? "3",
-  10
-);
+function resolveJudgeAutoFixMaxAttempts(): number {
+  const parsed = Number.parseInt(
+    process.env.JUDGE_AUTO_FIX_MAX_ATTEMPTS ?? "-1",
+    10
+  );
+  if (!Number.isFinite(parsed)) {
+    return -1;
+  }
+  if (parsed < 0) {
+    return -1;
+  }
+  return Math.max(1, parsed);
+}
+
+function isJudgeAutoFixUnlimited(): boolean {
+  return JUDGE_AUTO_FIX_MAX_ATTEMPTS < 0;
+}
+
+function formatJudgeAutoFixLimit(maxAttempts: number): string {
+  return maxAttempts < 0 ? "inf" : String(maxAttempts);
+}
+
+const JUDGE_AUTO_FIX_MAX_ATTEMPTS = resolveJudgeAutoFixMaxAttempts();
 const JUDGE_AWAITING_RETRY_COOLDOWN_MS = Number.parseInt(
   process.env.JUDGE_AWAITING_RETRY_COOLDOWN_MS ?? "120000",
   10
@@ -992,9 +1011,8 @@ async function createAutoFixTaskForPr(params: {
 
   const titlePrefix = `[AutoFix] PR #${params.prNumber}`;
   const titlePattern = `${escapeSqlLikePattern(titlePrefix)}%`;
-  const maxAttempts = Number.isFinite(JUDGE_AUTO_FIX_MAX_ATTEMPTS)
-    ? Math.max(1, JUDGE_AUTO_FIX_MAX_ATTEMPTS)
-    : 3;
+  const maxAttempts = JUDGE_AUTO_FIX_MAX_ATTEMPTS;
+  const maxAttemptsLabel = formatJudgeAutoFixLimit(maxAttempts);
 
   const [activeTask] = await db
     .select({ id: tasks.id, status: tasks.status })
@@ -1015,8 +1033,11 @@ async function createAutoFixTaskForPr(params: {
     .from(tasks)
     .where(sql`${tasks.title} like ${titlePattern} escape '\\'`);
   const attemptCount = Number(attemptRow?.count ?? 0);
-  if (attemptCount >= maxAttempts) {
-    return { created: false, reason: `autofix_attempt_limit_reached:${attemptCount}/${maxAttempts}` };
+  if (!isJudgeAutoFixUnlimited() && attemptCount >= maxAttempts) {
+    return {
+      created: false,
+      reason: `autofix_attempt_limit_reached:${attemptCount}/${maxAttemptsLabel}`,
+    };
   }
 
   const issueFiles = Array.from(
@@ -1033,7 +1054,7 @@ async function createAutoFixTaskForPr(params: {
   const [taskRow] = await db
     .insert(tasks)
     .values({
-      title: `${titlePrefix} (attempt ${nextAttempt}/${maxAttempts})`,
+      title: `${titlePrefix} (attempt ${nextAttempt}/${maxAttemptsLabel})`,
       goal:
         `Fix judge-reported issues for PR #${params.prNumber} and create a follow-up PR that passes review. ` +
         `Original review task: ${params.sourceTaskId}.`,
@@ -1080,7 +1101,7 @@ async function createAutoFixTaskForPr(params: {
       sourceTaskTitle: params.sourceTaskTitle,
       sourceTaskGoal: params.sourceTaskGoal,
       attempt: nextAttempt,
-      maxAttempts,
+      maxAttempts: maxAttempts < 0 ? null : maxAttempts,
     },
   });
 
@@ -1106,9 +1127,8 @@ async function createConflictAutoFixTaskForPr(params: {
 
   const titlePrefix = `[AutoFix-Conflict] PR #${params.prNumber}`;
   const titlePattern = `${escapeSqlLikePattern(titlePrefix)}%`;
-  const maxAttempts = Number.isFinite(JUDGE_AUTO_FIX_MAX_ATTEMPTS)
-    ? Math.max(1, JUDGE_AUTO_FIX_MAX_ATTEMPTS)
-    : 3;
+  const maxAttempts = JUDGE_AUTO_FIX_MAX_ATTEMPTS;
+  const maxAttemptsLabel = formatJudgeAutoFixLimit(maxAttempts);
 
   const [activeTask] = await db
     .select({ id: tasks.id, status: tasks.status })
@@ -1129,8 +1149,11 @@ async function createConflictAutoFixTaskForPr(params: {
     .from(tasks)
     .where(sql`${tasks.title} like ${titlePattern} escape '\\'`);
   const attemptCount = Number(attemptRow?.count ?? 0);
-  if (attemptCount >= maxAttempts) {
-    return { created: false, reason: `conflict_autofix_attempt_limit_reached:${attemptCount}/${maxAttempts}` };
+  if (!isJudgeAutoFixUnlimited() && attemptCount >= maxAttempts) {
+    return {
+      created: false,
+      reason: `conflict_autofix_attempt_limit_reached:${attemptCount}/${maxAttemptsLabel}`,
+    };
   }
 
   const reasonLine = params.mergeDeferredReason
@@ -1145,7 +1168,7 @@ async function createConflictAutoFixTaskForPr(params: {
   const [taskRow] = await db
     .insert(tasks)
     .values({
-      title: `${titlePrefix} (attempt ${nextAttempt}/${maxAttempts})`,
+      title: `${titlePrefix} (attempt ${nextAttempt}/${maxAttemptsLabel})`,
       goal:
         `Resolve merge conflicts for PR #${params.prNumber} and make it mergeable without human intervention. ` +
         `Original review task: ${params.sourceTaskId}.`,
@@ -1196,7 +1219,7 @@ async function createConflictAutoFixTaskForPr(params: {
       sourceTaskTitle: params.sourceTaskTitle,
       sourceTaskGoal: params.sourceTaskGoal,
       attempt: nextAttempt,
-      maxAttempts,
+      maxAttempts: maxAttempts < 0 ? null : maxAttempts,
       mergeDeferredReason: params.mergeDeferredReason,
     },
   });
@@ -1691,6 +1714,7 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log(`Dry run: ${config.dryRun}`);
   console.log(`Merge on approve: ${config.mergeOnApprove}`);
   console.log(`Requeue on non-approve: ${config.requeueOnNonApprove}`);
+  console.log(`Auto-fix max attempts: ${formatJudgeAutoFixLimit(JUDGE_AUTO_FIX_MAX_ATTEMPTS)}`);
   console.log(
     `Non-approve circuit breaker retries: ${
       Number.isFinite(JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
