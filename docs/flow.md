@@ -1,123 +1,134 @@
-# Operation Flow (Latest)
+# Operation Flow (Current)
 
-## 1. Main Loop
+## 1. Start / Preflight
 
-1. Start preflight checks the backlog
-   - GitHub open issues / open PRs
-   - Local `tasks` (queued/running/failed/blocked)
-2. Preflight directly injects open issues as tasks (when needed)
-3. Planner generates tasks only when there is requirement text and no issue backlog
-4. Dispatcher selects a `queued` task, acquires a lease, and assigns it to a worker
-5. Worker/Tester/Docser execute implementation and verification
-6. On success, task transitions to `blocked(awaiting_judge)` and waits for Judge
-7. Judge evaluates the run and moves it to `done` / `queued` / `blocked`
-8. Cycle Manager performs stuck recovery, failed/blocked requeue, and metrics updates
-9. Continue until all tasks are complete (no automatic stop unless explicitly shut down)
+System start calls `/system/preflight` and builds a recommendation.
 
-## 1.1 Start preflight launch decisions
+Inputs checked:
 
-- Issue backlog exists:
-  - Do not start Planner; prioritize issue-derived tasks
-  - Start Dispatcher/Worker roles
-- PR backlog exists:
-  - Start Judge
-- No backlog and only requirements exist:
-  - Start Planner and follow the normal planning flow
+- requirement content
+- GitHub open issues
+- GitHub open PRs
+- local task backlog (`queued/running/failed/blocked`)
 
-## 2. Task Status Transitions
+Decision rules:
 
-- `queued`
-  - Waiting to run
-- `running`
-  - Dispatcher transitions after lease acquisition
-- `blocked`
-  - Waiting for Judge or rework
-  - `blockReason`:
-    - `awaiting_judge`
-    - `needs_rework`
-    - `needs_human`
-- `failed`
-  - Worker execution failed
-- `done`
-  - Completed after Judge approval
-- `cancelled`
-  - Aborted due to timeout or similar
+- `startPlanner = hasRequirementContent && !hasIssueBacklog && !hasJudgeBacklog`
+- execution agents (`dispatcher/worker/tester/docser`) start when there is planner work or backlog
+- judge starts when judge backlog exists or execution agents are active
+- planner process count is capped at 1
 
-Representative transitions:
+Meaning of common warnings:
 
-- `queued -> running`
-- `running -> blocked(awaiting_judge)`
-- `blocked(awaiting_judge) -> done | queued | blocked(needs_*)`
-- `failed -> queued | blocked`
-- `blocked(needs_rework) -> failed + new rework task(queued)`
+- `Issue backlog detected (...)`
+  - backlog-first mode is active
+- `Planner is skipped for this launch`
+  - expected when issue/pr backlog exists
 
-## 3. Run Lifecycle
+## 2. Primary Lifecycle
 
-- Create `runs` record with `running` when Worker starts
-- On success, save `success` and `costTokens`
-- On failure, save `failed` and `errorMessage`
-- Judge targets only successful runs where `runs.judgedAt IS NULL`
-- Atomic claim during Judge processing:
-  - `judgedAt = now`
-  - `judgementVersion = judgementVersion + 1`
+1. Task in `queued`
+2. Dispatcher acquires lease and sets task `running`
+3. Worker role executes task and verify commands
+4. On success:
+  - usually `blocked(awaiting_judge)` if review is needed
+  - `done` for direct/no-review completion
+5. Judge evaluates successful run
+6. Task moves to:
+  - `done`
+  - `blocked(awaiting_judge)` (retry/recovery)
+  - `blocked(needs_rework)` (split/autofix path)
+7. Cycle Manager continuously requeues/rebuilds until convergence
 
-This prevents re-reviewing the same run.
+## 3. Blocked Reasons Used in Recovery
 
-## 4. Dispatcher Parallel Control
+- `awaiting_judge`
+  - successful run exists but not judged yet, or run restoration is needed
+- `quota_wait`
+  - worker detected LLM quota error and parked task for cooldown retry
+- `needs_rework`
+  - non-approve escalation, repeated failure signature, or explicit autofix path
 
-- Do not execute tasks with unresolved dependencies
-- Do not run tasks with conflicting `targetArea` concurrently
-- Concurrency limit is `maxConcurrentWorkers - busyAgentCount`
-  - Applies regardless of process/queue mode
+Legacy `needs_human` is normalized into active recovery paths for compatibility.
 
-## 5. Post-Judge Behavior
+## 4. Run Lifecycle and Judge Idempotency
 
-- `approve + merge success`:
-  - Mark task as `done`
-- `request_changes` / `needs_human`:
-  - Default is requeue to `queued`
-  - Even when requeue is disabled, Cycle Manager recovers via `needs_rework` or `awaiting_judge`
-- `approve but merge failed`:
-  - Requeue to `queued` to avoid stalling
+- Worker creates `runs(status=running)` at start
+- Worker updates run to `success/failed`
+- Judge only targets successful unjudged runs
+- Judge claims run atomically (`judgedAt`, `judgementVersion`) before review
 
-Notes:
+Result:
 
-- If a task has `context.issue.number`, Worker adds `Closes #<issue>` to the PR body
-- This automatically links task results to issues on GitHub
+- same run is not reviewed twice
+- duplicated judge loops are constrained
 
-## 6. Recovery
+## 5. Dispatcher Recovery Layer
 
-Cycle Manager periodically executes:
+Per poll loop:
 
-- Mark timeout runs as `cancelled`
-- Return orphaned `running` tasks to `queued`
-- Classification-based retries for failed tasks
-- Reason-based handling for blocked tasks
-  - `awaiting_judge`: requeue if there is no pending judge run
-  - `needs_rework`: generate split tasks
-  - `needs_human`: normalize to `awaiting_judge` and keep recovery running
+- cleanup expired leases
+- cleanup dangling leases
+- reclaim dead-agent leases
+- recover orphaned `running` tasks without active run
 
-## 7. Failure Classification (Adaptive Retry)
+Task filtering:
 
-Failures are classified to adjust retry strategy.
+- unresolved dependencies are blocked
+- `targetArea` collisions are blocked
+- recent non-quota failures can be cooldown-blocked
+- latest quota failures are excluded from dispatcher cooldown blocking
 
-- `env`
-- `setup`
-- `policy`
-- `test`
-- `flaky`
-- `model`
+## 6. Worker Failure Handling
 
-This prevents blind repetition of the same cause and moves to `blocked` when limits are reached.
+On task error:
 
-## 8. SLOs and Observability
+- run marked `failed`
+- task marked:
+  - `blocked(quota_wait)` for quota signatures
+  - `failed` otherwise
+- lease released
+- agent returned to `idle`
 
-- SLO1: `queued -> running` within 5 minutes
-- SLO2: Do not leave `blocked` beyond 30 minutes
-- SLO3: Visualize recovery escalation
+Queue duplicate protection:
 
-Dashboard Overview shows:
+- runtime lock per task
+- startup-window guard for lock conflicts (avoid false immediate requeue)
 
-- `QUEUE AGE MAX`
-- `BLOCKED > 30M`
-- `RETRY EXHAUSTED`
+## 7. Judge Non-Approve and Merge-Failure Paths
+
+- Non-approve can trigger AutoFix task creation and parent task -> `blocked(needs_rework)`
+- Approve but merge conflict can trigger `[AutoFix-Conflict] PR #...`
+- If conflict autofix enqueue fails, judge retry fallback is used
+
+## 8. Cycle Manager Self-Healing
+
+Periodic jobs include:
+
+- timeout run cancellation
+- lease cleanup
+- offline agent reset
+- failed task cooldown requeue
+- blocked task cooldown recovery by reason
+
+Blocked recovery behavior:
+
+- `awaiting_judge`
+  - restore latest successful judgeable run if needed
+  - otherwise timeout-requeue
+- `quota_wait`
+  - cooldown then requeue
+- `needs_rework`
+  - for PR review tasks: route back to `awaiting_judge`
+  - for normal tasks: generate `[Rework] ...` task and move parent to failed lineage
+
+## 9. Why "Failed" and "Retry" Can Coexist
+
+Runs table can show immediate failed runs while task card shows retry countdown.
+
+Example:
+
+- run status: `failed` (actual attempt outcome)
+- task retry: `quota 79s` (next recovery attempt is already scheduled)
+
+This is active recovery, not a dead stop.

@@ -2,37 +2,30 @@
 
 ## 1. Role
 
-A dedicated worker role for test-related tasks.
+Specialized worker for test-oriented tasks.
 
-It uses the same execution foundation as Worker and runs with `AGENT_ROLE=tester`.
+Uses the same worker runtime with `AGENT_ROLE=tester` and tester-specific instructions/model.
 
-## 2. Expected Work
+## 2. Typical Responsibilities
 
-- Prepare verification commands for existing implementations
-- Add unit/integration/E2E tests
-- Summarize failure logs
+- add/fix unit/integration/e2e tests
+- stabilize flaky verification commands
+- provide reproducible failure context for judge/autofix loops
 
-## 3. Current Design Policy
+## 3. Planner/Dispatcher Integration
 
-- Test tasks are tagged with `role=tester` by Planner
-- Dispatcher routes to tester agents based on role
-- Use verify commands that finish non-interactively
+- planner infers tester role from task text/path hints
+- dispatcher routes role-tagged tasks to idle tester agents
 
-## 4. Recommended Operation
+## 4. Verification Policy
 
-- Use `vitest run` (no watch mode)
-- Run E2E on a dedicated port
-- Store results in run/artifacts so Judge can track them
+- non-interactive commands only
+- avoid watch-mode commands
+- e2e command can be auto-appended for frontend tester tasks
 
-## 5. Main Settings
+## 5. Important Settings
 
 - `AGENT_ROLE=tester`
 - `TESTER_MODEL`
 - `TESTER_INSTRUCTIONS_PATH`
-- `OPENTIGER_E2E_PORT`
-
-## 6. Not Implemented / Improvement Areas
-
-- Improve flake auto-detection accuracy
-- Estimate test scope based on diff
-- Standardize E2E artifact retention
+- project-specific e2e command in repository scripts

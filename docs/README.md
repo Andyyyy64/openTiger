@@ -1,21 +1,21 @@
 # Docs Index
 
-Index of openTiger design, operations, and agent specifications.
+This folder documents the current (code-aligned) openTiger behavior.
 
-## 1. Overview
+## Architecture and Operations
 
 - `docs/flow.md`
-  - State transitions from requirement generation to implementation, Judge, retries, and cleanup
+  - End-to-end lifecycle, state transitions, and recovery loops.
 - `docs/mode.md`
-  - Operating modes for `REPO_MODE` / `JUDGE_MODE` / `LAUNCH_MODE`
+  - `REPO_MODE`, `JUDGE_MODE`, `LAUNCH_MODE`, scaling, and startup behavior.
 - `docs/nonhumanoriented.md`
-  - Principles and SLOs to minimize human intervention
+  - Design principles for long-running autonomous operation.
 - `docs/task.md`
-  - Implementation status and priority backlog
+  - What is already implemented and what is still risky.
 - `docs/idea.md`
-  - Next-phase ideas and extension proposals
+  - Next-phase improvements.
 
-## 2. By Agent
+## Agent Specs
 
 - `docs/agent/planner.md`
 - `docs/agent/worker.md`
@@ -23,3 +23,9 @@ Index of openTiger design, operations, and agent specifications.
 - `docs/agent/judge.md`
 - `docs/agent/docser.md`
 
+## Recommended Reading Order
+
+1. `docs/flow.md`
+2. `docs/mode.md`
+3. `docs/agent/*.md`
+4. `docs/task.md`

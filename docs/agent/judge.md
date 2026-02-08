@@ -2,51 +2,41 @@
 
 ## 1. Role
 
-Evaluate successful runs and transition tasks to done or recovery paths that keep execution moving.
+Evaluate successful implementation runs and drive state transitions toward merge completion.
 
 ## 2. Inputs
 
-- Run (`status=success`)
-- PR info (git mode) or local diff (local mode)
-- CI/policy/LLM evaluation results
+- successful run + artifacts (`pr`/`worktree`)
+- CI / policy / LLM evaluator summary
+- current task state and retry context
 
-Launch triggers (Start preflight):
-
-- There is a GitHub open PR
-- Or there is a `blocked(awaiting_judge)` task backlog
-
-## 3. Verdicts
+## 3. Core Decisions
 
 - `approve`
 - `request_changes`
-- `needs_human`
 
-## 4. Key Specifications
+(legacy `needs_human` is treated as request-changes-style recovery behavior.)
 
-- Idempotency:
-  - Only runs with `runs.judgedAt IS NULL`
-  - Increment `judgementVersion` on claim
-- Target tasks:
-  - Only `status=blocked`
-- On non-approval:
-  - Default is requeue to `queued`
-  - When requeue is disabled, Cycle Manager still recovers via `needs_rework` or `awaiting_judge`
-- Approve but merge fails:
-  - Requeue to avoid stalling
+## 4. Post-Decision Actions
 
-## 5. Main Settings
+- approve + merge success -> task `done`
+- non-approve -> requeue or escalate (`needs_rework` + autofix)
+- approve but merge not completed:
+  - conflict signals -> queue `[AutoFix-Conflict]`
+  - otherwise schedule judge retry path
 
-- `JUDGE_MODE=git|local|auto`
+## 5. Anti-Loop Mechanics
+
+- claim-run idempotency (`judgedAt` / `judgementVersion`)
+- non-approve circuit breaker -> AutoFix escalation
+- doom-loop detector -> AutoFix escalation
+- awaiting-judge backlog restoration for missing pending runs
+
+## 6. Important Settings
+
+- `JUDGE_MODE`
 - `JUDGE_MODEL`
 - `JUDGE_MERGE_ON_APPROVE`
 - `JUDGE_REQUEUE_ON_NON_APPROVE`
-- `JUDGE_LOCAL_BASE_REPO_RECOVERY`
-- `JUDGE_LOCAL_BASE_REPO_RECOVERY_CONFIDENCE`
-- `JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT`
-
-## 6. Outputs
-
-- Write review/requeue records to `events`
-- Update run (including failure reasons)
-- Update task (`done`/`queued`/`blocked`)
-- Create docser tasks when needed
+- `JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES`
+- local mode recovery settings (`JUDGE_LOCAL_BASE_REPO_RECOVERY*`)

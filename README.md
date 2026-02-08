@@ -2,103 +2,76 @@
 
 ![openTiger](assets/avator.png)
 
-**Autonomous development that never stalls. Failures still converge to completion.**
+**Never-stalling autonomous development orchestration.**
 
-
-An orchestration system that coordinates multiple AI agents to autonomously run from requirements to implementation, judgement, and retries.  
-Completion rate in long-running operation is the first priority, with recovery and convergence built around inevitable failures.  
-Design principles are based on [Cursor Research: Scaling Long-Running Autonomous Coding](https://cursor.com/ja/blog/scaling-agents).
+openTiger continuously runs requirement-to-task generation, implementation, review, and recovery using multiple agents.
 
 ![openTiger UI](assets/ui.png)
 
+---
+
+Docs: [Index](docs/README.md) | [Flow](docs/flow.md) | [Modes](docs/mode.md) | [Agents](docs/agent)
 
 ---
 
-Docs · [Index](docs/README.md) · [Flow](docs/flow.md) · [Modes](docs/mode.md) · [Agents](docs/agent)
+## What It Can Do
 
----
+- Generate executable tasks from requirements
+- Run implementation in parallel with Worker / Tester / Docser roles
+- Review with Judge and apply auto-merge decisions
+- Self-recover on failure (retry, rework, re-evaluate)
+- Monitor tasks, runs, and agents from one dashboard
 
-## Highlights
+## What Makes It Different
 
-- Completion-first orchestration with recovery and convergence
-- Lease-centric parallel control for long-running workloads
-- Idempotent judgement with machine-judgable completion criteria
-- Non-destructive verification that avoids mutating project state
-- Role-separated agents with operational visibility in the Dashboard
+- Prioritizes “do not stall” over first-attempt perfection
+- Backlog-first startup
+  - Existing issues/PRs are processed before generating new plans
+- Explicit recovery states
+  - `awaiting_judge` / `quota_wait` / `needs_rework`
+- Duplicate-execution defenses
+  - lease, runtime lock, and judge idempotency
+- Planner is single-instance; execution agents can scale horizontally
 
-## Never-stall operation rules
+## How To Use
 
-- Run long-lived system processes in `start` mode, not `dev/watch`
-  - file-watch restarts can interrupt in-flight runs and create duplicate retries
-- Planner and Cycle Manager are started via `start:fresh` (clean + build + start) to avoid stale `dist` artifacts
-- Worker shutdown must always recover interrupted runs and clear `busy` state
-- OpenCode child processes must be terminated when parent processes receive shutdown signals
-- Judge non-approve retries switch recovery strategy to avoid blind loops
-  - keep recovery running by escalating to `AutoFix` or `needs_rework`
-- System process auto-restart uses backoff and defaults to unlimited retries (`SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS=-1`)
-
----
-
-## How it works (short)
-
-Requirements → Planner → Dispatcher → Workers/Testers/Docser → Judge → Cycle Manager (requeue/recover)
-
----
-
-## Core Components
-
-- Planner
-  - Generate tasks from requirements
-- Dispatcher
-  - Task assignment and parallel control
-- Worker / Tester / Docser
-  - Implementation, testing, and documentation updates
-- Judge
-  - Judgement and transition control
-- Cycle Manager
-  - Stuck recovery, requeueing, and metrics management
-
----
-
-## Environment
-
-### Prerequisites
-
-- Node.js 20+
-- pnpm 9+
-- Docker / Docker Compose
-- PostgreSQL
-- Redis
-- OpenCode CLI
-
-### Setup
+### 1. Setup
 
 ```bash
 git clone git@github.com:Andyyyy64/openTiger.git
 cd openTiger
 pnpm install
 cp .env.example .env
+```
+
+### 2. Start
+
+Fastest path:
+
+```bash
 pnpm restart
 ```
 
----
+### 3. Access
 
-## Quick Start
+- Dashboard: `http://localhost:5190`
+- API: `http://localhost:4301`
 
-1. Prepare a requirement
-2. Generate tasks with the Planner
-3. Start Dispatcher/Worker/Judge/Cycle Manager
-4. Monitor `QUEUE AGE MAX` / `BLOCKED > 30M` / `RETRY EXHAUSTED` in the Dashboard
+### 4. First Run Flow
 
----
+1. Configure GitHub, model, and API keys in Dashboard `system_config`
+2. Load `requirement.md` and start
+3. Monitor progress in `tasks`, `runs`, and `judgements`
+
+## Best For Teams That
+
+- Need to keep processing even with large issue/PR backlogs
+- Want to reduce manual babysitting of autonomous coding loops
+- Prefer recovery-first workflows over stop-on-error behavior
 
 ## Documentation
 
-- `docs/README.md` (Index)
-- `docs/flow.md` (State transitions)
-- `docs/mode.md` (Operating modes)
-- `docs/nonhumanoriented.md` (Long-running operation principles)
-- `docs/task.md` (Implementation status)
-- `docs/agent/*.md` (Agent specifications)
-
----
+- `docs/flow.md`: end-to-end state transitions and convergence flow
+- `docs/mode.md`: operating modes and scaling setup
+- `docs/nonhumanoriented.md`: “never stall” design principles
+- `docs/agent/*.md`: per-agent responsibilities

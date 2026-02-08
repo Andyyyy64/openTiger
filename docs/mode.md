@@ -1,80 +1,90 @@
 # Operating Modes
 
-Operating mode is defined by three axes.
+openTiger behavior is controlled by three axes.
 
-- Repository operation: `REPO_MODE`
-- Judge execution: `JUDGE_MODE`
-- Worker launch: `LAUNCH_MODE`
+## 1. Repository Mode (`REPO_MODE`)
 
-## 1. REPO_MODE
+### `git`
 
-### `REPO_MODE=git`
+- clone/push/PR workflow
+- judge primarily reviews PR artifacts
 
-- Work by cloning a remote repo
-- Push and create PRs
-- Judge is primarily PR-based
-
-Required settings:
+Required:
 
 - `REPO_URL`
 - `BASE_BRANCH`
 - `GITHUB_TOKEN`
 
-### `REPO_MODE=local`
+### `local`
 
-- Use `git worktree` in parallel based on `LOCAL_REPO_PATH`
-- Do not push or create PRs
-- Judge evaluates local diffs
+- local repository + worktree workflow
+- no remote PR creation required
 
-Required settings:
+Required:
 
 - `LOCAL_REPO_PATH`
 - `LOCAL_WORKTREE_ROOT`
 - `BASE_BRANCH`
 
-## 2. JUDGE_MODE
+## 2. Judge Mode (`JUDGE_MODE`)
 
-- `JUDGE_MODE=git`
-  - Force PR mode
-- `JUDGE_MODE=local`
-  - Force local mode
-- `JUDGE_MODE=auto` or unset
-  - Follow `REPO_MODE`
+- `git`: force PR review path
+- `local`: force local diff path
+- `auto`: follow repository mode
 
-Supporting settings:
+Important flags:
 
-- `JUDGE_MERGE_ON_APPROVE` (default: true)
-- `JUDGE_REQUEUE_ON_NON_APPROVE` (default: true)
-- `JUDGE_LOCAL_BASE_REPO_RECOVERY=llm|stash|none`
+- `JUDGE_MERGE_ON_APPROVE`
+- `JUDGE_REQUEUE_ON_NON_APPROVE`
 
-## 3. LAUNCH_MODE
+## 3. Launch Mode (`LAUNCH_MODE`)
 
-- `LAUNCH_MODE=process`
-  - Dispatch queues to resident workers
-  - Recommended default for production
-- `LAUNCH_MODE=docker`
-  - Run one Docker container per task
-  - For environments that require stronger isolation
+### `process` (recommended)
 
-## 4. Recommended Combinations
+- resident agents consume queue jobs
+- fastest recovery and operational visibility
 
-- CI/PR-centric operation:
-  - `REPO_MODE=git`
-  - `JUDGE_MODE=auto`
-  - `LAUNCH_MODE=process`
-- Fast local verification:
-  - `REPO_MODE=local`
-  - `JUDGE_MODE=auto`
-  - `LAUNCH_MODE=process`
-- Strict isolation:
-  - `REPO_MODE=git` or `local`
-  - `LAUNCH_MODE=docker`
+### `docker`
 
-## 5. Critical Retry Settings
+- per-task container isolation
+- useful in stricter isolation environments
+
+## 4. Scaling Rules
+
+- planner is hard-limited to one process by API/system logic
+- worker/tester/docser/judge counts are configurable
+- dispatcher slot control counts only busy executable roles (`worker/tester/docser`)
+
+## 5. Startup Behavior You Should Expect
+
+`/system/preflight` can intentionally skip planner.
+
+Typical:
+
+- issue backlog exists -> create/continue issue tasks first
+- open PR or awaiting judge backlog exists -> judge first
+- planner starts only when backlog is clear and requirement content exists
+
+## 6. Retry/Recovery Controls
+
+Main knobs:
 
 - `FAILED_TASK_RETRY_COOLDOWN_MS`
-- `FAILED_TASK_MAX_RETRY_COUNT`
 - `BLOCKED_TASK_RETRY_COOLDOWN_MS`
+- `FAILED_TASK_MAX_RETRY_COUNT` (`-1` means unlimited global retry budget)
 - `DISPATCH_RETRY_DELAY_MS`
+- `SYSTEM_PROCESS_AUTO_RESTART*`
 
-These directly determine the "never stall, finish in parallel" behavior.
+Queue/lock recovery knobs:
+
+- `TASK_QUEUE_LOCK_DURATION_MS`
+- `TASK_QUEUE_STALLED_INTERVAL_MS`
+- `TASK_QUEUE_MAX_STALLED_COUNT`
+
+## 7. Quota Operation Settings
+
+- `OPENCODE_WAIT_ON_QUOTA`
+- `OPENCODE_QUOTA_RETRY_DELAY_MS`
+- `OPENCODE_MAX_QUOTA_WAITS`
+
+Current task-level behavior still uses `blocked(quota_wait)` + cycle cooldown requeue for convergence.

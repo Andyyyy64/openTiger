@@ -1,73 +1,66 @@
-# Principles of Non-Human Operation
+# Non-Human-Oriented Operation Principles
 
-## 1. Goal
+## 1. Objective
 
-Sustain long-running, parallel execution without human intervention.
+Maintain autonomous progress without manual babysitting.
 
-The goal is evaluated by three criteria:
+Practical definition:
 
-- Never stall
-- Keep recovering by changing strategy for repeated failures
-- Never break under parallelism
+- no silent deadlock
+- no infinite same-step loop without state change
+- repeated failures are converted into a different recovery path
 
-## 2. Design Principles
+## 2. Core Principles
 
-- Role separation
-  - Separate Planner / Dispatcher / Worker / Judge / Cycle Manager
-- Mechanized judgement
-  - Transitions decided by `commands`, policy, CI, and Judge verdict
-- Recovery-first
-  - Automatically handle failed / blocked / orphan / timeout
-- Idempotency
-  - Never evaluate the same run twice
-  - Never execute the same task twice
+- Recovery-first over perfect first-run success
+- Idempotent control points (lease, run claim, dedupe signatures)
+- Backlog-first startup (clear existing work before creating new work)
+- Explicit blocked reasons for machine recovery
 
-## 3. Primary Anti-Stall Mechanisms
+## 3. Anti-Stall Mechanisms
 
-### 3.1 Judge idempotency
+### 3.1 Lease and Runtime Lock Discipline
 
-- Use `runs.judgedAt` and `judgementVersion` to prevent re-judging the same run
-- Do not re-review claimed runs
+- task lease prevents duplicate dispatch
+- runtime lock prevents duplicate execution
+- dangling/expired/orphaned lease paths are continuously reclaimed
 
-### 3.2 Blocked control by blockReason
+### 3.2 Judge Idempotency
+
+- only unjudged successful runs are eligible
+- claimed run cannot be judged twice concurrently
+
+### 3.3 Recovery States Instead of Halt States
 
 - `awaiting_judge`
+- `quota_wait`
 - `needs_rework`
-- `needs_human`
 
-Separate behavior by reason to prevent stalling while isolating risky operations.
+State is transformed rather than abandoned.
 
-### 3.3 Adaptive retries
+### 3.4 Adaptive Escalation
 
-Failure classification:
+- repeated same failure signatures trigger rework/autofix escalation
+- merge-conflict approvals route to conflict autofix task when possible
 
-- `env/setup/policy/test/flaky/model`
+## 4. Quota Philosophy
 
-Adjust retry limits per category to switch recovery strategy without stopping.
+Quota pressure is treated as recoverable external pressure, not terminal failure.
 
-### 3.4 Unified parallel control
+- attempt may fail quickly
+- task is parked with explicit reason (`quota_wait`)
+- cooldown retry continues until resources recover
 
-- Concurrency is based on busy agent count
-- Avoid `targetArea` collisions
-- Lease + orphan recovery
+## 5. Observability Requirements
 
-## 4. SLO
+Operators must see progress intent, not only attempt outcomes.
 
-- `queued -> running` within 5 minutes
-- Do not leave `blocked` beyond 30 minutes
-- Visualize recovery escalation
+- run-level failures
+- task-level next retry reason/time
+- backlog gating reasons from preflight
 
-## 5. Boundary of Human Intervention
+## 6. Non-Goals
 
-Automation does not stop; it changes recovery strategies when needed:
-
-- Persistent `needs_human` or policy violations trigger rework/splitting rather than halting
-- External dependency failures are isolated but still retried with recovery context
-
-## 6. Operational Notes
-
-- Keep verify non-destructive
-  - Do not rewrite `package.json` just for verification
-- Stop denylisted commands with double defense
-  - Before verify + before OpenCode execution
-- Store logs per task/run and reuse as context for the next retry
+- maximizing first-attempt success at the cost of recoverability
+- strict sequential processing when safe parallelism is available
+- manual-only recovery flows

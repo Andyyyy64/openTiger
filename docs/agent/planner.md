@@ -2,55 +2,55 @@
 
 ## 1. Role
 
-Split requirements into executable tasks and save them to `tasks`.
+Generate executable tasks from requirement input and persist them safely.
 
-Notes:
-
-- If Start preflight detects an issue backlog, Planner is not started with priority
-- In that case, issue-derived tasks run first
+Planner is intentionally single-instance in system control to avoid duplicate planning races.
 
 ## 2. Inputs
 
-- Requirement file
-- Existing task state
-- Policy / allowed paths
+- requirement file/content
+- existing task backlog hints
+- judge feedback summaries
+- repository snapshot + inspection output
 
-Primary conditions for Planner to start after preflight:
+## 3. Planning Pipeline
 
-- Requirement text exists
-- There is no open issue backlog
+1. Parse and validate requirement
+2. Load judge feedback and existing-task hints
+3. Run codebase inspection (LLM)
+4. Generate tasks (LLM/simple fallback path)
+5. Normalize dependencies and allowed paths
+6. Attach policy fields (role, commands, notes)
+7. Save tasks with dedupe signature lock
+8. Optionally create linked GitHub issues
 
-## 3. Outputs
+## 4. Key Behaviors
 
-- Task creation
-- Dependencies
-- Priority
-- Risk level
+- initialization task auto-injection for uninitialized repos
+- dependency index sanitization and redundancy reduction
+- lockfile path allowance normalization
+- doc gap detection and optional docser task injection
+- plan save dedupe using advisory lock + event signature
 
-## 4. Key Specifications
+## 5. Start Constraints
 
-- Tasks must have machine-judgable goals
-- Fix circular or forward dependencies
-- Auto-inject initialization tasks for uninitialized repos
-- Use a dedupe window to avoid duplicate plans
+Planner may be skipped by preflight if backlog exists.
 
-## 5. Main Settings
+Planner start is blocked when PR/judge backlog exists in `/system/processes/:name/start` checks.
+
+## 6. Failure Model
+
+- inspection has retry and quota-aware delay logic
+- if inspection cannot produce usable output, planning aborts for that run
+- existing tasks remain untouched
+
+## 7. Important Settings
 
 - `PLANNER_MODEL`
+- `PLANNER_TIMEOUT`
+- `PLANNER_INSPECT_TIMEOUT`
+- `PLANNER_INSPECT_MAX_RETRIES`
+- `PLANNER_INSPECT_QUOTA_RETRY_DELAY_MS`
+- `PLANNER_DEDUPE_WINDOW_MS`
 - `PLANNER_USE_REMOTE`
 - `PLANNER_REPO_URL`
-- `PLANNER_TIMEOUT`
-- `PLANNER_INSPECT`
-- `PLANNER_INSPECT_TIMEOUT`
-- `PLANNER_DEDUPE_WINDOW_MS`
-
-## 6. On Failure
-
-- Record errors when requirement parsing fails
-- Sanitize and save invalid outputs
-- On critical failure, exit without breaking existing tasks
-
-## 7. Operational Notes
-
-- Planner prioritizes "non-stalling splits" over optimization
-- Prefer small, re-runnable plans over tightly coupled dependencies

@@ -1,59 +1,26 @@
-# Idea Notes (Next Phase)
+# Next Ideas
 
-The current implementation has reached "parallel execution that rarely stalls."
-The next phase focuses on quality and operational experience.
+## 1. Planner Fallback Layer
 
-## 1. Short-term (Priority)
+- Add optional "degraded planning" mode when inspection repeatedly fails.
+- Generate minimal safe tasks instead of hard aborting planning.
 
-### 1.1 Dedicated queue for needs_human
+## 2. Recovery Explainability
 
-- Currently only an isolation event exists
-- Add dedicated status/queue/UI to make operations explicit
+- Add first-class timeline panel: state transition graph per task.
+- Show reason evolution (`quota_wait -> queued -> running -> awaiting_judge`).
 
-### 1.2 Introduce a triager role
+## 3. Judge Throughput Controls
 
-- Connect failure classification directly to task splitting and replanning
-- A dedicated role that assists Cycle Manager recovery
+- Dynamic judge scaling based on awaiting backlog slope.
+- Prioritize PRs with oldest blocked parent task first.
 
-### 1.3 Expand health API
+## 4. Retry Policy Profiles
 
-- Real checks for DB/Redis/Queue via `/health/ready`
-- Return SLO violation counts
+- profile-based retry policy (`aggressive`, `balanced`, `cost-save`).
+- allow per-project overrides by config row.
 
-## 2. Mid-term
+## 5. Safety Hardening
 
-### 2.1 Strengthen tester
-
-- Select tests based on diffs
-  - unit / integration / e2e
-- Flake detection and automatic isolation
-
-### 2.2 Strengthen docser
-
-- Improve doc-missing detection accuracy
-- Template updates by change type
-
-### 2.3 Recursive planning for planner
-
-- Spawn sub-planners for large requirements
-- Predict conflict areas early and avoid them during task generation
-
-## 3. Long-term
-
-### 3.1 Deployer + observer
-
-- Promote to staging/prod and auto rollback
-- Generate fix tasks based on operational metrics
-
-### 3.2 Requirement interview
-
-- Ask questions automatically to resolve ambiguities
-- Version and diff management for requirements
-
-## 4. Target Metrics
-
-- Execution success rate
-- Average task completion time
-- Recovery escalation rate
-- Count of blocked over 30 minutes
-- Count of queued over 5 minutes
+- stronger permission preflight for expected external paths.
+- explicit validation before passing paths to worker instructions.
