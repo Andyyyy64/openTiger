@@ -19,7 +19,7 @@ export const tasks = pgTable("tasks", {
   riskLevel: text("risk_level").default("low").notNull(), // low/medium/high
   role: text("role").default("worker").notNull(), // worker/tester
   status: text("status").default("queued").notNull(), // queued/running/done/failed/blocked/cancelled
-  blockReason: text("block_reason"), // blocked理由（awaiting_judge/needs_rework/needs_human）
+  blockReason: text("block_reason"), // blocked理由（awaiting_judge/needs_rework）
   targetArea: text("target_area"), // 担当領域（コンフリクト制御用）
   touches: text("touches").array().default([]).notNull(), // 変更対象のファイル/ディレクトリ
   dependencies: uuid("dependencies").array().default([]).notNull(), // 先行タスクID

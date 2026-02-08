@@ -57,7 +57,7 @@ export const TaskSchema = z.object({
   riskLevel: RiskLevel.default("low"),
   role: TaskRole.default("worker"),
   status: TaskStatus.default("queued"),
-  blockReason: z.string().optional(), // blocked理由（awaiting_judge/needs_rework/needs_human）
+  blockReason: z.string().optional(), // blocked理由（awaiting_judge/needs_rework）
   targetArea: z.string().optional(), // 担当領域（コンフリクト制御用）
   touches: z.array(z.string()).default([]), // 変更対象のファイル/ディレクトリ
   dependencies: z.array(z.string().uuid()).default([]), // 先行タスクID
