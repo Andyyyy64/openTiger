@@ -196,7 +196,6 @@ const JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES = Number.parseInt(
   process.env.JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES ?? "2",
   10
 );
-const JUDGE_RECOVER_NEEDS_HUMAN = process.env.JUDGE_RECOVER_NEEDS_HUMAN === "true";
 
 const BASE_REPO_RECOVERY_MODES = ["none", "stash", "llm"] as const;
 
@@ -744,7 +743,6 @@ async function judgeSinglePR(
       console.log("  - Running LLM code review...");
       llmResult = await evaluateLLM(pr.prNumber, {
         taskGoal: pr.taskGoal,
-        workdir: config.workdir,
         instructionsPath: config.instructionsPath,
       });
       console.log(
@@ -821,7 +819,6 @@ async function judgeSingleWorktree(
       target.branchName
     );
     llmResult = await evaluateLLMDiff(diffText, target.taskGoal, {
-      workdir: config.workdir,
       instructionsPath: config.instructionsPath,
     });
   } else {
@@ -1309,71 +1306,6 @@ function isImportedPrReviewTask(goal: string, title: string): boolean {
   );
 }
 
-async function recoverNeedsHumanJudgeBacklog(agentId: string): Promise<number> {
-  const stuckTasks = await db
-    .select({
-      id: tasks.id,
-    })
-    .from(tasks)
-    .where(and(eq(tasks.status, "blocked"), eq(tasks.blockReason, "needs_human")));
-
-  if (stuckTasks.length === 0) {
-    return 0;
-  }
-
-  let recovered = 0;
-  for (const task of stuckTasks) {
-    const [recoverableRun] = await db
-      .select({
-        runId: runs.id,
-      })
-      .from(runs)
-      .innerJoin(artifacts, eq(artifacts.runId, runs.id))
-      .where(
-        and(
-          eq(runs.taskId, task.id),
-          eq(runs.status, "success"),
-          inArray(artifacts.type, ["pr", "worktree"])
-        )
-      )
-      .orderBy(desc(runs.startedAt))
-      .limit(1);
-
-    if (!recoverableRun?.runId) {
-      continue;
-    }
-
-    await db
-      .update(runs)
-      .set({
-        judgedAt: null,
-      })
-      .where(eq(runs.id, recoverableRun.runId));
-
-    await db
-      .update(tasks)
-      .set({
-        blockReason: "awaiting_judge",
-        updatedAt: new Date(),
-      })
-      .where(eq(tasks.id, task.id));
-
-    await db.insert(events).values({
-      type: "judge.task_recovered",
-      entityType: "task",
-      entityId: task.id,
-      agentId,
-      payload: {
-        reason: "recover_needs_human_to_awaiting_judge",
-        runId: recoverableRun.runId,
-      },
-    });
-    recovered += 1;
-  }
-
-  return recovered;
-}
-
 async function recoverAwaitingJudgeBacklog(agentId: string): Promise<number> {
   const cooldownMs = Number.isFinite(JUDGE_AWAITING_RETRY_COOLDOWN_MS)
     && JUDGE_AWAITING_RETRY_COOLDOWN_MS > 0
@@ -1561,7 +1493,6 @@ async function recoverDirtyBaseRepo(options: {
     fullDiff,
     "ローカルベースリポジトリの未コミット変更です。システム専用リポジトリに残すべきか判断してください。",
     {
-      workdir: options.workdir,
       instructionsPath: options.instructionsPath,
       timeoutSeconds: 300,
     }
@@ -1767,17 +1698,10 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
         : 2
     }`
   );
-  console.log(`Recover needs_human backlog: ${JUDGE_RECOVER_NEEDS_HUMAN}`);
   console.log("=".repeat(60));
 
   while (true) {
     try {
-      if (JUDGE_RECOVER_NEEDS_HUMAN) {
-        const recovered = await recoverNeedsHumanJudgeBacklog(config.agentId);
-        if (recovered > 0) {
-          console.log(`[Judge] Recovered ${recovered} needs_human task(s) back to awaiting_judge`);
-        }
-      }
       const recoveredAwaiting = await recoverAwaitingJudgeBacklog(config.agentId);
       if (recoveredAwaiting > 0) {
         console.log(`[Judge] Recovered ${recoveredAwaiting} awaiting_judge task(s) by restoring runs`);
@@ -1980,88 +1904,74 @@ async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                       }
                     }
                   } else {
-                    // CI/Policy系の非approveは従来どおり再キュー
-                    if (effectiveResult.verdict === "needs_human") {
-                      await db
-                        .update(tasks)
-                        .set({
-                          status: "blocked",
-                          blockReason: "needs_human",
-                          updatedAt: new Date(),
-                        })
-                        .where(eq(tasks.id, pr.taskId));
-                      console.warn(
-                        `  Task ${pr.taskId} blocked as needs_human (non-approve verdict)`
-                      );
-                    } else {
-                      const retryThreshold = Number.isFinite(JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
-                        ? Math.max(1, JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
-                        : 2;
-                      const currentRetryCount = await getTaskRetryCount(pr.taskId);
-                      const shouldEscalate = currentRetryCount >= retryThreshold;
+                    // CI/Policy系の非approveは再キューし、閾値超過でAutoFixへ昇格
+                    const retryThreshold = Number.isFinite(JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
+                      ? Math.max(1, JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
+                      : 2;
+                    const currentRetryCount = await getTaskRetryCount(pr.taskId);
+                    const shouldEscalate = currentRetryCount >= retryThreshold;
 
-                      if (shouldEscalate) {
-                        const autoFix = await createAutoFixTaskForPr({
-                          prNumber: pr.prNumber,
-                          prUrl: pr.prUrl,
-                          sourceTaskId: pr.taskId,
-                          sourceRunId: pr.runId,
-                          sourceTaskTitle: pr.taskTitle,
-                          sourceTaskGoal: pr.taskGoal,
-                          allowedPaths: pr.allowedPaths,
-                          commands: pr.commands,
-                          summary,
-                          agentId: config.agentId,
-                        });
+                    if (shouldEscalate) {
+                      const autoFix = await createAutoFixTaskForPr({
+                        prNumber: pr.prNumber,
+                        prUrl: pr.prUrl,
+                        sourceTaskId: pr.taskId,
+                        sourceRunId: pr.runId,
+                        sourceTaskTitle: pr.taskTitle,
+                        sourceTaskGoal: pr.taskGoal,
+                        allowedPaths: pr.allowedPaths,
+                        commands: pr.commands,
+                        summary,
+                        agentId: config.agentId,
+                      });
 
-                        if (autoFix.created) {
-                          await db
-                            .update(tasks)
-                            .set({
-                              status: "blocked",
-                              blockReason: "needs_rework",
-                              updatedAt: new Date(),
-                            })
-                            .where(eq(tasks.id, pr.taskId));
-                          console.log(
-                            `  Task ${pr.taskId} hit non-approve circuit breaker; auto-fix task queued: ${autoFix.taskId}`
-                          );
-                        } else {
-                          await db
-                            .update(tasks)
-                            .set({
-                              status: "blocked",
-                              blockReason: "needs_human",
-                              updatedAt: new Date(),
-                            })
-                            .where(eq(tasks.id, pr.taskId));
-                          console.warn(
-                            `  Task ${pr.taskId} blocked as needs_human; non-approve circuit breaker fallback (${autoFix.reason})`
-                          );
-                        }
+                      if (autoFix.created) {
+                        await db
+                          .update(tasks)
+                          .set({
+                            status: "blocked",
+                            blockReason: "needs_rework",
+                            updatedAt: new Date(),
+                          })
+                          .where(eq(tasks.id, pr.taskId));
+                        console.log(
+                          `  Task ${pr.taskId} hit non-approve circuit breaker; auto-fix task queued: ${autoFix.taskId}`
+                        );
                       } else {
-                        requeueReason = buildJudgeFailureMessage(effectiveResult);
-                        if (importedPrReviewTask) {
-                          await scheduleTaskForJudgeRetry({
-                            taskId: pr.taskId,
-                            runId: pr.runId,
-                            agentId: config.agentId,
-                            reason: `retry_imported_pr_review:${requeueReason}`,
-                          });
-                          console.log(
-                            `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`
-                          );
-                        } else {
-                          await requeueTaskAfterJudge({
-                            taskId: pr.taskId,
-                            runId: pr.runId,
-                            agentId: config.agentId,
-                            reason: requeueReason,
-                          });
-                          console.log(
-                            `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`
-                          );
-                        }
+                        await db
+                          .update(tasks)
+                          .set({
+                            status: "blocked",
+                            blockReason: "needs_rework",
+                            updatedAt: new Date(),
+                          })
+                          .where(eq(tasks.id, pr.taskId));
+                        console.warn(
+                          `  Task ${pr.taskId} blocked as needs_rework; non-approve circuit breaker fallback (${autoFix.reason})`
+                        );
+                      }
+                    } else {
+                      requeueReason = buildJudgeFailureMessage(effectiveResult);
+                      if (importedPrReviewTask) {
+                        await scheduleTaskForJudgeRetry({
+                          taskId: pr.taskId,
+                          runId: pr.runId,
+                          agentId: config.agentId,
+                          reason: `retry_imported_pr_review:${requeueReason}`,
+                        });
+                        console.log(
+                          `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`
+                        );
+                      } else {
+                        await requeueTaskAfterJudge({
+                          taskId: pr.taskId,
+                          runId: pr.runId,
+                          agentId: config.agentId,
+                          reason: requeueReason,
+                        });
+                        console.log(
+                          `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`
+                        );
                       }
                     }
                   }
@@ -2226,7 +2136,7 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
             if (!config.dryRun) {
               let nextStatus: "done" | "queued" | "blocked";
               let requeueReason: string | undefined;
-              let nextBlockReason: "needs_rework" | "needs_human" | null = null;
+              let nextBlockReason: "needs_rework" | null = null;
               if (result.verdict === "approve") {
                 mergeResult = await mergeLocalBranch({
                   baseRepoPath: target.baseRepoPath,
@@ -2278,10 +2188,7 @@ async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
                 if (config.requeueOnNonApprove) {
                   requeueReason = buildJudgeFailureMessage(result);
                 } else {
-                  nextBlockReason =
-                    result.verdict === "needs_human"
-                      ? "needs_human"
-                      : "needs_rework";
+                  nextBlockReason = "needs_rework";
                 }
               }
               await db
@@ -2372,7 +2279,6 @@ async function reviewSinglePR(
     console.log("\n[3/3] Running LLM code review...");
     llmResult = await evaluateLLM(prNumber, {
       taskGoal: "Review this PR",
-      workdir: config.workdir,
       instructionsPath: config.instructionsPath,
     });
     console.log(
@@ -2447,7 +2353,6 @@ Environment Variables:
   JUDGE_LOCAL_BASE_REPO_RECOVERY_CONFIDENCE=0.7 LLM confidence threshold
   JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT=20000 Diff size limit for DB storage
   JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES=2 Retry threshold before non-approve escalation
-  JUDGE_RECOVER_NEEDS_HUMAN=true Recover needs_human backlog back to awaiting_judge
 
 Example:
   pnpm --filter @openTiger/judge start 42

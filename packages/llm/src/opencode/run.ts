@@ -95,6 +95,52 @@ const EXTERNAL_PERMISSION_HINTS = [
 ];
 const PARENT_SHUTDOWN_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
 
+function readRuntimeEnv(
+  options: OpenCodeOptions,
+  key: string
+): string | undefined {
+  const optionValue = options.env?.[key];
+  if (typeof optionValue === "string" && optionValue.trim().length > 0) {
+    return optionValue;
+  }
+  const processValue = process.env[key];
+  if (typeof processValue === "string" && processValue.trim().length > 0) {
+    return processValue;
+  }
+  return undefined;
+}
+
+function parseBooleanEnvValue(
+  value: string | undefined,
+  fallback: boolean
+): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (["true", "1", "yes", "y", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["false", "0", "no", "n", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+}
+
+function parseIntegerEnvValue(
+  value: string | undefined,
+  fallback: number
+): number {
+  if (value === undefined) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return parsed;
+}
+
 function isRetryableError(stderr: string, exitCode: number): boolean {
   if (exitCode === 1 && !stderr) return false;
   return RETRYABLE_ERRORS.some((pattern) => pattern.test(stderr));
@@ -554,13 +600,24 @@ export async function runOpenCode(
 ): Promise<OpenCodeResult> {
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
-  const waitOnQuota = DEFAULT_WAIT_ON_QUOTA;
-  const quotaRetryDelayMs = Number.isFinite(DEFAULT_QUOTA_RETRY_DELAY_MS)
-    && DEFAULT_QUOTA_RETRY_DELAY_MS > 0
-    ? DEFAULT_QUOTA_RETRY_DELAY_MS
+  const waitOnQuota = parseBooleanEnvValue(
+    readRuntimeEnv(options, "OPENCODE_WAIT_ON_QUOTA"),
+    DEFAULT_WAIT_ON_QUOTA
+  );
+  const runtimeQuotaRetryDelayMs = parseIntegerEnvValue(
+    readRuntimeEnv(options, "OPENCODE_QUOTA_RETRY_DELAY_MS"),
+    DEFAULT_QUOTA_RETRY_DELAY_MS
+  );
+  const quotaRetryDelayMs = Number.isFinite(runtimeQuotaRetryDelayMs)
+    && runtimeQuotaRetryDelayMs > 0
+    ? runtimeQuotaRetryDelayMs
     : 30000;
-  const maxQuotaWaits = Number.isFinite(DEFAULT_MAX_QUOTA_WAITS)
-    ? DEFAULT_MAX_QUOTA_WAITS
+  const runtimeMaxQuotaWaits = parseIntegerEnvValue(
+    readRuntimeEnv(options, "OPENCODE_MAX_QUOTA_WAITS"),
+    DEFAULT_MAX_QUOTA_WAITS
+  );
+  const maxQuotaWaits = Number.isFinite(runtimeMaxQuotaWaits)
+    ? runtimeMaxQuotaWaits
     : -1;
   let currentModel = options.model ?? DEFAULT_MODEL;
   let fallbackUsed = false;

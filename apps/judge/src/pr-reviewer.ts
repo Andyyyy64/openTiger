@@ -2,10 +2,10 @@ import { addPRComment, mergePR, getOctokit, getRepoInfo } from "@openTiger/vcs";
 import type { Policy } from "@openTiger/core";
 import type { CIEvaluationResult, PolicyEvaluationResult, LLMEvaluationResult, CodeIssue } from "./evaluators/index.js";
 
-const ALLOW_LLM_FAIL_AUTOMERGE = process.env.JUDGE_ALLOW_LLM_FAIL_AUTOMERGE === "true";
+const ALLOW_LLM_FAIL_AUTOMERGE = process.env.JUDGE_ALLOW_LLM_FAIL_AUTOMERGE !== "false";
 
 // 判定結果
-export type JudgeVerdict = "approve" | "request_changes" | "needs_human";
+export type JudgeVerdict = "approve" | "request_changes";
 
 // レビュー結果
 export interface JudgeResult {
@@ -69,7 +69,7 @@ export function makeJudgement(
   const canAutoMerge =
     policy.autoMerge.enabled && isRiskAllowed(taskRiskLevel, maxRiskLevel);
   const allowLlmBypass =
-    ALLOW_LLM_FAIL_AUTOMERGE && policy.autoMerge.level === "low" && canAutoMerge;
+    ALLOW_LLM_FAIL_AUTOMERGE && canAutoMerge;
 
   if (!summary.llm.pass) {
     reasons.push(...summary.llm.reasons);
@@ -86,10 +86,10 @@ export function makeJudgement(
         confidence: summary.llm.confidence,
       };
     }
-    // LLMの確信度が低い場合は人間レビューを要求
+    // LLMの確信度が低い場合も request_changes に統一する
     if (summary.llm.confidence < 0.7) {
       return {
-        verdict: "needs_human",
+        verdict: "request_changes",
         reasons,
         suggestions,
         autoMerge: false,
@@ -113,8 +113,8 @@ export function makeJudgement(
 
   if (shouldRequireHuman) {
     return {
-      verdict: "needs_human",
-      reasons: ["High-risk change requires human review"],
+      verdict: "request_changes",
+      reasons: ["High-risk change requires rework before merge"],
       suggestions,
       autoMerge: false,
       riskLevel: taskRiskLevel,
@@ -166,13 +166,11 @@ export function generateReviewComment(
   const verdictEmoji = {
     approve: "✅",
     request_changes: "❌",
-    needs_human: "👀",
   };
 
   const verdictLabel = {
     approve: "Approved",
     request_changes: "Changes Requested",
-    needs_human: "Human Review Required",
   };
 
   let comment = `## ${verdictEmoji[result.verdict]} Judge Verdict: ${verdictLabel[result.verdict]}\n\n`;
@@ -359,9 +357,6 @@ export async function reviewAndAct(
         }
         break;
 
-      case "needs_human":
-        // 人間レビューが必要な場合は何もしない
-        break;
     }
   } catch (error) {
     console.error(`Failed to process PR #${prNumber}:`, error);

@@ -1,5 +1,8 @@
 import { runOpenCode } from "@openTiger/llm";
 import { getOctokit, getRepoInfo } from "@openTiger/vcs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 // LLM評価結果
 export interface LLMEvaluationResult {
@@ -18,6 +21,67 @@ export interface CodeIssue {
   file?: string;
   line?: number;
   suggestion?: string;
+}
+
+function normalizePath(path: string): string {
+  return path
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/^\.?\//, "");
+}
+
+function extractChangedFilesFromDiff(diff: string): Set<string> {
+  const files = new Set<string>();
+  const lines = diff.split("\n");
+  for (const line of lines) {
+    if (!line.startsWith("diff --git ")) {
+      continue;
+    }
+    const match = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
+    if (!match) {
+      continue;
+    }
+    const left = normalizePath(match[1] ?? "");
+    const right = normalizePath(match[2] ?? "");
+    if (left) {
+      files.add(left);
+    }
+    if (right) {
+      files.add(right);
+    }
+  }
+  return files;
+}
+
+function filterIssuesByDiffScope(
+  issues: CodeIssue[],
+  changedFiles: Set<string>
+): { kept: CodeIssue[]; dropped: CodeIssue[] } {
+  if (changedFiles.size === 0) {
+    return { kept: issues, dropped: [] };
+  }
+
+  const kept: CodeIssue[] = [];
+  const dropped: CodeIssue[] = [];
+
+  for (const issue of issues) {
+    if (!issue.file) {
+      kept.push(issue);
+      continue;
+    }
+    const normalized = normalizePath(issue.file);
+    if (!normalized) {
+      kept.push(issue);
+      continue;
+    }
+    if (changedFiles.has(normalized)) {
+      kept.push({ ...issue, file: normalized });
+      continue;
+    }
+    dropped.push({ ...issue, file: normalized });
+  }
+
+  return { kept, dropped };
 }
 
 // PRのdiffを取得
@@ -42,6 +106,8 @@ function buildReviewPrompt(diff: string, taskGoal: string): string {
   return `
 あなたはシニアソフトウェアエンジニアです。
 以下のPRのdiffをレビューし、問題点を指摘してください。
+このレビューは与えられたDiffだけを根拠に行い、ファイルの作成・編集・削除を絶対に行わないでください。
+外部コマンド実行やツール呼び出しは不要です。JSONのみ返してください。
 
 ## タスクの目標
 ${taskGoal}
@@ -88,6 +154,26 @@ ${diff.slice(0, 10000)}${diff.length > 10000 ? "\n... (truncated)" : ""}
 `.trim();
 }
 
+async function runIsolatedJudgeReview(params: {
+  task: string;
+  model: string;
+  instructionsPath?: string;
+  timeoutSeconds: number;
+}): ReturnType<typeof runOpenCode> {
+  const isolatedWorkdir = await mkdtemp(join(tmpdir(), "openTiger-judge-llm-"));
+  try {
+    return await runOpenCode({
+      workdir: isolatedWorkdir,
+      instructionsPath: params.instructionsPath,
+      task: params.task,
+      model: params.model,
+      timeoutSeconds: params.timeoutSeconds,
+    });
+  } finally {
+    await rm(isolatedWorkdir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 // LLMレスポンスからJSONを抽出
 function extractJsonFromResponse(response: string): unknown {
   const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -129,7 +215,6 @@ export async function evaluateLLM(
   prNumber: number,
   options: {
     taskGoal: string;
-    workdir: string;
     instructionsPath?: string;
     timeoutSeconds?: number;
   }
@@ -137,6 +222,7 @@ export async function evaluateLLM(
   try {
     // PRのdiffを取得
     const diff = await getPRDiff(prNumber);
+    const changedFiles = extractChangedFilesFromDiff(diff);
 
     if (!diff || diff.trim().length === 0) {
       return {
@@ -153,11 +239,10 @@ export async function evaluateLLM(
     const judgeModel = process.env.JUDGE_MODEL ?? "google/gemini-3-pro-preview";
 
     // OpenCodeを実行
-    const result = await runOpenCode({
-      workdir: options.workdir,
-      instructionsPath: options.instructionsPath,
+    const result = await runIsolatedJudgeReview({
       task: prompt,
       model: judgeModel, // Judgeは高精度モデルでレビュー品質を優先する
+      instructionsPath: options.instructionsPath,
       timeoutSeconds: options.timeoutSeconds ?? 300,
     });
 
@@ -189,7 +274,7 @@ export async function evaluateLLM(
     };
 
     // 問題点を変換
-    const codeIssues: CodeIssue[] = (parsed.issues ?? []).map((issue) => ({
+    const rawIssues: CodeIssue[] = (parsed.issues ?? []).map((issue) => ({
       severity: (issue.severity as "error" | "warning" | "info") ?? "warning",
       category: (issue.category as CodeIssue["category"]) ?? "maintainability",
       message: issue.message,
@@ -197,12 +282,19 @@ export async function evaluateLLM(
       line: issue.line,
       suggestion: issue.suggestion,
     }));
+    const { kept: codeIssues, dropped: outOfScopeIssues } = filterIssuesByDiffScope(
+      rawIssues,
+      changedFiles
+    );
 
     // 理由と提案を生成
     const reasons: string[] = [];
     const suggestions: string[] = [];
 
-    if (!parsed.pass) {
+    const hasErrorIssue = codeIssues.some((issue) => issue.severity === "error");
+    const effectivePass = parsed.pass || !hasErrorIssue;
+
+    if (!effectivePass) {
       reasons.push(parsed.summary ?? "Code review found issues");
     }
 
@@ -215,8 +307,14 @@ export async function evaluateLLM(
       }
     }
 
+    if (outOfScopeIssues.length > 0) {
+      suggestions.push(
+        `Ignored ${outOfScopeIssues.length} LLM issue(s) outside PR diff scope.`
+      );
+    }
+
     return {
-      pass: parsed.pass,
+      pass: effectivePass,
       confidence: parsed.confidence,
       reasons,
       suggestions,
@@ -239,7 +337,6 @@ export async function evaluateLLMDiff(
   diff: string,
   taskGoal: string,
   options: {
-    workdir: string;
     instructionsPath?: string;
     timeoutSeconds?: number;
   }
@@ -258,11 +355,10 @@ export async function evaluateLLMDiff(
     const prompt = buildReviewPrompt(diff, taskGoal);
     const judgeModel = process.env.JUDGE_MODEL ?? "google/gemini-3-pro-preview";
 
-    const result = await runOpenCode({
-      workdir: options.workdir,
-      instructionsPath: options.instructionsPath,
+    const result = await runIsolatedJudgeReview({
       task: prompt,
       model: judgeModel,
+      instructionsPath: options.instructionsPath,
       timeoutSeconds: options.timeoutSeconds ?? 300,
     });
 
@@ -292,7 +388,8 @@ export async function evaluateLLMDiff(
       summary?: string;
     };
 
-    const codeIssues: CodeIssue[] = (parsed.issues ?? []).map((issue) => ({
+    const changedFiles = extractChangedFilesFromDiff(diff);
+    const rawIssues: CodeIssue[] = (parsed.issues ?? []).map((issue) => ({
       severity: (issue.severity as "error" | "warning" | "info") ?? "warning",
       category: (issue.category as CodeIssue["category"]) ?? "maintainability",
       message: issue.message,
@@ -300,11 +397,18 @@ export async function evaluateLLMDiff(
       line: issue.line,
       suggestion: issue.suggestion,
     }));
+    const { kept: codeIssues, dropped: outOfScopeIssues } = filterIssuesByDiffScope(
+      rawIssues,
+      changedFiles
+    );
 
     const reasons: string[] = [];
     const suggestions: string[] = [];
 
-    if (!parsed.pass) {
+    const hasErrorIssue = codeIssues.some((issue) => issue.severity === "error");
+    const effectivePass = parsed.pass || !hasErrorIssue;
+
+    if (!effectivePass) {
       reasons.push(parsed.summary ?? "Code review found issues");
     }
 
@@ -316,8 +420,14 @@ export async function evaluateLLMDiff(
       }
     }
 
+    if (outOfScopeIssues.length > 0) {
+      suggestions.push(
+        `Ignored ${outOfScopeIssues.length} LLM issue(s) outside PR diff scope.`
+      );
+    }
+
     return {
-      pass: parsed.pass,
+      pass: effectivePass,
       confidence: parsed.confidence,
       reasons,
       suggestions,
