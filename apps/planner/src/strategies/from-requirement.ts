@@ -1,8 +1,8 @@
-import { runOpenCode } from "@openTiger/llm";
 import type { CreateTaskInput } from "@openTiger/core";
 import type { Requirement } from "../parser";
 import type { CodebaseInspection } from "../inspection";
 import { getPlannerOpenCodeEnv } from "../opencode-config";
+import { generateAndParseWithRetry } from "../llm-json-retry";
 
 // タスク生成結果
 export interface PlannedTaskInput extends CreateTaskInput {
@@ -115,7 +115,7 @@ ${inspectionBlock}
         "notes": "補足情報"
       },
       "allowedPaths": ["変更許可パス（glob）"],
-      "commands": ["検証コマンド（pnpm test / pnpm run dev など）"],
+      "commands": ["リポジトリのscriptsに合わせた検証コマンド（lint/test/typecheckなど）"],
       "priority": 10,
       "riskLevel": "low",
       "dependsOn": [],
@@ -140,23 +140,26 @@ ${inspectionBlock}
 `.trim();
 }
 
-// LLMレスポンスからJSONを抽出
-function extractJsonFromResponse(response: string): unknown {
-  // コードブロックを探す
-  const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const codeBlockContent = codeBlockMatch?.[1];
-  if (codeBlockContent) {
-    return JSON.parse(codeBlockContent.trim());
+function isTaskGenerationPayload(value: unknown): value is {
+  tasks: Array<{
+    title: string;
+    goal: string;
+    role?: string;
+    context?: { files?: string[]; specs?: string; notes?: string };
+    allowedPaths: string[];
+    commands: string[];
+    priority?: number;
+    riskLevel?: string;
+    dependsOn?: number[];
+    timeboxMinutes?: number;
+  }>;
+  warnings?: string[];
+} {
+  if (!value || typeof value !== "object") {
+    return false;
   }
-
-  // 直接JSONを試す
-  const jsonMatch = response.match(/\{[\s\S]*\}/);
-  const jsonContent = jsonMatch?.[0];
-  if (jsonContent) {
-    return JSON.parse(jsonContent);
-  }
-
-  throw new Error("No valid JSON found in response");
+  const record = value as { tasks?: unknown };
+  return Array.isArray(record.tasks);
 }
 
 // 依存関係をインデックスからタスクIDへの参照に変換
@@ -207,22 +210,8 @@ export async function generateTasksFromRequirement(
   const prompt = buildPrompt(requirement, options.inspection);
   const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
 
-  // OpenCodeを実行
-  const result = await runOpenCode({
-    workdir: options.workdir,
-    task: prompt,
-    model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
-    timeoutSeconds: options.timeoutSeconds ?? 300,
-    // Plannerはプロンプト内の情報だけで判断するためツールを使わない
-    env: getPlannerOpenCodeEnv(),
-  });
-
-  if (!result.success) {
-    throw new Error(`OpenCode failed: ${result.stderr}`);
-  }
-
   // レスポンスをパース
-  let parsed: {
+  const parsed = await generateAndParseWithRetry<{
     tasks: Array<{
       title: string;
       goal: string;
@@ -236,13 +225,16 @@ export async function generateTasksFromRequirement(
       timeboxMinutes?: number;
     }>;
     warnings?: string[];
-  };
-
-  try {
-    parsed = extractJsonFromResponse(result.stdout) as typeof parsed;
-  } catch (error) {
-    throw new Error(`Failed to parse LLM response: ${error}`);
-  }
+  }>({
+    workdir: options.workdir,
+    model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
+    prompt,
+    timeoutSeconds: options.timeoutSeconds ?? 300,
+    // Plannerはプロンプト内の情報だけで判断するためツールを使わない
+    env: getPlannerOpenCodeEnv(),
+    guard: isTaskGenerationPayload,
+    label: "Task generation",
+  });
 
   // タスクを変換
   const tasks = resolveDependencies(parsed.tasks);
@@ -272,7 +264,8 @@ export function generateSimpleTasks(requirement: Requirement): TaskGenerationRes
         notes: requirement.notes,
       },
       allowedPaths: requirement.allowedPaths,
-      commands: ["pnpm test", "pnpm run check", "pnpm run dev"],
+      // 検証コマンドを固定化せず、実装内容に応じて簡易チェックへ寄せる
+      commands: [],
       priority: (requirement.acceptanceCriteria.length - index) * 10,
       riskLevel: determineRiskLevel(requirement),
       dependencies: [],

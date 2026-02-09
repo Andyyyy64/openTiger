@@ -31,19 +31,20 @@ export async function resolveCheckVerificationCommand(
   return "npm run check";
 }
 
-async function getRootDevScript(workdir: string): Promise<string | undefined> {
-  // ルートのpackage.jsonからdevスクリプトを取得する
+async function getRootScript(workdir: string, name: string): Promise<string | undefined> {
+  // ルートのpackage.jsonから指定スクリプトを取得する
   try {
     const raw = await readFile(join(workdir, "package.json"), "utf-8");
     const parsed = JSON.parse(raw);
-    return typeof parsed?.scripts?.dev === "string" ? parsed.scripts.dev : undefined;
+    const scripts = parsed?.scripts as Record<string, string> | undefined;
+    return typeof scripts?.[name] === "string" ? scripts[name] : undefined;
   } catch {
     return undefined;
   }
 }
 
 export async function resolveDevVerificationCommand(workdir: string): Promise<string | undefined> {
-  const devScript = await getRootDevScript(workdir);
+  const devScript = await getRootScript(workdir, "dev");
   if (!devScript) {
     return undefined;
   }
@@ -69,14 +70,20 @@ export async function resolveDevVerificationCommand(workdir: string): Promise<st
 }
 
 export async function resolveE2EVerificationCommand(workdir: string): Promise<string | undefined> {
+  const e2eScript =
+    (await getRootScript(workdir, "test:e2e")) ?? (await getRootScript(workdir, "e2e"));
+  if (!e2eScript) {
+    return undefined;
+  }
+  const scriptName = (await getRootScript(workdir, "test:e2e")) ? "test:e2e" : "e2e";
   if (await pathIsFile(join(workdir, "pnpm-lock.yaml"))) {
-    return "pnpm run e2e";
+    return `pnpm run ${scriptName}`;
   }
   if (await pathIsFile(join(workdir, "yarn.lock"))) {
-    return "yarn e2e";
+    return `yarn ${scriptName}`;
   }
   if (await pathIsFile(join(workdir, "package-lock.json"))) {
-    return "npm run e2e";
+    return `npm run ${scriptName}`;
   }
-  return "npm run e2e";
+  return `npm run ${scriptName}`;
 }

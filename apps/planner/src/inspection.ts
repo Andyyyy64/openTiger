@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { runOpenCode } from "@openTiger/llm";
 import type { Requirement } from "./parser";
 import { getPlannerOpenCodeEnv } from "./opencode-config";
+import { extractJsonObjectFromText } from "./json-response";
 
 export interface CodebaseInspection {
   summary: string;
@@ -338,20 +339,18 @@ ${excerptBlock}
 `.trim();
 }
 
-function extractJsonFromResponse(response: string): unknown {
-  const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const codeBlockContent = codeBlockMatch?.[1];
-  if (codeBlockContent) {
-    return JSON.parse(codeBlockContent.trim());
+function isInspectionPayload(value: unknown): value is {
+  summary?: string;
+  satisfied?: string[];
+  gaps?: string[];
+  evidence?: string[];
+  notes?: string[];
+} {
+  if (!value || typeof value !== "object") {
+    return false;
   }
-
-  const jsonMatch = response.match(/\{[\s\S]*\}/);
-  const jsonContent = jsonMatch?.[0];
-  if (jsonContent) {
-    return JSON.parse(jsonContent);
-  }
-
-  throw new Error("No valid JSON found in response");
+  const record = value as { summary?: unknown; gaps?: unknown };
+  return typeof record.summary === "string" || Array.isArray(record.gaps);
 }
 
 // 1回あたりのLLM呼び出しタイムアウト（秒）
@@ -496,13 +495,7 @@ export async function inspectCodebase(
 }
 
 function parseInspectionResult(stdout: string): CodebaseInspection {
-  const parsed = extractJsonFromResponse(stdout) as {
-    summary?: string;
-    satisfied?: string[];
-    gaps?: string[];
-    evidence?: string[];
-    notes?: string[];
-  };
+  const parsed = extractJsonObjectFromText(stdout, isInspectionPayload);
 
   let gaps = Array.isArray(parsed.gaps) ? parsed.gaps.filter((g) => typeof g === "string") : [];
   const evidence = Array.isArray(parsed.evidence)

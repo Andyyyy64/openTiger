@@ -1,6 +1,6 @@
-import { runOpenCode } from "@openTiger/llm";
 import type { CreateTaskInput } from "@openTiger/core";
 import { getPlannerOpenCodeEnv } from "../opencode-config";
+import { generateAndParseWithRetry } from "../llm-json-retry";
 
 // GitHub Issue情報
 export interface GitHubIssue {
@@ -34,7 +34,7 @@ function buildPromptFromIssue(issue: GitHubIssue, allowedPaths: string[]): strin
 4. **範囲限定**: 変更するファイル/ディレクトリを明確にする
 5. **既存構成遵守**: 既存のモノレポ構成と技術スタックを必ず守る
 6. **許可パス遵守**: allowedPaths の外に触る必要があるタスクは作らない
-7. **役割分担**: 実装は worker、テスト作成/追加は tester に割り当てる
+7. **役割分担**: 実装は worker、テスト作成/追加は tester、ドキュメント更新は docser に割り当てる
 
 ## 既存構成と技術スタックの厳守
 
@@ -73,14 +73,14 @@ ${allowedPaths.map((p) => `- ${p}`).join("\n")}
     {
       "title": "簡潔なタスク名",
       "goal": "機械判定可能な完了条件",
-      "role": "worker or tester",
+      "role": "worker or tester or docser",
       "context": {
         "files": ["関連ファイルパス"],
         "specs": "詳細仕様",
         "notes": "補足情報"
       },
       "allowedPaths": ["変更許可パス"],
-      "commands": ["検証コマンド（pnpm test / pnpm run dev など）"],
+      "commands": ["リポジトリのscriptsに合わせた検証コマンド（lint/test/typecheckなど）"],
       "priority": 10,
       "riskLevel": "low",
       "dependsOn": [],
@@ -97,12 +97,109 @@ ${allowedPaths.map((p) => `- ${p}`).join("\n")}
 - dependsOn は必要最小限にし、並列で進められるタスクは依存を付けない
 - 依存を過剰に張って直列化しない
  - 各タスクのcommandは成功/失敗を返すもの
- - dev起動の確認も含める
+- devなど常駐コマンドは検証に入れない
 - フロントが絡むタスクはE2Eを必須とし、クリティカルパスを最低限カバーする
+- docs/**, README.md, ops/runbooks/** のみを触るタスクは role=docser を選ぶ
 - riskLevelは "low" / "medium" / "high"
 - timeboxMinutesは30〜90の範囲
 - Issueのラベルからリスクレベルを推定
 `.trim();
+}
+
+function hasDocKeyword(text: string): boolean {
+  if (!text) {
+    return false;
+  }
+  return /(docs?|documentation|readme|runbook|guide|manual|changelog|ドキュメント|手順書|仕様書|設計書)/i.test(
+    text,
+  );
+}
+
+function isDocumentationPathPattern(path: string): boolean {
+  const normalized = path.trim().replace(/^\.\//, "").toLowerCase();
+  if (!normalized || normalized === "**" || normalized === "*") {
+    return false;
+  }
+  if (normalized === "readme.md" || normalized.endsWith("/readme.md")) {
+    return true;
+  }
+  if (normalized === "docs" || normalized.startsWith("docs/")) {
+    return true;
+  }
+  if (normalized === "ops/runbooks" || normalized.startsWith("ops/runbooks/")) {
+    return true;
+  }
+  if (normalized.endsWith(".md") || normalized.endsWith(".mdx")) {
+    return true;
+  }
+  return false;
+}
+
+function isDocumentationOnlyPaths(allowedPaths: string[]): boolean {
+  if (allowedPaths.length === 0) {
+    return false;
+  }
+  return allowedPaths.every((path) => isDocumentationPathPattern(path));
+}
+
+function isDocserTaskCandidate(task: {
+  title?: string;
+  goal?: string;
+  context?: { files?: string[]; specs?: string; notes?: string };
+  allowedPaths?: string[];
+}): boolean {
+  const text = [
+    task.title,
+    task.goal,
+    task.context?.specs,
+    task.context?.notes,
+    ...(task.context?.files ?? []),
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join("\n");
+  if (hasDocKeyword(text)) {
+    return true;
+  }
+  return isDocumentationOnlyPaths(task.allowedPaths ?? []);
+}
+
+function resolveTaskRole(params: {
+  issueFallbackRole: "worker" | "tester" | "docser";
+  task: {
+    role?: string;
+    title: string;
+    goal: string;
+    context?: { files?: string[]; specs?: string; notes?: string };
+    allowedPaths: string[];
+  };
+}): "worker" | "tester" | "docser" {
+  const requestedRole = params.task.role as "worker" | "tester" | "docser" | undefined;
+  if (isDocserTaskCandidate(params.task)) {
+    return "docser";
+  }
+  return requestedRole ?? params.issueFallbackRole;
+}
+
+function inferRoleFromIssueContent(
+  issue: GitHubIssue,
+  allowedPaths: string[],
+): "worker" | "tester" | "docser" {
+  const labels = issue.labels.map((label) => label.toLowerCase());
+  if (labels.some((label) => label.includes("docs") || label.includes("docser"))) {
+    return "docser";
+  }
+  if (
+    labels.some((label) => label.includes("test") || label.includes("qa") || label.includes("e2e"))
+  ) {
+    return "tester";
+  }
+  if (isDocumentationOnlyPaths(allowedPaths)) {
+    return "docser";
+  }
+  if (hasDocKeyword(`${issue.title}\n${issue.body}`)) {
+    return "docser";
+  }
+  return "worker";
 }
 
 // ラベルからリスクレベルを推定
@@ -126,21 +223,26 @@ function inferRiskFromLabels(labels: string[]): "low" | "medium" | "high" {
   return "low";
 }
 
-// LLMレスポンスからJSONを抽出
-function extractJsonFromResponse(response: string): unknown {
-  const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const codeBlockContent = codeBlockMatch?.[1];
-  if (codeBlockContent) {
-    return JSON.parse(codeBlockContent.trim());
+function isIssueTaskPayload(value: unknown): value is {
+  tasks: Array<{
+    title: string;
+    goal: string;
+    role?: string;
+    context?: { files?: string[]; specs?: string; notes?: string };
+    allowedPaths: string[];
+    commands: string[];
+    priority?: number;
+    riskLevel?: string;
+    dependsOn?: number[];
+    timeboxMinutes?: number;
+  }>;
+  warnings?: string[];
+} {
+  if (!value || typeof value !== "object") {
+    return false;
   }
-
-  const jsonMatch = response.match(/\{[\s\S]*\}/);
-  const jsonContent = jsonMatch?.[0];
-  if (jsonContent) {
-    return JSON.parse(jsonContent);
-  }
-
-  throw new Error("No valid JSON found in response");
+  const record = value as { tasks?: unknown };
+  return Array.isArray(record.tasks);
 }
 
 // GitHub Issueからタスクを生成
@@ -156,22 +258,8 @@ export async function generateTasksFromIssue(
   const prompt = buildPromptFromIssue(issue, options.allowedPaths);
   const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
 
-  // OpenCodeを実行
-  const result = await runOpenCode({
-    workdir: options.workdir,
-    task: prompt,
-    model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
-    timeoutSeconds: options.timeoutSeconds ?? 300,
-    // Plannerはプロンプト内の情報だけで判断するためツールを使わない
-    env: getPlannerOpenCodeEnv(),
-  });
-
-  if (!result.success) {
-    throw new Error(`OpenCode failed: ${result.stderr}`);
-  }
-
   // レスポンスをパース
-  let parsed: {
+  const parsed = await generateAndParseWithRetry<{
     tasks: Array<{
       title: string;
       goal: string;
@@ -185,20 +273,33 @@ export async function generateTasksFromIssue(
       timeboxMinutes?: number;
     }>;
     warnings?: string[];
-  };
-
-  try {
-    parsed = extractJsonFromResponse(result.stdout) as typeof parsed;
-  } catch (error) {
-    throw new Error(`Failed to parse LLM response: ${error}`);
-  }
+  }>({
+    workdir: options.workdir,
+    model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
+    prompt,
+    timeoutSeconds: options.timeoutSeconds ?? 300,
+    // Plannerはプロンプト内の情報だけで判断するためツールを使わない
+    env: getPlannerOpenCodeEnv(),
+    guard: isIssueTaskPayload,
+    label: "Issue task generation",
+  });
 
   // タスクを変換
   const defaultRisk = inferRiskFromLabels(issue.labels);
+  const fallbackRole = inferRoleFromIssueContent(issue, options.allowedPaths);
   const tasks: CreateTaskInput[] = parsed.tasks.map((task, index) => ({
     title: task.title,
     goal: task.goal,
-    role: (task.role as "worker" | "tester" | undefined) ?? "worker",
+    role: resolveTaskRole({
+      issueFallbackRole: fallbackRole,
+      task: {
+        role: task.role,
+        title: task.title,
+        goal: task.goal,
+        context: task.context,
+        allowedPaths: task.allowedPaths,
+      },
+    }),
     context: {
       ...task.context,
       notes: `GitHub Issue #${issue.number}: ${issue.title}\n${task.context?.notes ?? ""}`,
@@ -226,17 +327,19 @@ export function generateSimpleTaskFromIssue(
   allowedPaths: string[],
 ): IssueAnalysisResult {
   const riskLevel = inferRiskFromLabels(issue.labels);
+  const role = inferRoleFromIssueContent(issue, allowedPaths);
 
   const task: CreateTaskInput = {
     title: issue.title,
     goal: `Resolve GitHub Issue #${issue.number}`,
-    role: "worker",
+    role,
     context: {
       specs: issue.body,
       notes: `Labels: ${issue.labels.join(", ") || "none"}`,
     },
     allowedPaths,
-    commands: ["pnpm test", "pnpm run check"],
+    // 検証コマンドは固定せず、簡易チェックに委ねる
+    commands: [],
     priority: 50,
     riskLevel,
     dependencies: [],

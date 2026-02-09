@@ -62,6 +62,10 @@ function appendPlannerWarning(result: TaskGenerationResult, warning: string): Ta
   };
 }
 
+function isTaskParseFailure(message: string): boolean {
+  return message.includes("Failed to parse LLM response");
+}
+
 // 要件ファイルからタスクを生成
 export async function planFromRequirement(
   requirementPath: string,
@@ -204,6 +208,9 @@ export async function planFromRequirement(
         });
       } catch (error) {
         const message = clipText(getErrorMessage(error), 220);
+        if (isTaskParseFailure(message)) {
+          throw error;
+        }
         console.warn(`[Planner] LLM task generation failed: ${message}`);
         result = appendPlannerWarning(
           generateSimpleTasks(requirement),
@@ -506,6 +513,9 @@ export async function planFromContent(
       });
     } catch (error) {
       const message = clipText(getErrorMessage(error), 220);
+      if (isTaskParseFailure(message)) {
+        throw error;
+      }
       console.warn(`[Planner] LLM task generation failed: ${message}`);
       result = appendPlannerWarning(
         generateSimpleTasks(requirement),
