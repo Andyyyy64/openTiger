@@ -48,6 +48,8 @@ export function isNoCommitsBetweenError(message: string): boolean {
 
 export function shouldAllowNoChanges(task: Task): boolean {
   const text = `${task.title} ${task.goal}`.toLowerCase();
+  const role = task.role ?? "worker";
+  const expectedFiles = task.context?.files ?? [];
   const commands = task.commands ?? [];
   const allowHints = [
     "検証",
@@ -65,6 +67,20 @@ export function shouldAllowNoChanges(task: Task): boolean {
     "check",
   ];
   const denyHints = [
+    "setup",
+    "set up",
+    "initialize",
+    "initialization",
+    "bootstrap",
+    "scaffold",
+    "migration",
+    "migrate",
+    "schema",
+    "seed",
+    "初期化",
+    "セットアップ",
+    "構成",
+    "土台",
     "実装",
     "追加",
     "作成",
@@ -89,7 +105,17 @@ export function shouldAllowNoChanges(task: Task): boolean {
   const denies = denyHints.some((hint) => text.includes(hint));
   const verificationOnly = isVerificationOnlyCommands(commands);
 
-  // 検証だけのタスクは変更なしでも成功扱いにする
+  // 生成/実装対象ファイルが明示されるタスクは差分必須
+  if (expectedFiles.length > 0) {
+    return false;
+  }
+
+  // worker は原則として差分必須。検証専用ロールのみ変更なしを許可する
+  if (role === "worker") {
+    return allows && !denies;
+  }
+
+  // tester/docser の検証専用タスクは変更なしでも成功扱いにする
   return (allows && !denies) || verificationOnly;
 }
 

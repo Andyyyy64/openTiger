@@ -1,5 +1,5 @@
 import { access, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { parse } from "dotenv";
 import { db } from "@openTiger/db";
 import { config as configTable } from "@openTiger/db/schema";
@@ -60,6 +60,7 @@ const OPEN_CODE_ENV_KEYS = new Set([
   "ANTHROPIC_API_KEY",
   "OPENAI_API_KEY",
   "OPENCODE_MODEL",
+  "OPENCODE_SMALL_MODEL",
   "OPENCODE_FALLBACK_MODEL",
   "OPENCODE_MAX_RETRIES",
   "OPENCODE_RETRY_DELAY_MS",
@@ -89,6 +90,7 @@ async function resolveDefaultOpenCodeConfigPath(cwd: string): Promise<string | u
   const candidates = [
     process.env.OPENCODE_CONFIG,
     join(process.cwd(), "opencode.json"),
+    resolve(import.meta.dirname, "../../../opencode.json"),
     join(cwd, "opencode.json"),
   ].filter((value): value is string => Boolean(value));
 
@@ -145,6 +147,7 @@ async function loadConfigFromDb(): Promise<Record<string, string>> {
     if (!row) {
       return {};
     }
+    const rowRecord = row as unknown as Record<string, string | undefined>;
     return {
       GEMINI_API_KEY: row.geminiApiKey ?? "",
       ANTHROPIC_API_KEY: row.anthropicApiKey ?? "",
@@ -152,6 +155,7 @@ async function loadConfigFromDb(): Promise<Record<string, string>> {
       XAI_API_KEY: row.xaiApiKey ?? "",
       DEEPSEEK_API_KEY: row.deepseekApiKey ?? "",
       OPENCODE_MODEL: row.opencodeModel ?? "",
+      OPENCODE_SMALL_MODEL: rowRecord.opencodeSmallModel ?? "",
       OPENCODE_WAIT_ON_QUOTA: row.opencodeWaitOnQuota ?? "",
       OPENCODE_QUOTA_RETRY_DELAY_MS: row.opencodeQuotaRetryDelayMs ?? "",
       OPENCODE_MAX_QUOTA_WAITS: row.opencodeMaxQuotaWaits ?? "",

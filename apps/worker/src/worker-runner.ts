@@ -12,12 +12,14 @@ import {
 import {
   checkoutRepository,
   createWorkBranch,
+  checkoutExistingBranch,
   executeTask,
   verifyChanges,
   commitAndPush,
   createTaskPR,
   ensureRemoteBaseBranch,
 } from "./steps/index";
+import { checkoutBranch, getCurrentBranch } from "@openTiger/vcs";
 import { generateBranchName } from "./steps/branch";
 import {
   buildPrFetchRefspecs,
@@ -185,7 +187,20 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
 
     // Step 2: 作業用ブランチを作成する
     let branchName: string;
-    if (repoMode === "local") {
+    if (taskPrContext?.headRef) {
+      console.log("\n[2/7] Checking out PR branch...");
+      const branchResult = await checkoutExistingBranch({
+        repoPath,
+        branchName: taskPrContext.headRef,
+        baseRef: resolveBranchBaseRef(taskPrContext, baseBranch),
+      });
+
+      if (!branchResult.success) {
+        throw new Error(branchResult.error);
+      }
+
+      branchName = branchResult.branchName;
+    } else if (repoMode === "local") {
       branchName = localBranchName ?? generateBranchName(agentId, taskId);
     } else {
       console.log("\n[2/7] Creating work branch...");
@@ -252,7 +267,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       return `${status} on ${row.agentId}: ${reason}`;
     });
 
-    const executeResult = await executeTask({
+    let executeResult = await executeTask({
       repoPath,
       task: taskData,
       instructionsPath,
@@ -273,6 +288,21 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       }
     }
 
+    // OpenCodeが途中で別ブランチへ移動した場合は、PR対象ブランチへ戻してから後続処理を行う
+    const currentBranch = await getCurrentBranch(repoPath);
+    if (currentBranch !== branchName) {
+      console.warn(
+        `[Worker] Branch drift detected after OpenCode execution: current=${currentBranch ?? "unknown"}, expected=${branchName}`,
+      );
+      const restoreBranchResult = await checkoutBranch(repoPath, branchName);
+      if (!restoreBranchResult.success) {
+        throw new Error(
+          `Failed to restore expected branch ${branchName}: ${restoreBranchResult.stderr}`,
+        );
+      }
+      console.log(`[Worker] Restored branch context to ${branchName}`);
+    }
+
     // Step 4: 期待ファイルの存在を確認する
     console.log("\n[4/7] Checking expected files...");
     const missingFiles = await validateExpectedFiles(repoPath, taskData);
@@ -284,7 +314,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
 
     // Step 5: 変更内容を検証する
     console.log("\n[5/7] Verifying changes...");
-    const verifyResult = await verifyChanges({
+    let verifyResult = await verifyChanges({
       repoPath,
       commands: taskData.commands,
       allowedPaths: taskData.allowedPaths,
@@ -298,7 +328,116 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       allowNoChanges: shouldAllowNoChanges(taskData),
     });
 
+    const isNoChangeFailure = (message: string | undefined): boolean => {
+      const normalized = (message ?? "").toLowerCase();
+      return (
+        normalized.includes("no changes were made") ||
+        normalized.includes("no relevant changes were made")
+      );
+    };
+
+    // 変更なしで失敗した場合も同一プロセス内で自己修復を試みる
+    if (!verifyResult.success && isNoChangeFailure(verifyResult.error)) {
+      const rawAttempts = Number.parseInt(
+        process.env.WORKER_NO_CHANGE_RECOVERY_ATTEMPTS ?? "1",
+        10,
+      );
+      const noChangeRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
+      for (let attempt = 1; attempt <= noChangeRecoveryAttempts; attempt += 1) {
+        const recoveryHint =
+          "変更が検出されませんでした。タスクの目的を満たすための変更を必ず行ってください。";
+        const recoveryHints = [recoveryHint, ...retryHints];
+        console.warn(
+          `[Worker] No changes detected; recovery attempt ${attempt}/${noChangeRecoveryAttempts}`,
+        );
+        executeResult = await executeTask({
+          repoPath,
+          task: taskData,
+          instructionsPath,
+          model,
+          retryHints: recoveryHints,
+          policy: effectivePolicy,
+        });
+        if (!executeResult.success) {
+          continue;
+        }
+        verifyResult = await verifyChanges({
+          repoPath,
+          commands: taskData.commands,
+          allowedPaths: taskData.allowedPaths,
+          policy: effectivePolicy,
+          baseBranch,
+          headBranch: branchName,
+          allowLockfileOutsidePaths: true,
+          allowEnvExampleOutsidePaths: repoMode === "local",
+          allowNoChanges: shouldAllowNoChanges(taskData),
+        });
+        if (verifyResult.success) {
+          break;
+        }
+      }
+    }
+
+    // allowedPaths違反は即失敗せず、同一プロセス内で自己修復を試みる
+    if (!verifyResult.success && verifyResult.policyViolations.length > 0) {
+      const rawAttempts = Number.parseInt(process.env.WORKER_POLICY_RECOVERY_ATTEMPTS ?? "1", 10);
+      const policyRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
+      for (let attempt = 1; attempt <= policyRecoveryAttempts; attempt += 1) {
+        const policyHint = `allowedPaths外の変更を取り除き、許可パスのみに修正を収めてください: ${verifyResult.policyViolations.join(", ")}`;
+        const recoveryHints = [policyHint, ...retryHints];
+        console.warn(
+          `[Worker] Policy violations detected; recovery attempt ${attempt}/${policyRecoveryAttempts}`,
+        );
+        executeResult = await executeTask({
+          repoPath,
+          task: taskData,
+          instructionsPath,
+          model,
+          retryHints: recoveryHints,
+          policy: effectivePolicy,
+        });
+        if (!executeResult.success) {
+          continue;
+        }
+        verifyResult = await verifyChanges({
+          repoPath,
+          commands: taskData.commands,
+          allowedPaths: taskData.allowedPaths,
+          policy: effectivePolicy,
+          baseBranch,
+          headBranch: branchName,
+          allowLockfileOutsidePaths: true,
+          allowEnvExampleOutsidePaths: repoMode === "local",
+          allowNoChanges: shouldAllowNoChanges(taskData),
+        });
+        if (verifyResult.success) {
+          break;
+        }
+      }
+    }
+
     if (!verifyResult.success) {
+      if (verifyResult.policyViolations.length > 0) {
+        const errorMessage =
+          verifyResult.error ?? `Policy violations: ${verifyResult.policyViolations.join(", ")}`;
+        console.warn("[Worker] Policy violations detected; deferring to rework flow.");
+        await finalizeTaskState({
+          runId,
+          taskId,
+          agentId,
+          runStatus: "failed",
+          taskStatus: "blocked",
+          blockReason: "needs_rework",
+          costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+          errorMessage,
+        });
+        return {
+          success: false,
+          taskId,
+          runId,
+          error: errorMessage,
+        };
+      }
       throw new Error(verifyResult.error);
     }
 

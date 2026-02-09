@@ -96,7 +96,7 @@ async function getUserName(userId: string): Promise<string> {
 ### Step 5: テストが通ることを確認
 
 ```bash
-pnpm test
+検証コマンドを実行
 ```
 
 ### Step 6: 関連するテストを追加

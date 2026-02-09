@@ -1,4 +1,4 @@
-import { stageChanges, commit, push } from "@openTiger/vcs";
+import { stageChanges, commit, push, getCurrentBranch } from "@openTiger/vcs";
 import { getRepoMode } from "@openTiger/core";
 import type { Task } from "@openTiger/core";
 
@@ -58,6 +58,16 @@ export async function commitAndPush(options: CommitOptions): Promise<CommitResul
   const { repoPath, branchName, task, changedFiles } = options;
   const repoMode = getRepoMode();
   const forbiddenFiles = findForbiddenChangedFiles(changedFiles);
+
+  const currentBranch = await getCurrentBranch(repoPath);
+  if (currentBranch !== branchName) {
+    return {
+      success: false,
+      committed: false,
+      commitMessage: "",
+      error: `Branch drift detected before commit: current=${currentBranch ?? "unknown"}, expected=${branchName}`,
+    };
+  }
 
   if (forbiddenFiles.length > 0) {
     return {

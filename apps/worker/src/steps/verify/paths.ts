@@ -3,13 +3,41 @@ import { join } from "node:path";
 import { minimatch } from "minimatch";
 import { GENERATED_EXTENSIONS, GENERATED_PATHS } from "./constants";
 
+export function normalizePathForMatch(path: string): string {
+  const trimmed = path.replaceAll("\0", "").trim();
+  const unquoted =
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+      ? trimmed.slice(1, -1)
+      : trimmed;
+  return unquoted.replace(/\\/g, "/").replace(/^\.\//, "").replace(/^\/+/, "");
+}
+
+function isOpenTigerTempPath(path: string): boolean {
+  const normalizedPath = normalizePathForMatch(path);
+  return (
+    normalizedPath.startsWith(".openTiger-opencode-") ||
+    normalizedPath.includes("/.openTiger-opencode-")
+  );
+}
+
 // パスがパターンに合致するか判定する
 export function matchesPattern(path: string, patterns: string[]): boolean {
+  const normalizedPath = normalizePathForMatch(path);
   // Playwrightの`.last-run.json`などドットファイルも含める
-  return patterns.some((pattern) => minimatch(path, pattern, { dot: true }));
+  return patterns.some((pattern) => {
+    const normalizedPattern = normalizePathForMatch(pattern);
+    return (
+      minimatch(normalizedPath, normalizedPattern, { dot: true }) ||
+      minimatch(path, pattern, { dot: true })
+    );
+  });
 }
 
 export function isGeneratedPath(path: string): boolean {
+  if (isOpenTigerTempPath(path)) {
+    return true;
+  }
   return matchesPattern(path, GENERATED_PATHS);
 }
 

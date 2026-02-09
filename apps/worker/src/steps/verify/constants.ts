@@ -1,5 +1,9 @@
 // ポリシー判定から除外する生成物パターン
 export const GENERATED_PATHS = [
+  ".openTiger-opencode-*",
+  ".openTiger-opencode-*/**",
+  "**/.openTiger-opencode-*",
+  "**/.openTiger-opencode-*/**",
   "node_modules",
   "node_modules/**",
   "**/node_modules",
