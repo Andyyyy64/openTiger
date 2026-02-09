@@ -84,6 +84,9 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
+    "lint:ci": {
+      "outputs": []
+    },
     "typecheck": {
       "dependsOn": ["^build"],
       "outputs": []

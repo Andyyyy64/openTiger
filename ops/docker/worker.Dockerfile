@@ -51,12 +51,19 @@ FROM deps AS builder
 
 # TypeScript設定をコピー
 COPY tsconfig.base.json turbo.json ./
+# tsup設定を含めてビルドの入力を揃える
+COPY tsup.config.base.ts ./
 COPY packages/core/tsconfig.json packages/core/
 COPY packages/db/tsconfig.json packages/db/
 COPY packages/llm/tsconfig.json packages/llm/
 COPY packages/vcs/tsconfig.json packages/vcs/
 COPY packages/queue/tsconfig.json packages/queue/
 COPY apps/worker/tsconfig.json apps/worker/
+COPY packages/core/tsup.config.ts packages/core/
+COPY packages/db/tsup.config.ts packages/db/
+COPY packages/llm/tsup.config.ts packages/llm/
+COPY packages/vcs/tsup.config.ts packages/vcs/
+COPY packages/queue/tsup.config.ts packages/queue/
 
 # ソースコードをコピー
 COPY packages/core/src packages/core/src
