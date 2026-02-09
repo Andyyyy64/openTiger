@@ -64,6 +64,7 @@ COPY packages/db/tsup.config.ts packages/db/
 COPY packages/llm/tsup.config.ts packages/llm/
 COPY packages/vcs/tsup.config.ts packages/vcs/
 COPY packages/queue/tsup.config.ts packages/queue/
+COPY apps/worker/tsup.config.ts apps/worker/
 
 # ソースコードをコピー
 COPY packages/core/src packages/core/src
