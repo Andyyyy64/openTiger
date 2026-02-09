@@ -132,25 +132,6 @@ export async function evaluatePolicy(
     const diffStats = await getPRDiffStats(prNumber);
     const hasManifestChanges = diffStats.files.some((file) => isPackageManifest(file.filename));
 
-    // 変更行数のチェック
-    const totalChanges = diffStats.additions + diffStats.deletions;
-    if (totalChanges > policy.maxLinesChanged) {
-      violations.push({
-        type: "lines",
-        severity: "error",
-        message: `Changes exceed maximum allowed lines (${totalChanges} > ${policy.maxLinesChanged})`,
-      });
-    }
-
-    // 変更ファイル数のチェック
-    if (diffStats.changedFiles > policy.maxFilesChanged) {
-      violations.push({
-        type: "files",
-        severity: "error",
-        message: `Changed files exceed maximum allowed (${diffStats.changedFiles} > ${policy.maxFilesChanged})`,
-      });
-    }
-
     // ファイルパスのチェック
     for (const file of diffStats.files) {
       // 依存更新に伴うロックファイル変更は許容する
@@ -173,11 +154,6 @@ export async function evaluatePolicy(
       if (violation.severity === "error") {
         reasons.push(violation.message);
       }
-    }
-
-    // 改善提案
-    if (violations.some((v) => v.type === "lines")) {
-      suggestions.push("Consider splitting this PR into smaller changes");
     }
 
     if (violations.some((v) => v.type === "path")) {

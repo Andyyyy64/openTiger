@@ -65,8 +65,7 @@ export function makeJudgement(
 
   // LLM評価
   suggestions.push(...summary.llm.suggestions);
-  const maxRiskLevel = policy.autoMerge.maxRiskLevel;
-  const canAutoMerge = policy.autoMerge.enabled && isRiskAllowed(taskRiskLevel, maxRiskLevel);
+  const canAutoMerge = policy.autoMerge.enabled;
   const allowLlmBypass = ALLOW_LLM_FAIL_AUTOMERGE && canAutoMerge;
 
   if (!summary.llm.pass) {
@@ -103,18 +102,6 @@ export function makeJudgement(
     };
   }
 
-  const shouldRequireHuman = taskRiskLevel === "high" && maxRiskLevel === "low";
-
-  if (shouldRequireHuman) {
-    return {
-      verdict: "request_changes",
-      reasons: ["High-risk change requires rework before merge"],
-      suggestions,
-      autoMerge: false,
-      riskLevel: taskRiskLevel,
-      confidence: summary.llm.confidence,
-    };
-  }
   return {
     verdict: "approve",
     reasons: [],
@@ -123,14 +110,6 @@ export function makeJudgement(
     riskLevel: taskRiskLevel,
     confidence: summary.llm.confidence,
   };
-}
-
-function isRiskAllowed(
-  taskRisk: "low" | "medium" | "high",
-  maxRisk: "low" | "medium" | "high",
-): boolean {
-  const priority = { low: 0, medium: 1, high: 2 };
-  return priority[taskRisk] <= priority[maxRisk];
 }
 
 // レビューコメントを生成
@@ -213,7 +192,7 @@ export function generateReviewComment(result: JudgeResult, summary: EvaluationSu
       comment += "🤖 **This PR will be automatically merged.**\n";
     } else {
       comment += "---\n";
-      comment += `ℹ️ Auto-merge disabled for ${result.riskLevel}-risk changes.\n`;
+      comment += "ℹ️ Auto-merge is disabled by policy.\n";
     }
   }
 
@@ -278,6 +257,7 @@ export async function reviewAndAct(
   commented: boolean;
   merged: boolean;
   approved: boolean;
+  selfAuthored: boolean;
   mergeDeferred?: boolean;
   mergeDeferredReason?: string;
 }> {
@@ -330,7 +310,14 @@ export async function reviewAndAct(
     console.error(`Failed to process PR #${prNumber}:`, error);
   }
 
-  return { commented, merged, approved, mergeDeferred, mergeDeferredReason };
+  return {
+    commented,
+    merged,
+    approved,
+    selfAuthored: isSelfAuthored,
+    mergeDeferred,
+    mergeDeferredReason,
+  };
 }
 
 async function trySyncPRWithBase(

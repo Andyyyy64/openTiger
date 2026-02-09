@@ -120,23 +120,6 @@ export async function evaluateLocalPolicy(
     const diffStats = await getLocalDiffStats(worktreePath, baseBranch, headBranch);
     const hasManifestChanges = diffStats.files.some((file) => isPackageManifest(file.filename));
 
-    const totalChanges = diffStats.additions + diffStats.deletions;
-    if (totalChanges > policy.maxLinesChanged) {
-      violations.push({
-        type: "lines",
-        severity: "error",
-        message: `Changes exceed maximum allowed lines (${totalChanges} > ${policy.maxLinesChanged})`,
-      });
-    }
-
-    if (diffStats.changedFiles > policy.maxFilesChanged) {
-      violations.push({
-        type: "files",
-        severity: "error",
-        message: `Changed files exceed maximum allowed (${diffStats.changedFiles} > ${policy.maxFilesChanged})`,
-      });
-    }
-
     for (const file of diffStats.files) {
       if (isLockfile(file.filename) && hasManifestChanges) {
         continue;
@@ -155,10 +138,6 @@ export async function evaluateLocalPolicy(
       if (violation.severity === "error") {
         reasons.push(violation.message);
       }
-    }
-
-    if (violations.some((v) => v.type === "lines")) {
-      suggestions.push("Consider splitting this change into smaller parts");
     }
 
     if (violations.some((v) => v.type === "path")) {

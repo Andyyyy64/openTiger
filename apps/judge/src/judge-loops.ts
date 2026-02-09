@@ -26,13 +26,19 @@ import {
   hasMergeConflictSignals,
 } from "./judge-autofix";
 import {
-  requeueTaskAfterJudge,
   getTaskRetryCount,
   scheduleTaskForJudgeRetry,
   isImportedPrReviewTask,
   recoverAwaitingJudgeBacklog,
   claimRunForJudgement,
 } from "./judge-retry";
+
+function hasActiveAutoFix(reason: string): boolean {
+  return (
+    reason.startsWith("existing_active_autofix:") ||
+    reason.startsWith("existing_active_conflict_autofix:")
+  );
+}
 
 export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log("=".repeat(60));
@@ -89,6 +95,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
               commented: boolean;
               approved: boolean;
               merged: boolean;
+              selfAuthored?: boolean;
               mergeDeferred?: boolean;
               mergeDeferredReason?: string;
             } = {
@@ -138,6 +145,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                   // On LLM FAIL, create a fix task instead of entering Judge re-evaluation loop
                   if (!summary.llm.pass) {
                     if (hasActionableLLMFailures(summary)) {
+                      const failureReason = buildJudgeFailureMessage(effectiveResult);
                       const autoFix = await createAutoFixTaskForPr({
                         prNumber: pr.prNumber,
                         prUrl: pr.prUrl,
@@ -149,6 +157,8 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                         commands: pr.commands,
                         summary,
                         agentId: config.agentId,
+                        previousFailureReason: failureReason,
+                        allowUnlimitedAttempts: true,
                       });
 
                       if (autoFix.created) {
@@ -164,26 +174,31 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           `  Task ${pr.taskId} blocked as needs_rework; auto-fix task queued: ${autoFix.taskId}`,
                         );
                       } else {
-                        requeueReason = `${buildJudgeFailureMessage(effectiveResult)} | ${autoFix.reason}`;
-                        if (importedPrReviewTask) {
+                        if (hasActiveAutoFix(autoFix.reason)) {
+                          await db
+                            .update(tasks)
+                            .set({
+                              status: "blocked",
+                              blockReason: "needs_rework",
+                              updatedAt: new Date(),
+                            })
+                            .where(eq(tasks.id, pr.taskId));
+                          console.log(
+                            `  Task ${pr.taskId} remains blocked as needs_rework (active auto-fix in progress: ${autoFix.reason})`,
+                          );
+                        } else {
+                          requeueReason = `${failureReason} | autofix_create_failed:${autoFix.reason}`;
                           await scheduleTaskForJudgeRetry({
                             taskId: pr.taskId,
                             runId: pr.runId,
                             agentId: config.agentId,
-                            reason: `retry_imported_pr_review:${requeueReason}`,
+                            reason: importedPrReviewTask
+                              ? `retry_imported_pr_review:${requeueReason}`
+                              : requeueReason,
+                            restoreRunImmediately: false,
                           });
                           console.log(
-                            `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`,
-                          );
-                        } else {
-                          await requeueTaskAfterJudge({
-                            taskId: pr.taskId,
-                            runId: pr.runId,
-                            agentId: config.agentId,
-                            reason: requeueReason,
-                          });
-                          console.log(
-                            `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`,
+                            `  Task ${pr.taskId} scheduled for judge retry (auto-fix create failed: ${autoFix.reason})`,
                           );
                         }
                       }
@@ -199,6 +214,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                         isDoomLoop && currentRetryCount >= doomLoopThreshold;
 
                       if (shouldTripCircuitBreaker) {
+                        const failureReason = buildJudgeFailureMessage(effectiveResult);
                         const autoFix = await createAutoFixTaskForPr({
                           prNumber: pr.prNumber,
                           prUrl: pr.prUrl,
@@ -210,6 +226,8 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           commands: pr.commands,
                           summary,
                           agentId: config.agentId,
+                          previousFailureReason: failureReason,
+                          allowUnlimitedAttempts: true,
                         });
 
                         if (autoFix.created) {
@@ -225,19 +243,33 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                             `  Task ${pr.taskId} hit doom-loop circuit breaker; auto-fix task queued: ${autoFix.taskId}`,
                           );
                         } else {
-                          requeueReason = `${buildJudgeFailureMessage(effectiveResult)} | doom_loop_circuit_breaker_failed:${autoFix.reason}`;
-                          await scheduleTaskForJudgeRetry({
-                            taskId: pr.taskId,
-                            runId: pr.runId,
-                            agentId: config.agentId,
-                            reason: importedPrReviewTask
-                              ? `retry_imported_pr_review:${requeueReason}`
-                              : requeueReason,
-                            restoreRunImmediately: false,
-                          });
-                          console.log(
-                            `  Task ${pr.taskId} doom-loop breaker fallback to judge retry (${autoFix.reason})`,
-                          );
+                          if (hasActiveAutoFix(autoFix.reason)) {
+                            await db
+                              .update(tasks)
+                              .set({
+                                status: "blocked",
+                                blockReason: "needs_rework",
+                                updatedAt: new Date(),
+                              })
+                              .where(eq(tasks.id, pr.taskId));
+                            console.log(
+                              `  Task ${pr.taskId} remains blocked as needs_rework (active auto-fix in progress: ${autoFix.reason})`,
+                            );
+                          } else {
+                            requeueReason = `${failureReason} | doom_loop_circuit_breaker_failed:${autoFix.reason}`;
+                            await scheduleTaskForJudgeRetry({
+                              taskId: pr.taskId,
+                              runId: pr.runId,
+                              agentId: config.agentId,
+                              reason: importedPrReviewTask
+                                ? `retry_imported_pr_review:${requeueReason}`
+                                : requeueReason,
+                              restoreRunImmediately: false,
+                            });
+                            console.log(
+                              `  Task ${pr.taskId} doom-loop breaker fallback to judge retry (${autoFix.reason})`,
+                            );
+                          }
                         }
                       } else {
                         // LLM failures without code diffs (quota exceeded, execution errors) are re-evaluated after cooldown
@@ -261,88 +293,9 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                       }
                     }
                   } else {
-                    // CI/Policy系の非approveは再キューし、閾値超過でAutoFixへ昇格
-                    const retryThreshold = Number.isFinite(
-                      JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES,
-                    )
-                      ? Math.max(1, JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES)
-                      : 2;
-                    const currentRetryCount = await getTaskRetryCount(pr.taskId);
-                    const shouldEscalate = currentRetryCount >= retryThreshold;
-
-                    if (shouldEscalate) {
-                      const autoFix = await createAutoFixTaskForPr({
-                        prNumber: pr.prNumber,
-                        prUrl: pr.prUrl,
-                        sourceTaskId: pr.taskId,
-                        sourceRunId: pr.runId,
-                        sourceTaskTitle: pr.taskTitle,
-                        sourceTaskGoal: pr.taskGoal,
-                        allowedPaths: pr.allowedPaths,
-                        commands: pr.commands,
-                        summary,
-                        agentId: config.agentId,
-                      });
-
-                      if (autoFix.created) {
-                        await db
-                          .update(tasks)
-                          .set({
-                            status: "blocked",
-                            blockReason: "needs_rework",
-                            updatedAt: new Date(),
-                          })
-                          .where(eq(tasks.id, pr.taskId));
-                        console.log(
-                          `  Task ${pr.taskId} hit non-approve circuit breaker; auto-fix task queued: ${autoFix.taskId}`,
-                        );
-                      } else {
-                        await db
-                          .update(tasks)
-                          .set({
-                            status: "blocked",
-                            blockReason: "needs_rework",
-                            updatedAt: new Date(),
-                          })
-                          .where(eq(tasks.id, pr.taskId));
-                        console.warn(
-                          `  Task ${pr.taskId} blocked as needs_rework; non-approve circuit breaker fallback (${autoFix.reason})`,
-                        );
-                      }
-                    } else {
-                      requeueReason = buildJudgeFailureMessage(effectiveResult);
-                      if (importedPrReviewTask) {
-                        await scheduleTaskForJudgeRetry({
-                          taskId: pr.taskId,
-                          runId: pr.runId,
-                          agentId: config.agentId,
-                          reason: `retry_imported_pr_review:${requeueReason}`,
-                        });
-                        console.log(
-                          `  Task ${pr.taskId} scheduled for judge retry (${effectiveResult.verdict})`,
-                        );
-                      } else {
-                        await requeueTaskAfterJudge({
-                          taskId: pr.taskId,
-                          runId: pr.runId,
-                          agentId: config.agentId,
-                          reason: requeueReason,
-                        });
-                        console.log(
-                          `  Task ${pr.taskId} requeued by judge verdict (${effectiveResult.verdict})`,
-                        );
-                      }
-                    }
-                  }
-                } else if (effectiveResult.verdict === "approve") {
-                  // If approve but merge didn't complete, send conflict-related ones to AutoFix, others back to judge retry
-                  let handledByConflictAutoFix = false;
-                  const conflictSignals = hasMergeConflictSignals({
-                    summary,
-                    mergeDeferredReason: actionResult.mergeDeferredReason,
-                  });
-                  if (conflictSignals && !actionResult.mergeDeferred) {
-                    const conflictAutoFix = await createConflictAutoFixTaskForPr({
+                    // CI/Policy系の非approveは初回からAutoFixへ誘導する
+                    const failureReason = buildJudgeFailureMessage(effectiveResult);
+                    const autoFix = await createAutoFixTaskForPr({
                       prNumber: pr.prNumber,
                       prUrl: pr.prUrl,
                       sourceTaskId: pr.taskId,
@@ -353,10 +306,12 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                       commands: pr.commands,
                       summary,
                       agentId: config.agentId,
-                      mergeDeferredReason: actionResult.mergeDeferredReason,
+                      allowWhenLlmPass: true,
+                      previousFailureReason: failureReason,
+                      allowUnlimitedAttempts: true,
                     });
 
-                    if (conflictAutoFix.created) {
+                    if (autoFix.created) {
                       await db
                         .update(tasks)
                         .set({
@@ -365,41 +320,138 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           updatedAt: new Date(),
                         })
                         .where(eq(tasks.id, pr.taskId));
-                      console.warn(
-                        `  Task ${pr.taskId} blocked as needs_rework; conflict auto-fix task queued: ${conflictAutoFix.taskId}`,
+                      console.log(
+                        `  Task ${pr.taskId} blocked as needs_rework; auto-fix task queued: ${autoFix.taskId}`,
                       );
-                      handledByConflictAutoFix = true;
                     } else {
-                      const fallbackReason = `Judge approved but merge conflict auto-fix was not queued (${conflictAutoFix.reason})`;
+                      if (hasActiveAutoFix(autoFix.reason)) {
+                        await db
+                          .update(tasks)
+                          .set({
+                            status: "blocked",
+                            blockReason: "needs_rework",
+                            updatedAt: new Date(),
+                          })
+                          .where(eq(tasks.id, pr.taskId));
+                        console.log(
+                          `  Task ${pr.taskId} remains blocked as needs_rework (active auto-fix in progress: ${autoFix.reason})`,
+                        );
+                      } else {
+                        requeueReason = `${failureReason} | autofix_create_failed:${autoFix.reason}`;
+                        await scheduleTaskForJudgeRetry({
+                          taskId: pr.taskId,
+                          runId: pr.runId,
+                          agentId: config.agentId,
+                          reason: importedPrReviewTask
+                            ? `retry_imported_pr_review:${requeueReason}`
+                            : requeueReason,
+                          restoreRunImmediately: false,
+                        });
+                        console.warn(
+                          `  Task ${pr.taskId} scheduled for judge retry (auto-fix create failed: ${autoFix.reason})`,
+                        );
+                      }
+                    }
+                  }
+                } else if (effectiveResult.verdict === "approve") {
+                  let handledApprovedWithoutMerge = false;
+                  if (!effectiveResult.autoMerge && actionResult.commented) {
+                    await db
+                      .update(tasks)
+                      .set({
+                        status: "done",
+                        blockReason: null,
+                        updatedAt: new Date(),
+                      })
+                      .where(eq(tasks.id, pr.taskId));
+                    console.log(
+                      `  Task ${pr.taskId} marked as done (approved; auto-merge disabled)`,
+                    );
+                    handledApprovedWithoutMerge = true;
+                  }
+
+                  if (!handledApprovedWithoutMerge) {
+                    // If approve but merge didn't complete, send conflict-related ones to AutoFix, others back to judge retry
+                    let handledByConflictAutoFix = false;
+                    const conflictSignals = hasMergeConflictSignals({
+                      summary,
+                      mergeDeferredReason: actionResult.mergeDeferredReason,
+                    });
+                    if (conflictSignals && !actionResult.mergeDeferred) {
+                      const conflictAutoFix = await createConflictAutoFixTaskForPr({
+                        prNumber: pr.prNumber,
+                        prUrl: pr.prUrl,
+                        sourceTaskId: pr.taskId,
+                        sourceRunId: pr.runId,
+                        sourceTaskTitle: pr.taskTitle,
+                        sourceTaskGoal: pr.taskGoal,
+                        allowedPaths: pr.allowedPaths,
+                        commands: pr.commands,
+                        summary,
+                        agentId: config.agentId,
+                        mergeDeferredReason: actionResult.mergeDeferredReason,
+                      });
+
+                      if (conflictAutoFix.created) {
+                        await db
+                          .update(tasks)
+                          .set({
+                            status: "blocked",
+                            blockReason: "needs_rework",
+                            updatedAt: new Date(),
+                          })
+                          .where(eq(tasks.id, pr.taskId));
+                        console.warn(
+                          `  Task ${pr.taskId} blocked as needs_rework; conflict auto-fix task queued: ${conflictAutoFix.taskId}`,
+                        );
+                        handledByConflictAutoFix = true;
+                      } else {
+                        if (hasActiveAutoFix(conflictAutoFix.reason)) {
+                          await db
+                            .update(tasks)
+                            .set({
+                              status: "blocked",
+                              blockReason: "needs_rework",
+                              updatedAt: new Date(),
+                            })
+                            .where(eq(tasks.id, pr.taskId));
+                          console.warn(
+                            `  Task ${pr.taskId} remains blocked as needs_rework (active conflict autofix in progress: ${conflictAutoFix.reason})`,
+                          );
+                          handledByConflictAutoFix = true;
+                        } else {
+                          const fallbackReason = `Judge approved but merge conflict auto-fix was not queued (${conflictAutoFix.reason})`;
+                          await scheduleTaskForJudgeRetry({
+                            taskId: pr.taskId,
+                            runId: pr.runId,
+                            agentId: config.agentId,
+                            reason: fallbackReason,
+                            restoreRunImmediately: false,
+                          });
+                          console.warn(
+                            `  Task ${pr.taskId} scheduled for judge retry (conflict autofix fallback: ${conflictAutoFix.reason})`,
+                          );
+                        }
+                      }
+                      // レビュー記録は継続して残す
+                    }
+
+                    if (!handledByConflictAutoFix) {
+                      const retryReason = actionResult.mergeDeferred
+                        ? `Judge approved but merge deferred: ${actionResult.mergeDeferredReason ?? "pending_branch_sync"}`
+                        : `Judge approved but merge was not completed${actionResult.mergeDeferredReason ? ` (${actionResult.mergeDeferredReason})` : ""}`;
                       await scheduleTaskForJudgeRetry({
                         taskId: pr.taskId,
                         runId: pr.runId,
                         agentId: config.agentId,
-                        reason: fallbackReason,
-                        restoreRunImmediately: false,
+                        reason: retryReason,
+                        // If update-branch was triggered, don't re-evaluate the same run until cooldown
+                        restoreRunImmediately: !actionResult.mergeDeferred,
                       });
                       console.warn(
-                        `  Task ${pr.taskId} scheduled for judge retry (conflict autofix fallback: ${conflictAutoFix.reason})`,
+                        `  Task ${pr.taskId} scheduled for judge retry because merge did not complete`,
                       );
                     }
-                    // レビュー記録は継続して残す
-                  }
-
-                  if (!handledByConflictAutoFix) {
-                    const retryReason = actionResult.mergeDeferred
-                      ? `Judge approved but merge deferred: ${actionResult.mergeDeferredReason ?? "pending_branch_sync"}`
-                      : `Judge approved but merge was not completed${actionResult.mergeDeferredReason ? ` (${actionResult.mergeDeferredReason})` : ""}`;
-                    await scheduleTaskForJudgeRetry({
-                      taskId: pr.taskId,
-                      runId: pr.runId,
-                      agentId: config.agentId,
-                      reason: retryReason,
-                      // If update-branch was triggered, don't re-evaluate the same run until cooldown
-                      restoreRunImmediately: !actionResult.mergeDeferred,
-                    });
-                    console.warn(
-                      `  Task ${pr.taskId} scheduled for judge retry because merge did not complete`,
-                    );
                   }
                 } else {
                   await db

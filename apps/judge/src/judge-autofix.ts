@@ -1,6 +1,6 @@
 import { db } from "@openTiger/db";
-import { tasks, events } from "@openTiger/db/schema";
-import { and, inArray, sql } from "drizzle-orm";
+import { tasks, events, runs } from "@openTiger/db/schema";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getOctokit, getRepoInfo } from "@openTiger/vcs";
 import {
   JUDGE_AUTO_FIX_ON_FAIL,
@@ -79,6 +79,88 @@ export async function getPrBranchContext(prNumber: number): Promise<{
   }
 }
 
+function formatPolicyViolations(summary: EvaluationSummary): string | null {
+  if (summary.policy.violations.length === 0) {
+    return null;
+  }
+  const lines = summary.policy.violations.map((violation) => `- ${violation.message}`);
+  return `Policy violations:\n${lines.join("\n")}`;
+}
+
+function formatLLMIssues(summary: EvaluationSummary): string | null {
+  const issues = summarizeLLMIssuesForTask(summary).trim();
+  if (!issues) {
+    return null;
+  }
+  return `LLM issues:\n${issues}`;
+}
+
+async function resolveLatestJudgeRetryReason(taskId: string): Promise<string | null> {
+  const [eventRow] = await db
+    .select({ payload: events.payload })
+    .from(events)
+    .where(
+      and(
+        eq(events.entityId, taskId),
+        eq(events.entityType, "task"),
+        eq(events.type, "judge.task_requeued"),
+      ),
+    )
+    .orderBy(desc(events.createdAt))
+    .limit(1);
+  const payload = eventRow?.payload as Record<string, unknown> | undefined;
+  const reason = typeof payload?.reason === "string" ? payload.reason.trim() : "";
+  return reason.length > 0 ? reason : null;
+}
+
+async function resolveLatestAutoFixFailure(titlePattern: string): Promise<string | null> {
+  const [row] = await db
+    .select({ errorMessage: runs.errorMessage })
+    .from(tasks)
+    .innerJoin(runs, eq(runs.taskId, tasks.id))
+    .where(
+      and(
+        sql`${tasks.title} like ${titlePattern} escape '\\'`,
+        inArray(runs.status, ["failed", "cancelled"]),
+      ),
+    )
+    .orderBy(desc(runs.finishedAt))
+    .limit(1);
+  const message = row?.errorMessage?.trim();
+  return message && message.length > 0 ? message : null;
+}
+
+// 前回の失敗理由とレビュー指摘をnotesに集約する
+function buildAutoFixNotes(params: {
+  summary: EvaluationSummary;
+  previousFailureReason?: string;
+  judgeRetryReason?: string | null;
+  autoFixFailureReason?: string | null;
+}): string {
+  const sections: string[] = [];
+  const policyNotes = formatPolicyViolations(params.summary);
+  if (policyNotes) {
+    sections.push(policyNotes);
+  }
+  const llmNotes = formatLLMIssues(params.summary);
+  if (llmNotes) {
+    sections.push(llmNotes);
+  }
+  if (params.previousFailureReason) {
+    sections.push(`Previous failure:\n${params.previousFailureReason}`);
+  }
+  if (params.judgeRetryReason) {
+    sections.push(`Judge retry reason:\n${params.judgeRetryReason}`);
+  }
+  if (params.autoFixFailureReason) {
+    sections.push(`Previous autofix failure:\n${params.autoFixFailureReason}`);
+  }
+  if (sections.length === 0) {
+    return "No detailed issues were reported.";
+  }
+  return sections.join("\n\n");
+}
+
 export async function createAutoFixTaskForPr(params: {
   prNumber: number;
   prUrl: string;
@@ -90,11 +172,14 @@ export async function createAutoFixTaskForPr(params: {
   commands: string[];
   summary: EvaluationSummary;
   agentId: string;
+  allowWhenLlmPass?: boolean;
+  previousFailureReason?: string;
+  allowUnlimitedAttempts?: boolean;
 }): Promise<{ created: boolean; taskId?: string; reason: string }> {
   if (!JUDGE_AUTO_FIX_ON_FAIL) {
     return { created: false, reason: "auto_fix_disabled" };
   }
-  if (params.summary.llm.pass) {
+  if (params.summary.llm.pass && !params.allowWhenLlmPass) {
     return { created: false, reason: "llm_pass" };
   }
 
@@ -122,7 +207,7 @@ export async function createAutoFixTaskForPr(params: {
     .from(tasks)
     .where(sql`${tasks.title} like ${titlePattern} escape '\\'`);
   const attemptCount = Number(attemptRow?.count ?? 0);
-  if (!isJudgeAutoFixUnlimited() && attemptCount >= maxAttempts) {
+  if (!params.allowUnlimitedAttempts && !isJudgeAutoFixUnlimited() && attemptCount >= maxAttempts) {
     return {
       created: false,
       reason: `autofix_attempt_limit_reached:${attemptCount}/${maxAttemptsLabel}`,
@@ -136,23 +221,32 @@ export async function createAutoFixTaskForPr(params: {
         .filter((file): file is string => Boolean(file)),
     ),
   );
-  const summarizedIssues = summarizeLLMIssuesForTask(params.summary);
   const nextAttempt = attemptCount + 1;
-  const prBranchContext = await getPrBranchContext(params.prNumber);
+  const [prBranchContext, judgeRetryReason, autoFixFailureReason] = await Promise.all([
+    getPrBranchContext(params.prNumber),
+    resolveLatestJudgeRetryReason(params.sourceTaskId),
+    resolveLatestAutoFixFailure(titlePattern),
+  ]);
+  const notes = buildAutoFixNotes({
+    summary: params.summary,
+    previousFailureReason: params.previousFailureReason,
+    judgeRetryReason,
+    autoFixFailureReason,
+  });
 
   const [taskRow] = await db
     .insert(tasks)
     .values({
       title: `${titlePrefix} (attempt ${nextAttempt}/${maxAttemptsLabel})`,
       goal:
-        `Fix judge-reported issues for PR #${params.prNumber} and create a follow-up PR that passes review. ` +
+        `Fix judge-reported issues for PR #${params.prNumber} and push updates to the same PR branch. ` +
         `Original review task: ${params.sourceTaskId}.`,
       context: {
         files: issueFiles,
         specs:
           "Resolve the issues listed in notes. Keep scope minimal and aligned with allowed paths. " +
-          "Do not run long-running dev/watch/start commands.",
-        notes: summarizedIssues,
+          "Prefer updating the existing PR branch. Do not run long-running dev/watch/start commands.",
+        notes,
         pr: {
           number: params.prNumber,
           url: params.prUrl,
