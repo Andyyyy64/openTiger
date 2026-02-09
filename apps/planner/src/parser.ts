@@ -67,6 +67,11 @@ function extractListItems(content: string): string[] {
   return items;
 }
 
+function normalizePathPattern(path: string): string {
+  // Markdown内でエスケープされたワイルドカードを元に戻す
+  return path.replace(/\\([*?])/g, "$1");
+}
+
 // コードブロック内のパスを抽出
 function extractPaths(content: string): string[] {
   const paths: string[] = [];
@@ -77,7 +82,7 @@ function extractPaths(content: string): string[] {
     const codeMatch = line.match(/`([^`]+)`/);
     const codeCapture = codeMatch?.[1];
     if (codeCapture) {
-      paths.push(codeCapture);
+      paths.push(normalizePathPattern(codeCapture));
       continue;
     }
 
@@ -85,7 +90,7 @@ function extractPaths(content: string): string[] {
     const listMatch = line.match(/^\s*[-*]\s+(.+)/);
     const listCapture = listMatch?.[1];
     if (listCapture) {
-      const path = listCapture.trim();
+      const path = normalizePathPattern(listCapture.trim());
       if (path.includes("/") || path.includes("*")) {
         paths.push(path);
       }
