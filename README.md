@@ -50,7 +50,7 @@ cp .env.example .env
 Fastest path:
 
 ```bash
-pnpm restart
+pnpm run up
 ```
 
 ### 3. Access
