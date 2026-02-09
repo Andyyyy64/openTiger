@@ -1,7 +1,7 @@
 import { resolve, relative, isAbsolute } from "node:path";
 import { db } from "@openTiger/db";
 import { tasks, runs } from "@openTiger/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { getRepoMode, getLocalRepoPath, getLocalWorktreeRoot } from "@openTiger/core";
 import { setupProcessLogging } from "@openTiger/core/process-logging";
 import { createTaskQueue, enqueueTask, getQueueStats, getTaskQueueName } from "@openTiger/queue";
@@ -110,6 +110,7 @@ function resolveLocalWorktreeRoot(config: DispatcherConfig): string | undefined 
 
 // ディスパッチャーの状態
 let isRunning = false;
+let quotaThrottleActive = false;
 // エージェント専用キューを再利用するためのキャッシュ
 const taskQueues = new Map<string, ReturnType<typeof createTaskQueue>>();
 
@@ -119,6 +120,14 @@ function getTaskQueueForAgent(agentId: string): ReturnType<typeof createTaskQueu
   const queue = createTaskQueue(getTaskQueueName(agentId));
   taskQueues.set(agentId, queue);
   return queue;
+}
+
+async function hasQuotaWaitBacklog(): Promise<boolean> {
+  const [result] = await db
+    .select({ count: count() })
+    .from(tasks)
+    .where(and(eq(tasks.status, "blocked"), eq(tasks.blockReason, "quota_wait")));
+  return (result?.count ?? 0) > 0;
 }
 
 // タスクをディスパッチ
@@ -245,8 +254,22 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
 
       // busyエージェント数を基準に同時実行上限を適用（queue/process両対応）
       const busyAgentCount = await getBusyAgentCount();
-      const availableSlots = Number.isFinite(config.maxConcurrentWorkers)
-        ? Math.max(0, config.maxConcurrentWorkers - busyAgentCount)
+      const quotaWaitBacklog = await hasQuotaWaitBacklog();
+      const effectiveMaxConcurrentWorkers = quotaWaitBacklog
+        ? Math.min(config.maxConcurrentWorkers, 1)
+        : config.maxConcurrentWorkers;
+      if (quotaWaitBacklog && !quotaThrottleActive) {
+        console.log(
+          "[Dispatch] quota_wait backlog detected. Concurrency temporarily limited to 1.",
+        );
+        quotaThrottleActive = true;
+      } else if (!quotaWaitBacklog && quotaThrottleActive) {
+        console.log("[Dispatch] quota_wait backlog cleared. Restoring normal concurrency.");
+        quotaThrottleActive = false;
+      }
+
+      const availableSlots = Number.isFinite(effectiveMaxConcurrentWorkers)
+        ? Math.max(0, effectiveMaxConcurrentWorkers - busyAgentCount)
         : Number.MAX_SAFE_INTEGER;
 
       if (availableSlots > 0) {

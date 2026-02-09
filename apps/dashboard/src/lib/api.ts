@@ -133,6 +133,13 @@ export interface AllLogsResponse {
   generatedAt: string;
 }
 
+export interface ClearLogsResponse {
+  cleared: boolean;
+  removed: number;
+  failed: number;
+  logDir: string;
+}
+
 export interface ConfigResponse {
   config: Record<string, string>;
 }
@@ -353,6 +360,7 @@ export const logsApi = {
     const suffix = query.toString();
     return fetchApi<AllLogsResponse>(`/logs/all${suffix ? `?${suffix}` : ""}`);
   },
+  clear: () => fetchApi<ClearLogsResponse>("/logs/clear", { method: "POST" }),
 };
 
 // 設定関連

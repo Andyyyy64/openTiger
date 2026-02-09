@@ -1,16 +1,58 @@
 import { db } from "@openTiger/db";
-import { tasks } from "@openTiger/db/schema";
-import { eq } from "drizzle-orm";
+import { tasks, runs } from "@openTiger/db/schema";
+import { computeQuotaBackoff } from "@openTiger/core";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { recordEvent } from "../../monitors/event-logger";
 import { hasPendingJudgeRun, restoreLatestJudgeRun } from "./judge-recovery";
 import { isPrReviewTask, normalizeBlockReason, normalizeContext } from "./task-context";
+
+const DEFAULT_QUOTA_BASE_DELAY_MS = 30_000;
+const DEFAULT_QUOTA_MAX_DELAY_MS = 30 * 60 * 1000;
+const DEFAULT_QUOTA_BACKOFF_FACTOR = 2;
+const DEFAULT_QUOTA_JITTER_RATIO = 0.2;
+
+function parseEnvInt(name: string, fallback: number): number {
+  const raw = Number.parseInt(process.env[name] ?? "", 10);
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return fallback;
+  }
+  return raw;
+}
+
+function parseEnvFloat(name: string, fallback: number): number {
+  const raw = Number.parseFloat(process.env[name] ?? "");
+  if (!Number.isFinite(raw)) {
+    return fallback;
+  }
+  return raw;
+}
+
+function resolveQuotaBackoffConfig(fallbackBaseDelayMs: number): {
+  baseDelayMs: number;
+  maxDelayMs: number;
+  factor: number;
+  jitterRatio: number;
+} {
+  const opencodeDelayMs = parseEnvInt("OPENCODE_QUOTA_RETRY_DELAY_MS", DEFAULT_QUOTA_BASE_DELAY_MS);
+  const baseDelayMs = parseEnvInt(
+    "QUOTA_BACKOFF_BASE_MS",
+    Math.max(opencodeDelayMs, Math.min(fallbackBaseDelayMs, 5 * 60 * 1000)),
+  );
+  const maxDelayMs = parseEnvInt("QUOTA_BACKOFF_MAX_MS", DEFAULT_QUOTA_MAX_DELAY_MS);
+  const factor = parseEnvFloat("QUOTA_BACKOFF_FACTOR", DEFAULT_QUOTA_BACKOFF_FACTOR);
+  const jitterRatio = parseEnvFloat("QUOTA_BACKOFF_JITTER_RATIO", DEFAULT_QUOTA_JITTER_RATIO);
+  return {
+    baseDelayMs,
+    maxDelayMs,
+    factor,
+    jitterRatio,
+  };
+}
 
 // blockedタスクをクールダウン後に再キュー（リトライ回数制限付き）
 export async function requeueBlockedTasksWithCooldown(
   cooldownMs: number = 5 * 60 * 1000,
 ): Promise<number> {
-  const cutoff = new Date(Date.now() - cooldownMs);
-
   const blockedTasks = await db
     .select({
       id: tasks.id,
@@ -35,11 +77,51 @@ export async function requeueBlockedTasksWithCooldown(
     return 0;
   }
 
+  const quotaBlockedIds = blockedTasks
+    .filter((task) => normalizeBlockReason(task.blockReason) === "quota_wait")
+    .map((task) => task.id);
+
+  const latestQuotaFailureByTaskId = new Map<string, string | null>();
+  if (quotaBlockedIds.length > 0) {
+    const quotaRuns = await db
+      .select({
+        taskId: runs.taskId,
+        errorMessage: runs.errorMessage,
+      })
+      .from(runs)
+      .where(
+        and(inArray(runs.taskId, quotaBlockedIds), inArray(runs.status, ["failed", "cancelled"])),
+      )
+      .orderBy(desc(runs.finishedAt), desc(runs.startedAt));
+
+    for (const row of quotaRuns) {
+      if (!latestQuotaFailureByTaskId.has(row.taskId)) {
+        latestQuotaFailureByTaskId.set(row.taskId, row.errorMessage);
+      }
+    }
+  }
+
+  const quotaBackoff = resolveQuotaBackoffConfig(cooldownMs);
   let handled = 0;
 
   for (const task of blockedTasks) {
     const reason = normalizeBlockReason(task.blockReason);
-    const cooldownPassed = task.updatedAt < cutoff;
+    let requiredCooldownMs = cooldownMs;
+    if (reason === "quota_wait") {
+      const backoff = computeQuotaBackoff({
+        taskId: task.id,
+        retryCount: task.retryCount ?? 0,
+        baseDelayMs: quotaBackoff.baseDelayMs,
+        maxDelayMs: quotaBackoff.maxDelayMs,
+        factor: quotaBackoff.factor,
+        jitterRatio: quotaBackoff.jitterRatio,
+        errorMessage: latestQuotaFailureByTaskId.get(task.id),
+      });
+      requiredCooldownMs = backoff.cooldownMs;
+    }
+
+    const retryAtMs = task.updatedAt.getTime() + requiredCooldownMs;
+    const cooldownPassed = retryAtMs <= Date.now();
     // 復旧を止めないため、上限に関わらずcooldownだけで再処理する
     if (!cooldownPassed) {
       continue;
@@ -196,6 +278,8 @@ export async function requeueBlockedTasksWithCooldown(
             : reason === "quota_wait"
               ? "quota_wait_retry"
               : "blocked_cooldown_retry",
+        cooldownMs: requiredCooldownMs,
+        retryAt: new Date(retryAtMs).toISOString(),
         retryCount: nextRetryCount,
       },
     });

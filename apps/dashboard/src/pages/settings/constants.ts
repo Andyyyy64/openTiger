@@ -3,27 +3,31 @@ export const REPO_MODE_OPTIONS = ["git", "local"] as const;
 // OpenCodeの対応モデル一覧
 // Reference: https://opencode.ai/docs/providers
 export const MODEL_OPTIONS = [
-  // Anthropic系
-  "anthropic/claude-sonnet-4-20250514",
-  "anthropic/claude-opus-4-20250514",
-  "anthropic/claude-3.5-sonnet",
-  // Google系
+  // Google Gemini 3系
   "google/gemini-3-pro-preview",
   "google/gemini-3-flash-preview",
-  "google/gemini-2.5-pro-preview-05-06",
-  "google/gemini-2.5-flash-preview-04-17",
-  // OpenAI系
-  "openai/gpt-5.1",
-  "openai/gpt-4.1",
-  "openai/gpt-4o",
-  "openai/o3",
-  "openai/o4-mini",
-  // xAI系
-  "xai/grok-3",
-  "xai/grok-3-mini",
-  // DeepSeek系
-  "deepseek/deepseek-chat",
-  "deepseek/deepseek-reasoner",
+  // Google Gemini 2系
+  "google/gemini-2.5-pro",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-flash-lite",
+  "google/gemini-2.0-flash",
+  "google/gemini-2.0-flash-lite",
+  // Claude Sonnet 4/4.5系
+  "anthropic/claude-sonnet-4-20250514",
+  "anthropic/claude-sonnet-4-5",
+  "anthropic/claude-sonnet-4-5-20250929",
+  // Claude Opus 4/4.5系
+  "anthropic/claude-opus-4-20250514",
+  "anthropic/claude-opus-4-5",
+  "anthropic/claude-opus-4-5-20251101",
+  // OpenAI Codex系
+  "openai/codex-mini-latest",
+  "openai/gpt-5-codex",
+  "openai/gpt-5.1-codex",
+  "openai/gpt-5.1-codex-mini",
+  "openai/gpt-5.1-codex-max",
+  "openai/gpt-5.2-codex",
+  "openai/gpt-5.3-codex",
 ] as const;
 
 export type SettingField = {
@@ -165,6 +169,14 @@ export const SETTINGS: SettingField[] = [
     options: MODEL_OPTIONS,
   },
   {
+    key: "OPENCODE_SMALL_MODEL",
+    label: "OpenCode_SmallModel",
+    description: "Small model for title/summary generation",
+    group: "Models",
+    type: "select",
+    options: MODEL_OPTIONS,
+  },
+  {
     key: "OPENCODE_WAIT_ON_QUOTA",
     label: "OpenCode_WaitOnQuota",
     description: "Wait and retry while provider quota is exhausted",
@@ -205,6 +217,22 @@ export const SETTINGS: SettingField[] = [
     key: "WORKER_MODEL",
     label: "Worker_Model",
     description: "Model for workers",
+    group: "Models",
+    type: "select",
+    options: MODEL_OPTIONS,
+  },
+  {
+    key: "TESTER_MODEL",
+    label: "Tester_Model",
+    description: "Model for testers",
+    group: "Models",
+    type: "select",
+    options: MODEL_OPTIONS,
+  },
+  {
+    key: "DOCSER_MODEL",
+    label: "Docser_Model",
+    description: "Model for docsers",
     group: "Models",
     type: "select",
     options: MODEL_OPTIONS,
@@ -339,7 +367,10 @@ export const GROUP_DISPLAY_ORDER = [
 export const FIELD_DISPLAY_ORDER_BY_GROUP: Record<string, readonly string[]> = {
   Models: [
     "OPENCODE_MODEL",
+    "OPENCODE_SMALL_MODEL",
     "WORKER_MODEL",
+    "TESTER_MODEL",
+    "DOCSER_MODEL",
     "JUDGE_MODEL",
     "PLANNER_MODEL",
     "OPENCODE_WAIT_ON_QUOTA",

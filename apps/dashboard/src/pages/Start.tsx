@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { configApi, systemApi, type SystemProcess } from "../lib/api";
+import { configApi, logsApi, systemApi, type SystemProcess } from "../lib/api";
 
 const MAX_PLANNERS = 1;
 
@@ -58,6 +58,7 @@ export const StartPage: React.FC = () => {
   const [requirementPath, setRequirementPath] = useState("requirement.md");
   const [content, setContent] = useState("");
   const [loadMessage, setLoadMessage] = useState("");
+  const [clearLogMessage, setClearLogMessage] = useState("");
   const [startResult, setStartResult] = useState<StartResult | null>(null);
   const [repoOwner, setRepoOwner] = useState("");
   const [repoName, setRepoName] = useState("");
@@ -107,6 +108,17 @@ export const StartPage: React.FC = () => {
     },
     onError: (error) => {
       setLoadMessage(error instanceof Error ? `> READ_ERR: ${error.message}` : "> READ_FAIL");
+    },
+  });
+
+  const clearLogsMutation = useMutation({
+    mutationFn: () => logsApi.clear(),
+    onSuccess: (data) => {
+      const suffix = data.failed > 0 ? ` (FAILED ${data.failed})` : "";
+      setClearLogMessage(`> LOGS_CLEARED: ${data.removed}${suffix}`);
+    },
+    onError: (error) => {
+      setClearLogMessage(error instanceof Error ? `> CLEAR_ERR: ${error.message}` : "> CLEAR_FAIL");
     },
   });
 
@@ -442,9 +454,19 @@ export const StartPage: React.FC = () => {
                 >
                   [ LOAD ]
                 </button>
+                <button
+                  onClick={() => clearLogsMutation.mutate()}
+                  disabled={clearLogsMutation.isPending}
+                  className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-sm uppercase transition-colors disabled:opacity-50"
+                >
+                  [ CLEAR_LOG ]
+                </button>
               </div>
-              {loadMessage && (
-                <div className="text-[10px] text-zinc-500 font-mono mt-1">{loadMessage}</div>
+              {(loadMessage || clearLogMessage) && (
+                <div className="text-[10px] text-zinc-500 font-mono mt-1 space-y-1">
+                  {loadMessage && <div>{loadMessage}</div>}
+                  {clearLogMessage && <div>{clearLogMessage}</div>}
+                </div>
               )}
             </div>
 

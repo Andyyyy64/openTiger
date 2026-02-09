@@ -272,7 +272,7 @@ export const CreateTaskPage: React.FC = () => {
                   <input
                     type="text"
                     className="flex-1 bg-black border border-term-border px-2 py-1 text-xs font-mono text-yellow-500 focus:border-term-tiger focus:outline-none"
-                    placeholder="npm test"
+                    placeholder="検証コマンド（例: lint / typecheck）"
                     value={cmd}
                     onChange={(e) => handleArrayChange("commands", i, e.target.value)}
                   />
