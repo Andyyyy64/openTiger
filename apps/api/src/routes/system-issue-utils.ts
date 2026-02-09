@@ -3,6 +3,8 @@ export function normalizeAllowedPathToken(token: string): string[] {
   value = value.replace(/^`+|`+$/g, "");
   value = value.replace(/^"+|"+$/g, "");
   value = value.replace(/^'+|'+$/g, "");
+  // Markdownのエスケープ(\*\*)を元に戻す
+  value = value.replace(/\\([*?])/g, "$1");
   value = value.replace(/^\.\//, "");
   value = value.trim();
 
@@ -128,9 +130,69 @@ export function parseDependencyIssueNumbersFromIssueBody(body: string): number[]
   return Array.from(numbers);
 }
 
-export function inferRoleFromLabels(labels: string[]): "worker" | "tester" | "docser" {
+function hasDocKeyword(text: string): boolean {
+  if (!text) {
+    return false;
+  }
+  return /(docs?|documentation|readme|runbook|guide|manual|changelog|ドキュメント|手順書|仕様書|設計書)/i.test(
+    text,
+  );
+}
+
+function hasDocumentationPathMention(text: string): boolean {
+  if (!text) {
+    return false;
+  }
+  return /(?:^|[\s`'"])(?:docs\/[^\s`'"]*|readme\.md|ops\/runbooks\/[^\s`'"]*|[a-z0-9_./-]+\.mdx?)(?:$|[\s`'"])/i.test(
+    text,
+  );
+}
+
+function isDocumentationPathPattern(path: string): boolean {
+  const normalized = path.trim().replace(/^\.\//, "").toLowerCase();
+  if (!normalized || normalized === "**" || normalized === "*") {
+    return false;
+  }
+  if (normalized === "readme.md" || normalized.endsWith("/readme.md")) {
+    return true;
+  }
+  if (normalized === "docs" || normalized.startsWith("docs/")) {
+    return true;
+  }
+  if (normalized === "ops/runbooks" || normalized.startsWith("ops/runbooks/")) {
+    return true;
+  }
+  if (normalized.endsWith(".md") || normalized.endsWith(".mdx")) {
+    return true;
+  }
+  return false;
+}
+
+function isDocumentationOnlyPaths(allowedPaths: string[]): boolean {
+  if (allowedPaths.length === 0) {
+    return false;
+  }
+  return allowedPaths.every((path) => isDocumentationPathPattern(path));
+}
+
+export function inferRoleFromIssue(params: {
+  labels: string[];
+  title?: string;
+  body?: string;
+  allowedPaths?: string[];
+}): "worker" | "tester" | "docser" {
+  const labels = params.labels;
+  const title = params.title ?? "";
+  const body = params.body ?? "";
+  const allowedPaths = params.allowedPaths ?? [];
   const lower = labels.map((label) => label.toLowerCase());
   if (lower.some((label) => label.includes("docs") || label.includes("docser"))) {
+    return "docser";
+  }
+  if (isDocumentationOnlyPaths(allowedPaths)) {
+    return "docser";
+  }
+  if (hasDocKeyword(`${title}\n${body}`) || hasDocumentationPathMention(`${title}\n${body}`)) {
     return "docser";
   }
   if (
@@ -139,6 +201,10 @@ export function inferRoleFromLabels(labels: string[]): "worker" | "tester" | "do
     return "tester";
   }
   return "worker";
+}
+
+export function inferRoleFromLabels(labels: string[]): "worker" | "tester" | "docser" {
+  return inferRoleFromIssue({ labels });
 }
 
 export function inferRiskFromLabels(labels: string[]): "low" | "medium" | "high" {

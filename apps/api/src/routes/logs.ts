@@ -1,6 +1,8 @@
 import { Hono } from "hono";
-import { open, stat, readdir, readFile } from "node:fs/promises";
+import { open, stat, readdir, readFile, rm } from "node:fs/promises";
 import { join, resolve, relative } from "node:path";
+import { getAuthInfo } from "../middleware/index";
+import { canControlSystem } from "./system-auth";
 
 export const logsRoute = new Hono();
 
@@ -44,6 +46,29 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function clearLogDir(logDir: string): Promise<{ removed: number; failed: number }> {
+  if (!(await pathExists(logDir))) {
+    return { removed: 0, failed: 0 };
+  }
+
+  const entries = await readdir(logDir, { withFileTypes: true });
+  let removed = 0;
+  let failed = 0;
+
+  for (const entry of entries) {
+    const fullPath = join(logDir, entry.name);
+    try {
+      await rm(fullPath, { recursive: true, force: true });
+      removed += 1;
+    } catch (error) {
+      failed += 1;
+      console.warn("[Logs] Failed to remove log entry:", fullPath, error);
+    }
+  }
+
+  return { removed, failed };
 }
 
 function buildAgentNameAliases(agentId: string): string[] {
@@ -354,5 +379,21 @@ logsRoute.get("/all", async (c) => {
   } catch (error) {
     console.warn("[Logs] Failed to read aggregated logs:", error);
     return c.json({ error: "Failed to aggregate logs" }, 500);
+  }
+});
+
+logsRoute.post("/clear", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  const logDir = resolveLogDir();
+  try {
+    const { removed, failed } = await clearLogDir(logDir);
+    return c.json({ cleared: true, removed, failed, logDir });
+  } catch (error) {
+    console.warn("[Logs] Failed to clear logs:", error);
+    return c.json({ error: "Failed to clear logs" }, 500);
   }
 });

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { computeQuotaBackoff } from "@openTiger/core";
 import { db } from "@openTiger/db";
 import { tasks, runs } from "@openTiger/db/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -37,6 +38,10 @@ const BLOCKED_TASK_RETRY_COOLDOWN_MS = Number.parseInt(
   10,
 );
 const MAX_RETRY_COUNT = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1", 10);
+const DEFAULT_QUOTA_BASE_DELAY_MS = 30_000;
+const DEFAULT_QUOTA_MAX_DELAY_MS = 30 * 60 * 1000;
+const DEFAULT_QUOTA_BACKOFF_FACTOR = 2;
+const DEFAULT_QUOTA_JITTER_RATIO = 0.2;
 
 const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
   env: 10,
@@ -114,6 +119,44 @@ function classifyFailure(errorMessage: string | null): {
   return { category: "model", retryable: true };
 }
 
+function parseEnvInt(name: string, fallback: number): number {
+  const raw = Number.parseInt(process.env[name] ?? "", 10);
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return fallback;
+  }
+  return raw;
+}
+
+function parseEnvFloat(name: string, fallback: number): number {
+  const raw = Number.parseFloat(process.env[name] ?? "");
+  if (!Number.isFinite(raw)) {
+    return fallback;
+  }
+  return raw;
+}
+
+function resolveQuotaBackoffConfig(fallbackBaseDelayMs: number): {
+  baseDelayMs: number;
+  maxDelayMs: number;
+  factor: number;
+  jitterRatio: number;
+} {
+  const opencodeDelayMs = parseEnvInt("OPENCODE_QUOTA_RETRY_DELAY_MS", DEFAULT_QUOTA_BASE_DELAY_MS);
+  const baseDelayMs = parseEnvInt(
+    "QUOTA_BACKOFF_BASE_MS",
+    Math.max(opencodeDelayMs, Math.min(fallbackBaseDelayMs, 5 * 60 * 1000)),
+  );
+  const maxDelayMs = parseEnvInt("QUOTA_BACKOFF_MAX_MS", DEFAULT_QUOTA_MAX_DELAY_MS);
+  const factor = parseEnvFloat("QUOTA_BACKOFF_FACTOR", DEFAULT_QUOTA_BACKOFF_FACTOR);
+  const jitterRatio = parseEnvFloat("QUOTA_BACKOFF_JITTER_RATIO", DEFAULT_QUOTA_JITTER_RATIO);
+  return {
+    baseDelayMs,
+    maxDelayMs,
+    factor,
+    jitterRatio,
+  };
+}
+
 function buildRetryInfo(
   task: typeof tasks.$inferSelect,
   latestFailureMessage?: string | null,
@@ -127,11 +170,24 @@ function buildRetryInfo(
   const retryCount = task.retryCount ?? 0;
 
   if (task.status === "blocked") {
-    const retryAtMs = new Date(task.updatedAt).getTime() + BLOCKED_TASK_RETRY_COOLDOWN_MS;
-    const retryInSeconds = Math.max(0, Math.ceil((retryAtMs - now) / 1000));
-    // legacy互換: needs_human は awaiting_judge 扱いに統一
     const normalizedBlockReason =
       task.blockReason === "needs_human" ? "awaiting_judge" : task.blockReason;
+    const quotaBackoff = resolveQuotaBackoffConfig(BLOCKED_TASK_RETRY_COOLDOWN_MS);
+    const blockedCooldownMs =
+      normalizedBlockReason === "quota_wait"
+        ? computeQuotaBackoff({
+            taskId: task.id,
+            retryCount: task.retryCount ?? 0,
+            baseDelayMs: quotaBackoff.baseDelayMs,
+            maxDelayMs: quotaBackoff.maxDelayMs,
+            factor: quotaBackoff.factor,
+            jitterRatio: quotaBackoff.jitterRatio,
+            errorMessage: latestFailureMessage,
+          }).cooldownMs
+        : BLOCKED_TASK_RETRY_COOLDOWN_MS;
+
+    const retryAtMs = new Date(task.updatedAt).getTime() + blockedCooldownMs;
+    const retryInSeconds = Math.max(0, Math.ceil((retryAtMs - now) / 1000));
     return {
       autoRetry: true,
       reason:
@@ -146,7 +202,7 @@ function buildRetryInfo(
                 : "retry_due",
       retryAt: new Date(retryAtMs).toISOString(),
       retryInSeconds,
-      cooldownMs: BLOCKED_TASK_RETRY_COOLDOWN_MS,
+      cooldownMs: blockedCooldownMs,
       retryCount,
       retryLimit,
     };
@@ -201,10 +257,16 @@ function buildRetryInfo(
 }
 
 async function enrichTasksWithRetryInfo(taskRows: (typeof tasks.$inferSelect)[]) {
-  const failedTaskIds = taskRows.filter((task) => task.status === "failed").map((task) => task.id);
+  const retryHintTaskIds = taskRows
+    .filter(
+      (task) =>
+        task.status === "failed" ||
+        (task.status === "blocked" && task.blockReason === "quota_wait"),
+    )
+    .map((task) => task.id);
 
   const latestFailureByTaskId = new Map<string, string | null>();
-  if (failedTaskIds.length > 0) {
+  if (retryHintTaskIds.length > 0) {
     const runRows = await db
       .select({
         taskId: runs.taskId,
@@ -212,7 +274,7 @@ async function enrichTasksWithRetryInfo(taskRows: (typeof tasks.$inferSelect)[])
       })
       .from(runs)
       .where(
-        and(inArray(runs.taskId, failedTaskIds), inArray(runs.status, ["failed", "cancelled"])),
+        and(inArray(runs.taskId, retryHintTaskIds), inArray(runs.status, ["failed", "cancelled"])),
       )
       .orderBy(desc(runs.startedAt));
 

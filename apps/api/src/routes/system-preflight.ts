@@ -1,12 +1,12 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@openTiger/db";
 import { artifacts, config as configTable, events, runs, tasks } from "@openTiger/db/schema";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   parseAllowedPathsFromIssueBody,
   parseDependencyIssueNumbersFromIssueBody,
-  inferRoleFromLabels,
+  inferRoleFromIssue,
   inferRiskFromLabels,
   inferPriorityFromLabels,
   extractIssueNumberFromTaskContext,
@@ -33,12 +33,39 @@ function resolveRepoRoot(): string {
   return resolve(import.meta.dirname, "../../../..");
 }
 
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolvePackageManager(repoRoot: string): Promise<"pnpm" | "yarn" | "npm"> {
+  if (await pathExists(join(repoRoot, "pnpm-lock.yaml"))) {
+    return "pnpm";
+  }
+  if (await pathExists(join(repoRoot, "yarn.lock"))) {
+    return "yarn";
+  }
+  if (await pathExists(join(repoRoot, "package-lock.json"))) {
+    return "npm";
+  }
+  return "npm";
+}
+
+function buildRunCommand(manager: "pnpm" | "yarn" | "npm", scriptName: string): string {
+  return `${manager} run ${scriptName}`;
+}
+
 type ConfigRow = typeof configTable.$inferSelect;
 
 type TaskIssueLink = {
   id: string;
   status: string;
   updatedAt: Date;
+  role: "worker" | "tester" | "docser";
 };
 
 export type SystemPreflightSummary = {
@@ -67,19 +94,46 @@ async function resolveIssueTaskCommands(): Promise<string[]> {
     const raw = await readFile(join(repoRoot, "package.json"), "utf-8");
     const parsed = JSON.parse(raw) as { scripts?: Record<string, unknown> };
     const scripts = parsed.scripts ?? {};
-    if (typeof scripts.check === "string") {
-      return ["pnpm run check"];
-    }
-    if (typeof scripts.test === "string") {
-      return ["pnpm test"];
-    }
-    if (typeof scripts.typecheck === "string") {
-      return ["pnpm run typecheck"];
+    const scriptName =
+      typeof scripts.check === "string"
+        ? "check"
+        : typeof scripts.test === "string"
+          ? "test"
+          : typeof scripts.typecheck === "string"
+            ? "typecheck"
+            : typeof scripts.lint === "string"
+              ? "lint"
+              : undefined;
+    if (scriptName) {
+      const manager = await resolvePackageManager(repoRoot);
+      return [buildRunCommand(manager, scriptName)];
     }
   } catch {
     // Fallback to safe default if unable to retrieve
   }
-  return ["pnpm -r --if-present test"];
+  // ここでは固定コマンドを使わず、簡易チェックに委ねる
+  return [];
+}
+
+function normalizeTaskRole(role: string | null | undefined): "worker" | "tester" | "docser" {
+  if (role === "tester" || role === "docser") {
+    return role;
+  }
+  return "worker";
+}
+
+function shouldRetargetIssueTaskRole(status: string): boolean {
+  return status === "queued" || status === "blocked" || status === "failed";
+}
+
+function resolveIssueRole(issue: OpenIssueSnapshot): "worker" | "tester" | "docser" {
+  const allowedPaths = parseAllowedPathsFromIssueBody(issue.body);
+  return inferRoleFromIssue({
+    labels: issue.labels,
+    title: issue.title,
+    body: issue.body,
+    allowedPaths,
+  });
 }
 
 async function createTaskFromIssue(
@@ -88,7 +142,12 @@ async function createTaskFromIssue(
   dependencyTaskIds: string[] = [],
 ): Promise<string | null> {
   const allowedPaths = parseAllowedPathsFromIssueBody(issue.body);
-  const role = inferRoleFromLabels(issue.labels);
+  const role = inferRoleFromIssue({
+    labels: issue.labels,
+    title: issue.title,
+    body: issue.body,
+    allowedPaths,
+  });
   const riskLevel = inferRiskFromLabels(issue.labels);
   const priority = inferPriorityFromLabels(issue.labels);
   const notes = `Imported from GitHub Issue #${issue.number}`;
@@ -175,6 +234,7 @@ export async function buildPreflightSummary(options: {
     .select({
       id: tasks.id,
       status: tasks.status,
+      role: tasks.role,
       blockReason: tasks.blockReason,
       context: tasks.context,
       updatedAt: tasks.updatedAt,
@@ -206,6 +266,7 @@ export async function buildPreflightSummary(options: {
       id: row.id,
       status: row.status,
       updatedAt: row.updatedAt,
+      role: normalizeTaskRole(row.role),
     });
     issueTaskMap.set(issueNumber, current);
   }
@@ -268,12 +329,34 @@ export async function buildPreflightSummary(options: {
   const generatedIssueTaskIds = new Map<number, string>();
 
   for (const issue of openIssues) {
+    const desiredRole = resolveIssueRole(issue);
     if (prLinkedIssueNumbers.has(issue.number)) {
       summary.github.skippedIssueNumbers.push(issue.number);
       continue;
     }
 
     const linkedTasks = issueTaskMap.get(issue.number) ?? [];
+    const roleMismatchedTaskIds = linkedTasks
+      .filter((task) => shouldRetargetIssueTaskRole(task.status) && task.role !== desiredRole)
+      .map((task) => task.id);
+    if (roleMismatchedTaskIds.length > 0) {
+      await db
+        .update(tasks)
+        .set({
+          role: desiredRole,
+          updatedAt: new Date(),
+        })
+        .where(inArray(tasks.id, roleMismatchedTaskIds));
+      const roleMismatchedSet = new Set(roleMismatchedTaskIds);
+      for (const linkedTask of linkedTasks) {
+        if (roleMismatchedSet.has(linkedTask.id)) {
+          linkedTask.role = desiredRole;
+        }
+      }
+      summary.github.warnings.push(
+        `Issue #${issue.number}: adjusted ${roleMismatchedTaskIds.length} task role(s) to ${desiredRole}.`,
+      );
+    }
     const isDone = linkedTasks.some((task) => task.status === "done");
     const hasOngoingTask = linkedTasks.some(
       (task) => task.status !== "done" && task.status !== "cancelled",
@@ -302,6 +385,7 @@ export async function buildPreflightSummary(options: {
         id: createdTaskId,
         status: "queued",
         updatedAt: new Date(),
+        role: desiredRole,
       });
       issueTaskMap.set(issue.number, current);
       summary.github.generatedTaskCount += 1;

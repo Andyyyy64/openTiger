@@ -1,6 +1,6 @@
 import type { config as configTable } from "@openTiger/db/schema";
 
-type ConfigColumn = keyof Omit<typeof configTable.$inferSelect, "id" | "createdAt" | "updatedAt">;
+type ConfigColumn = string;
 
 export type ConfigField = {
   key: string;
@@ -27,6 +27,11 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "LOCAL_WORKTREE_ROOT", column: "localWorktreeRoot", defaultValue: "" },
   { key: "BASE_BRANCH", column: "baseBranch", defaultValue: "main" },
   { key: "OPENCODE_MODEL", column: "opencodeModel", defaultValue: "google/gemini-3-flash-preview" },
+  {
+    key: "OPENCODE_SMALL_MODEL",
+    column: "opencodeSmallModel",
+    defaultValue: "google/gemini-2.5-flash",
+  },
   { key: "OPENCODE_WAIT_ON_QUOTA", column: "opencodeWaitOnQuota", defaultValue: "true" },
   {
     key: "OPENCODE_QUOTA_RETRY_DELAY_MS",
@@ -37,6 +42,8 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "PLANNER_MODEL", column: "plannerModel", defaultValue: "google/gemini-3-pro-preview" },
   { key: "JUDGE_MODEL", column: "judgeModel", defaultValue: "google/gemini-3-pro-preview" },
   { key: "WORKER_MODEL", column: "workerModel", defaultValue: "google/gemini-3-flash-preview" },
+  { key: "TESTER_MODEL", column: "testerModel", defaultValue: "google/gemini-3-flash-preview" },
+  { key: "DOCSER_MODEL", column: "docserModel", defaultValue: "google/gemini-3-flash-preview" },
   { key: "PLANNER_USE_REMOTE", column: "plannerUseRemote", defaultValue: "true" },
   { key: "PLANNER_REPO_URL", column: "plannerRepoUrl", defaultValue: "" },
   { key: "AUTO_REPLAN", column: "autoReplan", defaultValue: "true" },
@@ -76,7 +83,7 @@ export function buildConfigRecord(
   options: { includeDefaults?: boolean } = {},
 ): Partial<typeof configTable.$inferInsert> {
   const includeDefaults = options.includeDefaults ?? false;
-  const record: Partial<Record<ConfigColumn, string>> = {};
+  const record: Record<string, string> = {};
   for (const field of CONFIG_FIELDS) {
     const rawValue = values[field.key];
     if (rawValue !== undefined) {
@@ -92,8 +99,9 @@ export function buildConfigRecord(
 
 export function rowToConfig(row: typeof configTable.$inferSelect): Record<string, string> {
   const result: Record<string, string> = {};
+  const source = row as unknown as Record<string, string | undefined>;
   for (const field of CONFIG_FIELDS) {
-    const value = row[field.column];
+    const value = source[field.column];
     result[field.key] = typeof value === "string" && value.length > 0 ? value : field.defaultValue;
   }
   return result;

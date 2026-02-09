@@ -83,7 +83,7 @@ function buildWorkerRoleDefinition(
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@openTiger/worker", "start"],
+      args: ["--filter", "@openTiger/worker", "run", "start:fresh"],
       cwd: resolveRepoRoot(),
       env: { WORKER_INDEX: String(index), AGENT_ROLE: role },
     }),
