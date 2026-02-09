@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 // Git操作の結果
 export interface GitResult {
@@ -146,8 +148,8 @@ export async function cloneRepo(
   branch?: string,
   token?: string,
 ): Promise<GitResult> {
-  // 空のリポジトリやブランチ未指定の場合でも動作するように、まずは通常のクローンを試みる
-  const args = ["clone", "--depth", "1"];
+  // PR競合解消でmerge-base計算が必要になるため shallow clone は使わない
+  const args = ["clone"];
 
   let authenticatedUrl = repoUrl;
   if (token && repoUrl.startsWith("https://github.com/")) {
@@ -322,6 +324,11 @@ export async function getDiffBetweenRefs(
   return execGit(["diff", `${baseRef}...${headRef}`], cwd);
 }
 
+// 初回コミットの差分を取得
+export async function getDiffFromRoot(cwd: string): Promise<GitResult> {
+  return execGit(["show", "--root", "--pretty=", "--no-color", "HEAD"], cwd);
+}
+
 export async function getChangedFilesBetweenRefs(
   cwd: string,
   baseRef: string,
@@ -465,22 +472,54 @@ export async function getChangedFiles(cwd: string): Promise<string[]> {
 export async function getChangeStats(
   cwd: string,
 ): Promise<{ additions: number; deletions: number }> {
-  const result = await execGit(["diff", "--stat", "--staged"], cwd);
-  if (!result.success) {
-    return { additions: 0, deletions: 0 };
+  const parseNumstat = (output: string): { additions: number; deletions: number } => {
+    let additions = 0;
+    let deletions = 0;
+    for (const line of output.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+      const [addRaw, delRaw] = trimmed.split("\t");
+      const add = Number(addRaw);
+      const del = Number(delRaw);
+      additions += Number.isFinite(add) ? add : 0;
+      deletions += Number.isFinite(del) ? del : 0;
+    }
+    return { additions, deletions };
+  };
+
+  const [unstaged, staged, untracked] = await Promise.all([
+    execGit(["diff", "--numstat"], cwd),
+    execGit(["diff", "--numstat", "--cached"], cwd),
+    execGit(["ls-files", "--others", "--exclude-standard"], cwd),
+  ]);
+
+  const unstagedStats = unstaged.success
+    ? parseNumstat(unstaged.stdout)
+    : { additions: 0, deletions: 0 };
+  const stagedStats = staged.success ? parseNumstat(staged.stdout) : { additions: 0, deletions: 0 };
+  let additions = unstagedStats.additions + stagedStats.additions;
+  let deletions = unstagedStats.deletions + stagedStats.deletions;
+
+  // 未追跡ファイルはnumstatに現れないため、追加行として概算する
+  if (untracked.success && untracked.stdout) {
+    const files = untracked.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    for (const file of files) {
+      try {
+        const content = await readFile(join(cwd, file), "utf-8");
+        const lineCount = content.length === 0 ? 0 : content.split("\n").length;
+        additions += lineCount;
+      } catch {
+        // unreadable file is ignored for stats approximation
+      }
+    }
   }
 
-  // 最後の行から統計を抽出
-  const lines = result.stdout.split("\n");
-  const lastLine = lines.at(-1) ?? "";
-
-  const addMatch = lastLine.match(/(\d+) insertion/);
-  const delMatch = lastLine.match(/(\d+) deletion/);
-
-  return {
-    additions: addMatch?.[1] ? parseInt(addMatch[1], 10) : 0,
-    deletions: delMatch?.[1] ? parseInt(delMatch[1], 10) : 0,
-  };
+  return { additions, deletions };
 }
 
 // ブランチを削除

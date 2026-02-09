@@ -25,6 +25,35 @@ export interface PRInfo {
   state: string;
 }
 
+function getErrorStatus(error: unknown): number | undefined {
+  if (typeof error === "object" && error && "status" in error) {
+    const status = Number((error as { status?: unknown }).status);
+    if (Number.isFinite(status)) {
+      return status;
+    }
+  }
+  return undefined;
+}
+
+function isRecoverableServerError(error: unknown): boolean {
+  const status = getErrorStatus(error);
+  return typeof status === "number" && status >= 500;
+}
+
+function fallbackPRInfo(params: {
+  owner: string;
+  repo: string;
+  prNumber: number;
+  title?: string;
+}): PRInfo {
+  return {
+    number: params.prNumber,
+    url: `https://github.com/${params.owner}/${params.repo}/pull/${params.prNumber}`,
+    title: params.title ?? `PR #${params.prNumber}`,
+    state: "open",
+  };
+}
+
 // PRを検索
 export async function findPRs(options: SearchPROptions): Promise<PRInfo[]> {
   const octokit = getOctokit();
@@ -54,23 +83,52 @@ export async function updatePR(
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
 
-  const response = await octokit.pulls.update({
-    owner,
-    repo,
-    pull_number: prNumber,
-    title: options.title,
-    body: options.body,
-    state: "open",
-  });
+  let response: Awaited<ReturnType<typeof octokit.pulls.update>> | null = null;
+  try {
+    response = await octokit.pulls.update({
+      owner,
+      repo,
+      pull_number: prNumber,
+      title: options.title,
+      body: options.body,
+      state: "open",
+    });
+  } catch (error) {
+    if (!isRecoverableServerError(error)) {
+      throw error;
+    }
+    // GitHub一時障害時は既存PRを維持して処理継続する
+    console.warn(
+      `[VCS] pull update failed with recoverable server error for #${prNumber}; keeping existing PR.`,
+      error,
+    );
+    return fallbackPRInfo({
+      owner,
+      repo,
+      prNumber,
+      title: options.title,
+    });
+  }
 
   // ラベルを更新（既存のラベルに追加）
   if (options.labels && options.labels.length > 0) {
-    await octokit.issues.addLabels({
-      owner,
-      repo,
-      issue_number: prNumber,
-      labels: options.labels,
-    });
+    try {
+      await octokit.issues.addLabels({
+        owner,
+        repo,
+        issue_number: prNumber,
+        labels: options.labels,
+      });
+    } catch (error) {
+      if (!isRecoverableServerError(error)) {
+        throw error;
+      }
+      // ラベル付与失敗は致命扱いにしない
+      console.warn(
+        `[VCS] addLabels failed with recoverable server error for PR #${prNumber}; continuing.`,
+        error,
+      );
+    }
   }
 
   return {
@@ -86,24 +144,57 @@ export async function createPR(options: CreatePROptions): Promise<PRInfo> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
 
-  const response = await octokit.pulls.create({
-    owner,
-    repo,
-    title: options.title,
-    body: options.body,
-    head: options.head,
-    base: options.base ?? "main",
-    draft: options.draft ?? false,
-  });
+  let response: Awaited<ReturnType<typeof octokit.pulls.create>> | null = null;
+  try {
+    response = await octokit.pulls.create({
+      owner,
+      repo,
+      title: options.title,
+      body: options.body,
+      head: options.head,
+      base: options.base ?? "main",
+      draft: options.draft ?? false,
+    });
+  } catch (error) {
+    if (!isRecoverableServerError(error)) {
+      throw error;
+    }
+    // 作成成功直後のレスポンス失敗を救済するため、同一head/baseの既存PRを再検索する
+    console.warn(
+      `[VCS] pull create failed with recoverable server error for head=${options.head}; searching existing PR.`,
+      error,
+    );
+    const existing = await findPRs({
+      head: options.head,
+      base: options.base ?? "main",
+      state: "open",
+    });
+    const matched = existing[0];
+    if (matched) {
+      return matched;
+    }
+    throw error;
+  }
 
   // ラベルを追加
   if (options.labels && options.labels.length > 0) {
-    await octokit.issues.addLabels({
-      owner,
-      repo,
-      issue_number: response.data.number,
-      labels: options.labels,
-    });
+    try {
+      await octokit.issues.addLabels({
+        owner,
+        repo,
+        issue_number: response.data.number,
+        labels: options.labels,
+      });
+    } catch (error) {
+      if (!isRecoverableServerError(error)) {
+        throw error;
+      }
+      // ラベル付与失敗は致命扱いにしない
+      console.warn(
+        `[VCS] addLabels failed with recoverable server error for PR #${response.data.number}; continuing.`,
+        error,
+      );
+    }
   }
 
   return {
