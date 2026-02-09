@@ -16,6 +16,29 @@ export function isQuotaExceededError(message: string): boolean {
   return QUOTA_EXCEEDED_ERRORS.some((pattern) => pattern.test(message));
 }
 
+export function isResourceExhaustedError(message: string): boolean {
+  return /resource has been exhausted|resource_exhausted/i.test(message);
+}
+
+export function isTitleGenerationLine(message: string): boolean {
+  return (
+    /agent=title|failed to generate title|service=session\.prompt/i.test(message) ||
+    // OpenCodeの再試行エラーにはtitle生成用のsystem promptが埋め込まれることがある
+    /you are a title generator|generate a brief title|the following is the text to summarize/i.test(
+      message,
+    )
+  );
+}
+
+export function isTitleOnlyQuotaError(message: string): boolean {
+  const lines = message.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const quotaLines = lines.filter((line) => isQuotaExceededError(line));
+  if (quotaLines.length === 0) {
+    return false;
+  }
+  return quotaLines.every((line) => isTitleGenerationLine(line));
+}
+
 export function extractQuotaRetryDelayMs(message: string): number | undefined {
   const retryInfoMatch = message.match(
     /retrydelay["']?\s*[:=]\s*["']?([0-9]+(?:\.[0-9]+)?)s["']?/i,
@@ -52,6 +75,9 @@ export function normalizeForPromptDetection(text: string): string {
 }
 
 export function hasRepeatedPattern(chunks: string[]): boolean {
+  if (DOOM_LOOP_PATTERN_MAX_LENGTH <= 0 || DOOM_LOOP_PATTERN_REPEAT_THRESHOLD <= 1) {
+    return false;
+  }
   for (let patternLength = 1; patternLength <= DOOM_LOOP_PATTERN_MAX_LENGTH; patternLength++) {
     const requiredLength = patternLength * DOOM_LOOP_PATTERN_REPEAT_THRESHOLD;
     if (chunks.length < requiredLength) {

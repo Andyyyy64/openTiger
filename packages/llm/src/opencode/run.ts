@@ -12,6 +12,8 @@ import {
 import {
   extractQuotaRetryDelayMs,
   isQuotaExceededError,
+  isResourceExhaustedError,
+  isTitleOnlyQuotaError,
   isRetryableError,
   calculateBackoffDelay,
   delay,
@@ -22,7 +24,25 @@ import { executeOpenCodeOnce } from "./opencode-executor";
 export { OpenCodeOptions } from "./opencode-types";
 export type { OpenCodeResult } from "./opencode-types";
 
+function buildApiKeyFingerprint(options: OpenCodeOptions): string {
+  const fromOptions = options.env?.GEMINI_API_KEY?.trim();
+  const fromProcess = process.env.GEMINI_API_KEY?.trim();
+  const value = fromOptions || fromProcess;
+  if (!value) {
+    return "gemini:unset";
+  }
+  const tailLength = 5;
+  const tail = value.slice(-tailLength);
+  const maskedBodyLength = Math.max(0, value.length - tail.length);
+  const maskedBody = "*".repeat(Math.min(maskedBodyLength, 8));
+  const source = fromOptions ? "task_env" : "process_env";
+  return `gemini:${maskedBody}${tail}(${source})`;
+}
+
 export async function runOpenCode(options: OpenCodeOptions): Promise<OpenCodeResult> {
+  const apiKeyFingerprint = buildApiKeyFingerprint(options);
+  console.log(`[OpenCode] API key fingerprint: ${apiKeyFingerprint}`);
+
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const retryDelayMs = options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
   const waitOnQuota = parseBooleanEnvValue(
@@ -59,21 +79,43 @@ export async function runOpenCode(options: OpenCodeOptions): Promise<OpenCodeRes
     }
 
     if (isQuotaExceededError(result.stderr)) {
-      if (waitOnQuota && (maxQuotaWaits < 0 || quotaWaitCount < maxQuotaWaits)) {
-        quotaWaitCount++;
-        const detectedDelay = extractQuotaRetryDelayMs(result.stderr);
-        const waitMs = detectedDelay ?? quotaRetryDelayMs;
+      if (isTitleOnlyQuotaError(result.stderr)) {
+        if (attempt < maxRetries) {
+          attempt++;
+          retryCount++;
+          const backoffDelay = calculateBackoffDelay(attempt, retryDelayMs);
+          console.warn(
+            `[OpenCode] Title-generation quota error detected. Retrying (${retryCount}/${maxRetries}) after ${backoffDelay}ms.`,
+          );
+          await delay(backoffDelay);
+          continue;
+        }
         console.warn(
-          `[OpenCode] ${currentModel ?? "unknown model"} quota exceeded. ` +
-            `Waiting ${Math.round(waitMs / 1000)}s before retry (${quotaWaitCount}${maxQuotaWaits < 0 ? "" : `/${maxQuotaWaits}`}).`,
+          "[OpenCode] Title-generation quota error persisted; continuing error handling without quota handoff.",
         );
-        await delay(waitMs);
-        continue;
+      } else {
+        // resource_exhausted の場合は文言を切り替える
+        const resourceExhausted = isResourceExhaustedError(result.stderr);
+        const quotaLabel = resourceExhausted ? "Resource has been exhausted" : "Quota exceeded";
+        const quotaHint = resourceExhausted
+          ? "Please retry later or check provider capacity."
+          : "Please check your API quota.";
+        if (waitOnQuota && (maxQuotaWaits < 0 || quotaWaitCount < maxQuotaWaits)) {
+          quotaWaitCount++;
+          const detectedDelay = extractQuotaRetryDelayMs(result.stderr);
+          const waitMs = detectedDelay ?? quotaRetryDelayMs;
+          console.warn(
+            `[OpenCode] ${currentModel ?? "unknown model"} ${quotaLabel}. ` +
+              `Waiting ${Math.round(waitMs / 1000)}s before retry (${quotaWaitCount}${maxQuotaWaits < 0 ? "" : `/${maxQuotaWaits}`}).`,
+          );
+          await delay(waitMs);
+          continue;
+        }
+        console.error(
+          `[OpenCode] ${currentModel ?? "unknown model"} ${quotaLabel}. ${quotaHint}`,
+        );
+        break;
       }
-      console.error(
-        `[OpenCode] ${currentModel ?? "unknown model"} quota limit reached. Please check your API quota.`,
-      );
-      break;
     }
 
     if (

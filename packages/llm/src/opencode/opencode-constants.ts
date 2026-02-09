@@ -25,6 +25,8 @@ export const QUOTA_EXCEEDED_ERRORS = [
   /quota exceeded/i,
   /exceeded your current quota/i,
   /generate_requests_per_model_per_day/i,
+  // provider側のリソース枯渇はクォータ超過として扱う
+  /resource has been exhausted/i,
   /resource_exhausted/i,
   /quotafailure/i,
   /retryinfo/i,
@@ -37,17 +39,40 @@ const CONTROL_CHARS_CLASS = `${String.fromCharCode(0)}-${String.fromCharCode(31)
 // 制御文字の除去でプロンプト検出を安定させる
 export const CONTROL_CHARS_REGEX = new RegExp(`[${CONTROL_CHARS_CLASS}]+`, "g");
 
-export const DOOM_LOOP_WINDOW = 64;
-export const DOOM_LOOP_IDENTICAL_THRESHOLD = 5;
-export const DOOM_LOOP_PATTERN_MAX_LENGTH = 12;
-export const DOOM_LOOP_PATTERN_REPEAT_THRESHOLD = 4;
+const parseThreshold = (value: string | undefined, fallback: number): number => {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.max(0, parsed);
+};
+
+export const DOOM_LOOP_WINDOW = Math.max(
+  16,
+  parseThreshold(process.env.OPENCODE_DOOM_LOOP_WINDOW, 96),
+);
+export const DOOM_LOOP_IDENTICAL_THRESHOLD = Math.max(
+  0,
+  parseThreshold(process.env.OPENCODE_DOOM_LOOP_IDENTICAL_THRESHOLD, 0),
+);
+export const DOOM_LOOP_PATTERN_MAX_LENGTH = Math.max(
+  0,
+  parseThreshold(process.env.OPENCODE_DOOM_LOOP_PATTERN_MAX_LENGTH, 0),
+);
+export const DOOM_LOOP_PATTERN_REPEAT_THRESHOLD = Math.max(
+  0,
+  parseThreshold(process.env.OPENCODE_DOOM_LOOP_PATTERN_REPEAT_THRESHOLD, 0),
+);
 export const DEFAULT_IDLE_TIMEOUT_SECONDS = parseInt(
   process.env.OPENCODE_IDLE_TIMEOUT_SECONDS ?? "300",
   10,
 );
 export const IDLE_CHECK_INTERVAL_MS = 5000;
 export const PROGRESS_LOG_INTERVAL_MS = 30000;
-export const MAX_CONSECUTIVE_PLANNING_LINES = 10;
+export const MAX_CONSECUTIVE_PLANNING_LINES = parseThreshold(
+  process.env.OPENCODE_MAX_CONSECUTIVE_PLANNING_LINES,
+  0,
+);
 export const EXTERNAL_PERMISSION_PROMPT = /permission required:\s*external_directory/i;
 export const EXTERNAL_PERMISSION_HINTS = [
   "permission required",

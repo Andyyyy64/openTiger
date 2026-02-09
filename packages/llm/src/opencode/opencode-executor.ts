@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { extractOpenCodeTokenUsage } from "./parse";
 import type { OpenCodeOptions, OpenCodeResult } from "./opencode-types";
@@ -20,6 +19,8 @@ import {
 import {
   hasRepeatedPattern,
   isQuotaExceededError,
+  isResourceExhaustedError,
+  isTitleGenerationLine,
   normalizeChunkLine,
   normalizeForPromptDetection,
 } from "./opencode-helpers";
@@ -36,7 +37,7 @@ export async function executeOpenCodeOnce(
   const idleTimeoutEnabled = idleTimeoutMs > 0;
   let lastVisibleProgressAt = startTime;
   const args: string[] = ["run"];
-  const tempDir = await mkdtemp(join(tmpdir(), "openTiger-opencode-"));
+  const tempDir = await mkdtemp(join(options.workdir, ".openTiger-opencode-"));
   const promptPath = join(tempDir, "prompt.txt");
 
   // Pass prompt via file to avoid CLI argument limits and parsing issues
@@ -71,6 +72,8 @@ export async function executeOpenCodeOnce(
   let timedOut = false;
   let idleTimedOut = false;
   let quotaExceeded = false;
+  // resource_exhausted の場合は文言を切り替える
+  let resourceExhausted = false;
   let permissionPromptBlocked = false;
   let printedErrorSummary = false;
   const parentSignalHandlers: Array<{ signal: NodeJS.Signals; listener: () => void }> = [];
@@ -165,12 +168,16 @@ export async function executeOpenCodeOnce(
     if (normalized.length <= 10) {
       return;
     }
+    if (isPlanningLine(normalized)) {
+      // Planning narration alone should not trip doom-loop detection.
+      return;
+    }
     recentChunks.push(normalized);
     if (recentChunks.length > DOOM_LOOP_WINDOW) {
       recentChunks.shift();
     }
 
-    if (recentChunks.length >= DOOM_LOOP_IDENTICAL_THRESHOLD) {
+    if (DOOM_LOOP_IDENTICAL_THRESHOLD > 1 && recentChunks.length >= DOOM_LOOP_IDENTICAL_THRESHOLD) {
       const last = recentChunks[recentChunks.length - 1];
       const repeats = recentChunks.filter((chunk) => chunk === last).length;
       if (repeats >= DOOM_LOOP_IDENTICAL_THRESHOLD) {
@@ -239,7 +246,10 @@ export async function executeOpenCodeOnce(
       }
       if (isPlanningLine(line)) {
         consecutivePlanningLines += 1;
-        if (consecutivePlanningLines >= MAX_CONSECUTIVE_PLANNING_LINES) {
+        if (
+          MAX_CONSECUTIVE_PLANNING_LINES > 0 &&
+          consecutivePlanningLines >= MAX_CONSECUTIVE_PLANNING_LINES
+        ) {
           stderr += `\n[OpenCode] Excessive planning chatter detected (${consecutivePlanningLines} lines)`;
           markDoomLoopAndTerminate();
           continue;
@@ -256,10 +266,20 @@ export async function executeOpenCodeOnce(
     detectPermissionPrompt(chunk);
     const lines = chunk.split(/\r?\n/).filter((line) => line.trim().length > 0);
     for (const line of lines) {
+      if (!resourceExhausted && isResourceExhaustedError(line)) {
+        resourceExhausted = true;
+      }
       if (!quotaExceeded && isQuotaExceededError(line)) {
+        if (isTitleGenerationLine(line)) {
+          // Title generation is optional. Don't fail the whole run on its quota error.
+          continue;
+        }
         quotaExceeded = true;
         // Quota exceeded won't recover, so stop early
-        process.stderr.write("\n[OpenCode] Quota limit reached. Aborting.\n");
+        const quotaMessage = resourceExhausted
+          ? "\n[OpenCode] Resource has been exhausted. Aborting.\n"
+          : "\n[OpenCode] Quota limit reached. Aborting.\n";
+        process.stderr.write(quotaMessage);
         terminateOpenCode("SIGTERM");
         setTimeout(() => terminateOpenCode("SIGKILL"), 2000);
         continue;
@@ -302,7 +322,11 @@ export async function executeOpenCodeOnce(
       const idleTimeoutMessage = idleTimedOut
         ? `\n[OpenCode] Idle timeout exceeded (${Math.round(idleTimeoutMs / 1000)}s without visible progress)`
         : "";
-      const quotaMessage = quotaExceeded ? "\n[OpenCode] Quota limit reached" : "";
+      const quotaMessage = quotaExceeded
+        ? resourceExhausted
+          ? "\n[OpenCode] Resource has been exhausted"
+          : "\n[OpenCode] Quota limit reached"
+        : "";
       const doomLoopMessage = doomLoopDetected ? "\n[OpenCode] Doom loop detected" : "";
       const permissionPromptMessage = permissionPromptBlocked
         ? "\n[OpenCode] external_directory permission prompt blocked the run"
