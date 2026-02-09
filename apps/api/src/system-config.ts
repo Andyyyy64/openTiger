@@ -1,4 +1,4 @@
-import { config as configTable } from "@openTiger/db/schema";
+import type { config as configTable } from "@openTiger/db/schema";
 
 type ConfigColumn = keyof Omit<typeof configTable.$inferSelect, "id" | "createdAt" | "updatedAt">;
 

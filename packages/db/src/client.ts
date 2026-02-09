@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
@@ -11,6 +12,7 @@ const client = postgres(connectionString);
 
 // Drizzle ORMインスタンス
 export const db = drizzle(client, { schema });
+export { sql };
 
 export async function closeDb(): Promise<void> {
   await client.end({ timeout: 5 });
