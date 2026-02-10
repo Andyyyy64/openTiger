@@ -187,7 +187,8 @@ systemRoute.post("/preflight", async (c) => {
     const hasJudgeBacklog =
       preflight.github.openPrCount > 0 || preflight.local.pendingJudgeTaskCount > 0;
 
-    const startPlanner = hasRequirementContent && !hasIssueBacklog && !hasJudgeBacklog;
+    const startPlanner =
+      hasRequirementContent && !hasIssueBacklog && !hasJudgeBacklog && !hasLocalTaskBacklog;
     const startExecutionAgents = startPlanner || hasIssueBacklog || hasLocalTaskBacklog;
 
     const recommendations = {
@@ -214,7 +215,7 @@ systemRoute.post("/preflight", async (c) => {
           ? "Planner count is capped at 1"
           : "Planner count is within limit",
         startPlanner
-          ? "Planner is enabled because requirement content is present and issue/PR backlog is empty"
+          ? "Planner is enabled because requirement content is present and local/issue/PR backlog is empty"
           : "Planner is skipped for this launch",
       ],
     };

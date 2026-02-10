@@ -177,6 +177,34 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
           autoCreateIssueTasks: false,
           autoCreatePrJudgeTasks: false,
         });
+        const hasLocalTaskBacklog =
+          preflight.local.queuedTaskCount > 0 ||
+          preflight.local.runningTaskCount > 0 ||
+          preflight.local.failedTaskCount > 0 ||
+          preflight.local.blockedTaskCount > 0;
+        if (hasLocalTaskBacklog) {
+          return c.json(
+            {
+              error:
+                "Planner start blocked: local task backlog exists " +
+                `(queued=${preflight.local.queuedTaskCount}, running=${preflight.local.runningTaskCount}, failed=${preflight.local.failedTaskCount}, blocked=${preflight.local.blockedTaskCount}). ` +
+                "Clear task backlog first.",
+            },
+            409,
+          );
+        }
+        const hasIssueBacklog = preflight.github.issueTaskBacklogCount > 0;
+        if (hasIssueBacklog) {
+          return c.json(
+            {
+              error:
+                "Planner start blocked: open issue backlog exists " +
+                `(issueBacklog=${preflight.github.issueTaskBacklogCount}). ` +
+                "Process issue backlog first.",
+            },
+            409,
+          );
+        }
         const hasJudgeBacklog =
           preflight.github.openPrCount > 0 || preflight.local.pendingJudgeTaskCount > 0;
         if (hasJudgeBacklog) {
