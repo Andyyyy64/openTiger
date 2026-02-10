@@ -4,7 +4,7 @@ import { db } from "@openTiger/db";
 import { config as configTable } from "@openTiger/db/schema";
 import { ensureConfigRow } from "../config-store";
 import { getAuthInfo } from "../middleware/index";
-import { createRepo } from "@openTiger/vcs";
+import { createRepo, getOctokit } from "@openTiger/vcs";
 import { obliterateAllQueues } from "@openTiger/queue";
 import { parseBooleanSetting, parseCountSetting, buildPreflightSummary } from "./system-preflight";
 import { canControlSystem } from "./system-auth";
@@ -96,6 +96,54 @@ systemRoute.post("/github/repo", async (c) => {
       );
     }
     return c.json({ error: message }, status === 403 ? 403 : 500);
+  }
+});
+
+systemRoute.get("/github/repos", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  const ownerFilter = c.req.query("owner")?.trim().toLowerCase();
+  const configRow = await ensureConfigRow();
+  const token = configRow.githubToken?.trim();
+  if (!token) {
+    return c.json({ error: "GitHub token is not configured" }, 400);
+  }
+
+  try {
+    const octokit = getOctokit({ token });
+    const rows = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
+      affiliation: "owner,collaborator,organization_member",
+      sort: "updated",
+      per_page: 100,
+    });
+
+    const repos = rows
+      .map((repo) => ({
+        owner: repo.owner?.login ?? "",
+        name: repo.name,
+        fullName: repo.full_name,
+        url: repo.html_url,
+        defaultBranch: repo.default_branch ?? "main",
+        private: repo.private,
+        archived: repo.archived,
+      }))
+      .filter((repo) => repo.owner.length > 0)
+      .filter((repo) =>
+        ownerFilter ? repo.owner.toLowerCase() === ownerFilter || repo.fullName.includes(ownerFilter) : true,
+      )
+      .sort((a, b) => a.fullName.localeCompare(b.fullName));
+
+    return c.json({ repos });
+  } catch (error) {
+    const status =
+      typeof error === "object" && error && "status" in error
+        ? Number((error as { status?: number }).status)
+        : undefined;
+    const message = error instanceof Error ? error.message : "Failed to list repositories";
+    return c.json({ error: message }, status === 401 || status === 403 ? status : 500);
   }
 });
 

@@ -29,7 +29,7 @@ function buildPlannerDefinition(index: number): ProcessDefinition {
       }
       return {
         command: "pnpm",
-        args: ["--filter", "@openTiger/planner", "run", "start:fresh", requirementPath],
+        args: ["--filter", "@openTiger/planner", "run", "start", requirementPath],
         cwd: resolveRepoRoot(),
         env: { AGENT_ID: `planner-${index}` },
       };
@@ -83,7 +83,7 @@ function buildWorkerRoleDefinition(
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@openTiger/worker", "run", "start:fresh"],
+      args: ["--filter", "@openTiger/worker", "run", "start"],
       cwd: resolveRepoRoot(),
       env: { WORKER_INDEX: String(index), AGENT_ROLE: role },
     }),
@@ -140,7 +140,7 @@ const processDefinitions: ProcessDefinition[] = [
     autoRestart: true,
     buildStart: async () => ({
       command: "pnpm",
-      args: ["--filter", "@openTiger/cycle-manager", "run", "start:fresh"],
+      args: ["--filter", "@openTiger/cycle-manager", "run", "start"],
       cwd: resolveRepoRoot(),
     }),
   },

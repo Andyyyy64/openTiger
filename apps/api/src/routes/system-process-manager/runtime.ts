@@ -23,6 +23,140 @@ const AUTO_RESTART_MAX_ATTEMPTS = Number.parseInt(
   10,
 );
 
+const SYSTEM_PROCESS_CMD_PATTERNS: RegExp[] = [
+  /\bpnpm\s+--filter\s+@openTiger\/dispatcher\s+start\b/i,
+  /\bpnpm\s+--filter\s+@openTiger\/cycle-manager\s+run\s+start\b/i,
+  /\bpnpm\s+--filter\s+@openTiger\/judge\s+start\b/i,
+  /\bpnpm\s+--filter\s+@openTiger\/worker\s+run\s+start\b/i,
+  /\bpnpm\s+--filter\s+@openTiger\/planner\s+run\s+start\b/i,
+];
+
+type OsProcessInfo = {
+  pid: number;
+  command: string;
+};
+
+type ForceStopSummary = {
+  matched: number;
+  signaled: number;
+  killed: number;
+  pids: number[];
+};
+
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function killPidGroup(pid: number, signal: NodeJS.Signals): void {
+  if (process.platform !== "win32") {
+    try {
+      process.kill(-pid, signal);
+      return;
+    } catch {
+      // Fall back to single process kill
+    }
+  }
+  try {
+    process.kill(pid, signal);
+  } catch {
+    // Ignore if already gone
+  }
+}
+
+async function listOsProcesses(): Promise<OsProcessInfo[]> {
+  if (process.platform === "win32") {
+    return [];
+  }
+
+  return await new Promise<OsProcessInfo[]>((resolve) => {
+    const ps = spawn("ps", ["-eo", "pid=,args="], {
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+
+    let stdout = "";
+    ps.stdout?.setEncoding("utf-8");
+    ps.stdout?.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+
+    ps.on("close", () => {
+      const rows = stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      const processes: OsProcessInfo[] = [];
+      for (const row of rows) {
+        const match = row.match(/^(\d+)\s+(.+)$/);
+        if (!match?.[1] || !match[2]) {
+          continue;
+        }
+        const pid = Number.parseInt(match[1], 10);
+        if (!Number.isFinite(pid) || pid <= 0) {
+          continue;
+        }
+        processes.push({
+          pid,
+          command: match[2],
+        });
+      }
+      resolve(processes);
+    });
+
+    ps.on("error", () => {
+      resolve([]);
+    });
+  });
+}
+
+export async function forceTerminateUnmanagedSystemProcesses(): Promise<ForceStopSummary> {
+  const processes = await listOsProcesses();
+  if (processes.length === 0) {
+    return { matched: 0, signaled: 0, killed: 0, pids: [] };
+  }
+
+  const currentPid = process.pid;
+  const targetPids = Array.from(
+    new Set(
+      processes
+        .filter((row) => row.pid !== currentPid)
+        .filter((row) => SYSTEM_PROCESS_CMD_PATTERNS.some((pattern) => pattern.test(row.command)))
+        .map((row) => row.pid),
+    ),
+  );
+
+  if (targetPids.length === 0) {
+    return { matched: 0, signaled: 0, killed: 0, pids: [] };
+  }
+
+  for (const pid of targetPids) {
+    killPidGroup(pid, "SIGTERM");
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+
+  let killed = 0;
+  for (const pid of targetPids) {
+    if (!isPidAlive(pid)) {
+      continue;
+    }
+    killPidGroup(pid, "SIGKILL");
+    killed += 1;
+  }
+
+  return {
+    matched: targetPids.length,
+    signaled: targetPids.length,
+    killed,
+    pids: targetPids,
+  };
+}
+
 export function buildProcessInfo(
   definition: ProcessDefinition,
   runtime?: ProcessRuntime,

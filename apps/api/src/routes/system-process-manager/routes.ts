@@ -7,9 +7,13 @@ import { getAuthInfo } from "../../middleware/index";
 import { buildPreflightSummary } from "../system-preflight";
 import { canControlSystem } from "../system-auth";
 import { listProcessDefinitions, resolveProcessDefinition } from "./definitions";
-import { startRestart } from "./restart";
-import { buildProcessInfo, startManagedProcess, stopManagedProcess } from "./runtime";
-import { managedProcesses, processStartLocks, restartState } from "./state";
+import {
+  buildProcessInfo,
+  forceTerminateUnmanagedSystemProcesses,
+  startManagedProcess,
+  stopManagedProcess,
+} from "./runtime";
+import { managedProcesses, processStartLocks } from "./state";
 import type { ProcessRuntime, StartPayload } from "./types";
 
 const AGENT_LIVENESS_WINDOW_MS = Number.parseInt(
@@ -70,41 +74,6 @@ async function detectLiveBoundAgent(processName: string): Promise<{
 
 // APIルートの公開窓口
 export function registerProcessManagerRoutes(systemRoute: Hono): void {
-  systemRoute.get("/restart", (c) => {
-    const auth = getAuthInfo(c);
-    if (!canControlSystem(auth.method)) {
-      return c.json({ error: "Admin access required" }, 403);
-    }
-    return c.json(restartState.status);
-  });
-
-  systemRoute.post("/restart", (c) => {
-    const auth = getAuthInfo(c);
-    if (!canControlSystem(auth.method)) {
-      return c.json({ error: "Admin access required" }, 403);
-    }
-
-    if (restartState.process) {
-      return c.json(
-        {
-          error: "Restart already running",
-          status: restartState.status,
-        },
-        409,
-      );
-    }
-
-    try {
-      const status = startRestart();
-      return c.json(status);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to restart";
-      restartState.status = { status: "failed", message };
-      restartState.process = null;
-      return c.json({ error: message }, 500);
-    }
-  });
-
   systemRoute.get("/processes", (c) => {
     const auth = getAuthInfo(c);
     if (!canControlSystem(auth.method)) {
@@ -296,7 +265,10 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
 
     let cancelledRuns = 0;
     let requeuedTasks = 0;
+    let orphanCleanup = { matched: 0, signaled: 0, killed: 0, pids: [] as number[] };
     try {
+      orphanCleanup = await forceTerminateUnmanagedSystemProcesses();
+
       const runningRows = await db
         .select({
           runId: runs.id,
@@ -358,6 +330,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
     return c.json({
       stopped,
       skipped,
+      orphanCleanup,
       cancelledRuns,
       requeuedTasks,
       message: `Stopped ${stopped.length} process(es)`,

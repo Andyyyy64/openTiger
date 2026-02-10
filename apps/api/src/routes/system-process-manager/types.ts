@@ -1,15 +1,5 @@
 import type { ChildProcess } from "node:child_process";
 
-export type RestartStatus = {
-  status: "idle" | "running" | "completed" | "failed";
-  startedAt?: string;
-  finishedAt?: string;
-  exitCode?: number | null;
-  signal?: NodeJS.Signals | null;
-  logPath?: string;
-  message?: string;
-};
-
 export type ProcessStatus = "idle" | "running" | "completed" | "failed" | "stopped";
 export type ProcessKind = "service" | "worker" | "planner" | "database" | "command";
 
