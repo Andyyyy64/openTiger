@@ -1,103 +1,60 @@
-# リファクタリング指示
+# Refactoring Instructions
 
-このドキュメントは、openTiger Workerが既存コードをリファクタリングする際のガイドラインを定義します。
+This document defines guidelines for refactoring existing code in openTiger worker tasks.
 
-## リファクタリングの原則
+## Refactoring Principles
 
-### 1. 動作を変えない
+### 1. Do not change behavior
 
-リファクタリングの目的は**コードの品質を向上させること**であり、機能を変更することではありません。
+The objective of refactoring is better code quality, not feature changes.
+Existing behavior must remain intact.
+
+### 2. Work in small steps
+
+Break large changes into small safe steps and verify after each step.
+
+```
+1. Extract a function -> verify
+2. Rename for clarity -> verify
+3. Remove duplication -> verify
+```
+
+### 3. Trust tests, and add them when missing
+
+If tests exist, keep them green through the refactor.
+If tests are missing, add coverage before major structural changes.
+
+## Common Refactor Patterns
+
+### Extract function by responsibility
 
 ```typescript
-// リファクタリング前後で同じテストが通ること
-検証コマンドを実行;
-```
-
-### 2. 小さなステップで進める
-
-大きな変更は小さなステップに分割し、各ステップでテストが通ることを確認します。
-
-```
-1. 関数を抽出 → テスト
-2. 変数名を変更 → テスト
-3. 重複を除去 → テスト
-```
-
-### 3. 既存のテストを信頼する
-
-テストがある場合は、リファクタリング中もテストが通ることを確認しながら進めます。
-テストがない場合は、まずテストを追加してからリファクタリングを行います。
-
-## よくあるリファクタリングパターン
-
-### 関数の抽出
-
-```typescript
-// Before: 長い関数
+// Before
 async function processOrder(order: Order) {
-  // バリデーション（10行）
   if (!order.items.length) throw new Error("Empty order");
   if (order.total < 0) throw new Error("Invalid total");
-  // ... more validation
 
-  // 在庫チェック（15行）
   for (const item of order.items) {
     const stock = await getStock(item.productId);
     if (stock < item.quantity) {
       throw new Error(`Insufficient stock: ${item.productId}`);
     }
   }
-  // ... more stock checks
 
-  // 支払い処理（20行）
-  // ...
+  await processPayment(order);
 }
 
-// After: 責務ごとに関数を分割
+// After
 async function processOrder(order: Order) {
   validateOrder(order);
   await checkInventory(order.items);
   await processPayment(order);
 }
-
-function validateOrder(order: Order): void {
-  if (!order.items.length) throw new Error("Empty order");
-  if (order.total < 0) throw new Error("Invalid total");
-}
-
-async function checkInventory(items: OrderItem[]): Promise<void> {
-  for (const item of items) {
-    const stock = await getStock(item.productId);
-    if (stock < item.quantity) {
-      throw new Error(`Insufficient stock: ${item.productId}`);
-    }
-  }
-}
 ```
 
-### 条件分岐の簡素化
+### Simplify conditionals
 
 ```typescript
-// Before: ネストが深い
-function getDiscount(user: User, order: Order): number {
-  if (user.isPremium) {
-    if (order.total > 10000) {
-      return 0.2;
-    } else if (order.total > 5000) {
-      return 0.15;
-    } else {
-      return 0.1;
-    }
-  } else {
-    if (order.total > 10000) {
-      return 0.1;
-    } else {
-      return 0;
-    }
-  }
-}
-
-// After: 早期リターンとテーブル駆動
 const PREMIUM_DISCOUNTS = [
   { minTotal: 10000, rate: 0.2 },
   { minTotal: 5000, rate: 0.15 },
@@ -110,109 +67,53 @@ const REGULAR_DISCOUNTS = [
 ];
 
 function getDiscount(user: User, order: Order): number {
-  const discounts = user.isPremium ? PREMIUM_DISCOUNTS : REGULAR_DISCOUNTS;
-  const discount = discounts.find((d) => order.total >= d.minTotal);
-  return discount?.rate ?? 0;
+  const table = user.isPremium ? PREMIUM_DISCOUNTS : REGULAR_DISCOUNTS;
+  return table.find((d) => order.total >= d.minTotal)?.rate ?? 0;
 }
 ```
 
-### 重複の除去
+### Remove duplication
 
 ```typescript
-// Before: 重複したコード
-async function createUser(data: UserInput) {
-  const id = crypto.randomUUID();
-  const now = new Date();
-  return db.insert(users).values({
-    id,
-    ...data,
-    createdAt: now,
-    updatedAt: now,
-  });
-}
-
-async function createTask(data: TaskInput) {
-  const id = crypto.randomUUID();
-  const now = new Date();
-  return db.insert(tasks).values({
-    id,
-    ...data,
-    createdAt: now,
-    updatedAt: now,
-  });
-}
-
-// After: 共通ロジックを抽出
 function withTimestamps<T extends object>(data: T) {
+  const now = new Date();
   return {
     id: crypto.randomUUID(),
     ...data,
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    createdAt: now,
+    updatedAt: now,
   };
-}
-
-async function createUser(data: UserInput) {
-  return db.insert(users).values(withTimestamps(data));
-}
-
-async function createTask(data: TaskInput) {
-  return db.insert(tasks).values(withTimestamps(data));
 }
 ```
 
-### マジックナンバーの定数化
+### Replace magic numbers with constants
 
 ```typescript
-// Before
-if (retryCount > 3) {
-  throw new Error("Max retries exceeded");
-}
-
-await sleep(5000);
-
-if (response.status === 429) {
-  // rate limited
-}
-
-// After
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 5000;
 const HTTP_TOO_MANY_REQUESTS = 429;
-
-if (retryCount > MAX_RETRIES) {
-  throw new Error("Max retries exceeded");
-}
-
-await sleep(RETRY_DELAY_MS);
-
-if (response.status === HTTP_TOO_MANY_REQUESTS) {
-  // rate limited
-}
 ```
 
-## リファクタリング時の注意事項
+## Safety Rules During Refactoring
 
-### やるべきこと
+### Do
 
-- 変更前にテストが通ることを確認
-- 小さな変更ごとにテストを実行
-- コミットは小さく、意図が明確なメッセージで
-- 公開APIの変更は最小限に
+- Verify before and after refactor
+- Keep public API changes minimal
+- Isolate refactor from feature development
+- Keep change scope narrow and intentional
 
-### やってはいけないこと
+### Do not
 
-- テストなしで大規模な変更を行う
-- 機能追加とリファクタリングを同時に行う
-- 既存の動作を変える変更（それはリファクタリングではない）
-- 関係ないファイルを変更する
+- Perform large refactors without tests
+- Mix feature additions with structural cleanup
+- Change behavior unintentionally
+- Edit unrelated files
 
-## チェックリスト
+## Completion Checklist
 
-リファクタリング完了前に確認：
-
-- [ ] すべてのテストが通る
-- [ ] 型チェックが通る（`pnpm typecheck`）
-- [ ] Lintが通る（`pnpm lint`）
-- [ ] 動作が変わっていないことを確認
-- [ ] コードが読みやすくなったことを確認
+- [ ] All required tests pass
+- [ ] Typecheck passes
+- [ ] Lint passes
+- [ ] Behavior remains unchanged
+- [ ] Readability/maintainability is improved

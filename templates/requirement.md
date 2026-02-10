@@ -1,55 +1,55 @@
-# 要件定義テンプレート
+# Requirement Template
 
-> このテンプレートに沿って要件を記述してください。
-> Plannerがこの内容を読み取り、実行可能なタスクに分割します。
+> Describe requirements using this template.
+> The Planner reads this document and splits it into executable tasks.
 
 ## Goal
 
-[何を達成したいかを明確に記述]
+[Clearly state what should be achieved]
 
 ## Background
 
-[なぜこの機能が必要か、現状の課題は何か]
+[Explain why this feature is needed and what current problem it solves]
 
 ## Constraints
 
-- [守るべき制約1]
-- [守るべき制約2]
-- [守るべき制約3]
+- [Constraint 1 to respect]
+- [Constraint 2 to respect]
+- [Constraint 3 to respect]
 
 ## Acceptance Criteria
 
-> テストやコマンドで検証可能な形式で記述してください。
+> Write criteria in a form that can be verified by tests or commands.
 
-- [ ] [完了条件1]
-- [ ] [完了条件2]
-- [ ] [完了条件3]
+- [ ] [Completion condition 1]
+- [ ] [Completion condition 2]
+- [ ] [Completion condition 3]
 
 ## Scope
 
 ### In Scope
 
-- [実装すること1]
-- [実装すること2]
+- [Thing to implement 1]
+- [Thing to implement 2]
 
 ### Out of Scope
 
-- [今回は実装しないこと1]
-- [今回は実装しないこと2]
+- [Thing not implemented in this scope 1]
+- [Thing not implemented in this scope 2]
 
 ## Allowed Paths
 
-> 変更を許可するディレクトリ/ファイルを指定してください。
+> Specify directories/files where changes are allowed.
 
 - `packages/xxx/src/**`
 - `apps/xxx/src/**`
 
 ## Risk Assessment
 
-| リスク    | 影響度   | 対策   |
-| --------- | -------- | ------ |
-| [リスク1] | 高/中/低 | [対策] |
+| Risk     | Impact   | Mitigation |
+| -------- | -------- | ---------- |
+| [Risk 1] | High/Med/Low | [Mitigation] |
 
 ## Notes
 
-[その他の補足情報、参考リンク、関連Issue等]
+[Additional notes, reference links, related issues, etc.]

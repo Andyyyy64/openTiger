@@ -1,37 +1,32 @@
-# コーディング規約
+# Coding Guidelines
 
-このドキュメントは、openTiger Workerが新しいコードを実装する際に従うべき規約を定義します。
+This document defines coding standards for openTiger workers implementing new code.
 
-## 基本原則
+## Core Principles
 
-### 1. 型安全性を最優先
+### 1. Prioritize type safety
 
 ```typescript
-// NG: any型や型アサーションで無理やり通す
+// Bad
 const data = response as any;
-const user = data.user as User;
 
-// OK: 適切な型ガードを使用
+// Good
 function isUser(data: unknown): data is User {
   return typeof data === "object" && data !== null && "id" in data && "name" in data;
 }
-
-if (isUser(data)) {
-  // ここでdataはUser型として扱える
-}
 ```
 
-### 2. 明示的なエラーハンドリング
+Avoid forcing type errors away with `any` or unsafe assertions.
+
+### 2. Handle errors explicitly
 
 ```typescript
-// NG: エラーを握りつぶす
+// Bad
 try {
   await doSomething();
-} catch {
-  // 何もしない
-}
+} catch {}
 
-// OK: エラーを適切に処理
+// Good
 try {
   await doSomething();
 } catch (error) {
@@ -40,46 +35,33 @@ try {
 }
 ```
 
-### 3. 早期リターン
+### 3. Prefer early returns
 
 ```typescript
-// NG: ネストが深い
-function process(data: Data | null) {
-  if (data) {
-    if (data.isValid) {
-      if (data.items.length > 0) {
-        // 処理
-      }
-    }
-  }
-}
-
-// OK: 早期リターンでフラットに
 function process(data: Data | null) {
   if (!data) return;
   if (!data.isValid) return;
   if (data.items.length === 0) return;
 
-  // 処理
+  // main path
 }
 ```
 
-## TypeScript スタイルガイド
+## TypeScript Style Guide
 
-### 命名規則
+### Naming
 
-| 種類                 | 規則             | 例                                 |
-| -------------------- | ---------------- | ---------------------------------- |
-| 変数・関数           | camelCase        | `getUserById`, `isValid`           |
-| 定数                 | UPPER_SNAKE_CASE | `MAX_RETRIES`, `DEFAULT_TIMEOUT`   |
-| 型・インターフェース | PascalCase       | `User`, `TaskConfig`               |
-| Enumの値             | PascalCase       | `Status.Running`, `Role.Admin`     |
-| ファイル名           | kebab-case       | `user-service.ts`, `api-client.ts` |
+| Item              | Rule             | Example                              |
+| ----------------- | ---------------- | ------------------------------------ |
+| variables/functions | camelCase      | `getUserById`, `isValid`             |
+| constants         | UPPER_SNAKE_CASE | `MAX_RETRIES`, `DEFAULT_TIMEOUT`     |
+| types/interfaces  | PascalCase       | `User`, `TaskConfig`                 |
+| enum values       | PascalCase       | `Status.Running`, `Role.Admin`       |
+| file names        | kebab-case       | `user-service.ts`, `api-client.ts`   |
 
-### 型定義
+### Runtime validation + types
 
 ```typescript
-// Zodスキーマを使用してランタイム検証と型を統合
 import { z } from "zod";
 
 export const UserSchema = z.object({
@@ -92,21 +74,11 @@ export const UserSchema = z.object({
 export type User = z.infer<typeof UserSchema>;
 ```
 
-### 関数定義
+### Function signatures
+
+When argument count grows, use an options object.
 
 ```typescript
-// 引数が多い場合はオブジェクトで受け取る
-// NG
-function createTask(
-  title: string,
-  goal: string,
-  priority: number,
-  allowedPaths: string[],
-  commands: string[],
-  dependencies?: string[],
-) {}
-
-// OK
 interface CreateTaskOptions {
   title: string;
   goal: string;
@@ -119,10 +91,9 @@ interface CreateTaskOptions {
 function createTask(options: CreateTaskOptions) {}
 ```
 
-### 非同期処理
+### Async conventions
 
 ```typescript
-// async/awaitを使用
 async function fetchUser(id: string): Promise<User> {
   const response = await fetch(`/api/users/${id}`);
 
@@ -133,51 +104,38 @@ async function fetchUser(id: string): Promise<User> {
   const data = await response.json();
   return UserSchema.parse(data);
 }
-
-// 並列実行が可能な場合はPromise.allを使用
-const [user, tasks] = await Promise.all([fetchUser(userId), fetchTasks(userId)]);
 ```
 
-## コメント規約
+Use `Promise.all` when operations are independent.
 
-### 日本語でコメントを記述
+## Comment and API Doc Guidelines
+
+### Keep comments clear and intentional
+
+Explain intent or non-obvious tradeoffs. Do not describe trivial assignments.
 
 ```typescript
-// ユーザーのセッションを検証し、有効期限が切れている場合は更新する
-async function validateSession(sessionId: string): Promise<Session> {
-  const session = await getSession(sessionId);
-
-  // セッションが存在しない場合はエラー
-  if (!session) {
-    throw new SessionNotFoundError(sessionId);
-  }
-
-  // 有効期限が近い場合は更新
-  if (isExpiringSoon(session)) {
-    return await refreshSession(session);
-  }
-
-  return session;
+// Refresh sessions that are close to expiration to reduce mid-request failures.
+if (isExpiringSoon(session)) {
+  return await refreshSession(session);
 }
 ```
 
-### JSDocは公開APIにのみ
+### Use JSDoc only for public APIs
 
 ```typescript
 /**
- * タスクを作成してキューに追加する
- * @param options タスク作成オプション
- * @returns 作成されたタスク
- * @throws {ValidationError} 入力が不正な場合
+ * Create a task and enqueue it.
+ * @throws {ValidationError} when input is invalid
  */
 export async function createTask(options: CreateTaskOptions): Promise<Task> {
-  // 実装
+  // implementation
 }
 ```
 
-## テスト規約
+## Testing Guidelines
 
-### テストファイルの配置
+### Placement
 
 ```
 src/
@@ -188,38 +146,28 @@ test/
     user-service.test.ts
 ```
 
-### テストの構造
+### Structure
 
 ```typescript
 describe("UserService", () => {
   describe("createUser", () => {
-    it("有効な入力でユーザーを作成できる", async () => {
-      // Arrange
+    it("creates a user with valid input", async () => {
       const input = { name: "Test", email: "test@example.com" };
-
-      // Act
       const user = await userService.createUser(input);
 
-      // Assert
       expect(user.name).toBe("Test");
       expect(user.id).toBeDefined();
-    });
-
-    it("無効なメールアドレスでエラーを投げる", async () => {
-      const input = { name: "Test", email: "invalid" };
-
-      await expect(userService.createUser(input)).rejects.toThrow(ValidationError);
     });
   });
 });
 ```
 
-## 禁止事項
+## Prohibited Patterns
 
-- `any`型の使用
-- 型アサーション（`as`）の乱用
-- `// @ts-ignore` や `// @ts-expect-error` の使用
-- `console.log` のコミット（ロガーを使用すること）
-- テストのスキップ（`it.skip`, `describe.skip`）のコミット
-- 未使用のインポート・変数
-- ハードコードされた秘密情報（環境変数を使用）
+- Using `any`
+- Overusing assertions (`as`)
+- Using `// @ts-ignore` or `// @ts-expect-error`
+- Committing `console.log` (use logger utilities)
+- Committing skipped tests (`it.skip`, `describe.skip`)
+- Leaving unused imports or variables
+- Hardcoding secrets (use environment variables)

@@ -1,52 +1,52 @@
 # Goal
 
-社内向け会議室予約Webアプリ「RoomFlow」を構築する。
-会議室ごとの空き枠確認、予約作成、予約変更、予約キャンセルを提供し、予約競合を確実に防止する。
+Build an internal meeting-room reservation web application called "RoomFlow".
+The product must support availability lookup, reservation creation, reservation updates, and cancellation, while reliably preventing booking conflicts.
 
 ## Background
 
-会議室の予約がチャットや口頭で管理されており、ダブルブッキングや利用状況の可視性不足が発生しています。
-最低限の運用で破綻しない予約基盤を先に整備したいです。
+Meeting-room reservations are currently managed through chat and verbal coordination, which causes double bookings and poor visibility.
+We need a minimal but robust reservation baseline that works reliably in daily operations.
 
 ## Constraints
 
-- Monorepo (pnpm workspaces) を維持する
+- Keep Monorepo (pnpm workspaces)
 - Backend: Hono
 - Frontend: React + Tailwind CSS
 - Database: PostgreSQL + Drizzle ORM
-- 技術構成は上記から変更しない
+- Do not change the technology stack above
 
 ## Acceptance Criteria
 
-- [ ] 会議室一覧が表示される（名称、収容人数、設備）
-- [ ] 日付と会議室を指定して空き枠を確認できる
-- [ ] 予約を作成できる（会議名、開始時刻、終了時刻、予約者名）
-- [ ] 既存予約の変更ができる
-- [ ] 予約のキャンセルができる（誤操作防止の確認あり）
-- [ ] 同一会議室・同一時間帯の重複予約はAPIで拒否される
-- [ ] 一覧画面で会議室と日付による絞り込みができる
-- [ ] 必須項目未入力時は、API/画面の双方でバリデーションエラーを返す
-- [ ] APIエラー時にユーザーが原因を把握できるメッセージを表示する
-- [ ] クリティカルパス（空き枠確認→予約作成→重複予約拒否→予約変更→予約キャンセル）のE2Eテストがある
-- [ ] Vitest による単体テストと結合テストがある
+- [ ] A room list is displayed (name, capacity, equipment)
+- [ ] Users can check availability by date and room
+- [ ] Users can create reservations (meeting title, start time, end time, organizer name)
+- [ ] Users can update existing reservations
+- [ ] Users can cancel reservations (with confirmation to prevent accidental actions)
+- [ ] The API rejects overlapping reservations for the same room and time window
+- [ ] The list view supports filtering by room and date
+- [ ] Missing required fields return validation errors in both API and UI
+- [ ] API errors are shown with user-understandable messages
+- [ ] Critical-path E2E tests exist (availability check -> reservation create -> overlap rejection -> reservation update -> reservation cancel)
+- [ ] Unit and integration tests exist using Vitest
 
 ## Scope
 
 ## In Scope
 
-- 会議室・予約のDBスキーマ定義
-- APIの実装
-- フロントエンドの実装
-- バリデーション実装（API/フロントの両方）
-- 予約競合防止の整合性実装
-- テスト実装（E2E、Vitest単体、Vitest結合）
+- Room and reservation DB schema definitions
+- API implementation
+- Frontend implementation
+- Validation implementation (both API and frontend)
+- Consistency implementation for conflict prevention
+- Test implementation (E2E, Vitest unit, Vitest integration)
 
 ## Out of Scope
 
-- ユーザー認証・認可
-- 外部カレンダー連携（Google Calendar等）
-- 通知機能（メール、Slack）
-- リアルタイム同期
+- Authentication and authorization
+- External calendar integrations (Google Calendar, etc.)
+- Notification features (email, Slack)
+- Real-time sync
 
 ## Allowed Paths
 
@@ -56,12 +56,12 @@
 
 ## Risk Assessment
 
-- API と UI のバリデーション不整合
-- 同時更新時の予約競合処理漏れ
-- テストの不安定化（タイミング依存）
+- Validation mismatch between API and UI
+- Missing conflict handling during concurrent updates
+- Test flakiness caused by timing dependencies
 
 ## Notes
 
-モダンなUIで実装してください。
-実装は最小構成でよいですが、テストしやすい設計（責務分離）を意識してください。
-予約競合の制御はDBレベルとAPIレベルの両方で安全策を検討してください。
+Use a modern UI.
+A minimal implementation is acceptable, but keep the design testable through clear responsibility separation.
+For reservation conflict control, apply safeguards at both DB and API layers.

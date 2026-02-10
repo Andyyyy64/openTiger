@@ -1,44 +1,39 @@
-# バグ修正指示
+# Bug Fix Instructions
 
-このドキュメントは、openTiger Workerがバグを修正する際のガイドラインを定義します。
+This document defines guidelines for fixing bugs in the openTiger worker flow.
 
-## バグ修正の原則
+## Core Principles
 
-### 1. まず再現する
+### 1. Reproduce first
 
-バグを修正する前に、そのバグを再現できることを確認します。
+Before changing code, confirm the bug is reproducible.
 
 ```typescript
-// 失敗するテストを書く
-it("ユーザー名が空の場合にエラーを投げるべき", () => {
-  // このテストが失敗することを確認してから修正に着手
+// Write a failing test first.
+it("throws when name is empty", () => {
   expect(() => createUser({ name: "" })).toThrow(ValidationError);
 });
 ```
 
-### 2. 根本原因を特定する
+### 2. Find the root cause
 
-表面的な症状ではなく、根本原因を特定してから修正します。
+Do not patch symptoms only. Identify why the issue happens.
 
 ```
-症状: ユーザー作成が失敗する
-表面的な対処: try-catchでエラーを握りつぶす ← NG
-根本原因の調査: なぜ失敗するのか？
-- バリデーションエラー？
-- DB接続エラー？
-- 権限エラー？
-根本原因の修正: バリデーションロジックを修正 ← OK
+Symptom: user creation fails
+Bad fix: swallow errors in try/catch
+Good fix: identify failing validation rule and correct it
 ```
 
-### 3. 修正は最小限に
+### 3. Keep the fix minimal
 
-バグ修正に必要な変更のみを行い、「ついでに」のリファクタリングは別のタスクにします。
+Only change what is required to resolve the bug. Move unrelated cleanup to a separate task.
 
-## バグ修正の手順
+## Bug Fix Workflow
 
-### Step 1: バグの理解
+### Step 1: Understand the failure
 
-エラーメッセージ、スタックトレース、ログを確認します。
+Inspect error messages, stack traces, and logs.
 
 ```
 Error: Cannot read property 'id' of undefined
@@ -46,45 +41,32 @@ Error: Cannot read property 'id' of undefined
     at processRequest (src/api/handler.ts:23:10)
 ```
 
-この場合、`src/services/user.ts`の42行目で`undefined`にアクセスしています。
-
-### Step 2: 再現テストを書く
+### Step 2: Add a reproduction test
 
 ```typescript
 describe("getUserName", () => {
-  it("ユーザーが見つからない場合にエラーを投げる", async () => {
-    // 存在しないユーザーIDを渡す
-    await expect(getUserName("non-existent-id")).rejects.toThrow(UserNotFoundError);
+  it("throws when user does not exist", async () => {
+    await expect(getUserName("missing-id")).rejects.toThrow(UserNotFoundError);
   });
 });
 ```
 
-### Step 3: 原因を特定
-
-コードを読んで原因を特定します。
+### Step 3: Inspect the source
 
 ```typescript
-// 問題のあるコード
+// Problematic code
 async function getUserName(userId: string): Promise<string> {
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-  });
-
-  // userがundefinedの場合にエラーが発生
-  return user.name; // ← ここでundefinedにアクセス
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
+  return user.name; // crashes when user is undefined
 }
 ```
 
-### Step 4: 修正を実装
+### Step 4: Implement a targeted fix
 
 ```typescript
-// 修正後
 async function getUserName(userId: string): Promise<string> {
-  const user = await db.query.users.findFirst({
-    where: eq(users.id, userId),
-  });
+  const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
 
-  // nullチェックを追加
   if (!user) {
     throw new UserNotFoundError(userId);
   }
@@ -93,54 +75,46 @@ async function getUserName(userId: string): Promise<string> {
 }
 ```
 
-### Step 5: テストが通ることを確認
+### Step 5: Run required verification
 
-```bash
-検証コマンドを実行
-```
+Run all verification commands required by the task.
 
-### Step 6: 関連するテストを追加
+### Step 6: Add nearby regression coverage
 
-類似のバグが他の場所にないか確認し、必要に応じてテストを追加します。
+Check for similar failure patterns and add tests if needed.
 
-## よくあるバグパターンと修正
+## Common Bug Patterns
 
-### Null/Undefined チェック漏れ
+### Missing null or undefined checks
 
 ```typescript
-// Before: nullチェックなし
+// Before
 function getFirstItem<T>(items: T[]): T {
-  return items[0]; // 空配列でundefined
+  return items[0];
 }
 
-// After: 適切なエラーハンドリング
+// After
 function getFirstItem<T>(items: T[]): T {
   if (items.length === 0) {
     throw new Error("Array is empty");
   }
-  return items[0]!;
-}
-
-// または、undefinedを返すことを明示
-function getFirstItem<T>(items: T[]): T | undefined {
   return items[0];
 }
 ```
 
-### 非同期処理のエラー
+### Async error handling mistakes
 
 ```typescript
-// Before: awaitなしでPromiseを返す
+// Before
 async function fetchData() {
   try {
-    return fetch("/api/data"); // awaitがない
+    return fetch("/api/data");
   } catch (error) {
-    // このcatchは実行されない
     console.error(error);
   }
 }
 
-// After: 適切にawait
+// After
 async function fetchData() {
   try {
     return await fetch("/api/data");
@@ -151,69 +125,54 @@ async function fetchData() {
 }
 ```
 
-### 状態の競合
+### Race conditions
 
 ```typescript
-// Before: 競合状態の可能性
+// Before
 let counter = 0;
 
 async function increment() {
   const current = counter;
   await someAsyncOperation();
-  counter = current + 1; // 競合する可能性
-}
-
-// After: アトミックな操作を使用
-import { Mutex } from "async-mutex";
-
-const mutex = new Mutex();
-let counter = 0;
-
-async function increment() {
-  await mutex.runExclusive(async () => {
-    counter += 1;
-    await someAsyncOperation();
-  });
+  counter = current + 1;
 }
 ```
 
-### 境界値のバグ
+Use atomic updates or proper locking primitives where needed.
+
+### Boundary value bugs
 
 ```typescript
-// Before: off-by-oneエラー
+// Before
 function getPage(items: Item[], page: number, pageSize: number) {
   const start = page * pageSize;
-  const end = start + pageSize;
-  return items.slice(start, end); // page=1で最初のページではない
+  return items.slice(start, start + pageSize);
 }
 
-// After: 1-indexedを考慮
+// After
 function getPage(items: Item[], page: number, pageSize: number) {
   if (page < 1) throw new Error("Page must be >= 1");
   const start = (page - 1) * pageSize;
-  const end = start + pageSize;
-  return items.slice(start, end);
+  return items.slice(start, start + pageSize);
 }
 ```
 
-## チェックリスト
+## Checklist
 
-バグ修正完了前に確認：
+Before finishing:
 
-- [ ] バグを再現するテストを書いた
-- [ ] そのテストが修正前に失敗することを確認した
-- [ ] 根本原因を特定した
-- [ ] 最小限の変更で修正した
-- [ ] 修正後にテストが通る
-- [ ] 既存のすべてのテストも通る
-- [ ] 型チェックが通る（`pnpm typecheck`）
-- [ ] Lintが通る（`pnpm lint`）
-- [ ] 類似のバグがないか確認した
+- [ ] Added a test that reproduces the bug
+- [ ] Confirmed the test fails before the fix
+- [ ] Identified the root cause
+- [ ] Applied a minimal, focused fix
+- [ ] Confirmed required tests pass
+- [ ] Confirmed typecheck and lint pass
+- [ ] Reviewed nearby code for similar issues
 
-## やってはいけないこと
+## Anti-Patterns
 
-- エラーを握りつぶす
-- 再現テストなしで修正する
-- 根本原因を調べずに対症療法的な修正をする
-- 修正と同時に無関係なリファクタリングをする
-- テストをスキップする
+- Swallowing errors
+- Fixing without a reproduction test
+- Symptom-only patching without root cause analysis
+- Mixing feature work with bug fix work
+- Skipping verification
