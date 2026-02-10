@@ -101,6 +101,25 @@ Behavior:
   - builds launch recommendation from requirement content + issue/PR/task backlog
   - may skip planner intentionally when issue/pr backlog exists
 
+Issue role assignment (required for automatic issue -> task import):
+
+- open issue must explicitly declare agent role
+- accepted label format:
+  - `role:worker`
+  - `role:tester`
+  - `role:docser`
+- accepted body format:
+  - `Agent: worker` (or `tester`, `docser`)
+  - `Role: worker` (or `tester`, `docser`)
+  - markdown section:
+    - `## Agent`
+    - `- worker` (or `tester`, `docser`)
+
+If explicit role is missing:
+
+- preflight does not auto-create a task from that issue
+- warning is reported in preflight summary
+
 ### 5.2 Process Control
 
 - `GET /system/processes`
