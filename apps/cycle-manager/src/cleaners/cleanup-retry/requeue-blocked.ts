@@ -10,6 +10,48 @@ const DEFAULT_QUOTA_BASE_DELAY_MS = 30_000;
 const DEFAULT_QUOTA_MAX_DELAY_MS = 30 * 60 * 1000;
 const DEFAULT_QUOTA_BACKOFF_FACTOR = 2;
 const DEFAULT_QUOTA_JITTER_RATIO = 0.2;
+const VERIFY_REWORK_MARKER_PREFIX = "[verify-rework-json]";
+
+type VerifyReworkMeta = {
+  failedCommand?: string;
+  failedCommandSource?: string;
+  stderrSummary?: string;
+};
+
+export function extractVerifyReworkMeta(notes: string | undefined): VerifyReworkMeta | null {
+  const lines = (notes ?? "").split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith(VERIFY_REWORK_MARKER_PREFIX)) {
+      continue;
+    }
+    const payload = trimmed.slice(VERIFY_REWORK_MARKER_PREFIX.length).trim();
+    if (!payload) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(decodeURIComponent(payload)) as VerifyReworkMeta;
+      if (!parsed || typeof parsed !== "object") {
+        continue;
+      }
+      return parsed;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+export function stripVerifyReworkMarkers(notes: string | undefined): string | undefined {
+  if (!notes) {
+    return notes;
+  }
+  const filtered = notes
+    .split("\n")
+    .filter((line) => !line.trim().startsWith(VERIFY_REWORK_MARKER_PREFIX));
+  const joined = filtered.join("\n").trim();
+  return joined.length > 0 ? joined : undefined;
+}
 
 function parseEnvInt(name: string, fallback: number): number {
   const raw = Number.parseInt(process.env[name] ?? "", 10);
@@ -172,17 +214,41 @@ export async function requeueBlockedTasksWithCooldown(
 
       // needs_rework は親タスクをfailed化し、分割した再作業タスクを自動生成する
       const context = normalizeContext(task.context);
-      const notes = context.notes
-        ? `${context.notes}\n[auto-rework] parentTask=${task.id}`
-        : `[auto-rework] parentTask=${task.id}`;
+      const verifyReworkMeta = extractVerifyReworkMeta(context.notes);
+      const baseNotes = stripVerifyReworkMarkers(context.notes);
+      const verifySummaryLines =
+        verifyReworkMeta && verifyReworkMeta.failedCommand
+          ? [
+              "[verify-rework] previous verification failure",
+              `- command: ${verifyReworkMeta.failedCommand}`,
+              `- source: ${verifyReworkMeta.failedCommandSource ?? "unknown"}`,
+              `- stderr: ${verifyReworkMeta.stderrSummary ?? "stderr unavailable"}`,
+            ]
+          : [];
+      const notes = [baseNotes, verifySummaryLines.join("\n"), `[auto-rework] parentTask=${task.id}`]
+        .filter((part) => Boolean(part && part.length > 0))
+        .join("\n");
+      const baseSpecs = context.specs?.trim();
+      const verifySpecs =
+        verifyReworkMeta && verifyReworkMeta.failedCommand
+          ? `Focus on recovering failed verification command:\n- ${verifyReworkMeta.failedCommand}\n- source: ${verifyReworkMeta.failedCommandSource ?? "unknown"}`
+          : "";
+      const mergedSpecs = [baseSpecs, verifySpecs]
+        .filter((part) => Boolean(part && part.length > 0))
+        .join("\n\n");
+      const isReworkTitle =
+        task.title.startsWith("[Rework]") || task.title.startsWith("[Rework-Verify]");
+      const titlePrefix = verifyReworkMeta ? "[Rework-Verify]" : "[Rework]";
+      const reworkTitle = isReworkTitle ? task.title : `${titlePrefix} ${task.title}`;
 
       const [reworkTask] = await db
         .insert(tasks)
         .values({
-          title: task.title.startsWith("[Rework]") ? task.title : `[Rework] ${task.title}`,
+          title: reworkTitle,
           goal: task.goal,
           context: {
             ...context,
+            specs: mergedSpecs.length > 0 ? mergedSpecs : context.specs,
             notes,
           },
           allowedPaths: task.allowedPaths ?? [],

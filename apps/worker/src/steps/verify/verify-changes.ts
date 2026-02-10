@@ -1,5 +1,5 @@
-import { readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { access, readdir, rm } from "node:fs/promises";
+import { dirname, join, relative, resolve } from "node:path";
 import {
   getChangedFiles,
   getChangeStats,
@@ -29,7 +29,12 @@ import {
 import { checkPolicyViolations } from "./policy";
 import { resolveAutoVerificationCommands } from "./repo-scripts";
 import { ENV_EXAMPLE_PATHS } from "./constants";
-import type { CommandResult, VerifyOptions, VerifyResult } from "./types";
+import type {
+  CommandResult,
+  VerifyOptions,
+  VerifyResult,
+  VerificationCommandSource,
+} from "./types";
 
 async function cleanupOpenCodeTempDirs(repoPath: string): Promise<void> {
   try {
@@ -53,6 +58,159 @@ function isDocumentationFile(path: string): boolean {
     path.startsWith("docs/") ||
     path.startsWith("ops/runbooks/")
   );
+}
+
+type VerificationCommand = {
+  command: string;
+  source: VerificationCommandSource;
+};
+
+const WORKSPACE_ROOT_META_FILES = new Set([
+  "package.json",
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "bun.lockb",
+  "pnpm-workspace.yaml",
+  "turbo.json",
+  "lerna.json",
+  "nx.json",
+]);
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isInsideRepo(repoPath: string, candidatePath: string): boolean {
+  const normalizedRoot = resolve(repoPath);
+  const normalizedCandidate = resolve(candidatePath);
+  return (
+    normalizedCandidate === normalizedRoot ||
+    normalizedCandidate.startsWith(`${normalizedRoot}/`) ||
+    normalizedCandidate.startsWith(`${normalizedRoot}\\`)
+  );
+}
+
+function isWorkspaceRootMetaFile(file: string): boolean {
+  return WORKSPACE_ROOT_META_FILES.has(normalizePathForMatch(file));
+}
+
+async function findNearestPackageDir(repoPath: string, changedFile: string): Promise<string | null> {
+  const normalizedFile = normalizePathForMatch(changedFile);
+  let current = resolve(repoPath, normalizedFile);
+  if (!isInsideRepo(repoPath, current)) {
+    return null;
+  }
+  current = dirname(current);
+
+  while (isInsideRepo(repoPath, current)) {
+    if (await pathExists(join(current, "package.json"))) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  return null;
+}
+
+async function resolveSingleChangedPackageDir(
+  repoPath: string,
+  files: string[],
+): Promise<string | null> {
+  const packageDirs = new Set<string>();
+
+  for (const file of files) {
+    if (isWorkspaceRootMetaFile(file)) {
+      continue;
+    }
+    const packageDir = await findNearestPackageDir(repoPath, file);
+    if (!packageDir) {
+      continue;
+    }
+    packageDirs.add(packageDir);
+    if (packageDirs.size > 1) {
+      return null;
+    }
+  }
+
+  const [singleDir] = Array.from(packageDirs);
+  if (!singleDir || resolve(singleDir) === resolve(repoPath)) {
+    return null;
+  }
+
+  return singleDir;
+}
+
+function summarizeCommandError(stderr: string, maxChars = 300): string {
+  const normalized = stderr.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "stderr unavailable";
+  }
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxChars)}...`;
+}
+
+function formatVerificationFailureError(params: {
+  command?: string;
+  source?: VerificationCommandSource;
+  stderr?: string;
+}): string {
+  if (!params.command) {
+    return "Verification commands failed";
+  }
+  const sourceLabel = params.source ? ` [${params.source}]` : "";
+  const stderrSummary = summarizeCommandError(params.stderr ?? "");
+  return `Verification failed at ${params.command}${sourceLabel}: ${stderrSummary}`;
+}
+
+function resolveCommandOutput(stderr: string, stdout: string): string {
+  return stderr.trim().length > 0 ? stderr : stdout;
+}
+
+function isMissingScriptFailure(output: string): boolean {
+  const normalized = output.toLowerCase();
+  return (
+    normalized.includes("err_pnpm_no_script") ||
+    normalized.includes("missing script") ||
+    (normalized.includes("command") &&
+      normalized.includes("not found") &&
+      normalized.includes("script"))
+  );
+}
+
+export function shouldSkipExplicitCommandFailure(params: {
+  source: VerificationCommandSource;
+  command: string;
+  output: string;
+  hasRemainingCommands: boolean;
+  isDocOnlyChange: boolean;
+}): boolean {
+  if (params.source !== "explicit") {
+    return false;
+  }
+  const skipEnabled =
+    (process.env.WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT ?? "true").toLowerCase() !== "false";
+  if (!skipEnabled) {
+    return false;
+  }
+  if (!isMissingScriptFailure(params.output)) {
+    return false;
+  }
+  if (params.hasRemainingCommands) {
+    return true;
+  }
+  return params.isDocOnlyChange;
 }
 
 // 変更を検証
@@ -142,6 +300,8 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
     console.log(`Filtered generated files: ${filteredGeneratedCount}`);
   }
   console.log(`Relevant files: ${relevantFiles.length}`);
+  const isDocOnlyChange =
+    relevantFiles.length > 0 && relevantFiles.every((file) => isDocumentationFile(file));
 
   if (changedFiles.length === 0 && !allowNoChanges) {
     return {
@@ -198,6 +358,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
   const buildLightCheckResult = (message: string, success = true): CommandResult => {
     return {
       command: "llm:light-check",
+      source: "light-check",
       success,
       outcome: success ? "passed" : "failed",
       stdout: message,
@@ -300,43 +461,81 @@ ${clippedDiff || "(diff unavailable)"}
   // 検証コマンドを実行
   const commandResults: CommandResult[] = [];
   let allPassed = true;
-  let ranCommand = false;
+  let ranEffectiveCommand = false;
+  let failedCommand: string | undefined;
+  let failedCommandSource: VerificationCommandSource | undefined;
+  let failedCommandStderr: string | undefined;
   const autoCommands = await resolveAutoVerificationCommands({
     repoPath,
     changedFiles: relevantFiles,
     explicitCommands: commands,
     deniedCommands: policy.deniedCommands ?? [],
   });
+  const singleChangedPackageDir = await resolveSingleChangedPackageDir(repoPath, relevantFiles);
+  const singleChangedPackageLabel = singleChangedPackageDir
+    ? normalizePathForMatch(relative(repoPath, singleChangedPackageDir)) || "."
+    : undefined;
+  if (singleChangedPackageLabel) {
+    console.log(`[Verify] Auto command package scope candidate: ${singleChangedPackageLabel}`);
+  }
   if (autoCommands.length > 0) {
     console.log(`[Verify] Auto verification commands added: ${autoCommands.join(", ")}`);
   }
-  const verificationCommands = [...commands, ...autoCommands];
+  const verificationCommands: VerificationCommand[] = [
+    ...commands.map((command) => ({ command, source: "explicit" as const })),
+    ...autoCommands.map((command) => ({ command, source: "auto" as const })),
+  ];
 
   if (verificationCommands.length === 0) {
-    commandResults.push(await runLightCheck());
-    allPassed = commandResults[0]?.success ?? true;
+    const lightCheckResult = await runLightCheck();
+    commandResults.push(lightCheckResult);
+    allPassed = lightCheckResult.success;
+    if (!allPassed) {
+      failedCommand = lightCheckResult.command;
+      failedCommandSource = lightCheckResult.source ?? "light-check";
+      failedCommandStderr = lightCheckResult.stderr;
+    }
     return {
       success: allPassed,
       commandResults,
       policyViolations: [],
       changedFiles: relevantFiles,
       stats,
+      failedCommand,
+      failedCommandSource,
+      failedCommandStderr,
+      error: allPassed
+        ? undefined
+        : formatVerificationFailureError({
+            command: failedCommand,
+            source: failedCommandSource,
+            stderr: failedCommandStderr,
+          }),
     };
   }
 
-  for (const command of verificationCommands) {
+  for (let index = 0; index < verificationCommands.length; index += 1) {
+    const verificationCommand = verificationCommands[index];
+    if (!verificationCommand) {
+      continue;
+    }
+    const { command, source } = verificationCommand;
     const deniedMatch = matchDeniedCommand(command, policy.deniedCommands ?? []);
     if (deniedMatch) {
       const message = `Denied command detected: ${command} (matched: ${deniedMatch})`;
       console.error(`  ✗ ${message}`);
       commandResults.push({
         command,
+        source,
         success: false,
         outcome: "failed",
         stdout: "",
         stderr: message,
         durationMs: 0,
       });
+      failedCommand = command;
+      failedCommandSource = source;
+      failedCommandStderr = message;
       allPassed = false;
       break;
     }
@@ -347,44 +546,100 @@ ${clippedDiff || "(diff unavailable)"}
     }
 
     console.log(`Running: ${normalizedCommand}`);
-    ranCommand = true;
     const result = await runCommand(normalizedCommand, repoPath);
-    commandResults.push(result);
+    commandResults.push({
+      ...result,
+      source,
+    });
 
     if (result.success && result.outcome === "passed") {
+      ranEffectiveCommand = true;
       console.log(`  ✓ Passed (${Math.round(result.durationMs / 1000)}s)`);
     } else {
+      let output = resolveCommandOutput(result.stderr, result.stdout);
+      if (source === "auto" && singleChangedPackageDir && singleChangedPackageLabel) {
+        console.warn(
+          `[Verify] Retrying failed auto command within package scope (${singleChangedPackageLabel}): ${normalizedCommand}`,
+        );
+        const scopedResult = await runCommand(normalizedCommand, singleChangedPackageDir);
+        if (scopedResult.success && scopedResult.outcome === "passed") {
+          ranEffectiveCommand = true;
+          console.log(`  ✓ Passed in package scope (${Math.round(scopedResult.durationMs / 1000)}s)`);
+          commandResults[commandResults.length - 1] = {
+            ...scopedResult,
+            source,
+          };
+          continue;
+        }
+        const scopedOutput = resolveCommandOutput(scopedResult.stderr, scopedResult.stdout);
+        output = `${output}\n[package-scope:${singleChangedPackageLabel}] ${scopedOutput}`.trim();
+      }
+
+      const hasRemainingCommands = index < verificationCommands.length - 1;
+      if (
+        shouldSkipExplicitCommandFailure({
+          source,
+          command: normalizedCommand,
+          output,
+          hasRemainingCommands,
+          isDocOnlyChange,
+        })
+      ) {
+        console.warn(
+          `[Verify] Skipping explicit command due to missing script and continuing: ${normalizedCommand}`,
+        );
+        commandResults[commandResults.length - 1] = {
+          ...result,
+          source,
+          success: true,
+          outcome: "skipped",
+          stderr: output,
+        };
+        continue;
+      }
+
       if (result.outcome === "skipped") {
         console.error(`  ✗ Skipped (treated as failure)`);
       } else {
         console.error(`  ✗ Failed`);
       }
-      console.error(`  stderr: ${result.stderr.slice(0, 500)}`);
+      ranEffectiveCommand = true;
+      console.error(`  stderr: ${output.slice(0, 500)}`);
+      failedCommand = normalizedCommand;
+      failedCommandSource = source;
+      failedCommandStderr = output;
       allPassed = false;
       break; // 最初の失敗で停止
     }
   }
 
-  if (allPassed && !ranCommand) {
+  if (allPassed && !ranEffectiveCommand) {
     const allowLightCheckForCodeChanges =
       (process.env.WORKER_ALLOW_LIGHT_CHECK_FOR_CODE_CHANGES ?? "false").toLowerCase() === "true";
-    const isDocOnlyChange =
-      relevantFiles.length > 0 && relevantFiles.every((file) => isDocumentationFile(file));
 
     if (allowLightCheckForCodeChanges || isDocOnlyChange) {
       const lightCheck = await runLightCheck();
       commandResults.push(lightCheck);
       allPassed = lightCheck.success;
+      if (!lightCheck.success) {
+        failedCommand = lightCheck.command;
+        failedCommandSource = lightCheck.source ?? "light-check";
+        failedCommandStderr = lightCheck.stderr;
+      }
     } else {
       const message = "No executable verification commands were run for non-documentation changes.";
       commandResults.push({
         command: "verify:guard",
+        source: "guard",
         success: false,
         outcome: "failed",
         stdout: "",
         stderr: message,
         durationMs: 0,
       });
+      failedCommand = "verify:guard";
+      failedCommandSource = "guard";
+      failedCommandStderr = message;
       allPassed = false;
     }
   }
@@ -395,6 +650,15 @@ ${clippedDiff || "(diff unavailable)"}
     policyViolations: [],
     changedFiles: relevantFiles,
     stats,
-    error: allPassed ? undefined : "Verification commands failed",
+    failedCommand,
+    failedCommandSource,
+    failedCommandStderr,
+    error: allPassed
+      ? undefined
+      : formatVerificationFailureError({
+          command: failedCommand,
+          source: failedCommandSource,
+          stderr: failedCommandStderr,
+        }),
   };
 }

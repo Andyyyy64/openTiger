@@ -12,8 +12,11 @@ export interface VerifyOptions {
   allowNoChanges?: boolean;
 }
 
+export type VerificationCommandSource = "explicit" | "auto" | "light-check" | "guard";
+
 export interface CommandResult {
   command: string;
+  source?: VerificationCommandSource;
   success: boolean;
   outcome: "passed" | "failed" | "skipped";
   stdout: string;
@@ -27,5 +30,8 @@ export interface VerifyResult {
   policyViolations: string[];
   changedFiles: string[];
   stats: { additions: number; deletions: number };
+  failedCommand?: string;
+  failedCommandSource?: VerificationCommandSource;
+  failedCommandStderr?: string;
   error?: string;
 }

@@ -18,9 +18,11 @@ import {
   commitAndPush,
   createTaskPR,
   ensureRemoteBaseBranch,
+  type VerifyResult,
 } from "./steps/index";
 import { checkoutBranch, getCurrentBranch } from "@openTiger/vcs";
 import { generateBranchName } from "./steps/branch";
+import type { VerificationCommandSource } from "./steps/verify/types";
 import {
   buildPrFetchRefspecs,
   resolveBranchBaseRef,
@@ -68,6 +70,123 @@ function isClaudeExecutorValue(value: string | undefined): boolean {
 
 function getRuntimeExecutorDisplayName(): string {
   return isClaudeExecutorValue(process.env.LLM_EXECUTOR) ? "Claude Code" : "OpenCode";
+}
+
+function isExecutionTimeout(stderr: string, exitCode: number): boolean {
+  return (
+    exitCode === -1 &&
+    (stderr.includes("[OpenCode] Timeout exceeded") ||
+      stderr.includes("[ClaudeCode] Timeout exceeded"))
+  );
+}
+
+function parseRecoveryAttempts(name: string, fallback: number): number {
+  const parsed = Number.parseInt(process.env[name] ?? "", 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.max(0, parsed);
+}
+
+function summarizeVerificationFailure(stderr: string | undefined, maxChars = 400): string {
+  const normalized = sanitizeRetryHint(stderr ?? "");
+  if (!normalized) {
+    return "stderr unavailable";
+  }
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxChars)}...`;
+}
+
+function shouldAttemptVerifyRecovery(
+  verifyResult: VerifyResult,
+  allowExplicitRecovery: boolean,
+): boolean {
+  if (verifyResult.success || verifyResult.policyViolations.length > 0) {
+    return false;
+  }
+  const failedCommand = verifyResult.failedCommand?.trim();
+  if (!failedCommand) {
+    return false;
+  }
+  const source = verifyResult.failedCommandSource ?? "explicit";
+  if (source === "auto") {
+    return true;
+  }
+  if (!allowExplicitRecovery) {
+    return false;
+  }
+  return source === "explicit" || source === "light-check" || source === "guard";
+}
+
+function buildVerifyRecoveryHint(params: {
+  verifyResult: VerifyResult;
+  attempt: number;
+  maxAttempts: number;
+}): string {
+  const command = params.verifyResult.failedCommand ?? "(unknown command)";
+  const sourceLabel = params.verifyResult.failedCommandSource
+    ? ` [${params.verifyResult.failedCommandSource}]`
+    : "";
+  const stderrSummary = summarizeVerificationFailure(params.verifyResult.failedCommandStderr);
+  return (
+    `検証失敗を優先して復旧してください（${params.attempt}/${params.maxAttempts}）: ` +
+    `${command}${sourceLabel} が失敗。` +
+    `stderr: ${stderrSummary}. ` +
+    "最小限の修正で失敗コマンドが通る状態にしてください。"
+  );
+}
+
+function encodeVerifyReworkMarker(payload: {
+  failedCommand: string;
+  failedCommandSource?: VerificationCommandSource;
+  stderrSummary: string;
+}): string {
+  const encoded = encodeURIComponent(
+    JSON.stringify({
+      failedCommand: payload.failedCommand,
+      failedCommandSource: payload.failedCommandSource ?? "explicit",
+      stderrSummary: payload.stderrSummary,
+    }),
+  );
+  return `[verify-rework-json]${encoded}`;
+}
+
+function appendContextNotes(existingNotes: string | undefined, lines: string[]): string {
+  const base = existingNotes?.trim();
+  const additions = lines
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .join("\n");
+  if (!base) {
+    return additions;
+  }
+  if (!additions) {
+    return base;
+  }
+  return `${base}\n${additions}`;
+}
+
+async function restoreExpectedBranchContext(
+  repoPath: string,
+  expectedBranch: string,
+  executorDisplayName: string,
+): Promise<void> {
+  const currentBranch = await getCurrentBranch(repoPath);
+  if (currentBranch === expectedBranch) {
+    return;
+  }
+  console.warn(
+    `[Worker] Branch drift detected after ${executorDisplayName} execution: current=${currentBranch ?? "unknown"}, expected=${expectedBranch}`,
+  );
+  const restoreBranchResult = await checkoutBranch(repoPath, expectedBranch);
+  if (!restoreBranchResult.success) {
+    throw new Error(
+      `Failed to restore expected branch ${expectedBranch}: ${restoreBranchResult.stderr}`,
+    );
+  }
+  console.log(`[Worker] Restored branch context to ${expectedBranch}`);
 }
 
 interface FinalizeTaskStateOptions {
@@ -341,10 +460,10 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     });
 
     if (!executeResult.success) {
-      const isTimeout =
-        executeResult.openCodeResult.exitCode === -1 &&
-        (executeResult.openCodeResult.stderr.includes("[OpenCode] Timeout exceeded") ||
-          executeResult.openCodeResult.stderr.includes("[ClaudeCode] Timeout exceeded"));
+      const isTimeout = isExecutionTimeout(
+        executeResult.openCodeResult.stderr,
+        executeResult.openCodeResult.exitCode,
+      );
       if (isTimeout) {
         // タイムアウトでも変更がある可能性があるため検証へ進む
         console.warn(
@@ -356,19 +475,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     }
 
     // 実行中に別ブランチへ移動した場合は、PR対象ブランチへ戻してから後続処理を行う
-    const currentBranch = await getCurrentBranch(repoPath);
-    if (currentBranch !== branchName) {
-      console.warn(
-        `[Worker] Branch drift detected after ${runtimeExecutorDisplayName} execution: current=${currentBranch ?? "unknown"}, expected=${branchName}`,
-      );
-      const restoreBranchResult = await checkoutBranch(repoPath, branchName);
-      if (!restoreBranchResult.success) {
-        throw new Error(
-          `Failed to restore expected branch ${branchName}: ${restoreBranchResult.stderr}`,
-        );
-      }
-      console.log(`[Worker] Restored branch context to ${branchName}`);
-    }
+    await restoreExpectedBranchContext(repoPath, branchName, runtimeExecutorDisplayName);
 
     // Step 4: 期待ファイルの存在を確認する
     console.log("\n[4/7] Checking expected files...");
@@ -483,6 +590,75 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       }
     }
 
+    const verifyRecoveryAttempts = parseRecoveryAttempts("WORKER_VERIFY_RECOVERY_ATTEMPTS", 1);
+    const allowExplicitVerifyRecovery =
+      (process.env.WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT ?? "true").toLowerCase() !== "false";
+
+    if (
+      !verifyResult.success &&
+      shouldAttemptVerifyRecovery(verifyResult, allowExplicitVerifyRecovery)
+    ) {
+      for (let attempt = 1; attempt <= verifyRecoveryAttempts; attempt += 1) {
+        const failedCommand = verifyResult.failedCommand ?? "(unknown command)";
+        const recoveryHint = buildVerifyRecoveryHint({
+          verifyResult,
+          attempt,
+          maxAttempts: verifyRecoveryAttempts,
+        });
+        const recoveryHints = [recoveryHint, ...retryHints];
+        console.warn(
+          `[Worker] Verification failed at ${failedCommand}; recovery attempt ${attempt}/${verifyRecoveryAttempts}`,
+        );
+        executeResult = await executeTask({
+          repoPath,
+          task: taskData,
+          instructionsPath,
+          model,
+          retryHints: recoveryHints,
+          policy: effectivePolicy,
+          verificationRecovery: {
+            attempt,
+            failedCommand,
+            failedCommandSource: verifyResult.failedCommandSource,
+            failedCommandStderr: verifyResult.failedCommandStderr,
+          },
+        });
+
+        if (!executeResult.success) {
+          const isTimeout = isExecutionTimeout(
+            executeResult.openCodeResult.stderr,
+            executeResult.openCodeResult.exitCode,
+          );
+          if (isTimeout) {
+            console.warn(
+              "[Worker] Verification recovery execution timed out; continuing to re-verify changes.",
+            );
+          } else {
+            continue;
+          }
+        }
+
+        await restoreExpectedBranchContext(repoPath, branchName, runtimeExecutorDisplayName);
+        verifyResult = await verifyChanges({
+          repoPath,
+          commands: taskData.commands,
+          allowedPaths: verificationAllowedPaths,
+          policy: effectivePolicy,
+          baseBranch,
+          headBranch: branchName,
+          allowLockfileOutsidePaths: true,
+          allowEnvExampleOutsidePaths: repoMode === "local",
+          allowNoChanges: shouldAllowNoChanges(taskData),
+        });
+        if (verifyResult.success) {
+          break;
+        }
+        if (!shouldAttemptVerifyRecovery(verifyResult, allowExplicitVerifyRecovery)) {
+          break;
+        }
+      }
+    }
+
     if (!verifyResult.success) {
       if (verifyResult.policyViolations.length > 0) {
         const errorMessage =
@@ -505,7 +681,65 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
           error: errorMessage,
         };
       }
-      throw new Error(verifyResult.error);
+      if (!verifyResult.failedCommand?.trim()) {
+        throw new Error(verifyResult.error ?? "Verification commands failed");
+      }
+      const failedCommand = verifyResult.failedCommand ?? "(unknown command)";
+      const failedSource = verifyResult.failedCommandSource ?? "explicit";
+      const stderrSummary = summarizeVerificationFailure(
+        verifyResult.failedCommandStderr ?? verifyResult.error,
+      );
+      const verifyMarker = encodeVerifyReworkMarker({
+        failedCommand,
+        failedCommandSource: failedSource,
+        stderrSummary,
+      });
+      const existingNotes = taskData.context?.notes;
+      const markerPrefix = "[verify-rework-json]";
+      const hasVerifyMarker = existingNotes?.includes(markerPrefix) ?? false;
+      const notesToAppend = hasVerifyMarker
+        ? []
+        : [
+            "[verify-rework] Verification command failure requires focused rework.",
+            `failed_command: ${failedCommand}`,
+            `failed_source: ${failedSource}`,
+            `failed_stderr: ${stderrSummary}`,
+            verifyMarker,
+          ];
+      if (notesToAppend.length > 0) {
+        const updatedContext = {
+          ...(taskData.context ?? {}),
+          notes: appendContextNotes(existingNotes, notesToAppend),
+        };
+        await db
+          .update(tasks)
+          .set({
+            context: updatedContext,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, taskId));
+      }
+
+      const errorMessage =
+        verifyResult.error ??
+        `Verification failed at ${failedCommand} [${failedSource}]: ${stderrSummary}`;
+      console.warn("[Worker] Verification failure detected; deferring to rework flow.");
+      await finalizeTaskState({
+        runId,
+        taskId,
+        agentId,
+        runStatus: "failed",
+        taskStatus: "blocked",
+        blockReason: "needs_rework",
+        costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+        errorMessage,
+      });
+      return {
+        success: false,
+        taskId,
+        runId,
+        error: errorMessage,
+      };
     }
 
     if (verifyResult.changedFiles.length === 0) {

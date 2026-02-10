@@ -8,7 +8,10 @@ const connectionString =
   process.env.DATABASE_URL ?? "postgresql://opentiger:opentiger@localhost:5432/opentiger";
 
 // PostgreSQLクライアント
-const client = postgres(connectionString);
+// max: 接続プールサイズ（各プロセスでこの数まで接続を使用）
+// api/worker/dispatcher/judge/planner/cycle-manager など複数プロセスが同時接続するため
+// プロセスあたりの接続数を抑えて max_connections 枯渇を防ぐ
+const client = postgres(connectionString, { max: 3 });
 
 // Drizzle ORMインスタンス
 export const db = drizzle(client, { schema });

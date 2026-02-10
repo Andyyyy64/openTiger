@@ -1,6 +1,14 @@
 import type { Task, Policy } from "@openTiger/core";
 import { runOpenCode, type OpenCodeResult } from "@openTiger/llm";
 import { buildOpenCodeEnv } from "../env";
+import type { VerificationCommandSource } from "./verify/types";
+
+export interface VerificationRecoveryContext {
+  attempt: number;
+  failedCommand: string;
+  failedCommandSource?: VerificationCommandSource;
+  failedCommandStderr?: string;
+}
 
 export interface ExecuteOptions {
   repoPath: string;
@@ -9,6 +17,7 @@ export interface ExecuteOptions {
   model?: string;
   retryHints?: string[];
   policy?: Policy;
+  verificationRecovery?: VerificationRecoveryContext;
 }
 
 export interface ExecuteResult {
@@ -47,7 +56,22 @@ function isConflictAutoFixTask(task: Task): boolean {
 }
 
 // Generate prompt for OpenCode from task
-function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
+function summarizeRecoveryError(stderr: string | undefined, maxChars = 400): string {
+  const normalized = (stderr ?? "").replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "stderr unavailable";
+  }
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxChars)}...`;
+}
+
+function buildTaskPrompt(
+  task: Task,
+  retryHints: string[] = [],
+  verificationRecovery?: VerificationRecoveryContext,
+): string {
   const lines: string[] = [`# Task: ${task.title}`, "", "## Goal", task.goal, ""];
 
   if (task.context) {
@@ -82,6 +106,24 @@ function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
     for (const hint of retryHints.slice(0, 3)) {
       lines.push(`- ${hint}`);
     }
+    lines.push("");
+  }
+
+  if (verificationRecovery) {
+    const sourceLabel = verificationRecovery.failedCommandSource
+      ? ` (${verificationRecovery.failedCommandSource})`
+      : "";
+    lines.push("## Verification Recovery");
+    lines.push(
+      `The previous verification attempt failed at command${sourceLabel}: ${verificationRecovery.failedCommand}`,
+    );
+    lines.push("Fix only what is necessary to pass this verification failure.");
+    lines.push(
+      `Failure details: ${summarizeRecoveryError(verificationRecovery.failedCommandStderr)}`,
+    );
+    lines.push(
+      "After edits, ensure this command passes locally before finishing your response if feasible.",
+    );
     lines.push("");
   }
 
@@ -207,7 +249,8 @@ function matchDeniedCommand(command: string, deniedCommands: string[]): string |
 
 // Execute OpenCode to complete task
 export async function executeTask(options: ExecuteOptions): Promise<ExecuteResult> {
-  const { repoPath, task, instructionsPath, model, retryHints = [], policy } = options;
+  const { repoPath, task, instructionsPath, model, retryHints = [], policy, verificationRecovery } =
+    options;
 
   for (const command of task.commands) {
     const deniedMatch = matchDeniedCommand(command, policy?.deniedCommands ?? []);
@@ -229,7 +272,7 @@ export async function executeTask(options: ExecuteOptions): Promise<ExecuteResul
     }
   }
 
-  const prompt = buildTaskPrompt(task, retryHints);
+  const prompt = buildTaskPrompt(task, retryHints, verificationRecovery);
   const workerModel =
     model ??
     process.env.WORKER_MODEL ??
