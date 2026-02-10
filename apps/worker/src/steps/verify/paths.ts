@@ -1,6 +1,7 @@
-import { access } from "node:fs/promises";
+import { access, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { minimatch } from "minimatch";
+import { parseCommand } from "./command-parser";
 import { GENERATED_EXTENSIONS, GENERATED_PATHS } from "./constants";
 
 export function normalizePathForMatch(path: string): string {
@@ -50,14 +51,42 @@ export function mergeAllowedPaths(current: string[], extra: string[]): string[] 
 }
 
 export function includesInstallCommand(commands: string[]): boolean {
-  return commands.some((command) => /\bpnpm\b[^\n]*\b(install|add|i)\b/.test(command));
+  const rawTokens = process.env.WORKER_INSTALL_SUBCOMMAND_TOKENS ?? "install,add,i";
+  const installTokens = new Set(
+    rawTokens
+      .split(",")
+      .map((token) => token.trim().toLowerCase())
+      .filter((token) => token.length > 0),
+  );
+
+  return commands.some((command) => {
+    const parsed = parseCommand(command);
+    if (!parsed) {
+      return false;
+    }
+    return parsed.args.some((arg) => installTokens.has(arg.toLowerCase()));
+  });
 }
 
 export function touchesPackageManifest(files: string[]): boolean {
+  const workspaceConfigPattern =
+    /(^|\/)(?:[^/]*workspace[^/]*\.(?:json|ya?ml)|turbo\.json|lerna\.json)$/i;
   return files.some(
-    (file) =>
-      file === "package.json" || file.endsWith("/package.json") || file === "pnpm-workspace.yaml",
+    (file) => file === "package.json" || file.endsWith("/package.json") || workspaceConfigPattern.test(file),
   );
+}
+
+export async function detectLockfilePaths(repoPath: string): Promise<string[]> {
+  try {
+    const entries = await readdir(repoPath, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .filter((name) => /(^|[-._])lock([-._]|$)/i.test(name))
+      .map((name) => normalizePathForMatch(name));
+  } catch {
+    return [];
+  }
 }
 
 async function fileExists(path: string): Promise<boolean> {

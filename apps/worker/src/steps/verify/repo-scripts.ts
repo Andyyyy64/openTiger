@@ -1,6 +1,10 @@
 import { access, readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
-import { normalizePathForMatch } from "./paths";
+import { dirname, join, relative, resolve } from "node:path";
+import { runOpenCode } from "@openTiger/llm";
+import { buildOpenCodeEnv } from "../../env";
+import { matchDeniedCommand } from "./command-normalizer";
+import { parseCommand } from "./command-parser";
+import { matchesPattern, normalizePathForMatch } from "./paths";
 
 export async function loadRootScripts(repoPath: string): Promise<Record<string, string>> {
   try {
@@ -12,18 +16,6 @@ export async function loadRootScripts(repoPath: string): Promise<Record<string, 
   }
 }
 
-export async function hasRootCheckScript(repoPath: string): Promise<boolean> {
-  try {
-    const raw = await readFile(join(repoPath, "package.json"), "utf-8");
-    const parsed = JSON.parse(raw);
-    return typeof parsed?.scripts?.check === "string";
-  } catch {
-    return false;
-  }
-}
-
-type PackageManager = "pnpm" | "npm" | "yarn" | "bun";
-
 type PackageManifest = {
   dir: string;
   name?: string;
@@ -34,11 +26,51 @@ type ResolveAutoVerificationCommandsOptions = {
   repoPath: string;
   changedFiles: string[];
   explicitCommands: string[];
+  deniedCommands?: string[];
 };
 
-const AUTO_VERIFICATION_SCRIPTS = ["check", "typecheck", "build", "lint"] as const;
+type VerificationContractRule = {
+  whenChangedAny?: string[];
+  whenChangedAll?: string[];
+  commands: string[];
+};
+
+type VerificationContract = {
+  commands?: string[];
+  byRole?: Record<string, string[]>;
+  rules?: VerificationContractRule[];
+};
+
+type VerificationPlan = {
+  commands: string[];
+  summary?: string;
+};
+
+const DEFAULT_VERIFY_CONTRACT_PATH = ".opentiger/verify.contract.json";
+const DEFAULT_AUTO_VERIFY_MAX_COMMANDS = 4;
+const DEFAULT_VERIFY_PLAN_TIMEOUT_SECONDS = 120;
+const DEFAULT_VERIFY_PLAN_PARSE_RETRIES = 2;
+const DEFAULT_VERIFY_RECONCILE_TIMEOUT_SECONDS = 180;
+const MAX_PROMPT_PREVIEW_CHARS = 6000;
+const MAX_CONTEXT_PACKAGES = 16;
+const MAX_CONTEXT_SCRIPTS_PER_PACKAGE = 20;
+const MAX_CONTEXT_SCRIPT_BODY_CHARS = 180;
+const ANSI_ESCAPE_SEQUENCE = `${String.fromCharCode(27)}\\[[0-9;]*m`;
+const ANSI_ESCAPE_REGEX = new RegExp(ANSI_ESCAPE_SEQUENCE, "g");
+const CONTROL_CHARS_CLASS = `${String.fromCharCode(0)}-${String.fromCharCode(8)}${String.fromCharCode(11)}${String.fromCharCode(12)}${String.fromCharCode(14)}-${String.fromCharCode(31)}${String.fromCharCode(127)}`;
+const CONTROL_CHARS_REGEX = new RegExp(`[${CONTROL_CHARS_CLASS}]+`, "g");
+
+type AutoVerifyMode = "off" | "fallback" | "contract" | "llm" | "hybrid";
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(raw ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
+function parseNonNegativeInt(raw: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(raw ?? "", 10);
   if (!Number.isFinite(parsed) || parsed < 0) {
     return fallback;
@@ -46,28 +78,21 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   return parsed;
 }
 
-function shouldIncludeAutoScript(script: string): boolean {
-  if (script !== "test") {
-    return true;
+function resolveAutoVerifyMode(raw: string | undefined): AutoVerifyMode {
+  const normalized = (raw ?? "hybrid").trim().toLowerCase();
+  if (normalized === "off" || normalized === "disabled") {
+    return "off";
   }
-  return (process.env.WORKER_AUTO_VERIFY_INCLUDE_TEST ?? "false").toLowerCase() === "true";
-}
-
-function getAutoVerificationScripts(): string[] {
-  const configuredOrder = process.env.WORKER_AUTO_VERIFY_SCRIPT_ORDER;
-  if (!configuredOrder) {
-    return Array.from(AUTO_VERIFICATION_SCRIPTS);
+  if (normalized === "fallback" || normalized === "safety") {
+    return "fallback";
   }
-  const allowed = new Set([...AUTO_VERIFICATION_SCRIPTS, "test"]);
-  const scripts = configuredOrder
-    .split(",")
-    .map((value) => value.trim().toLowerCase())
-    .filter((value) => allowed.has(value))
-    .filter((value) => shouldIncludeAutoScript(value));
-  if (scripts.length > 0) {
-    return scripts;
+  if (normalized === "contract") {
+    return "contract";
   }
-  return Array.from(AUTO_VERIFICATION_SCRIPTS);
+  if (normalized === "llm") {
+    return "llm";
+  }
+  return "hybrid";
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -79,17 +104,21 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-async function detectPackageManager(repoPath: string): Promise<PackageManager> {
-  if (await pathExists(join(repoPath, "pnpm-lock.yaml"))) {
-    return "pnpm";
+function normalizeScriptsForPrompt(
+  scripts: Record<string, string>,
+  maxEntries = MAX_CONTEXT_SCRIPTS_PER_PACKAGE,
+): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  const entries = Object.entries(scripts)
+    .map(([name, command]) => [name, command.trim()] as const)
+    .filter(([, command]) => command.length > 0)
+    .slice(0, maxEntries);
+
+  for (const [name, command] of entries) {
+    normalized[name] = command.slice(0, MAX_CONTEXT_SCRIPT_BODY_CHARS);
   }
-  if (await pathExists(join(repoPath, "yarn.lock"))) {
-    return "yarn";
-  }
-  if (await pathExists(join(repoPath, "bun.lockb"))) {
-    return "bun";
-  }
-  return "npm";
+
+  return normalized;
 }
 
 async function loadPackageManifest(packageJsonPath: string): Promise<PackageManifest | null> {
@@ -128,7 +157,7 @@ async function findNearestPackageManifest(
   if (!isInsideRepo(repoPath, current)) {
     return null;
   }
-  // changedFile は通常ファイルパスなので1段上から探索する
+
   current = dirname(current);
 
   while (isInsideRepo(repoPath, current)) {
@@ -146,119 +175,532 @@ async function findNearestPackageManifest(
   return null;
 }
 
-function buildRootScriptCommand(manager: PackageManager, script: string): string {
-  if (manager === "yarn") {
-    return `yarn ${script}`;
-  }
-  if (manager === "pnpm") {
-    return `pnpm run ${script}`;
-  }
-  if (manager === "bun") {
-    return `bun run ${script}`;
-  }
-  return `npm run ${script}`;
-}
-
-function buildFilteredScriptCommand(
-  manager: PackageManager,
-  packageName: string,
-  script: string,
-): string | null {
-  if (manager === "pnpm") {
-    return `pnpm --filter ${packageName} run ${script}`;
-  }
-  return null;
-}
-
-function hasCompileLikeScript(commands: string[]): boolean {
-  return commands.some((command) => {
-    const trimmed = command.trim().toLowerCase();
-    return (
-      /\b(run\s+)?(check|build|typecheck)\b/.test(trimmed) ||
-      /\btsc\b/.test(trimmed) ||
-      /\bnext\s+build\b/.test(trimmed) ||
-      /\bvite\s+build\b/.test(trimmed)
-    );
-  });
-}
-
-export async function resolveAutoVerificationCommands(
-  options: ResolveAutoVerificationCommandsOptions,
-): Promise<string[]> {
-  const mode = (process.env.WORKER_AUTO_VERIFY_MODE ?? "safety").toLowerCase();
-  if (mode === "off" || mode === "disabled") {
-    return [];
-  }
-
-  const maxCommands = parsePositiveInt(process.env.WORKER_AUTO_VERIFY_MAX_COMMANDS, 4);
-  if (maxCommands === 0) {
-    return [];
-  }
-
-  if (mode === "fallback" && options.explicitCommands.length > 0) {
-    return [];
-  }
-  if (mode === "safety" && hasCompileLikeScript(options.explicitCommands)) {
-    return [];
-  }
-
-  const manager = await detectPackageManager(options.repoPath);
-  const scriptOrder = getAutoVerificationScripts();
-  const existing = new Set(options.explicitCommands.map((command) => command.trim()));
-  const autoCommands: string[] = [];
-
-  const pushAuto = (command: string | null): void => {
-    if (!command) {
-      return;
-    }
-    const trimmed = command.trim();
-    if (!trimmed || existing.has(trimmed) || autoCommands.includes(trimmed)) {
-      return;
-    }
-    autoCommands.push(trimmed);
-  };
-
-  const rootScripts = await loadRootScripts(options.repoPath);
-  if (typeof rootScripts.check === "string" && scriptOrder.includes("check")) {
-    pushAuto(buildRootScriptCommand(manager, "check"));
-  } else {
-    for (const script of scriptOrder) {
-      if (script === "check") {
-        continue;
-      }
-      if (typeof rootScripts[script] === "string") {
-        pushAuto(buildRootScriptCommand(manager, script));
-      }
-    }
-  }
-
+async function collectChangedPackageManifests(
+  repoPath: string,
+  changedFiles: string[],
+): Promise<PackageManifest[]> {
   const packageManifestMap = new Map<string, PackageManifest>();
-  for (const changedFile of options.changedFiles) {
-    const manifest = await findNearestPackageManifest(options.repoPath, changedFile);
+
+  for (const changedFile of changedFiles) {
+    const manifest = await findNearestPackageManifest(repoPath, changedFile);
     if (!manifest) {
       continue;
     }
     packageManifestMap.set(manifest.dir, manifest);
   }
 
-  for (const manifest of packageManifestMap.values()) {
-    if (manifest.dir === resolve(options.repoPath)) {
-      continue;
-    }
-    if (!manifest.name) {
-      continue;
-    }
+  return Array.from(packageManifestMap.values()).slice(0, MAX_CONTEXT_PACKAGES);
+}
 
-    for (const script of scriptOrder) {
-      if (script === "check") {
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isVerificationContract(value: unknown): value is VerificationContract {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const hasCommands = value.commands === undefined || Array.isArray(value.commands);
+  const hasByRole = value.byRole === undefined || isRecord(value.byRole);
+  const hasRules = value.rules === undefined || Array.isArray(value.rules);
+  return hasCommands && hasByRole && hasRules;
+}
+
+async function loadVerificationContract(repoPath: string): Promise<VerificationContract | null> {
+  const relativePath =
+    process.env.WORKER_VERIFY_CONTRACT_PATH?.trim() || DEFAULT_VERIFY_CONTRACT_PATH;
+  const contractPath = join(repoPath, relativePath);
+
+  if (!(await pathExists(contractPath))) {
+    return null;
+  }
+
+  try {
+    const raw = await readFile(contractPath, "utf-8");
+    const parsed = JSON.parse(raw) as unknown;
+    return isVerificationContract(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function roleFromEnvironment(): string {
+  const role = process.env.AGENT_ROLE?.trim().toLowerCase();
+  return role || "worker";
+}
+
+function ruleMatchesChangedFiles(rule: VerificationContractRule, changedFiles: string[]): boolean {
+  const whenChangedAny = toStringArray(rule.whenChangedAny);
+  const whenChangedAll = toStringArray(rule.whenChangedAll);
+
+  const anyMatched =
+    whenChangedAny.length === 0 ||
+    changedFiles.some((file) => matchesPattern(file, whenChangedAny));
+
+  const allMatched = whenChangedAll.every((pattern) =>
+    changedFiles.some((file) => matchesPattern(file, [pattern])),
+  );
+
+  return anyMatched && allMatched;
+}
+
+function resolveContractCommands(
+  contract: VerificationContract,
+  changedFiles: string[],
+  role: string,
+): string[] {
+  const commands: string[] = [];
+
+  commands.push(...toStringArray(contract.commands));
+
+  if (isRecord(contract.byRole)) {
+    commands.push(...toStringArray(contract.byRole[role]));
+  }
+
+  if (Array.isArray(contract.rules)) {
+    for (const rawRule of contract.rules) {
+      if (!isRecord(rawRule)) {
         continue;
       }
-      if (typeof manifest.scripts[script] !== "string") {
+      const rule: VerificationContractRule = {
+        whenChangedAny: toStringArray(rawRule.whenChangedAny),
+        whenChangedAll: toStringArray(rawRule.whenChangedAll),
+        commands: toStringArray(rawRule.commands),
+      };
+      if (rule.commands.length === 0) {
         continue;
       }
-      pushAuto(buildFilteredScriptCommand(manager, manifest.name, script));
+      if (!ruleMatchesChangedFiles(rule, changedFiles)) {
+        continue;
+      }
+      commands.push(...rule.commands);
     }
   }
 
-  return autoCommands.slice(0, maxCommands);
+  return commands;
+}
+
+function stripControlChars(text: string): string {
+  return text.replace(ANSI_ESCAPE_REGEX, "").replace(CONTROL_CHARS_REGEX, "");
+}
+
+function extractCodeBlockCandidates(text: string): string[] {
+  const candidates: string[] = [];
+  const pattern = /```(?:json)?\s*([\s\S]*?)```/gi;
+  for (const match of text.matchAll(pattern)) {
+    const value = match[1]?.trim();
+    if (value) {
+      candidates.push(value);
+    }
+  }
+  return candidates;
+}
+
+function extractBalancedObjectCandidates(text: string): string[] {
+  const candidates: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let inString = false;
+  let escaping = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (!ch) {
+      continue;
+    }
+
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaping = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === "{") {
+      if (depth === 0) {
+        start = i;
+      }
+      depth += 1;
+      continue;
+    }
+
+    if (ch === "}" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        const value = text.slice(start, i + 1).trim();
+        if (value) {
+          candidates.push(value);
+        }
+        start = -1;
+      }
+    }
+  }
+
+  return candidates;
+}
+
+function collectJsonCandidates(text: string): string[] {
+  const normalized = stripControlChars(text);
+  const ordered = [
+    ...extractCodeBlockCandidates(normalized),
+    ...extractBalancedObjectCandidates(normalized),
+    normalized.trim(),
+  ];
+
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of ordered) {
+    const value = candidate.trim();
+    if (!value || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    unique.push(value);
+  }
+
+  return unique;
+}
+
+function isVerificationPlan(value: unknown): value is VerificationPlan {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return Array.isArray(value.commands);
+}
+
+function extractVerificationPlan(text: string): VerificationPlan {
+  const candidates = collectJsonCandidates(text);
+  const parseErrors: string[] = [];
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (!isVerificationPlan(parsed)) {
+        continue;
+      }
+      const commands = toStringArray(parsed.commands);
+      const summary = typeof parsed.summary === "string" ? parsed.summary : undefined;
+      return { commands, summary };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      parseErrors.push(message);
+    }
+  }
+
+  const hint = parseErrors.length > 0 ? ` (parse errors: ${parseErrors[0]})` : "";
+  throw new Error(`No valid verification plan JSON found${hint}`);
+}
+
+function clipOutput(text: string): string {
+  return stripControlChars(text).slice(0, MAX_PROMPT_PREVIEW_CHARS);
+}
+
+function buildRegenerationPrompt(basePrompt: string, previousOutput: string): string {
+  return `${basePrompt}
+
+## Regeneration Instruction
+Your previous response was not parseable JSON.
+Regenerate and output JSON only.
+
+Previous response:
+\`\`\`
+${clipOutput(previousOutput)}
+\`\`\``;
+}
+
+function buildReconcilePrompt(basePrompt: string, outputs: string[]): string {
+  const candidates = outputs
+    .slice(0, 3)
+    .map(
+      (output, index) => `Candidate ${index + 1}:
+\`\`\`
+${clipOutput(output)}
+\`\`\``,
+    )
+    .join("\n\n");
+
+  return `${basePrompt}
+
+## Reconciliation Instruction
+Multiple attempts failed JSON parsing.
+Reconcile the candidates and output exactly one valid JSON object.
+Do not add markdown fences.
+
+${candidates}`;
+}
+
+function dedupeCommands(commands: string[]): string[] {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const command of commands) {
+    const trimmed = command.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    normalized.push(trimmed);
+  }
+
+  return normalized;
+}
+
+function sanitizeCommands(params: {
+  commands: string[];
+  deniedCommands: string[];
+  explicitCommands: string[];
+  maxCommands: number;
+}): string[] {
+  const explicitSet = new Set(params.explicitCommands.map((command) => command.trim()));
+  const accepted: string[] = [];
+
+  for (const command of dedupeCommands(params.commands)) {
+    if (explicitSet.has(command)) {
+      continue;
+    }
+    if (!parseCommand(command)) {
+      continue;
+    }
+    if (matchDeniedCommand(command, params.deniedCommands)) {
+      continue;
+    }
+    accepted.push(command);
+    if (accepted.length >= params.maxCommands) {
+      break;
+    }
+  }
+
+  return accepted;
+}
+
+function buildPlannerPrompt(params: {
+  changedFiles: string[];
+  explicitCommands: string[];
+  rootScripts: Record<string, string>;
+  changedPackages: Array<{
+    packageName: string;
+    packagePath: string;
+    scripts: Record<string, string>;
+  }>;
+  deniedCommands: string[];
+  maxCommands: number;
+}): string {
+  const payload = {
+    changedFiles: params.changedFiles,
+    explicitCommands: params.explicitCommands,
+    deniedCommandPatterns: params.deniedCommands,
+    rootScripts: normalizeScriptsForPrompt(params.rootScripts),
+    changedPackages: params.changedPackages,
+  };
+
+  return [
+    "You are a verification command planner for a software repository.",
+    "Return one JSON object with this schema:",
+    '{"commands": ["string"], "summary": "string"}',
+    "Rules:",
+    "- Output JSON only.",
+    "- commands must be non-interactive and deterministic.",
+    "- Do not use shell control operators.",
+    "- Prefer repository-defined scripts from the provided context.",
+    "- Provide only supplemental commands (explicitCommands already exist).",
+    `- Maximum commands: ${params.maxCommands}`,
+    "- If no additional commands are needed, return commands as an empty array.",
+    "Repository context:",
+    "```json",
+    JSON.stringify(payload, null, 2),
+    "```",
+  ].join("\n");
+}
+
+async function generateCommandsWithLlm(params: {
+  repoPath: string;
+  changedFiles: string[];
+  explicitCommands: string[];
+  deniedCommands: string[];
+  maxCommands: number;
+}): Promise<string[]> {
+  const rootScripts = await loadRootScripts(params.repoPath);
+  const changedManifests = await collectChangedPackageManifests(params.repoPath, params.changedFiles);
+  const changedPackages = changedManifests.map((manifest) => ({
+    packageName: manifest.name ?? "(unnamed)",
+    packagePath: normalizePathForMatch(relative(params.repoPath, manifest.dir)) || ".",
+    scripts: normalizeScriptsForPrompt(manifest.scripts),
+  }));
+
+  const basePrompt = buildPlannerPrompt({
+    changedFiles: params.changedFiles,
+    explicitCommands: params.explicitCommands,
+    rootScripts,
+    changedPackages,
+    deniedCommands: params.deniedCommands,
+    maxCommands: params.maxCommands,
+  });
+
+  const retries = parseNonNegativeInt(
+    process.env.WORKER_VERIFY_PLAN_PARSE_RETRIES,
+    DEFAULT_VERIFY_PLAN_PARSE_RETRIES,
+  );
+  const timeoutSeconds = parsePositiveInt(
+    process.env.WORKER_VERIFY_PLAN_TIMEOUT_SECONDS,
+    DEFAULT_VERIFY_PLAN_TIMEOUT_SECONDS,
+  );
+  const reconcileTimeoutSeconds = parsePositiveInt(
+    process.env.WORKER_VERIFY_RECONCILE_TIMEOUT_SECONDS,
+    DEFAULT_VERIFY_RECONCILE_TIMEOUT_SECONDS,
+  );
+  const model =
+    process.env.WORKER_VERIFY_PLAN_MODEL?.trim() ||
+    process.env.WORKER_MODEL?.trim() ||
+    process.env.OPENCODE_MODEL?.trim() ||
+    undefined;
+
+  const env = await buildOpenCodeEnv(params.repoPath);
+  const outputs: string[] = [];
+  let prompt = basePrompt;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const result = await runOpenCode({
+      workdir: params.repoPath,
+      task: prompt,
+      model,
+      timeoutSeconds,
+      env,
+      inheritEnv: false,
+    });
+
+    if (!result.success) {
+      throw new Error(`verify-plan generation failed: ${result.stderr}`);
+    }
+
+    outputs.push(result.stdout);
+
+    try {
+      const plan = extractVerificationPlan(result.stdout);
+      return sanitizeCommands({
+        commands: plan.commands,
+        deniedCommands: params.deniedCommands,
+        explicitCommands: params.explicitCommands,
+        maxCommands: params.maxCommands,
+      });
+    } catch {
+      if (attempt < retries) {
+        prompt = buildRegenerationPrompt(basePrompt, result.stdout);
+      }
+    }
+  }
+
+  if (outputs.length >= 2) {
+    const reconcile = await runOpenCode({
+      workdir: params.repoPath,
+      task: buildReconcilePrompt(basePrompt, outputs),
+      model,
+      timeoutSeconds: reconcileTimeoutSeconds,
+      env,
+      inheritEnv: false,
+    });
+
+    if (reconcile.success) {
+      const plan = extractVerificationPlan(reconcile.stdout);
+      return sanitizeCommands({
+        commands: plan.commands,
+        deniedCommands: params.deniedCommands,
+        explicitCommands: params.explicitCommands,
+        maxCommands: params.maxCommands,
+      });
+    }
+  }
+
+  throw new Error("verify-plan generation failed: could not parse JSON response");
+}
+
+export async function resolveAutoVerificationCommands(
+  options: ResolveAutoVerificationCommandsOptions,
+): Promise<string[]> {
+  const mode = resolveAutoVerifyMode(process.env.WORKER_AUTO_VERIFY_MODE);
+  if (mode === "off") {
+    return [];
+  }
+
+  const maxCommands = parsePositiveInt(
+    process.env.WORKER_AUTO_VERIFY_MAX_COMMANDS,
+    DEFAULT_AUTO_VERIFY_MAX_COMMANDS,
+  );
+  const deniedCommands = options.deniedCommands ?? [];
+  const role = roleFromEnvironment();
+
+  const contract = await loadVerificationContract(options.repoPath);
+  const contractCommands = contract
+    ? sanitizeCommands({
+        commands: resolveContractCommands(contract, options.changedFiles, role),
+        deniedCommands,
+        explicitCommands: options.explicitCommands,
+        maxCommands,
+      })
+    : [];
+
+  if (mode === "contract") {
+    return contractCommands;
+  }
+
+  if (mode === "fallback" && options.explicitCommands.length > 0 && contractCommands.length > 0) {
+    return contractCommands.slice(0, maxCommands);
+  }
+
+  if (mode === "fallback" && options.explicitCommands.length > 0) {
+    return [];
+  }
+
+  if (mode === "llm") {
+    try {
+      return await generateCommandsWithLlm({
+        repoPath: options.repoPath,
+        changedFiles: options.changedFiles,
+        explicitCommands: options.explicitCommands,
+        deniedCommands,
+        maxCommands,
+      });
+    } catch (error) {
+      console.warn(
+        `[Verify] LLM verification command planning failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return [];
+    }
+  }
+
+  try {
+    const llmCommands = await generateCommandsWithLlm({
+      repoPath: options.repoPath,
+      changedFiles: options.changedFiles,
+      explicitCommands: options.explicitCommands,
+      deniedCommands,
+      maxCommands,
+    });
+
+    return dedupeCommands([...contractCommands, ...llmCommands]).slice(0, maxCommands);
+  } catch (error) {
+    console.warn(
+      `[Verify] LLM verification command planning failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return contractCommands.slice(0, maxCommands);
+  }
 }

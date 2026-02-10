@@ -76,10 +76,8 @@ function buildPortOverrideCommand(command: string, port: number): string | null 
   if (/\s--port\b/.test(command)) {
     return null;
   }
-  if (/\b(pnpm|npm|yarn|bun)\b[^\n]*\brun\b/.test(command)) {
-    return `${command} -- --port ${port}`;
-  }
-  if (/^(?:pnpm|npm|yarn|bun)\s+dev\b/.test(command)) {
+  const parsed = parseCommand(command);
+  if (parsed?.args.includes("run")) {
     return `${command} -- --port ${port}`;
   }
   return `${command} --port ${port}`;

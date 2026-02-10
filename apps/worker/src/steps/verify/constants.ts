@@ -29,19 +29,9 @@ export const GENERATED_PATHS = [
   "apps/judge/repro/**",
 ];
 
-export const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
 export const ENV_EXAMPLE_PATHS = ["**/.env.example"];
 export const GENERATED_EXTENSIONS = [".js", ".d.ts", ".d.ts.map"];
 
 export const DEV_COMMAND_WARMUP_MS = 8000;
 export const DEV_PORT_IN_USE_PATTERNS = [/Port\s+\d+\s+is already in use/i, /EADDRINUSE/i];
 export const SHELL_CONTROL_PATTERN = /&&|\|\||[|;&<>`]/;
-
-export const VERIFICATION_SCRIPT_CANDIDATES = [
-  "lint",
-  "build",
-  "test",
-  "typecheck",
-  "check",
-  "dev",
-] as const;

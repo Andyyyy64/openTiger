@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   getChangedFiles,
   getChangeStats,
+  getChangeStatsForFiles,
   getChangedFilesBetweenRefs,
   getDiffBetweenRefs,
   getDiffStatsBetweenRefs,
@@ -14,18 +15,13 @@ import {
 } from "@openTiger/vcs";
 import { runOpenCode } from "@openTiger/llm";
 import {
-  isCheckCommand,
-  isDevCommand,
-  isE2ECommand,
-  isFilteredCommand,
-  isUnsafeRuntimeCommand,
   matchDeniedCommand,
   normalizeVerificationCommand,
-  resolveRunScript,
 } from "./command-normalizer";
-import { runCommand, runDevCommand } from "./command-runner";
+import { runCommand } from "./command-runner";
 import { buildOpenCodeEnv } from "../../env";
 import {
+  detectLockfilePaths,
   includesInstallCommand,
   isGeneratedPath,
   isGeneratedTypeScriptOutput,
@@ -34,12 +30,8 @@ import {
   touchesPackageManifest,
 } from "./paths";
 import { checkPolicyViolations } from "./policy";
-import {
-  hasRootCheckScript,
-  loadRootScripts,
-  resolveAutoVerificationCommands,
-} from "./repo-scripts";
-import { ENV_EXAMPLE_PATHS, LOCKFILE_PATHS } from "./constants";
+import { resolveAutoVerificationCommands } from "./repo-scripts";
+import { ENV_EXAMPLE_PATHS } from "./constants";
 import type { CommandResult, VerifyOptions, VerifyResult } from "./types";
 
 async function cleanupOpenCodeTempDirs(repoPath: string): Promise<void> {
@@ -54,6 +46,16 @@ async function cleanupOpenCodeTempDirs(repoPath: string): Promise<void> {
   } catch {
     // ignore cleanup failures and continue verification
   }
+}
+
+function isDocumentationFile(path: string): boolean {
+  return (
+    path.endsWith(".md") ||
+    path.endsWith(".mdx") ||
+    path === "README.md" ||
+    path.startsWith("docs/") ||
+    path.startsWith("ops/runbooks/")
+  );
 }
 
 // 変更を検証
@@ -115,12 +117,11 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
       }
     }
   }
+  const shouldAllowLockfiles =
+    includesInstallCommand(commands) || touchesPackageManifest(changedFiles) || allowLockfileOutsidePaths;
+  const lockfilePaths = shouldAllowLockfiles ? await detectLockfilePaths(repoPath) : [];
   const effectiveAllowedPaths =
-    includesInstallCommand(commands) ||
-    touchesPackageManifest(changedFiles) ||
-    allowLockfileOutsidePaths
-      ? mergeAllowedPaths(allowedPaths, LOCKFILE_PATHS)
-      : allowedPaths;
+    lockfilePaths.length > 0 ? mergeAllowedPaths(allowedPaths, lockfilePaths) : allowedPaths;
   const finalAllowedPaths = allowEnvExampleOutsidePaths
     ? mergeAllowedPaths(effectiveAllowedPaths, ENV_EXAMPLE_PATHS)
     : effectiveAllowedPaths;
@@ -141,6 +142,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
   if (filteredGeneratedCount > 0) {
     console.log(`Filtered generated files: ${filteredGeneratedCount}`);
   }
+  console.log(`Relevant files: ${relevantFiles.length}`);
 
   if (changedFiles.length === 0 && !allowNoChanges) {
     return {
@@ -166,7 +168,12 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
 
   // 変更統計を取得
   if (!usesCommittedDiff) {
-    stats = await getChangeStats(repoPath);
+    if (filteredGeneratedCount > 0) {
+      // 生成物が大量にある場合でも、判定対象の実変更だけで統計を出す。
+      stats = await getChangeStatsForFiles(repoPath, relevantFiles);
+    } else {
+      stats = await getChangeStats(repoPath);
+    }
   }
   console.log(`Changes: +${stats.additions} -${stats.deletions}`);
 
@@ -295,13 +302,11 @@ ${clippedDiff || "(diff unavailable)"}
   const commandResults: CommandResult[] = [];
   let allPassed = true;
   let ranCommand = false;
-  const checkScriptAvailable = await hasRootCheckScript(repoPath);
-
-  const rootScripts = await loadRootScripts(repoPath);
   const autoCommands = await resolveAutoVerificationCommands({
     repoPath,
     changedFiles: relevantFiles,
     explicitCommands: commands,
+    deniedCommands: policy.deniedCommands ?? [],
   });
   if (autoCommands.length > 0) {
     console.log(`[Verify] Auto verification commands added: ${autoCommands.join(", ")}`);
@@ -337,62 +342,17 @@ ${clippedDiff || "(diff unavailable)"}
       break;
     }
 
-    // checkスクリプトが無い場合は検証対象から外す
-    if (isCheckCommand(command) && !checkScriptAvailable) {
-      const notice = `Skipped: ${command} (check script not found)`;
-      console.error(`  ✗ ${notice}`);
-      commandResults.push({
-        command,
-        success: true,
-        outcome: "skipped",
-        stdout: notice,
-        stderr: "",
-        durationMs: 0,
-      });
-      continue;
-    }
-
-    if (isUnsafeRuntimeCommand(command) && !isE2ECommand(command)) {
-      const notice = `Skipped: ${command} (runtime/watch command is not allowed in verification)`;
-      console.error(`  ✗ ${notice}`);
-      commandResults.push({
-        command,
-        success: true,
-        outcome: "skipped",
-        stdout: notice,
-        stderr: "",
-        durationMs: 0,
-      });
-      continue;
-    }
-
     const normalizedCommand = normalizeVerificationCommand(command);
     if (normalizedCommand !== command) {
       console.log(`Normalized verification command: ${command} -> ${normalizedCommand}`);
     }
 
-    const scriptName = resolveRunScript(normalizedCommand);
-    if (scriptName && !isFilteredCommand(normalizedCommand) && !rootScripts[scriptName]) {
-      const notice = `Skipped: ${normalizedCommand} (script not found: ${scriptName})`;
-      console.error(`  ✗ ${notice}`);
-      commandResults.push({
-        command: normalizedCommand,
-        success: true,
-        outcome: "skipped",
-        stdout: notice,
-        stderr: "",
-        durationMs: 0,
-      });
-      continue;
-    }
     console.log(`Running: ${normalizedCommand}`);
     ranCommand = true;
-    const result = isDevCommand(normalizedCommand)
-      ? await runDevCommand(normalizedCommand, repoPath)
-      : await runCommand(normalizedCommand, repoPath);
+    const result = await runCommand(normalizedCommand, repoPath);
     commandResults.push(result);
 
-    if (result.success) {
+    if (result.success && result.outcome === "passed") {
       console.log(`  ✓ Passed (${Math.round(result.durationMs / 1000)}s)`);
     } else {
       if (result.outcome === "skipped") {
@@ -407,9 +367,28 @@ ${clippedDiff || "(diff unavailable)"}
   }
 
   if (allPassed && !ranCommand) {
-    const lightCheck = await runLightCheck();
-    commandResults.push(lightCheck);
-    allPassed = lightCheck.success;
+    const allowLightCheckForCodeChanges =
+      (process.env.WORKER_ALLOW_LIGHT_CHECK_FOR_CODE_CHANGES ?? "false").toLowerCase() === "true";
+    const isDocOnlyChange =
+      relevantFiles.length > 0 && relevantFiles.every((file) => isDocumentationFile(file));
+
+    if (allowLightCheckForCodeChanges || isDocOnlyChange) {
+      const lightCheck = await runLightCheck();
+      commandResults.push(lightCheck);
+      allPassed = lightCheck.success;
+    } else {
+      const message =
+        "No executable verification commands were run for non-documentation changes.";
+      commandResults.push({
+        command: "verify:guard",
+        success: false,
+        outcome: "failed",
+        stdout: "",
+        stderr: message,
+        durationMs: 0,
+      });
+      allPassed = false;
+    }
   }
 
   return {
