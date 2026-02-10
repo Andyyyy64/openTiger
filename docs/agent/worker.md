@@ -14,7 +14,7 @@ Execute task implementation and verification.
 
 1. Validate task and acquire runtime lock
 2. Checkout/branch preparation
-3. OpenCode task execution
+3. Task execution via selected LLM executor (`opencode` / `claude_code`)
 4. expected-file check
 5. verification command execution
 6. commit/push + PR creation (git mode)
@@ -29,7 +29,8 @@ Execute task implementation and verification.
 ## 4. Failure Transitions
 
 - quota signature -> `blocked(quota_wait)`
-- other failures -> `failed`
+- verification/policy failure -> `blocked(needs_rework)`
+- other non-recoverable failures -> `failed`
 
 Both cases:
 

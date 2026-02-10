@@ -45,10 +45,15 @@ Configure these first:
 
 ### 3.3 Model Selection
 
+- `LLM_EXECUTOR` (`opencode` / `claude_code`)
 - `OPENCODE_MODEL`
+- `OPENCODE_SMALL_MODEL`
 - `PLANNER_MODEL`
 - `JUDGE_MODEL`
 - `WORKER_MODEL`
+- `TESTER_MODEL`
+- `DOCSER_MODEL`
+- `CLAUDE_CODE_MODEL`
 
 ### 3.4 Agent Scaling and Switches
 
@@ -140,13 +145,12 @@ Important runtime behavior:
 
 ### 5.4 Maintenance
 
-- `POST /system/restart`
-- `GET /system/restart`
 - `POST /system/cleanup`
 
 Warning:
 
 - `/system/cleanup` truncates runtime tables and clears queue state.
+- process restart control is managed by `SYSTEM_PROCESS_AUTO_RESTART*` environment variables.
 
 ## 6. Process Names You Can Start/Stop
 

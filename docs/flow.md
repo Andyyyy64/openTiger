@@ -29,19 +29,15 @@ Meaning of common warnings:
 
 1. Task in `queued`
 2. Dispatcher acquires lease and sets task `running`
-3. Worker role executes task and verify commands
+3. Executable role (`worker/tester/docser`) executes task and verify commands
 4. On success:
-
-- usually `blocked(awaiting_judge)` if review is needed
-- `done` for direct/no-review completion
-
+   - usually `blocked(awaiting_judge)` if review is needed
+   - `done` for direct/no-review completion
 5. Judge evaluates successful run
 6. Task moves to:
-
-- `done`
-- `blocked(awaiting_judge)` (retry/recovery)
-- `blocked(needs_rework)` (split/autofix path)
-
+   - `done`
+   - `blocked(awaiting_judge)` (retry/recovery)
+   - `blocked(needs_rework)` (split/autofix path)
 7. Cycle Manager continuously requeues/rebuilds until convergence
 
 ## 3. Blocked Reasons Used in Recovery
@@ -54,6 +50,11 @@ Meaning of common warnings:
   - non-approve escalation, repeated failure signature, or explicit autofix path
 
 Legacy `needs_human` is normalized into active recovery paths for compatibility.
+
+Other runtime blocked reason:
+
+- `issue_linking`
+  - planner temporarily parks a task until issue-link metadata is resolved, then returns it to `queued`
 
 ## 4. Run Lifecycle and Judge Idempotency
 

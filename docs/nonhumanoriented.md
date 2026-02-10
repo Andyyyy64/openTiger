@@ -42,6 +42,10 @@ Completion policy:
 - `quota_wait`
 - `needs_rework`
 
+Additional runtime blocked state used for planner issue-link sequencing:
+
+- `issue_linking`
+
 State is transformed rather than abandoned.
 
 ### 3.4 Adaptive Escalation

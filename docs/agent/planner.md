@@ -36,12 +36,17 @@ Planner is intentionally single-instance in system control to avoid duplicate pl
 
 Planner may be skipped by preflight if backlog exists.
 
-Planner start is blocked when PR/judge backlog exists in `/system/processes/:name/start` checks.
+Planner start is blocked in `/system/processes/:name/start` checks when any backlog exists:
+
+- local task backlog
+- issue task backlog
+- PR/judge backlog
 
 ## 6. Failure Model
 
 - inspection has retry and quota-aware delay logic
-- if inspection cannot produce usable output, planning aborts for that run
+- if inspection cannot produce usable output, planner falls back to simple planning for that run
+- LLM task generation failures (except hard parse failures) also fall back to simple planning
 - existing tasks remain untouched
 
 ## 7. Important Settings

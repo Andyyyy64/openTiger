@@ -6,7 +6,7 @@ This document describes the code-aligned decision patterns for:
 2. Runtime convergence loop in `cycle-manager`
 3. Planner prehook guard (`/system/processes/:name/start` for planner)
 
-Last verified against code on 2026-02-10.
+Last verified against code on 2026-02-11.
 
 ## Decision Inputs
 
