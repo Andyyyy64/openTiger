@@ -249,8 +249,15 @@ function matchDeniedCommand(command: string, deniedCommands: string[]): string |
 
 // Execute OpenCode to complete task
 export async function executeTask(options: ExecuteOptions): Promise<ExecuteResult> {
-  const { repoPath, task, instructionsPath, model, retryHints = [], policy, verificationRecovery } =
-    options;
+  const {
+    repoPath,
+    task,
+    instructionsPath,
+    model,
+    retryHints = [],
+    policy,
+    verificationRecovery,
+  } = options;
 
   for (const command of task.commands) {
     const deniedMatch = matchDeniedCommand(command, policy?.deniedCommands ?? []);

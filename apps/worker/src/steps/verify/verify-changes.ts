@@ -100,7 +100,10 @@ function isWorkspaceRootMetaFile(file: string): boolean {
   return WORKSPACE_ROOT_META_FILES.has(normalizePathForMatch(file));
 }
 
-async function findNearestPackageDir(repoPath: string, changedFile: string): Promise<string | null> {
+async function findNearestPackageDir(
+  repoPath: string,
+  changedFile: string,
+): Promise<string | null> {
   const normalizedFile = normalizePathForMatch(changedFile);
   let current = resolve(repoPath, normalizedFile);
   if (!isInsideRepo(repoPath, current)) {
@@ -564,7 +567,9 @@ ${clippedDiff || "(diff unavailable)"}
         const scopedResult = await runCommand(normalizedCommand, singleChangedPackageDir);
         if (scopedResult.success && scopedResult.outcome === "passed") {
           ranEffectiveCommand = true;
-          console.log(`  ✓ Passed in package scope (${Math.round(scopedResult.durationMs / 1000)}s)`);
+          console.log(
+            `  ✓ Passed in package scope (${Math.round(scopedResult.durationMs / 1000)}s)`,
+          );
           commandResults[commandResults.length - 1] = {
             ...scopedResult,
             source,

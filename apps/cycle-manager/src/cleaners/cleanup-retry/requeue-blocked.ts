@@ -225,7 +225,11 @@ export async function requeueBlockedTasksWithCooldown(
               `- stderr: ${verifyReworkMeta.stderrSummary ?? "stderr unavailable"}`,
             ]
           : [];
-      const notes = [baseNotes, verifySummaryLines.join("\n"), `[auto-rework] parentTask=${task.id}`]
+      const notes = [
+        baseNotes,
+        verifySummaryLines.join("\n"),
+        `[auto-rework] parentTask=${task.id}`,
+      ]
         .filter((part) => Boolean(part && part.length > 0))
         .join("\n");
       const baseSpecs = context.specs?.trim();
