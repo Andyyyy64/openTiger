@@ -1,5 +1,14 @@
 // 設定フォームの定義と表示順を集約する
 export const REPO_MODE_OPTIONS = ["git", "local"] as const;
+export const LLM_EXECUTOR_OPTIONS = ["opencode", "claude_code"] as const;
+export const CLAUDE_PERMISSION_MODE_OPTIONS = [
+  "default",
+  "acceptEdits",
+  "bypassPermissions",
+  "delegate",
+  "dontAsk",
+  "plan",
+] as const;
 // OpenCodeの対応モデル一覧
 // Reference: https://opencode.ai/docs/providers
 export const MODEL_OPTIONS = [
@@ -161,6 +170,14 @@ export const SETTINGS: SettingField[] = [
     type: "text",
   },
   {
+    key: "LLM_EXECUTOR",
+    label: "LLM_Executor",
+    description: "Select backend executor (opencode or claude_code)",
+    group: "Models",
+    type: "select",
+    options: LLM_EXECUTOR_OPTIONS,
+  },
+  {
     key: "OPENCODE_MODEL",
     label: "OpenCode_Model",
     description: "Default LLM model",
@@ -196,6 +213,42 @@ export const SETTINGS: SettingField[] = [
     description: "-1 for unlimited; otherwise max quota wait attempts",
     group: "Models",
     type: "number",
+  },
+  {
+    key: "CLAUDE_CODE_PERMISSION_MODE",
+    label: "ClaudeCode_Permission",
+    description: "Permission mode when LLM_Executor=claude_code",
+    group: "Models",
+    type: "select",
+    options: CLAUDE_PERMISSION_MODE_OPTIONS,
+  },
+  {
+    key: "CLAUDE_CODE_MAX_TURNS",
+    label: "ClaudeCode_MaxTurns",
+    description: "Max turns for claude -p (0 uses CLI default)",
+    group: "Models",
+    type: "number",
+  },
+  {
+    key: "CLAUDE_CODE_ALLOWED_TOOLS",
+    label: "ClaudeCode_AllowedTools",
+    description: "Comma-separated allowed tools when LLM_Executor=claude_code",
+    group: "Models",
+    type: "text",
+  },
+  {
+    key: "CLAUDE_CODE_DISALLOWED_TOOLS",
+    label: "ClaudeCode_DisallowedTools",
+    description: "Comma-separated disallowed tools when LLM_Executor=claude_code",
+    group: "Models",
+    type: "text",
+  },
+  {
+    key: "CLAUDE_CODE_APPEND_SYSTEM_PROMPT",
+    label: "ClaudeCode_SystemPrompt",
+    description: "Appended system prompt when LLM_Executor=claude_code",
+    group: "Models",
+    type: "text",
   },
   {
     key: "PLANNER_MODEL",
@@ -366,16 +419,22 @@ export const GROUP_DISPLAY_ORDER = [
 
 export const FIELD_DISPLAY_ORDER_BY_GROUP: Record<string, readonly string[]> = {
   Models: [
+    "LLM_EXECUTOR",
     "OPENCODE_MODEL",
     "OPENCODE_SMALL_MODEL",
+    "OPENCODE_WAIT_ON_QUOTA",
+    "OPENCODE_QUOTA_RETRY_DELAY_MS",
+    "OPENCODE_MAX_QUOTA_WAITS",
+    "CLAUDE_CODE_PERMISSION_MODE",
+    "CLAUDE_CODE_MAX_TURNS",
+    "CLAUDE_CODE_ALLOWED_TOOLS",
+    "CLAUDE_CODE_DISALLOWED_TOOLS",
+    "CLAUDE_CODE_APPEND_SYSTEM_PROMPT",
     "WORKER_MODEL",
     "TESTER_MODEL",
     "DOCSER_MODEL",
     "JUDGE_MODEL",
     "PLANNER_MODEL",
-    "OPENCODE_WAIT_ON_QUOTA",
-    "OPENCODE_QUOTA_RETRY_DELAY_MS",
-    "OPENCODE_MAX_QUOTA_WAITS",
   ],
   API_Keys: [
     "GEMINI_API_KEY",

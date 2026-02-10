@@ -144,16 +144,6 @@ export interface ConfigResponse {
   config: Record<string, string>;
 }
 
-export interface RestartStatusResponse {
-  status: "idle" | "running" | "completed" | "failed";
-  startedAt?: string;
-  finishedAt?: string;
-  exitCode?: number | null;
-  signal?: string | null;
-  logPath?: string;
-  message?: string;
-}
-
 export interface SystemProcess {
   name: string;
   label: string;
@@ -219,6 +209,16 @@ export interface GitHubRepoInfo {
   created: boolean;
 }
 
+export interface GitHubRepoListItem {
+  owner: string;
+  name: string;
+  fullName: string;
+  url: string;
+  defaultBranch: string;
+  private: boolean;
+  archived: boolean;
+}
+
 export interface TaskRetryInfo {
   autoRetry: boolean;
   reason:
@@ -263,8 +263,6 @@ export const runsApi = {
 // システム状態
 export const systemApi = {
   health: () => fetchApi<{ status: string; timestamp: string }>("/health"),
-  restart: () => fetchApi<RestartStatusResponse>("/system/restart", { method: "POST" }),
-  restartStatus: () => fetchApi<RestartStatusResponse>("/system/restart"),
   processes: () =>
     fetchApi<{ processes: SystemProcess[] }>("/system/processes").then((res) => res.processes),
   startProcess: (name: string, payload?: { requirementPath?: string; content?: string }) =>
@@ -296,6 +294,16 @@ export const systemApi = {
       method: "POST",
       body: JSON.stringify(payload),
     }).then((res) => res.repo),
+  listGithubRepos: (params?: { owner?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.owner) {
+      query.set("owner", params.owner);
+    }
+    const suffix = query.toString();
+    return fetchApi<{ repos: GitHubRepoListItem[] }>(
+      `/system/github/repos${suffix ? `?${suffix}` : ""}`,
+    ).then((res) => res.repos);
+  },
   preflight: (payload?: { content?: string; autoCreateIssueTasks?: boolean }) =>
     fetchApi<SystemPreflightSummary>("/system/preflight", {
       method: "POST",

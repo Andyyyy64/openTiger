@@ -1,7 +1,28 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { agentsApi, tasksApi } from "../lib/api";
+import { agentsApi, configApi, tasksApi } from "../lib/api";
 import { Link } from "react-router-dom";
+
+const CLAUDE_CODE_DEFAULT_MODEL = "claude-sonnet-4-5";
+
+function isClaudeExecutor(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code";
+}
+
+function normalizeClaudeModel(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith("anthropic/")) {
+    return trimmed.slice("anthropic/".length);
+  }
+  if (trimmed.startsWith("claude")) {
+    return trimmed;
+  }
+  return undefined;
+}
 
 export const AgentsPage: React.FC = () => {
   const {
@@ -16,6 +37,13 @@ export const AgentsPage: React.FC = () => {
     queryKey: ["tasks"],
     queryFn: () => tasksApi.list(),
   });
+  const { data: config } = useQuery({
+    queryKey: ["config"],
+    queryFn: () => configApi.get(),
+  });
+
+  const llmExecutor = config?.config.LLM_EXECUTOR;
+  const useClaudeLabels = isClaudeExecutor(llmExecutor);
 
   // Detect state where dispatch is not possible due to incomplete dependencies
   const queuedTasks = tasks?.filter((t) => t.status === "queued") ?? [];
@@ -106,10 +134,12 @@ export const AgentsPage: React.FC = () => {
                 </div>
 
                 <div className="col-span-2 text-xs text-zinc-400">
-                  {agent.metadata?.provider && <span>{agent.metadata.provider}</span>}
-                  {agent.metadata?.model && (
-                    <span className="text-zinc-600 block">{agent.metadata.model}</span>
-                  )}
+                  <span>{useClaudeLabels ? "claude_code" : (agent.metadata?.provider ?? "--")}</span>
+                  <span className="text-zinc-600 block">
+                    {useClaudeLabels
+                      ? (normalizeClaudeModel(agent.metadata?.model) ?? CLAUDE_CODE_DEFAULT_MODEL)
+                      : (agent.metadata?.model ?? "--")}
+                  </span>
                 </div>
 
                 <div className="col-span-3 text-xs">

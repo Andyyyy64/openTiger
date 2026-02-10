@@ -1,15 +1,5 @@
 import React from "react";
 
-type RestartPanelState = {
-  status: string;
-  statusLabel: string;
-  startedAtLabel: string;
-  finishedAtLabel: string;
-  errorMessage?: string;
-  isPending: boolean;
-  onRestart: () => void;
-};
-
 type SimpleActionState = {
   isPending: boolean;
   isSuccess: boolean;
@@ -21,53 +11,16 @@ type StopAllActionState = SimpleActionState & {
 };
 
 type SystemControlPanelProps = {
-  restart: RestartPanelState;
   cleanup: SimpleActionState;
   stopAll: StopAllActionState;
 };
 
 export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({
-  restart,
   cleanup,
   stopAll,
 }) => {
-  const isRestartRunning = restart.status === "running";
-  const isRestartBlocked = restart.isPending || isRestartRunning;
-
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <section className="border border-term-border p-0">
-        <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wider">System_Restart</h2>
-          <span className="text-xs text-zinc-500">sudo reboot</span>
-        </div>
-        <div className="p-4 space-y-3 font-mono text-sm">
-          <div className="flex justify-between items-center">
-            <span className="text-zinc-500">CURRENT_STATUS</span>
-            <span className={isRestartRunning ? "text-term-tiger animate-pulse" : "text-zinc-300"}>
-              [{restart.statusLabel}]
-            </span>
-          </div>
-
-          <div className="text-xs text-zinc-600 border-l border-zinc-800 pl-2">
-            <div>STARTED: {restart.startedAtLabel}</div>
-            <div>FINISHED: {restart.finishedAtLabel}</div>
-          </div>
-
-          <button
-            onClick={restart.onRestart}
-            disabled={isRestartBlocked}
-            className="w-full border border-term-border hover:bg-term-fg hover:text-black py-2 mt-2 text-xs uppercase transition-colors disabled:opacity-50"
-          >
-            {isRestartBlocked ? "> REBOOTING..." : "> EXECUTE REBOOT"}
-          </button>
-
-          {restart.errorMessage && restart.status === "failed" && (
-            <div className="text-red-500 text-xs mt-2">&gt; ERR: {restart.errorMessage}</div>
-          )}
-        </div>
-      </section>
-
       <section className="border border-term-border p-0">
         <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider">DB_Maintenance</h2>
