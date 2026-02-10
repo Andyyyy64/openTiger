@@ -33,6 +33,15 @@ describe("inferRoleFromIssue", () => {
     expect(role).toBe("worker");
   });
 
+  it("reads explicit role from bullet inline body field", () => {
+    const role = inferRoleFromIssue({
+      labels: [],
+      body: ["## Task", "- Role: tester", "- Goal: add e2e"].join("\n"),
+    });
+
+    expect(role).toBe("tester");
+  });
+
   it("reads explicit role from markdown section", () => {
     const role = inferRoleFromIssue({
       labels: [],

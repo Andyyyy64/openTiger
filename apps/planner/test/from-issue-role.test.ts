@@ -27,6 +27,13 @@ describe("issue role resolution", () => {
     expect(resolved).toBe("docser");
   });
 
+  it("parses role from bullet inline format", () => {
+    const resolved = parseExplicitRoleFromIssue(
+      issue({ body: ["## Task", "- Role: worker", "- Goal: implement update API"].join("\n") }),
+    );
+    expect(resolved).toBe("worker");
+  });
+
   it("returns null when no explicit role exists", () => {
     const resolved = parseExplicitRoleFromIssue(
       issue({

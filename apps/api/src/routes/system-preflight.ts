@@ -379,7 +379,7 @@ export async function buildPreflightSummary(options: {
     if (!desiredRole) {
       summary.github.issueTaskBacklogCount += 1;
       summary.github.warnings.push(
-        `Issue #${issue.number}: explicit role is required. Add label role:worker|role:tester|role:docser or set "Agent: <role>" in body.`,
+        `Issue #${issue.number}: explicit role is required. Add label role:worker|role:tester|role:docser or set "Agent: <role>" / "Role: <role>" in body.`,
       );
       continue;
     }

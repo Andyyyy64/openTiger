@@ -144,7 +144,7 @@ function parseRoleFromInlineBody(body: string): IssueTaskRole | null {
     return null;
   }
   const inline = body.match(
-    /^(?:\s*)(?:agent|role|担当(?:エージェント)?|実行エージェント)\s*[:：]\s*(worker|tester|docser)\s*$/im,
+    /^(?:\s*[-*]\s*)?(?:agent(?:\s*role)?|role|担当(?:エージェント)?|実行エージェント)\s*[:：]\s*(worker|tester|docser)\s*$/im,
   );
   return normalizeRoleToken(inline?.[1] ?? null);
 }
@@ -193,7 +193,7 @@ export function parseExplicitRoleFromIssue(issue: GitHubIssue): IssueTaskRole | 
 }
 
 function buildMissingRoleWarning(issueNumber: number): string {
-  return `Issue #${issueNumber}: explicit role is required. Add label role:worker|role:tester|role:docser or set "Agent: <role>" in body.`;
+  return `Issue #${issueNumber}: explicit role is required. Add label role:worker|role:tester|role:docser or set "Agent: <role>" / "Role: <role>" in body.`;
 }
 
 // ラベルからリスクレベルを推定

@@ -165,7 +165,7 @@ function parseRoleFromInlineBody(body: string): IssueTaskRole | null {
   }
 
   const inline = body.match(
-    /^(?:\s*)(?:agent|role|担当(?:エージェント)?|実行エージェント)\s*[:：]\s*(worker|tester|docser)\s*$/im,
+    /^(?:\s*[-*]\s*)?(?:agent(?:\s*role)?|role|担当(?:エージェント)?|実行エージェント)\s*[:：]\s*(worker|tester|docser)\s*$/im,
   );
   return normalizeRoleToken(inline?.[1] ?? null);
 }
