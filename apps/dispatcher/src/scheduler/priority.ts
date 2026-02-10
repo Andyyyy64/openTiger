@@ -25,55 +25,6 @@ let lastObservedJudgeBacklog = -1;
 let lastObservedPendingJudgeRun = false;
 let lastObservedJudgeBacklogBlocked = false;
 
-function hasDocKeyword(text: string): boolean {
-  if (!text) {
-    return false;
-  }
-  return /(docs?|documentation|readme|runbook|guide|manual|changelog|ドキュメント|手順書|仕様書|設計書)/i.test(
-    text,
-  );
-}
-
-function isDocumentationPathPattern(path: string): boolean {
-  const normalized = path.trim().replace(/^\.\//, "").toLowerCase();
-  if (!normalized || normalized === "**" || normalized === "*") {
-    return false;
-  }
-  if (normalized === "readme.md" || normalized.endsWith("/readme.md")) {
-    return true;
-  }
-  if (normalized === "docs" || normalized.startsWith("docs/")) {
-    return true;
-  }
-  if (normalized === "ops/runbooks" || normalized.startsWith("ops/runbooks/")) {
-    return true;
-  }
-  if (normalized.endsWith(".md") || normalized.endsWith(".mdx")) {
-    return true;
-  }
-  return false;
-}
-
-function isDocumentationOnlyPaths(allowedPaths: string[] | null | undefined): boolean {
-  const paths = allowedPaths ?? [];
-  if (paths.length === 0) {
-    return false;
-  }
-  return paths.every((path) => isDocumentationPathPattern(path));
-}
-
-function isDocserCandidateTask(task: {
-  title: string | null;
-  goal: string | null;
-  allowedPaths: string[] | null;
-}): boolean {
-  if (isDocumentationOnlyPaths(task.allowedPaths)) {
-    return true;
-  }
-  const text = `${task.title ?? ""}\n${task.goal ?? ""}`;
-  return hasDocKeyword(text);
-}
-
 function isQuotaFailureMessage(message: string): boolean {
   return /quota exceeded|resource has been exhausted|resource_exhausted|quota limit reached|generate_requests_per_model_per_day|generate_content_paid_tier_input_token_count|retryinfo/i.test(
     message,
@@ -180,28 +131,6 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
   if (dispatchableQueuedTasks.length === 0) {
     console.log("[Priority] No dispatchable queued tasks found");
     return [];
-  }
-
-  const docRoleMismatchIds = dispatchableQueuedTasks
-    .filter((task) => (task.role ?? "worker") !== "docser" && isDocserCandidateTask(task))
-    .map((task) => task.id);
-  if (docRoleMismatchIds.length > 0) {
-    await db
-      .update(tasks)
-      .set({
-        role: "docser",
-        updatedAt: new Date(),
-      })
-      .where(inArray(tasks.id, docRoleMismatchIds));
-    const mismatchSet = new Set(docRoleMismatchIds);
-    for (const task of dispatchableQueuedTasks) {
-      if (mismatchSet.has(task.id)) {
-        task.role = "docser";
-      }
-    }
-    console.log(
-      `[Priority] Retargeted ${docRoleMismatchIds.length} docs task(s) to docser before dispatch`,
-    );
   }
 
   console.log(`[Priority] Found ${dispatchableQueuedTasks.length} dispatchable queued tasks`);
