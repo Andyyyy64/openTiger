@@ -56,6 +56,27 @@ export type SettingField = {
   options?: readonly string[];
 };
 
+// 空だと主要フローが動かない設定を必須扱いにする。
+export const REQUIRED_SETTING_KEYS = new Set<string>([
+  "GITHUB_TOKEN",
+  "GITHUB_OWNER",
+  "REPO_URL",
+  "REPLAN_REQUIREMENT_PATH",
+]);
+
+type FieldHelpLink = {
+  label: string;
+  url: string;
+};
+
+// 補助ドキュメントへ誘導したい設定だけリンクを持たせる。
+export const FIELD_HELP_LINKS: Partial<Record<string, FieldHelpLink>> = {
+  GITHUB_TOKEN: {
+    label: "Create GitHub Personal Access Token",
+    url: "https://github.com/settings/personal-access-tokens",
+  },
+};
+
 export const SETTINGS: SettingField[] = [
   {
     key: "MAX_CONCURRENT_WORKERS",

@@ -124,7 +124,7 @@ export const RunsPage: React.FC = () => {
                       <span className="text-zinc-600">|</span>
                       <span>latest: {new Date(latestRun.startedAt).toLocaleString()}</span>
                     </div>
-                    <div>retry: {retryLabel}</div>
+                    <div className="text-sm leading-tight">retry: {retryLabel}</div>
                   </div>
                 </div>
 

@@ -54,7 +54,10 @@ export const SettingsPage: React.FC = () => {
     queryFn: () => systemApi.listGithubRepos({ owner: githubOwner || undefined }),
     enabled: hasGithubToken,
   });
-  const githubRepos = githubReposQuery.data ?? [];
+  const githubRepos = useMemo(
+    () => githubReposQuery.data ?? [],
+    [githubReposQuery.data],
+  );
 
   const mutation = useMutation({
     mutationFn: (updates: Record<string, string>) => configApi.update(updates),

@@ -75,6 +75,14 @@ export const AgentsPage: React.FC = () => {
     });
   }, [agents]);
 
+  const taskTitleById = React.useMemo(() => {
+    const titleMap = new Map<string, string>();
+    for (const task of tasks ?? []) {
+      titleMap.set(task.id, task.title);
+    }
+    return titleMap;
+  }, [tasks]);
+
   return (
     <div className="p-6 text-term-fg">
       <div className="flex items-center justify-between mb-8">
@@ -112,63 +120,74 @@ export const AgentsPage: React.FC = () => {
           <div className="py-12 text-center text-zinc-500 font-mono">&gt; No nodes detected</div>
         ) : (
           <div className="divide-y divide-term-border font-mono text-sm">
-            {sortedAgents.map((agent) => (
-              <Link
-                key={agent.id}
-                to={`/agents/${agent.id}`}
-                className="grid grid-cols-12 gap-4 px-4 py-3 hover:bg-term-tiger/5 transition-colors group items-center"
-              >
-                <div className="col-span-3 overflow-hidden">
-                  <div className="font-bold text-term-fg group-hover:text-term-tiger truncate">
-                    {agent.id}
-                  </div>
-                  <div className="text-xs text-zinc-500 uppercase flex gap-2 mt-1">
-                    <span>[{agent.role}]</span>
-                  </div>
-                </div>
+            {sortedAgents.map((agent) => {
+              const currentTaskTitle = agent.currentTaskId
+                ? taskTitleById.get(agent.currentTaskId)
+                : undefined;
 
-                <div className="col-span-2">
-                  <span
-                    className={`text-xs uppercase px-1 ${agent.status === "busy" ? "bg-term-tiger text-black font-bold animate-pulse" : "text-zinc-500"}`}
-                  >
-                    {agent.status === "busy" ? "PROCESSING" : "IDLE"}
-                  </span>
-                </div>
-
-                <div className="col-span-2 text-xs text-zinc-400">
-                  <span>
-                    {useClaudeLabels ? "claude_code" : (agent.metadata?.provider ?? "--")}
-                  </span>
-                  <span className="text-zinc-600 block">
-                    {useClaudeLabels
-                      ? (normalizeClaudeModel(agent.metadata?.model) ?? CLAUDE_CODE_DEFAULT_MODEL)
-                      : (agent.metadata?.model ?? "--")}
-                  </span>
-                </div>
-
-                <div className="col-span-3 text-xs">
-                  {agent.status === "busy" ? (
-                    <div className="w-full">
-                      <div className="flex justify-between mb-1">
-                        <span className="text-term-tiger">EXEC_TASK</span>
-                        <span className="text-zinc-500">{agent.currentTaskId?.slice(0, 8)}</span>
-                      </div>
-                      <div className="w-full bg-zinc-800 h-2">
-                        <div className="h-full bg-term-tiger w-[60%] repeating-linear-gradient-animation"></div>
-                      </div>
+              return (
+                <Link
+                  key={agent.id}
+                  to={`/agents/${agent.id}`}
+                  className="grid grid-cols-12 gap-4 px-4 py-3 hover:bg-term-tiger/5 transition-colors group items-center"
+                >
+                  <div className="col-span-3 overflow-hidden">
+                    <div className="font-bold text-term-fg group-hover:text-term-tiger truncate">
+                      {agent.id}
                     </div>
-                  ) : (
-                    <span className="text-zinc-600">--</span>
-                  )}
-                </div>
+                    <div className="text-xs text-zinc-500 uppercase flex gap-2 mt-1">
+                      <span>[{agent.role}]</span>
+                    </div>
+                  </div>
 
-                <div className="col-span-2 text-right text-xs text-zinc-600">
-                  {agent.lastHeartbeat
-                    ? new Date(agent.lastHeartbeat).toLocaleTimeString()
-                    : "--:--:--"}
-                </div>
-              </Link>
-            ))}
+                  <div className="col-span-2">
+                    <span
+                      className={`text-xs uppercase px-1 ${agent.status === "busy" ? "bg-term-tiger text-black font-bold animate-pulse" : "text-zinc-500"}`}
+                    >
+                      {agent.status === "busy" ? "PROCESSING" : "IDLE"}
+                    </span>
+                  </div>
+
+                  <div className="col-span-2 text-xs text-zinc-400">
+                    <span>
+                      {useClaudeLabels ? "claude_code" : (agent.metadata?.provider ?? "--")}
+                    </span>
+                    <span className="text-zinc-600 block">
+                      {useClaudeLabels
+                        ? (normalizeClaudeModel(agent.metadata?.model) ?? CLAUDE_CODE_DEFAULT_MODEL)
+                        : (agent.metadata?.model ?? "--")}
+                    </span>
+                  </div>
+
+                  <div className="col-span-3 text-xs">
+                    {agent.status === "busy" ? (
+                      <div className="w-full">
+                        <div className="flex justify-between mb-1">
+                          <span className="text-term-tiger">EXEC_TASK</span>
+                          <span className="text-zinc-500">
+                            {agent.currentTaskId?.slice(0, 8) ?? "--"}
+                          </span>
+                        </div>
+                        <div className="text-zinc-300 truncate mb-1">
+                          {currentTaskTitle ?? "Task title unavailable"}
+                        </div>
+                        <div className="w-full bg-zinc-800 h-2">
+                          <div className="h-full bg-term-tiger w-[60%] repeating-linear-gradient-animation"></div>
+                        </div>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-600">--</span>
+                    )}
+                  </div>
+
+                  <div className="col-span-2 text-right text-xs text-zinc-600">
+                    {agent.lastHeartbeat
+                      ? new Date(agent.lastHeartbeat).toLocaleTimeString()
+                      : "--:--:--"}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
       </div>
