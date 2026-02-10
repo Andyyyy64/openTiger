@@ -28,6 +28,8 @@ Docs: [Index](docs/README.md) | [Flow](docs/flow.md) | [Modes](docs/mode.md) | [
 - Does not claim guaranteed completion; it keeps running and switches recovery strategy when progress patterns degrade
 - Backlog-first startup
   - Existing issues/PRs are processed before generating new plans
+- Strict convergence loop in runtime
+  - `local tasks -> issue backlog sync -> planner replan (only when issue backlog is empty)`
 - Explicit recovery states
   - `awaiting_judge` / `quota_wait` / `needs_rework`
 - Duplicate-execution defenses

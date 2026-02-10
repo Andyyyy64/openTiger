@@ -21,7 +21,7 @@ Uses the same worker runtime with `AGENT_ROLE=tester` and tester-specific instru
 
 - non-interactive commands only
 - avoid watch-mode commands
-- e2e command can be auto-appended for frontend tester tasks
+- e2e command can be auto-appended when tester tasks explicitly require e2e coverage
 
 ## 5. Important Settings
 

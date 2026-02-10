@@ -6,6 +6,8 @@ This folder documents the current (code-aligned) openTiger behavior.
 
 - `docs/flow.md`
   - End-to-end lifecycle, state transitions, and recovery loops.
+- `docs/startup-patterns.md`
+  - Start-time decision matrix, exhaustive pattern classes, and runtime state diagram.
 - `docs/mode.md`
   - `REPO_MODE`, `JUDGE_MODE`, `LAUNCH_MODE`, scaling, and startup behavior.
 - `docs/config.md`

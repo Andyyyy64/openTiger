@@ -114,6 +114,10 @@ Periodic jobs include:
 - offline agent reset
 - failed task cooldown requeue
 - blocked task cooldown recovery by reason
+- backlog ordering gate
+  - `local task backlog > 0`: keep executing tasks
+  - `local task backlog == 0`: run `/system/preflight` to import/sync issue backlog
+  - `issue backlog == 0`: trigger planner replan
 
 Blocked recovery behavior:
 
