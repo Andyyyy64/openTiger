@@ -3,6 +3,7 @@ import {
   FileChange,
   extractTokenUsage,
   parseClaudeCodeOutput,
+  parseClaudeCodeStreamJson,
   extractErrorReason,
 } from "../../src/claude-code/parse";
 
@@ -236,5 +237,65 @@ Actual error message`;
     // trim後に空になり、split結果の最後がundefinedになる可能性
     const result = extractErrorReason("   \n  \n  ");
     expect(result).toBe("");
+  });
+});
+
+describe("parseClaudeCodeStreamJson", () => {
+  it("stream-json形式からassistant/result/usageを抽出できる", () => {
+    const output = `
+{"type":"system","subtype":"init"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"First line"},{"type":"text","text":"Second line"}]}}
+{"type":"result","is_error":false,"result":"Completed","usage":{"input_tokens":120,"output_tokens":80,"cache_read_input_tokens":10,"cache_creation_input_tokens":5}}
+`;
+
+    const parsed = parseClaudeCodeStreamJson(output);
+    expect(parsed.assistantText).toBe("First line\nSecond line");
+    expect(parsed.resultText).toBe("Completed");
+    expect(parsed.isError).toBe(false);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.permissionDenials).toEqual([]);
+    expect(parsed.tokenUsage).toEqual({
+      inputTokens: 120,
+      outputTokens: 80,
+      totalTokens: 215,
+      cacheReadTokens: 10,
+      cacheWriteTokens: 5,
+    });
+    expect(parsed.rawEvents).toHaveLength(3);
+  });
+
+  it("パース不能な行を無視しつつerrorを拾える", () => {
+    const output = `
+not-json-line
+{"type":"assistant","error":"authentication_failed","message":{"content":[{"type":"text","text":"Auth failed"}]}}
+{"type":"result","is_error":true,"result":"Please run /login.","usage":{"input_tokens":0,"output_tokens":0}}
+`;
+
+    const parsed = parseClaudeCodeStreamJson(output);
+    expect(parsed.assistantText).toBe("Auth failed");
+    expect(parsed.resultText).toBe("Please run /login.");
+    expect(parsed.isError).toBe(true);
+    expect(parsed.errors).toEqual(["authentication_failed"]);
+    expect(parsed.permissionDenials).toEqual([]);
+    expect(parsed.rawEvents).toHaveLength(2);
+  });
+
+  it("イベントがない場合は空で返す", () => {
+    const parsed = parseClaudeCodeStreamJson("");
+    expect(parsed.assistantText).toBe("");
+    expect(parsed.resultText).toBe("");
+    expect(parsed.isError).toBe(false);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.permissionDenials).toEqual([]);
+    expect(parsed.tokenUsage).toBeUndefined();
+    expect(parsed.rawEvents).toEqual([]);
+  });
+
+  it("permission_denialsを抽出できる", () => {
+    const output = `
+{"type":"result","is_error":false,"result":"approval required","permission_denials":[{"tool_name":"Bash"}]}
+`;
+    const parsed = parseClaudeCodeStreamJson(output);
+    expect(parsed.permissionDenials).toEqual(["Bash"]);
   });
 });

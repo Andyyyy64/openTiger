@@ -1,4 +1,6 @@
 import type { OpenCodeOptions, OpenCodeResult } from "./opencode-types";
+import { runClaudeCode } from "../claude-code/run";
+import { isClaudeCodeProvider } from "../claude-code/claude-code-helpers";
 import {
   DEFAULT_FALLBACK_MODEL,
   DEFAULT_MAX_QUOTA_WAITS,
@@ -24,6 +26,17 @@ import { executeOpenCodeOnce } from "./opencode-executor";
 export { OpenCodeOptions } from "./opencode-types";
 export type { OpenCodeResult } from "./opencode-types";
 
+function resolveExecutor(options: OpenCodeOptions): "opencode" | "claude_code" {
+  if (options.provider === "claude_code") {
+    return "claude_code";
+  }
+  const fromRuntime = readRuntimeEnv(options, "LLM_EXECUTOR");
+  if (isClaudeCodeProvider(fromRuntime)) {
+    return "claude_code";
+  }
+  return "opencode";
+}
+
 function buildApiKeyFingerprint(options: OpenCodeOptions): string {
   const fromOptions = options.env?.GEMINI_API_KEY?.trim();
   const fromProcess = process.env.GEMINI_API_KEY?.trim();
@@ -40,6 +53,10 @@ function buildApiKeyFingerprint(options: OpenCodeOptions): string {
 }
 
 export async function runOpenCode(options: OpenCodeOptions): Promise<OpenCodeResult> {
+  if (resolveExecutor(options) === "claude_code") {
+    return runClaudeCode(options);
+  }
+
   const apiKeyFingerprint = buildApiKeyFingerprint(options);
   console.log(`[OpenCode] API key fingerprint: ${apiKeyFingerprint}`);
 
@@ -111,9 +128,7 @@ export async function runOpenCode(options: OpenCodeOptions): Promise<OpenCodeRes
           await delay(waitMs);
           continue;
         }
-        console.error(
-          `[OpenCode] ${currentModel ?? "unknown model"} ${quotaLabel}. ${quotaHint}`,
-        );
+        console.error(`[OpenCode] ${currentModel ?? "unknown model"} ${quotaLabel}. ${quotaHint}`);
         break;
       }
     }

@@ -20,6 +20,8 @@ export const OpenCodeOptions = z.object({
   // Retry configuration
   maxRetries: z.number().int().nonnegative().optional(),
   retryDelayMs: z.number().int().nonnegative().optional(),
+  // Runtime executor backend
+  provider: z.enum(["opencode", "claude_code"]).optional(),
 });
 export type OpenCodeOptions = z.infer<typeof OpenCodeOptions>;
 
