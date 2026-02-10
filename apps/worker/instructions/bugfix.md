@@ -19,7 +19,7 @@ it("throws when name is empty", () => {
 
 Do not patch symptoms only. Identify why the issue happens.
 
-```
+```text
 Symptom: user creation fails
 Bad fix: swallow errors in try/catch
 Good fix: identify failing validation rule and correct it
@@ -35,7 +35,7 @@ Only change what is required to resolve the bug. Move unrelated cleanup to a sep
 
 Inspect error messages, stack traces, and logs.
 
-```
+```text
 Error: Cannot read property 'id' of undefined
     at getUserName (src/services/user.ts:42:15)
     at processRequest (src/api/handler.ts:23:10)

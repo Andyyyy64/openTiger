@@ -1,0 +1,1 @@
+ALTER TABLE "config" ADD COLUMN "claude_code_model" text DEFAULT 'claude-sonnet-4-5' NOT NULL;

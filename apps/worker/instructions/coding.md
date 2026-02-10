@@ -51,13 +51,11 @@ function process(data: Data | null) {
 
 ### Naming
 
-| Item              | Rule             | Example                              |
-| ----------------- | ---------------- | ------------------------------------ |
-| variables/functions | camelCase      | `getUserById`, `isValid`             |
-| constants         | UPPER_SNAKE_CASE | `MAX_RETRIES`, `DEFAULT_TIMEOUT`     |
-| types/interfaces  | PascalCase       | `User`, `TaskConfig`                 |
-| enum values       | PascalCase       | `Status.Running`, `Role.Admin`       |
-| file names        | kebab-case       | `user-service.ts`, `api-client.ts`   |
+- variables/functions: camelCase (e.g. `getUserById`, `isValid`)
+- constants: UPPER_SNAKE_CASE (e.g. `MAX_RETRIES`, `DEFAULT_TIMEOUT`)
+- types/interfaces: PascalCase (e.g. `User`, `TaskConfig`)
+- enum values: PascalCase (e.g. `Status.Running`, `Role.Admin`)
+- file names: kebab-case (e.g. `user-service.ts`, `api-client.ts`)
 
 ### Runtime validation + types
 
@@ -137,7 +135,7 @@ export async function createTask(options: CreateTaskOptions): Promise<Task> {
 
 ### Placement
 
-```
+```text
 src/
   services/
     user-service.ts

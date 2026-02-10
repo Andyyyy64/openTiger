@@ -13,7 +13,7 @@ Existing behavior must remain intact.
 
 Break large changes into small safe steps and verify after each step.
 
-```
+```text
 1. Extract a function -> verify
 2. Rename for clarity -> verify
 3. Remove duplication -> verify

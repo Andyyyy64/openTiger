@@ -46,9 +46,9 @@
 
 ## Risk Assessment
 
-| Risk     | Impact   | Mitigation |
-| -------- | -------- | ---------- |
-| [Risk 1] | High/Med/Low | [Mitigation] |
+- Risk: [Risk 1]
+  - Impact: High/Med/Low
+  - Mitigation: [Mitigation]
 
 ## Notes
 
