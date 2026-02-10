@@ -104,6 +104,50 @@ async function finalizeTaskState(options: FinalizeTaskStateOptions): Promise<voi
   });
 }
 
+function isConflictAutoFixTaskTitle(title: string): boolean {
+  return /^\[AutoFix-Conflict\]\s+PR\s+#\d+/i.test(title.trim());
+}
+
+function buildGitHubPrUrl(repoUrl: string, prNumber: number): string | undefined {
+  try {
+    const normalizedRepoUrl = repoUrl.startsWith("git@github.com:")
+      ? repoUrl.replace("git@github.com:", "https://github.com/")
+      : repoUrl;
+    const parsed = new URL(normalizedRepoUrl);
+    if (!parsed.hostname.toLowerCase().includes("github.com")) {
+      return undefined;
+    }
+    const parts = parsed.pathname.split("/").filter((segment) => segment.length > 0);
+    const owner = parts[0];
+    const repo = parts[1]?.replace(/\.git$/i, "");
+    if (!owner || !repo) {
+      return undefined;
+    }
+    return `https://github.com/${owner}/${repo}/pull/${prNumber}`;
+  } catch {
+    return undefined;
+  }
+}
+
+async function attachExistingPrArtifact(params: {
+  runId: string;
+  prNumber: number;
+  repoUrl: string;
+}): Promise<string | undefined> {
+  const prUrl = buildGitHubPrUrl(params.repoUrl, params.prNumber);
+  await db.insert(artifacts).values({
+    runId: params.runId,
+    type: "pr",
+    ref: String(params.prNumber),
+    url: prUrl,
+    metadata: {
+      source: "existing_pr_context",
+      reused: true,
+    },
+  });
+  return prUrl;
+}
+
 // タスクを実行するメイン処理
 export async function runWorker(taskData: Task, config: WorkerConfig): Promise<WorkerResult> {
   const {
@@ -120,6 +164,10 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
   const repoMode = getRepoMode();
   const effectivePolicy = applyRepoModePolicyOverrides(policy);
   const taskPrContext = repoMode === "git" ? resolveTaskPrContext(taskData) : null;
+  const shouldReturnConflictAutoFixToJudge =
+    repoMode === "git" &&
+    isConflictAutoFixTaskTitle(taskData.title) &&
+    typeof taskPrContext?.number === "number";
 
   const taskId = taskData.id;
   const agentLabel = role === "tester" ? "Tester" : role === "docser" ? "Docser" : "Worker";
@@ -443,6 +491,40 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
 
     if (verifyResult.changedFiles.length === 0) {
       console.log("\n[6/7] Skipping commit/PR...");
+      if (shouldReturnConflictAutoFixToJudge && taskPrContext) {
+        console.log(
+          "[Worker] No repository diff detected for conflict autofix task. Returning task to Judge queue.",
+        );
+
+        const prUrl = await attachExistingPrArtifact({
+          runId,
+          prNumber: taskPrContext.number,
+          repoUrl,
+        });
+
+        await finalizeTaskState({
+          runId,
+          taskId,
+          agentId,
+          runStatus: "success",
+          taskStatus: "blocked",
+          blockReason: "awaiting_judge",
+          costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+          errorMessage: "Conflict autofix produced no diff; returned to judge for mergeability check.",
+        });
+
+        console.log("\n" + "=".repeat(60));
+        console.log("Task completed: awaiting judge re-check.");
+        console.log(`PR #${taskPrContext.number} will be re-evaluated.`);
+        console.log("=".repeat(60));
+
+        return {
+          success: true,
+          taskId,
+          runId,
+          prUrl,
+        };
+      }
       console.log(
         "[Worker] No repository diff detected after verification. Marking task as no-op success.",
       );
@@ -484,6 +566,41 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
 
     if (!commitResult.committed) {
       console.log("\n[7/7] Skipping PR...");
+      if (shouldReturnConflictAutoFixToJudge && taskPrContext) {
+        console.log(
+          "[Worker] Commit step produced no new commit for conflict autofix task. Returning task to Judge queue.",
+        );
+
+        const prUrl = await attachExistingPrArtifact({
+          runId,
+          prNumber: taskPrContext.number,
+          repoUrl,
+        });
+
+        await finalizeTaskState({
+          runId,
+          taskId,
+          agentId,
+          runStatus: "success",
+          taskStatus: "blocked",
+          blockReason: "awaiting_judge",
+          costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+          errorMessage:
+            "Conflict autofix produced no additional commit; returned to judge for mergeability check.",
+        });
+
+        console.log("\n" + "=".repeat(60));
+        console.log("Task completed: awaiting judge re-check.");
+        console.log(`PR #${taskPrContext.number} will be re-evaluated.`);
+        console.log("=".repeat(60));
+
+        return {
+          success: true,
+          taskId,
+          runId,
+          prUrl,
+        };
+      }
       console.log("[Worker] Commit step produced no new commit. Marking task as no-op success.");
 
       await finalizeTaskState({

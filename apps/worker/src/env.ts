@@ -12,6 +12,8 @@ const STRIP_ENV_PREFIXES = [
   "WORKER_",
   "JUDGE_",
   "OPENCODE_",
+  "CLAUDE_",
+  "LLM_",
   "GEMINI_",
   "ANTHROPIC_",
   "GITHUB_",
@@ -68,6 +70,12 @@ const OPEN_CODE_ENV_KEYS = new Set([
   "OPENCODE_QUOTA_RETRY_DELAY_MS",
   "OPENCODE_MAX_QUOTA_WAITS",
   "OPENCODE_CONFIG",
+  "LLM_EXECUTOR",
+  "CLAUDE_CODE_PERMISSION_MODE",
+  "CLAUDE_CODE_MAX_TURNS",
+  "CLAUDE_CODE_ALLOWED_TOOLS",
+  "CLAUDE_CODE_DISALLOWED_TOOLS",
+  "CLAUDE_CODE_APPEND_SYSTEM_PROMPT",
 ]);
 
 function shouldStripEnvKey(key: string): boolean {
@@ -159,6 +167,12 @@ async function loadConfigFromDb(): Promise<Record<string, string>> {
       OPENCODE_WAIT_ON_QUOTA: row.opencodeWaitOnQuota ?? "",
       OPENCODE_QUOTA_RETRY_DELAY_MS: row.opencodeQuotaRetryDelayMs ?? "",
       OPENCODE_MAX_QUOTA_WAITS: row.opencodeMaxQuotaWaits ?? "",
+      LLM_EXECUTOR: rowRecord.llmExecutor ?? "",
+      CLAUDE_CODE_PERMISSION_MODE: rowRecord.claudeCodePermissionMode ?? "",
+      CLAUDE_CODE_MAX_TURNS: rowRecord.claudeCodeMaxTurns ?? "",
+      CLAUDE_CODE_ALLOWED_TOOLS: rowRecord.claudeCodeAllowedTools ?? "",
+      CLAUDE_CODE_DISALLOWED_TOOLS: rowRecord.claudeCodeDisallowedTools ?? "",
+      CLAUDE_CODE_APPEND_SYSTEM_PROMPT: rowRecord.claudeCodeAppendSystemPrompt ?? "",
       GITHUB_TOKEN: row.githubToken ?? "",
     };
   } catch (error) {

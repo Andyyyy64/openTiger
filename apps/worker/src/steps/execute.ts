@@ -17,6 +17,10 @@ export interface ExecuteResult {
   error?: string;
 }
 
+function isConflictAutoFixTask(task: Task): boolean {
+  return /^\[AutoFix-Conflict\]\s+PR\s+#\d+/i.test(task.title.trim());
+}
+
 // Generate prompt for OpenCode from task
 function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
   const lines: string[] = [`# Task: ${task.title}`, "", "## Goal", task.goal, ""];
@@ -56,6 +60,31 @@ function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
     lines.push("");
   }
 
+  const importantRules: string[] = [
+    "- Only modify files within the allowed paths",
+    "- Ensure all verification commands pass",
+    "- Write clear, maintainable code",
+    "- Add tests if applicable",
+  ];
+
+  if (isConflictAutoFixTask(task)) {
+    importantRules.push(
+      "- Conflict autofix task: git commands for conflict resolution are allowed (fetch/status/diff/merge/checkout --ours/--theirs/add/restore)",
+      "- Do not run git commit/push/rebase/reset/cherry-pick/branch operations; orchestrator handles commit/push/PR updates",
+    );
+  } else {
+    importantRules.push("- Do not run any git operations (no commit/push/checkout/branch/rebase)");
+  }
+
+  importantRules.push(
+    "- Do not run long-running dev/watch/start servers (forbidden: dev, watch, start, next dev, vite, turbo dev)",
+    "- Never access files/directories outside the current repository working directory",
+    "- Never use absolute paths outside the repository (forbidden examples: /home/*, /tmp/* from other workspaces)",
+    "- If expected files are missing, report the mismatch and stop instead of scanning parent/home directories",
+    "- Execute actions directly; do not emit repetitive planning chatter",
+    "- Never call todo/todoread/todowrite pseudo tools",
+  );
+
   lines.push(
     "## Allowed Paths",
     "You may only modify files in these paths:",
@@ -66,17 +95,7 @@ function buildTaskPrompt(task: Task, retryHints: string[] = []): string {
     ...task.commands.map((c) => `- ${c}`),
     "",
     "## Important",
-    "- Only modify files within the allowed paths",
-    "- Ensure all verification commands pass",
-    "- Write clear, maintainable code",
-    "- Add tests if applicable",
-    "- Do not run any git operations (no commit/push/checkout/branch/rebase)",
-    "- Do not run long-running dev/watch/start servers (forbidden: dev, watch, start, next dev, vite, turbo dev)",
-    "- Never access files/directories outside the current repository working directory",
-    "- Never use absolute paths outside the repository (forbidden examples: /home/*, /tmp/* from other workspaces)",
-    "- If expected files are missing, report the mismatch and stop instead of scanning parent/home directories",
-    "- Execute actions directly; do not emit repetitive planning chatter",
-    "- Never call todo/todoread/todowrite pseudo tools",
+    ...importantRules,
   );
 
   return lines.join("\n");
