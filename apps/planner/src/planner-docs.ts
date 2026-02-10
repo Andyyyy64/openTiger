@@ -62,7 +62,7 @@ export function buildDocserTaskForGap(params: {
     `docGap: ${JSON.stringify(params.docGap)}`,
     "docs/README.md が存在しない場合は最小構成で作成する。",
   ].join("\n");
-  const commands = params.checkCommand ? [params.checkCommand] : ["npm run check"];
+  const commands = params.checkCommand ? [params.checkCommand] : [];
   return {
     title: "ドキュメント整備",
     goal: "docs/README.md を含むドキュメントが実装と整合し、検証コマンドが成功する",

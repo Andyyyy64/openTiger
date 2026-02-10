@@ -41,6 +41,7 @@ import {
   loadJudgeFeedback,
 } from "./planner-notes";
 import { clipText, getErrorMessage, isRepoUninitialized } from "./planner-utils";
+import { augmentVerificationCommandsForTasks } from "./planner-verification";
 import {
   computePlanSignature,
   resolvePlanDedupeWindowMs,
@@ -69,6 +70,33 @@ function isTaskParseFailure(message: string): boolean {
     normalized.includes("no valid json found in response") ||
     (normalized.includes("json") && normalized.includes("parse"))
   );
+}
+
+async function applyPlannerTaskPolicies(params: {
+  result: TaskGenerationResult;
+  requirement: Requirement;
+  workdir: string;
+  checkScriptAvailable: boolean;
+  e2eCommand?: string;
+  devCommand?: string;
+  judgeFeedback?: string;
+  inspectionNotes?: string;
+}): Promise<TaskGenerationResult> {
+  let next = sanitizeTaskDependencyIndexes(params.result);
+  next = reduceRedundantDependencyIndexes(next);
+  next = normalizeGeneratedTasks(next);
+  next = applyTaskRolePolicy(next);
+  next = await augmentVerificationCommandsForTasks({
+    workdir: params.workdir,
+    requirement: params.requirement,
+    result: next,
+  });
+  next = applyVerificationCommandPolicy(next, params.checkScriptAvailable);
+  next = applyTesterCommandPolicy(next, params.e2eCommand);
+  next = applyDevCommandPolicy(next, params.devCommand);
+  next = attachJudgeFeedbackToTasks(next, params.judgeFeedback);
+  next = attachInspectionToTasks(next, params.inspectionNotes);
+  return next;
 }
 
 // 要件ファイルからタスクを生成
@@ -253,15 +281,16 @@ export async function planFromRequirement(
     };
   }
 
-  result = sanitizeTaskDependencyIndexes(result);
-  result = reduceRedundantDependencyIndexes(result);
-  result = normalizeGeneratedTasks(result);
-  result = applyTaskRolePolicy(result);
-  result = applyVerificationCommandPolicy(result, checkScriptAvailable);
-  result = applyTesterCommandPolicy(result, e2eCommand);
-  result = applyDevCommandPolicy(result, devCommand);
-  result = attachJudgeFeedbackToTasks(result, judgeFeedback);
-  result = attachInspectionToTasks(result, inspectionNotes);
+  result = await applyPlannerTaskPolicies({
+    result,
+    requirement,
+    workdir: config.workdir,
+    checkScriptAvailable,
+    e2eCommand,
+    devCommand,
+    judgeFeedback,
+    inspectionNotes,
+  });
 
   // 結果を表示
   console.log(`\n[Generated ${result.tasks.length} tasks]`);
@@ -476,28 +505,16 @@ export async function planFromContent(
   }
 
   if (repoUninitialized) {
-    return attachInspectionToTasks(
-      attachJudgeFeedbackToTasks(
-        applyDevCommandPolicy(
-          applyTesterCommandPolicy(
-            applyVerificationCommandPolicy(
-              applyTaskRolePolicy(
-                normalizeGeneratedTasks(
-                  reduceRedundantDependencyIndexes(
-                    sanitizeTaskDependencyIndexes(generateInitializationTasks(requirement)),
-                  ),
-                ),
-              ),
-              checkScriptAvailable,
-            ),
-            e2eCommand,
-          ),
-          devCommand,
-        ),
-        judgeFeedback,
-      ),
+    return applyPlannerTaskPolicies({
+      result: generateInitializationTasks(requirement),
+      requirement,
+      workdir: fullConfig.workdir,
+      checkScriptAvailable,
+      e2eCommand,
+      devCommand,
+      judgeFeedback,
       inspectionNotes,
-    );
+    });
   }
 
   const canUseLlmPlanning = fullConfig.useLlm && (repoUninitialized || Boolean(inspectionResult));
@@ -542,51 +559,29 @@ export async function planFromContent(
         warnings: [...result.warnings, "ドキュメントが未整備のためdocserタスクを追加しました。"],
       };
     }
-    result = sanitizeTaskDependencyIndexes(result);
-    result = reduceRedundantDependencyIndexes(result);
-    return attachInspectionToTasks(
-      attachJudgeFeedbackToTasks(
-        applyDevCommandPolicy(
-          applyTesterCommandPolicy(
-            applyVerificationCommandPolicy(
-              applyTaskRolePolicy(normalizeGeneratedTasks(result)),
-              checkScriptAvailable,
-            ),
-            e2eCommand,
-          ),
-          devCommand,
-        ),
-        judgeFeedback,
-      ),
+    return applyPlannerTaskPolicies({
+      result,
+      requirement,
+      workdir: fullConfig.workdir,
+      checkScriptAvailable,
+      e2eCommand,
+      devCommand,
+      judgeFeedback,
       inspectionNotes,
-    );
+    });
   }
 
-  return attachInspectionToTasks(
-    attachJudgeFeedbackToTasks(
-      applyDevCommandPolicy(
-        applyTesterCommandPolicy(
-          applyVerificationCommandPolicy(
-            applyTaskRolePolicy(
-              normalizeGeneratedTasks(
-                reduceRedundantDependencyIndexes(
-                  sanitizeTaskDependencyIndexes(
-                    appendPlannerWarning(
-                      generateSimpleTasks(requirement),
-                      "LLM planning skipped because inspection was unavailable.",
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            checkScriptAvailable,
-          ),
-          e2eCommand,
-        ),
-        devCommand,
-      ),
-      judgeFeedback,
+  return applyPlannerTaskPolicies({
+    result: appendPlannerWarning(
+      generateSimpleTasks(requirement),
+      "LLM planning skipped because inspection was unavailable.",
     ),
+    requirement,
+    workdir: fullConfig.workdir,
+    checkScriptAvailable,
+    e2eCommand,
+    devCommand,
+    judgeFeedback,
     inspectionNotes,
-  );
+  });
 }

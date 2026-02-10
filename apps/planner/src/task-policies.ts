@@ -5,7 +5,14 @@ import type { PlannedTaskInput, TaskGenerationResult } from "./strategies/index"
 export const INIT_ALLOWED_PATHS = [
   "package.json",
   "pnpm-workspace.yaml",
+  "yarn-workspace.yaml",
+  "workspace.json",
+  "workspaces.json",
   "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "bun.lock",
+  "bun.lockb",
   ".gitignore",
   "tsconfig.json",
   "tsconfig.*.json",
@@ -24,12 +31,25 @@ export const INIT_ALLOWED_PATHS = [
 const INIT_ROOT_FILES = [
   "package.json",
   "pnpm-workspace.yaml",
+  "yarn-workspace.yaml",
+  "workspace.json",
+  "workspaces.json",
   "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "bun.lock",
+  "bun.lockb",
   ".gitignore",
   "tsconfig.json",
 ];
 
-const LOCKFILE_PATHS = ["pnpm-lock.yaml"];
+const LOCKFILE_PATHS = [
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "yarn.lock",
+  "bun.lock",
+  "bun.lockb",
+];
 
 // docser はドキュメント整備が主務だが、package.json の scripts 補完や
 // .env.example の追記など軽微なルート変更が必要になるケースを許容する
@@ -87,9 +107,17 @@ function isInitializationTask(task: PlannedTaskInput): boolean {
 }
 
 function normalizeVerificationCommands(commands: string[]): string[] {
-  return commands.map((command) => {
-    return command;
-  });
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const command of commands) {
+    const trimmed = command.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    normalized.push(trimmed);
+  }
+  return normalized;
 }
 
 export function normalizeGeneratedTasks(result: TaskGenerationResult): TaskGenerationResult {
@@ -159,14 +187,6 @@ export function applyTaskRolePolicy(result: TaskGenerationResult): TaskGeneratio
   return { ...result, tasks };
 }
 
-function isCheckCommand(command: string): boolean {
-  return /\b(pnpm|npm)\b[^\n]*\b(run\s+)?check\b/.test(command);
-}
-
-function isDevCommand(command: string): boolean {
-  return /\b(pnpm|npm|yarn|bun)\b[^\n]*\b(run\s+)?dev\b/.test(command);
-}
-
 function ensureDevCommand(commands: string[]): string[] {
   // `dev` は常駐プロセスになりやすく検証用途には不向きなので自動補完しない
   return commands;
@@ -189,25 +209,13 @@ export function applyDevCommandPolicy(
   return { ...result, tasks };
 }
 
-function filterVerificationCommands(commands: string[], checkScriptAvailable: boolean): string[] {
-  return commands.filter((command) => {
-    if (isDevCommand(command)) {
-      return false;
-    }
-    if (!checkScriptAvailable && isCheckCommand(command)) {
-      return false;
-    }
-    return true;
-  });
-}
-
 export function applyVerificationCommandPolicy(
   result: TaskGenerationResult,
-  checkScriptAvailable: boolean,
+  _checkScriptAvailable: boolean,
 ): TaskGenerationResult {
-  // `dev` は常に除外し、`check` はスクリプト未定義時のみ除外する
+  // コマンド文字列を正規化し、重複や空値を除外する
   const tasks = result.tasks.map((task) => {
-    const filtered = filterVerificationCommands(task.commands, checkScriptAvailable);
+    const filtered = normalizeVerificationCommands(task.commands);
     if (filtered.length === task.commands.length) {
       return task;
     }
@@ -269,9 +277,19 @@ export function applyTesterCommandPolicy(
 }
 
 function requiresLockfile(commands: string[]): boolean {
+  const installTokens = new Set(
+    (process.env.PLANNER_INSTALL_SUBCOMMAND_TOKENS ?? "install,add,i")
+      .split(",")
+      .map((token) => token.trim().toLowerCase())
+      .filter((token) => token.length > 0),
+  );
+
   return commands.some((command) => {
-    const trimmed = command.trim();
-    return /\bpnpm\b[^\n]*\b(install|add|i)\b/.test(trimmed);
+    const tokens = command
+      .trim()
+      .split(/\s+/)
+      .map((token) => token.toLowerCase());
+    return tokens.some((token) => installTokens.has(token));
   });
 }
 
@@ -279,15 +297,15 @@ export function generateInitializationTasks(requirement: Requirement): TaskGener
   const allowedPaths = mergeAllowedPaths(requirement.allowedPaths, INIT_ALLOWED_PATHS);
   const task: PlannedTaskInput = {
     title: "モノレポ構成の初期化",
-    goal: "pnpm workspaces が使える状態になり、pnpm -r list が成功する",
+    goal: "ワークスペース構成と依存関係の基盤が整備され、検証コマンドが定義されている",
     role: "worker",
     context: {
-      files: ["package.json", "pnpm-workspace.yaml", ".gitignore", "apps/", "packages/"],
+      files: ["package.json", ".gitignore", "apps/", "packages/"],
       specs: "apps/ と packages/ の土台と最小限のpackage.jsonを用意する",
       notes: requirement.goal,
     },
     allowedPaths,
-    commands: ["pnpm install", "pnpm -r list"],
+    commands: [],
     priority: 100,
     riskLevel: "low",
     dependencies: [],
@@ -490,5 +508,5 @@ export function ensureInitializationTaskForUninitializedRepo(
 }
 
 export function needsLockfileAllowance(commands: string[], allowedPaths: string[]): boolean {
-  return requiresLockfile(commands) && !allowedPaths.includes("pnpm-lock.yaml");
+  return requiresLockfile(commands) && !allowedPaths.some((path) => LOCKFILE_PATHS.includes(path));
 }
