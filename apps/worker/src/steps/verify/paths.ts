@@ -72,7 +72,10 @@ export function touchesPackageManifest(files: string[]): boolean {
   const workspaceConfigPattern =
     /(^|\/)(?:[^/]*workspace[^/]*\.(?:json|ya?ml)|turbo\.json|lerna\.json)$/i;
   return files.some(
-    (file) => file === "package.json" || file.endsWith("/package.json") || workspaceConfigPattern.test(file),
+    (file) =>
+      file === "package.json" ||
+      file.endsWith("/package.json") ||
+      workspaceConfigPattern.test(file),
   );
 }
 

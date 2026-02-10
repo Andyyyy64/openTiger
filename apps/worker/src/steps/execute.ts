@@ -271,7 +271,9 @@ export async function executeTask(options: ExecuteOptions): Promise<ExecuteResul
     enableImmediateRecovery &&
     isDoomLoopFailure(openCodeResult.stderr)
   ) {
-    console.warn(`[${executorLogTag}] Doom loop detected. Retrying once in immediate recovery mode...`);
+    console.warn(
+      `[${executorLogTag}] Doom loop detected. Retrying once in immediate recovery mode...`,
+    );
     const recoveryTimeoutRaw = Number.parseInt(
       process.env.OPENCODE_RECOVERY_TIMEOUT_SECONDS ?? "420",
       10,

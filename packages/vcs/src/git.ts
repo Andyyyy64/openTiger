@@ -25,7 +25,10 @@ export interface DiffStats {
 // Gitコマンドを実行
 async function execGit(args: string[], cwd: string): Promise<GitResult> {
   return new Promise((resolve) => {
-    const rawTimeoutMs = Number.parseInt(globalThis.process.env.OPENTIGER_GIT_TIMEOUT_MS ?? "900000", 10);
+    const rawTimeoutMs = Number.parseInt(
+      globalThis.process.env.OPENTIGER_GIT_TIMEOUT_MS ?? "900000",
+      10,
+    );
     const timeoutMs = Number.isFinite(rawTimeoutMs) && rawTimeoutMs > 0 ? rawTimeoutMs : 900000;
     const child = spawn("git", args, {
       cwd,
@@ -542,9 +545,7 @@ export async function getChangeStatsForFiles(
 ): Promise<{ additions: number; deletions: number }> {
   const targetFiles = Array.from(
     new Set(
-      files
-        .map((file) => file.trim())
-        .filter((file) => file.length > 0 && !file.endsWith("/")),
+      files.map((file) => file.trim()).filter((file) => file.length > 0 && !file.endsWith("/")),
     ),
   );
 

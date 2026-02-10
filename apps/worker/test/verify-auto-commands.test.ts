@@ -108,11 +108,7 @@ describe("resolveAutoVerificationCommands", () => {
       explicitCommands: [],
     });
 
-    expect(commands).toEqual([
-      "runner verify:root",
-      "runner verify:worker",
-      "runner verify:api",
-    ]);
+    expect(commands).toEqual(["runner verify:root", "runner verify:worker", "runner verify:api"]);
     expect(runOpenCodeMock).not.toHaveBeenCalled();
   });
 
@@ -127,7 +123,7 @@ describe("resolveAutoVerificationCommands", () => {
 
     process.env.WORKER_AUTO_VERIFY_MODE = "llm";
     runOpenCodeMock.mockResolvedValueOnce(
-      createLlmResult("```json\n{\"commands\":[\"runner verify:llm\"],\"summary\":\"ok\"}\n```"),
+      createLlmResult('```json\n{"commands":["runner verify:llm"],"summary":"ok"}\n```'),
     );
 
     const commands = await resolveAutoVerificationCommands({

@@ -14,10 +14,7 @@ import {
   getWorkingTreeDiff,
 } from "@openTiger/vcs";
 import { runOpenCode } from "@openTiger/llm";
-import {
-  matchDeniedCommand,
-  normalizeVerificationCommand,
-} from "./command-normalizer";
+import { matchDeniedCommand, normalizeVerificationCommand } from "./command-normalizer";
 import { runCommand } from "./command-runner";
 import { buildOpenCodeEnv } from "../../env";
 import {
@@ -118,7 +115,9 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
     }
   }
   const shouldAllowLockfiles =
-    includesInstallCommand(commands) || touchesPackageManifest(changedFiles) || allowLockfileOutsidePaths;
+    includesInstallCommand(commands) ||
+    touchesPackageManifest(changedFiles) ||
+    allowLockfileOutsidePaths;
   const lockfilePaths = shouldAllowLockfiles ? await detectLockfilePaths(repoPath) : [];
   const effectiveAllowedPaths =
     lockfilePaths.length > 0 ? mergeAllowedPaths(allowedPaths, lockfilePaths) : allowedPaths;
@@ -377,8 +376,7 @@ ${clippedDiff || "(diff unavailable)"}
       commandResults.push(lightCheck);
       allPassed = lightCheck.success;
     } else {
-      const message =
-        "No executable verification commands were run for non-documentation changes.";
+      const message = "No executable verification commands were run for non-documentation changes.";
       commandResults.push({
         command: "verify:guard",
         success: false,

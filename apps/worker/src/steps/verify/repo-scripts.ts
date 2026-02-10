@@ -540,7 +540,10 @@ async function generateCommandsWithLlm(params: {
   maxCommands: number;
 }): Promise<string[]> {
   const rootScripts = await loadRootScripts(params.repoPath);
-  const changedManifests = await collectChangedPackageManifests(params.repoPath, params.changedFiles);
+  const changedManifests = await collectChangedPackageManifests(
+    params.repoPath,
+    params.changedFiles,
+  );
   const changedPackages = changedManifests.map((manifest) => ({
     packageName: manifest.name ?? "(unnamed)",
     packagePath: normalizePathForMatch(relative(params.repoPath, manifest.dir)) || ".",

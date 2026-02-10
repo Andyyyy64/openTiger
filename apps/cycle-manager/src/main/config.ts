@@ -46,8 +46,7 @@ export const DEFAULT_CONFIG: CycleManagerConfig = {
   replanRepoUrl: process.env.REPLAN_REPO_URL ?? process.env.REPO_URL,
   replanBaseBranch: process.env.REPLAN_BASE_BRANCH ?? process.env.BASE_BRANCH ?? "main",
   systemApiBaseUrl:
-    process.env.SYSTEM_API_BASE_URL ??
-    `http://127.0.0.1:${process.env.API_PORT?.trim() || "4301"}`,
+    process.env.SYSTEM_API_BASE_URL ?? `http://127.0.0.1:${process.env.API_PORT?.trim() || "4301"}`,
   issueSyncIntervalMs: parseInt(process.env.ISSUE_SYNC_INTERVAL_MS ?? "30000", 10),
   issueSyncTimeoutMs: parseInt(process.env.ISSUE_SYNC_TIMEOUT_MS ?? "15000", 10),
   failedTaskRetryCooldownMs: parseInt(process.env.FAILED_TASK_RETRY_COOLDOWN_MS ?? "30000", 10),

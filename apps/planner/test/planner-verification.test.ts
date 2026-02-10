@@ -196,8 +196,8 @@ describe("augmentVerificationCommandsForTasks", () => {
     });
 
     expect(result.tasks[0]?.commands).toEqual([]);
-    expect(result.warnings.some((warning) => warning.includes("verification commands unresolved"))).toBe(
-      true,
-    );
+    expect(
+      result.warnings.some((warning) => warning.includes("verification commands unresolved")),
+    ).toBe(true);
   });
 });

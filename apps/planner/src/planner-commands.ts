@@ -18,7 +18,9 @@ export async function hasRootCheckScript(workdir: string): Promise<boolean> {
 }
 
 // 実行コマンドの具体形は verify.contract / LLM 計画で補完する
-export async function resolveCheckVerificationCommand(_workdir: string): Promise<string | undefined> {
+export async function resolveCheckVerificationCommand(
+  _workdir: string,
+): Promise<string | undefined> {
   return undefined;
 }
 

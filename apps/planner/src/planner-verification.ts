@@ -202,7 +202,9 @@ function dedupeCommands(commands: string[]): string[] {
 }
 
 function sanitizeCommands(commands: string[], maxCommands: number): string[] {
-  return dedupeCommands(commands).filter((command) => isRunnableCommand(command)).slice(0, maxCommands);
+  return dedupeCommands(commands)
+    .filter((command) => isRunnableCommand(command))
+    .slice(0, maxCommands);
 }
 
 function toStringArray(value: unknown): string[] {
@@ -320,7 +322,10 @@ async function loadPackageScriptsForTask(
   task: PlannedTaskInput,
 ): Promise<Array<{ packagePath: string; packageName?: string; scripts: Record<string, string> }>> {
   const contextFiles = task.context?.files ?? [];
-  const packageMap = new Map<string, { packagePath: string; packageName?: string; scripts: Record<string, string> }>();
+  const packageMap = new Map<
+    string,
+    { packagePath: string; packageName?: string; scripts: Record<string, string> }
+  >();
 
   for (const rawFile of contextFiles) {
     const normalized = normalizePath(rawFile);
@@ -391,7 +396,11 @@ function buildTaskVerificationPrompt(params: {
   requirement: Requirement;
   task: PlannedTaskInput;
   rootScripts: Record<string, string>;
-  packageContexts: Array<{ packagePath: string; packageName?: string; scripts: Record<string, string> }>;
+  packageContexts: Array<{
+    packagePath: string;
+    packageName?: string;
+    scripts: Record<string, string>;
+  }>;
   maxCommands: number;
 }): string {
   const payload = {
@@ -473,8 +482,12 @@ export async function augmentVerificationCommandsForTasks(
     return options.result;
   }
 
-  const maxCommands = parsePositiveInt(process.env.PLANNER_VERIFY_MAX_COMMANDS, DEFAULT_MAX_COMMANDS);
-  const augmentNonEmpty = (process.env.PLANNER_VERIFY_AUGMENT_NONEMPTY ?? "false").toLowerCase() === "true";
+  const maxCommands = parsePositiveInt(
+    process.env.PLANNER_VERIFY_MAX_COMMANDS,
+    DEFAULT_MAX_COMMANDS,
+  );
+  const augmentNonEmpty =
+    (process.env.PLANNER_VERIFY_AUGMENT_NONEMPTY ?? "false").toLowerCase() === "true";
   const contract = await loadVerificationContract(options.workdir);
   const warnings = [...options.result.warnings];
 
@@ -486,12 +499,19 @@ export async function augmentVerificationCommandsForTasks(
 
     if (shouldResolve && (mode === "contract" || mode === "hybrid" || mode === "fallback")) {
       if (contract) {
-        const contractCommands = sanitizeCommands(resolveContractCommandsForTask(contract, task), maxCommands);
+        const contractCommands = sanitizeCommands(
+          resolveContractCommandsForTask(contract, task),
+          maxCommands,
+        );
         merged = dedupeCommands([...merged, ...contractCommands]).slice(0, maxCommands);
       }
     }
 
-    if (shouldResolve && merged.length === 0 && (mode === "llm" || mode === "hybrid" || mode === "fallback")) {
+    if (
+      shouldResolve &&
+      merged.length === 0 &&
+      (mode === "llm" || mode === "hybrid" || mode === "fallback")
+    ) {
       try {
         const llmCommands = await planCommandsWithLlm({
           workdir: options.workdir,

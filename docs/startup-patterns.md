@@ -10,12 +10,12 @@ Last verified against code on 2026-02-10.
 
 ## Decision Inputs
 
-| Symbol | Meaning | Source |
-| --- | --- | --- |
-| `R` | Requirement content is non-empty | `/system/preflight` request body |
-| `I` | Issue task backlog exists | `preflight.github.issueTaskBacklogCount > 0` |
-| `P` | PR/Judge backlog exists | `openPrCount > 0 OR pendingJudgeTaskCount > 0` |
-| `L` | Local task backlog exists | `queued/running/failed/blocked > 0` |
+| Symbol | Meaning                          | Source                                         |
+| ------ | -------------------------------- | ---------------------------------------------- |
+| `R`    | Requirement content is non-empty | `/system/preflight` request body               |
+| `I`    | Issue task backlog exists        | `preflight.github.issueTaskBacklogCount > 0`   |
+| `P`    | PR/Judge backlog exists          | `openPrCount > 0 OR pendingJudgeTaskCount > 0` |
+| `L`    | Local task backlog exists        | `queued/running/failed/blocked > 0`            |
 
 ## Start-Time Rules
 
@@ -36,14 +36,14 @@ If `!startPlanner && backlogTotal == 0`, Start UI returns:
 
 The 16 boolean combinations of `R/I/P/L` collapse into the classes below (same outputs are grouped):
 
-| Class | Condition | Planner | Dispatcher/Worker/Tester/Docser | Judge | Expected behavior |
-| --- | --- | --- | --- | --- | --- |
-| S0 | `R=0,I=0,P=0,L=0` | No | No | No | Start is rejected (nothing to do) |
-| S1 | `R=1,I=0,P=0,L=0` | Yes | Yes | Yes | Planner generates tasks, then normal execution |
-| S2 | `I=1` (any `R/P/L`) | No | Yes | Yes | Issue backlog is processed first |
-| S3 | `P=1,I=0,L=0` (any `R`) | No | No | Yes | Judge-only backlog processing |
-| S4 | `L=1,I=0,P=0` (any `R`) | No | Yes | Yes | Existing local tasks are processed first |
-| S5 | `L=1,P=1,I=0` (any `R`) | No | Yes | Yes | Local backlog + judge backlog first |
+| Class | Condition               | Planner | Dispatcher/Worker/Tester/Docser | Judge | Expected behavior                              |
+| ----- | ----------------------- | ------- | ------------------------------- | ----- | ---------------------------------------------- |
+| S0    | `R=0,I=0,P=0,L=0`       | No      | No                              | No    | Start is rejected (nothing to do)              |
+| S1    | `R=1,I=0,P=0,L=0`       | Yes     | Yes                             | Yes   | Planner generates tasks, then normal execution |
+| S2    | `I=1` (any `R/P/L`)     | No      | Yes                             | Yes   | Issue backlog is processed first               |
+| S3    | `P=1,I=0,L=0` (any `R`) | No      | No                              | Yes   | Judge-only backlog processing                  |
+| S4    | `L=1,I=0,P=0` (any `R`) | No      | Yes                             | Yes   | Existing local tasks are processed first       |
+| S5    | `L=1,P=1,I=0` (any `R`) | No      | Yes                             | Yes   | Local backlog + judge backlog first            |
 
 Notes:
 
@@ -102,10 +102,9 @@ stateDiagram-v2
 
 ## Important Edge Patterns
 
-| Pattern | What happens |
-| --- | --- |
-| Issue exists but explicit role missing | Issue backlog stays non-zero; planner is blocked until issue metadata is fixed |
-| GitHub query failed in preflight | Warnings are emitted; Start behavior depends on remaining local signals |
-| Runtime issue-sync request failed | `cycle-manager` skips replan for that cycle (fail-closed) |
-| Manual planner start while backlog exists | Rejected by planner prehook (`409`) |
-
+| Pattern                                   | What happens                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------ |
+| Issue exists but explicit role missing    | Issue backlog stays non-zero; planner is blocked until issue metadata is fixed |
+| GitHub query failed in preflight          | Warnings are emitted; Start behavior depends on remaining local signals        |
+| Runtime issue-sync request failed         | `cycle-manager` skips replan for that cycle (fail-closed)                      |
+| Manual planner start while backlog exists | Rejected by planner prehook (`409`)                                            |
