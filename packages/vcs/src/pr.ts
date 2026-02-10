@@ -25,6 +25,12 @@ export interface PRInfo {
   state: string;
 }
 
+export interface MergePRResult {
+  merged: boolean;
+  status?: number;
+  reason?: string;
+}
+
 function getErrorStatus(error: unknown): number | undefined {
   if (typeof error === "object" && error && "status" in error) {
     const status = Number((error as { status?: unknown }).status);
@@ -219,10 +225,20 @@ export async function addPRComment(prNumber: number, body: string): Promise<void
 }
 
 // PRをマージ
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "object" && error && "message" in error) {
+    return String((error as { message?: unknown }).message ?? "Unknown error");
+  }
+  return String(error);
+}
+
 export async function mergePR(
   prNumber: number,
   mergeMethod: "merge" | "squash" | "rebase" = "squash",
-): Promise<boolean> {
+): Promise<MergePRResult> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
 
@@ -233,10 +249,14 @@ export async function mergePR(
       pull_number: prNumber,
       merge_method: mergeMethod,
     });
-    return true;
+    return { merged: true };
   } catch (error) {
     console.error(`Failed to merge PR #${prNumber}:`, error);
-    return false;
+    return {
+      merged: false,
+      status: getErrorStatus(error),
+      reason: extractErrorMessage(error),
+    };
   }
 }
 
