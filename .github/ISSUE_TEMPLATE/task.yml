@@ -1,0 +1,55 @@
+name: Task
+description: Create an executable task for openTiger agents
+title: "[Task] "
+labels:
+  - task
+body:
+  - type: dropdown
+    id: agent_role
+    attributes:
+      label: Agent Role
+      description: Select exactly one agent role for this task.
+      options:
+        - worker
+        - tester
+        - docser
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What should be implemented or changed?
+      placeholder: Describe the desired outcome.
+    validations:
+      required: true
+
+  - type: textarea
+    id: allowed_paths
+    attributes:
+      label: Allowed Paths
+      description: One path per line.
+      value: |
+        apps/**
+        packages/**
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: List machine-checkable completion criteria.
+      placeholder: |
+        - command X exits with code 0
+        - feature Y works
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        Role parsing notes for automation:
+        - Add one of these labels to the issue: `role:worker`, `role:tester`, `role:docser`
+        - Or add an inline line in body: `Agent: worker` (or tester/docser)
