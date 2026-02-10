@@ -1,4 +1,4 @@
-# openTiger
+# 🐯openTiger
 
 ![openTiger](assets/avatar.png)
 
@@ -7,12 +7,6 @@
 openTiger continuously runs requirement-to-task generation, implementation, review, and recovery using multiple agents.
 
 ![openTiger UI](assets/ui.png)
-
----
-
-Docs: [Index](docs/README.md) | [Flow](docs/flow.md) | [Modes](docs/mode.md) | [Agents](docs/agent)
-
----
 
 ## What It Can Do
 
