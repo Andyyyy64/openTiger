@@ -1,6 +1,6 @@
 # Docs Index
 
-This folder documents the current (code-aligned) openTiger behavior.
+This folder documents openTiger behavior and operations.
 
 ## Architecture and Operations
 
@@ -14,8 +14,6 @@ This folder documents the current (code-aligned) openTiger behavior.
   - `/system` APIs and `system_config` setting reference.
 - `docs/nonhumanoriented.md`
   - Design principles for long-running autonomous operation.
-- `docs/task.md`
-  - What is already implemented and what is still risky.
 - `docs/idea.md`
   - Next-phase improvements.
 
@@ -33,4 +31,5 @@ This folder documents the current (code-aligned) openTiger behavior.
 2. `docs/mode.md`
 3. `docs/config.md`
 4. `docs/agent/*.md`
-5. `docs/task.md`
+5. `docs/startup-patterns.md`
+6. `docs/idea.md`

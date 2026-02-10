@@ -30,8 +30,8 @@ Docs: [Index](docs/README.md) | [Flow](docs/flow.md) | [Modes](docs/mode.md) | [
   - Existing issues/PRs are processed before generating new plans
 - Strict convergence loop in runtime
   - `local tasks -> issue backlog sync -> planner replan (only when issue backlog is empty)`
-- Explicit recovery states
-  - `awaiting_judge` / `quota_wait` / `needs_rework`
+- Explicit blocked states in runtime
+  - `awaiting_judge` / `quota_wait` / `needs_rework` / `issue_linking`
 - Duplicate-execution defenses
   - lease, runtime lock, and judge idempotency
 - Planner is single-instance; execution agents can scale horizontally
@@ -63,7 +63,7 @@ pnpm run up
 ### 4. First Run Flow
 
 1. Configure GitHub, model, and API keys in Dashboard `system_config`
-2. Load `requirement.md` and start
+2. Load `templates/requirement.md` (or your own `requirement.md`) and start
 3. Monitor progress in `tasks`, `runs`, and `judgements`
 
 ## Best For Teams That
@@ -75,6 +75,7 @@ pnpm run up
 ## Documentation
 
 - `docs/flow.md`: end-to-end state transitions and convergence flow
+- `docs/startup-patterns.md`: startup decision matrix and pattern classes
 - `docs/mode.md`: operating modes and scaling setup
 - `docs/config.md`: `/system` and `system_config` settings guide
 - `docs/nonhumanoriented.md`: “never stall” design principles
