@@ -217,26 +217,35 @@ export function applyVerificationCommandPolicy(
   return { ...result, tasks };
 }
 
-function taskTouchesFrontend(task: PlannedTaskInput): boolean {
+function taskRequiresE2E(task: PlannedTaskInput): boolean {
   const text = [task.title, task.goal, task.context?.specs, task.context?.notes]
     .filter((value): value is string => typeof value === "string")
     .join(" ")
     .toLowerCase();
-  const textHints = ["frontend", "フロント", "ui", "画面", "web"];
-  if (textHints.some((hint) => text.includes(hint))) {
+  const explicitE2ePatterns = [
+    /\be2e\b/,
+    /\bplaywright\b/,
+    /\bcypress\b/,
+    /critical path/,
+    /user flow/,
+    /エンドツーエンド/,
+    /クリティカルパス/,
+    /ユーザーフロー/,
+  ];
+  if (explicitE2ePatterns.some((pattern) => pattern.test(text))) {
     return true;
   }
   const paths = [...(task.allowedPaths ?? []), ...(task.context?.files ?? [])]
     .join(" ")
     .toLowerCase();
-  return /apps\/web|web\/|frontend|ui/.test(paths);
+  return /(^|\/)(__e2e__|e2e|playwright|cypress)(\/|$)|test-results/.test(paths);
 }
 
 function hasE2ECommand(commands: string[]): boolean {
-  return commands.some((command) => /\b(e2e|playwright)\b/i.test(command));
+  return commands.some((command) => /\b(e2e|playwright|cypress)\b/i.test(command));
 }
 
-// フロントタスクのtesterにE2E検証を補う
+// E2E要件が明示されたtesterタスクにのみE2E検証を補う
 export function applyTesterCommandPolicy(
   result: TaskGenerationResult,
   e2eCommand?: string,
@@ -248,7 +257,7 @@ export function applyTesterCommandPolicy(
     if (task.role !== "tester") {
       return task;
     }
-    if (!taskTouchesFrontend(task) || hasE2ECommand(task.commands)) {
+    if (!taskRequiresE2E(task) || hasE2ECommand(task.commands)) {
       return task;
     }
     return {

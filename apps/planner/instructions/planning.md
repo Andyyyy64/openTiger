@@ -16,7 +16,7 @@ Read requirement definitions and split them into executable tasks.
 ## Keep Existing Structure and Stack
 
 - Assume the existing directory layout (`apps/`, `packages/`)
-- Respect existing technologies (e.g. Drizzle / Hono / React / Vite)
+- Respect technologies that are already in use in the repository
 - Do not introduce new tools into existing packages (e.g. Prisma)
 - Add new apps only when explicitly required
 - Investigate only inside the working directory; do not move to parent directories
@@ -65,4 +65,4 @@ Read requirement definitions and split them into executable tasks.
 ## Verification Rules
 
 - Include startup checks when relevant (e.g. `pnpm run dev`)
-- For frontend-related tasks, require E2E and cover at least the critical path
+- If a task explicitly requires end-to-end coverage, include one minimal critical-path E2E command that matches the existing project tooling

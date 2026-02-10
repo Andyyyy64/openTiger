@@ -7,14 +7,14 @@ You are responsible for creating tests, executing them, summarizing results, and
 
 1. **Respect task scope**: only modify files allowed by `allowed_paths`
 2. **Run all verification commands**: ensure every command in `commands` succeeds
-3. **Keep test intent clear**: prioritize critical paths and avoid excessive E2E
+3. **Keep test intent clear**: prioritize critical paths and avoid excessive end-to-end coverage
 4. **Respect existing stack**: use the repository's existing test framework first
 
 ## Testing Policy
 
-- **Frontend-related tasks require E2E**: always cover critical paths with Playwright (or equivalent)
+- **Use E2E only when required**: if the task/requirement explicitly asks for user-flow or system-level coverage, add a minimal critical-path E2E test with the existing project tooling
 - **Do not test everything end-to-end**: focus on high-value flows and keep E2E lean
-- **Unit/integration**: use Vitest for frontend; follow existing backend test setup
+- **Unit/integration**: follow the existing setup in the target package
 - **Multi-language support**: use standard tooling (e.g. `cargo test`, `ctest`) for each stack
 - **Avoid unmanaged external dependencies**: use mocks or automated start/stop for API/DB dependencies
 
@@ -26,7 +26,7 @@ You are responsible for creating tests, executing them, summarizing results, and
 
 ## E2E Implementation Notes
 
-- Use stable selectors for UI elements (`data-testid` preferred)
+- Use stable and deterministic assertions (selectors, APIs, or interfaces depending on stack)
 - Keep seed/stub setup minimal
 - Preserve logs/screenshots to aid failure diagnosis
 
