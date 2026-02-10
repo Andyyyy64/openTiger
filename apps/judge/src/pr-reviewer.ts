@@ -244,8 +244,35 @@ export async function requestChanges(prNumber: number, reasons: string[]): Promi
 export async function autoMergePR(
   prNumber: number,
   mergeMethod: "merge" | "squash" | "rebase" = "squash",
-): Promise<boolean> {
+): Promise<{ merged: boolean; status?: number; reason?: string }> {
   return mergePR(prNumber, mergeMethod);
+}
+
+function isMergeInProgressReason(reason: string | undefined): boolean {
+  if (!reason) {
+    return false;
+  }
+  const normalized = reason.toLowerCase();
+  return (
+    normalized.includes("merge already in progress") ||
+    normalized.includes("merge is already in progress")
+  );
+}
+
+async function isMergedPR(prNumber: number): Promise<boolean> {
+  try {
+    const octokit = getOctokit();
+    const { owner, repo } = getRepoInfo();
+    const pr = await octokit.pulls.get({
+      owner,
+      repo,
+      pull_number: prNumber,
+    });
+    return Boolean(pr.data.merged);
+  } catch (error) {
+    console.warn(`[Judge] Failed to re-check merge state for PR #${prNumber}:`, error);
+    return false;
+  }
 }
 
 // 完全なレビューフローを実行
@@ -284,10 +311,24 @@ export async function reviewAndAct(
         }
 
         if (result.autoMerge) {
-          merged = await autoMergePR(prNumber);
+          const mergeResult = await autoMergePR(prNumber);
+          merged = mergeResult.merged;
           if (merged) {
             console.log(`PR #${prNumber} has been automatically merged`);
           } else {
+            const mergedAfterFailure = await isMergedPR(prNumber);
+            if (mergedAfterFailure) {
+              merged = true;
+              console.log(`PR #${prNumber} was already merged by another process`);
+              break;
+            }
+
+            if (isMergeInProgressReason(mergeResult.reason)) {
+              mergeDeferred = true;
+              mergeDeferredReason = "merge_already_in_progress";
+              break;
+            }
+
             const sync = await trySyncPRWithBase(prNumber);
             mergeDeferred = sync.requested;
             mergeDeferredReason = sync.reason;

@@ -1,6 +1,6 @@
 import { db } from "@openTiger/db";
 import { tasks, events, runs } from "@openTiger/db/schema";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { getOctokit, getRepoInfo } from "@openTiger/vcs";
 import {
   JUDGE_AUTO_FIX_ON_FAIL,
@@ -195,6 +195,7 @@ export async function createAutoFixTaskForPr(params: {
       and(
         sql`${tasks.title} like ${titlePattern} escape '\\'`,
         inArray(tasks.status, ["queued", "running", "blocked"]),
+        ne(tasks.id, params.sourceTaskId),
       ),
     )
     .limit(1);
@@ -320,6 +321,7 @@ export async function createConflictAutoFixTaskForPr(params: {
       and(
         sql`${tasks.title} like ${titlePattern} escape '\\'`,
         inArray(tasks.status, ["queued", "running", "blocked"]),
+        ne(tasks.id, params.sourceTaskId),
       ),
     )
     .limit(1);
