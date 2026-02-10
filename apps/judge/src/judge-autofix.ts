@@ -378,7 +378,10 @@ export async function createConflictAutoFixTaskForPr(params: {
           baseRef: prBranchContext.baseRef,
         },
       },
-      allowedPaths: params.allowedPaths.length > 0 ? params.allowedPaths : ["**"],
+      // Conflict autofix needs to merge base branch changes, which can stage files
+      // outside the source task's allowed paths. Restricting paths here causes
+      // policy false-positives and endless rework loops.
+      allowedPaths: ["**"],
       commands: params.commands,
       dependencies: [],
       priority: 90,

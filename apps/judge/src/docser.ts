@@ -34,6 +34,10 @@ type DocserCreationResult = {
   docserTaskId?: string;
 };
 
+function isAutoFixTaskTitle(title: string): boolean {
+  return /^\[(?:AutoFix|AutoFix-Conflict)\]\s+PR\s+#\d+/i.test(title.trim());
+}
+
 function isDocPath(path: string): boolean {
   if (path === "README.md") {
     return true;
@@ -175,6 +179,10 @@ async function createDocserTask(params: {
 
   if (baseTask.role === "docser") {
     return { created: false, reason: "source_is_docser" };
+  }
+
+  if (isAutoFixTaskTitle(baseTask.title)) {
+    return { created: false, reason: "source_is_autofix" };
   }
 
   if (await hasDocserTaskEvent(params.source.taskId)) {
