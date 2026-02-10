@@ -25,7 +25,9 @@ export interface DiffStats {
 // Gitコマンドを実行
 async function execGit(args: string[], cwd: string): Promise<GitResult> {
   return new Promise((resolve) => {
-    const process = spawn("git", args, {
+    const rawTimeoutMs = Number.parseInt(globalThis.process.env.OPENTIGER_GIT_TIMEOUT_MS ?? "900000", 10);
+    const timeoutMs = Number.isFinite(rawTimeoutMs) && rawTimeoutMs > 0 ? rawTimeoutMs : 900000;
+    const child = spawn("git", args, {
       cwd,
       env: {
         ...globalThis.process.env,
@@ -35,25 +37,36 @@ async function execGit(args: string[], cwd: string): Promise<GitResult> {
 
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
+    const timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      setTimeout(() => child.kill("SIGKILL"), 2000);
+    }, timeoutMs);
 
-    process.stdout.on("data", (data: Buffer) => {
+    child.stdout.on("data", (data: Buffer) => {
       stdout += data.toString();
     });
 
-    process.stderr.on("data", (data: Buffer) => {
+    child.stderr.on("data", (data: Buffer) => {
       stderr += data.toString();
     });
 
-    process.on("close", (code) => {
+    child.on("close", (code) => {
+      clearTimeout(timeoutHandle);
+      const timeoutMessage = timedOut
+        ? `\n[git] Command timed out after ${Math.round(timeoutMs / 1000)}s: git ${args.join(" ")}`
+        : "";
       resolve({
         success: code === 0,
         stdout: stdout.trim(),
-        stderr: stderr.trim(),
+        stderr: `${stderr}${timeoutMessage}`.trim(),
         exitCode: code ?? -1,
       });
     });
 
-    process.on("error", (error) => {
+    child.on("error", (error) => {
+      clearTimeout(timeoutHandle);
       resolve({
         success: false,
         stdout,
@@ -516,6 +529,76 @@ export async function getChangeStats(
       } catch {
         // unreadable file is ignored for stats approximation
       }
+    }
+  }
+
+  return { additions, deletions };
+}
+
+// 指定ファイルだけの変更行数を取得
+export async function getChangeStatsForFiles(
+  cwd: string,
+  files: string[],
+): Promise<{ additions: number; deletions: number }> {
+  const targetFiles = Array.from(
+    new Set(
+      files
+        .map((file) => file.trim())
+        .filter((file) => file.length > 0 && !file.endsWith("/")),
+    ),
+  );
+
+  if (targetFiles.length === 0) {
+    return { additions: 0, deletions: 0 };
+  }
+
+  const parseNumstat = (output: string): { additions: number; deletions: number } => {
+    let additions = 0;
+    let deletions = 0;
+    for (const line of output.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        continue;
+      }
+      const [addRaw, delRaw] = trimmed.split("\t");
+      const add = Number(addRaw);
+      const del = Number(delRaw);
+      additions += Number.isFinite(add) ? add : 0;
+      deletions += Number.isFinite(del) ? del : 0;
+    }
+    return { additions, deletions };
+  };
+
+  const [unstaged, staged, untracked] = await Promise.all([
+    execGit(["diff", "--numstat", "--", ...targetFiles], cwd),
+    execGit(["diff", "--numstat", "--cached", "--", ...targetFiles], cwd),
+    execGit(["ls-files", "--others", "--exclude-standard"], cwd),
+  ]);
+
+  const unstagedStats = unstaged.success
+    ? parseNumstat(unstaged.stdout)
+    : { additions: 0, deletions: 0 };
+  const stagedStats = staged.success ? parseNumstat(staged.stdout) : { additions: 0, deletions: 0 };
+  let additions = unstagedStats.additions + stagedStats.additions;
+  let deletions = unstagedStats.deletions + stagedStats.deletions;
+
+  const untrackedSet = new Set(
+    (untracked.success ? untracked.stdout : "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
+  );
+
+  for (const file of targetFiles) {
+    if (!untrackedSet.has(file)) {
+      continue;
+    }
+    try {
+      const content = await readFile(join(cwd, file), "utf-8");
+      const lineCount = content.length === 0 ? 0 : content.split("\n").length;
+      additions += lineCount;
+    } catch {
+      // unreadable file is ignored for stats approximation
     }
   }
 
