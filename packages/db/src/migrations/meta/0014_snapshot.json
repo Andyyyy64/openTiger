@@ -1,6 +1,6 @@
 {
-  "id": "9e6121b7-909f-48b1-8f6c-7da96c36b007",
-  "prevId": "bc0d5b68-732a-4878-8f35-e15405e60198",
+  "id": "5e0b6e49-94f2-4136-aea7-7b0300d531af",
+  "prevId": "9e6121b7-909f-48b1-8f6c-7da96c36b007",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -268,6 +268,13 @@
           "notNull": true,
           "default": "'main'"
         },
+        "llm_executor": {
+          "name": "llm_executor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'opencode'"
+        },
         "opencode_model": {
           "name": "opencode_model",
           "type": "text",
@@ -302,6 +309,41 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'-1'"
+        },
+        "claude_code_permission_mode": {
+          "name": "claude_code_permission_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'bypassPermissions'"
+        },
+        "claude_code_max_turns": {
+          "name": "claude_code_max_turns",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'0'"
+        },
+        "claude_code_allowed_tools": {
+          "name": "claude_code_allowed_tools",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "claude_code_disallowed_tools": {
+          "name": "claude_code_disallowed_tools",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "claude_code_append_system_prompt": {
+          "name": "claude_code_append_system_prompt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
         },
         "planner_model": {
           "name": "planner_model",
