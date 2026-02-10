@@ -106,6 +106,20 @@ export function resolveRunScript(command: string): string | undefined {
     return runMatch[1];
   }
 
+  const filteredShorthandMatch = command.match(
+    /^(?:pnpm|npm|yarn|bun)\s+(?:--filter|-F)\s+\S+\s+([^\s]+)/,
+  );
+  if (filteredShorthandMatch?.[1]) {
+    const candidate = filteredShorthandMatch[1];
+    if (
+      VERIFICATION_SCRIPT_CANDIDATES.includes(
+        candidate as (typeof VERIFICATION_SCRIPT_CANDIDATES)[number],
+      )
+    ) {
+      return candidate;
+    }
+  }
+
   const shorthandMatch = command.match(/^(?:pnpm|npm|yarn|bun)\s+([^\s]+)/);
   if (!shorthandMatch?.[1]) {
     return undefined;

@@ -38,7 +38,8 @@ async function main() {
           ? (process.env.DOCSER_MODEL ?? process.env.OPENCODE_MODEL)
           : (process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL);
   const effectiveModel =
-    agentModel ?? (llmExecutor === "claude_code" ? "claude-sonnet-4-5" : "google/gemini-3-flash-preview");
+    agentModel ??
+    (llmExecutor === "claude_code" ? "claude-sonnet-4-5" : "google/gemini-3-flash-preview");
   // 環境変数があればそちらを優先する
   const instructionsPath =
     agentRole === "tester"

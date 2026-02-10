@@ -58,6 +58,18 @@ export interface WorkerResult {
   costTokens?: number;
 }
 
+function isClaudeExecutorValue(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
+  );
+}
+
+function getRuntimeExecutorDisplayName(): string {
+  return isClaudeExecutorValue(process.env.LLM_EXECUTOR) ? "Claude Code" : "OpenCode";
+}
+
 interface FinalizeTaskStateOptions {
   runId: string;
   taskId: string;
@@ -168,6 +180,9 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     repoMode === "git" &&
     isConflictAutoFixTaskTitle(taskData.title) &&
     typeof taskPrContext?.number === "number";
+  const verificationAllowedPaths = shouldReturnConflictAutoFixToJudge
+    ? ["**"]
+    : taskData.allowedPaths;
 
   const taskId = taskData.id;
   const agentLabel = role === "tester" ? "Tester" : role === "docser" ? "Docser" : "Worker";
@@ -287,8 +302,9 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       });
     }
 
-    // Step 3: OpenCodeでタスクを実行する
-    console.log("\n[3/7] Executing task with OpenCode...");
+    // Step 3: 選択中のLLM実行エンジンでタスクを実行する
+    const runtimeExecutorDisplayName = getRuntimeExecutorDisplayName();
+    console.log(`\n[3/7] Executing task with ${runtimeExecutorDisplayName}...`);
     const previousFailures = await db
       .select({
         status: runs.status,
@@ -327,20 +343,23 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     if (!executeResult.success) {
       const isTimeout =
         executeResult.openCodeResult.exitCode === -1 &&
-        executeResult.openCodeResult.stderr.includes("[OpenCode] Timeout exceeded");
+        (executeResult.openCodeResult.stderr.includes("[OpenCode] Timeout exceeded") ||
+          executeResult.openCodeResult.stderr.includes("[ClaudeCode] Timeout exceeded"));
       if (isTimeout) {
         // タイムアウトでも変更がある可能性があるため検証へ進む
-        console.warn("[Worker] OpenCode timed out, but continuing to verify changes...");
+        console.warn(
+          `[Worker] ${runtimeExecutorDisplayName} timed out, but continuing to verify changes...`,
+        );
       } else {
         throw new Error(executeResult.error);
       }
     }
 
-    // OpenCodeが途中で別ブランチへ移動した場合は、PR対象ブランチへ戻してから後続処理を行う
+    // 実行中に別ブランチへ移動した場合は、PR対象ブランチへ戻してから後続処理を行う
     const currentBranch = await getCurrentBranch(repoPath);
     if (currentBranch !== branchName) {
       console.warn(
-        `[Worker] Branch drift detected after OpenCode execution: current=${currentBranch ?? "unknown"}, expected=${branchName}`,
+        `[Worker] Branch drift detected after ${runtimeExecutorDisplayName} execution: current=${currentBranch ?? "unknown"}, expected=${branchName}`,
       );
       const restoreBranchResult = await checkoutBranch(repoPath, branchName);
       if (!restoreBranchResult.success) {
@@ -365,7 +384,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     let verifyResult = await verifyChanges({
       repoPath,
       commands: taskData.commands,
-      allowedPaths: taskData.allowedPaths,
+      allowedPaths: verificationAllowedPaths,
       policy: effectivePolicy,
       baseBranch,
       headBranch: branchName,
@@ -412,7 +431,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
         verifyResult = await verifyChanges({
           repoPath,
           commands: taskData.commands,
-          allowedPaths: taskData.allowedPaths,
+          allowedPaths: verificationAllowedPaths,
           policy: effectivePolicy,
           baseBranch,
           headBranch: branchName,
@@ -450,7 +469,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
         verifyResult = await verifyChanges({
           repoPath,
           commands: taskData.commands,
-          allowedPaths: taskData.allowedPaths,
+          allowedPaths: verificationAllowedPaths,
           policy: effectivePolicy,
           baseBranch,
           headBranch: branchName,

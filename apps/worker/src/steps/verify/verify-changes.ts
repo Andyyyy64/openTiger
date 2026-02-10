@@ -34,7 +34,11 @@ import {
   touchesPackageManifest,
 } from "./paths";
 import { checkPolicyViolations } from "./policy";
-import { hasRootCheckScript, loadRootScripts } from "./repo-scripts";
+import {
+  hasRootCheckScript,
+  loadRootScripts,
+  resolveAutoVerificationCommands,
+} from "./repo-scripts";
 import { ENV_EXAMPLE_PATHS, LOCKFILE_PATHS } from "./constants";
 import type { CommandResult, VerifyOptions, VerifyResult } from "./types";
 
@@ -294,8 +298,17 @@ ${clippedDiff || "(diff unavailable)"}
   const checkScriptAvailable = await hasRootCheckScript(repoPath);
 
   const rootScripts = await loadRootScripts(repoPath);
+  const autoCommands = await resolveAutoVerificationCommands({
+    repoPath,
+    changedFiles: relevantFiles,
+    explicitCommands: commands,
+  });
+  if (autoCommands.length > 0) {
+    console.log(`[Verify] Auto verification commands added: ${autoCommands.join(", ")}`);
+  }
+  const verificationCommands = [...commands, ...autoCommands];
 
-  if (commands.length === 0) {
+  if (verificationCommands.length === 0) {
     commandResults.push(await runLightCheck());
     allPassed = commandResults[0]?.success ?? true;
     return {
@@ -307,7 +320,7 @@ ${clippedDiff || "(diff unavailable)"}
     };
   }
 
-  for (const command of commands) {
+  for (const command of verificationCommands) {
     const deniedMatch = matchDeniedCommand(command, policy.deniedCommands ?? []);
     if (deniedMatch) {
       const message = `Denied command detected: ${command} (matched: ${deniedMatch})`;

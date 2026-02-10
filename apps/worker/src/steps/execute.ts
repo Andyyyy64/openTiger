@@ -17,6 +17,31 @@ export interface ExecuteResult {
   error?: string;
 }
 
+type ExecutorKind = "opencode" | "claude_code";
+
+function isClaudeExecutorValue(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
+  );
+}
+
+function resolveExecutorKindFromEnv(env: Record<string, string>): ExecutorKind {
+  if (isClaudeExecutorValue(env.LLM_EXECUTOR) || isClaudeExecutorValue(process.env.LLM_EXECUTOR)) {
+    return "claude_code";
+  }
+  return "opencode";
+}
+
+function getExecutorDisplayName(executor: ExecutorKind): string {
+  return executor === "claude_code" ? "Claude Code" : "OpenCode";
+}
+
+function getExecutorLogTag(executor: ExecutorKind): string {
+  return executor === "claude_code" ? "ClaudeCode" : "OpenCode";
+}
+
 function isConflictAutoFixTask(task: Task): boolean {
   return /^\[AutoFix-Conflict\]\s+PR\s+#\d+/i.test(task.title.trim());
 }
@@ -117,8 +142,10 @@ async function runOpenCodeWithGuard(params: {
   model: string;
   timeoutSeconds: number;
   env: Record<string, string>;
+  executor: ExecutorKind;
 }): Promise<OpenCodeResult> {
   const hardTimeoutMs = (params.timeoutSeconds + 30) * 1000;
+  const executorLogTag = getExecutorLogTag(params.executor);
   let hardTimeoutHandle: NodeJS.Timeout | undefined;
   const hardTimeoutResult = new Promise<OpenCodeResult>((resolve) => {
     hardTimeoutHandle = setTimeout(() => {
@@ -126,7 +153,7 @@ async function runOpenCodeWithGuard(params: {
         success: false,
         exitCode: -1,
         stdout: "",
-        stderr: `[OpenCode] Hard timeout guard exceeded (${hardTimeoutMs}ms)`,
+        stderr: `[${executorLogTag}] Hard timeout guard exceeded (${hardTimeoutMs}ms)`,
         durationMs: hardTimeoutMs,
         retryCount: 0,
       });
@@ -185,7 +212,7 @@ export async function executeTask(options: ExecuteOptions): Promise<ExecuteResul
   for (const command of task.commands) {
     const deniedMatch = matchDeniedCommand(command, policy?.deniedCommands ?? []);
     if (deniedMatch) {
-      const stderr = `Denied command detected before OpenCode execution: ${command} (matched: ${deniedMatch})`;
+      const stderr = `Denied command detected before task execution: ${command} (matched: ${deniedMatch})`;
       const openCodeResult: OpenCodeResult = {
         success: false,
         exitCode: -1,
@@ -209,11 +236,15 @@ export async function executeTask(options: ExecuteOptions): Promise<ExecuteResul
     process.env.OPENCODE_MODEL ??
     "google/gemini-3-flash-preview";
 
-  console.log("Executing OpenCode...");
+  // 実行環境から選択中のLLM実行エンジンを判定してログ表示を揃える。
+  const taskEnv = await buildOpenCodeEnv(repoPath);
+  const executor = resolveExecutorKindFromEnv(taskEnv);
+  const executorDisplayName = getExecutorDisplayName(executor);
+  const executorLogTag = getExecutorLogTag(executor);
+
+  console.log(`Executing ${executorDisplayName}...`);
   console.log("Task:", task.title);
 
-  // Execute OpenCode
-  const taskEnv = await buildOpenCodeEnv(repoPath);
   const timeoutCapSeconds = Number.parseInt(
     process.env.OPENCODE_TASK_TIMEOUT_CAP_SECONDS ?? "1800",
     10,
@@ -231,6 +262,7 @@ export async function executeTask(options: ExecuteOptions): Promise<ExecuteResul
     model: workerModel,
     timeoutSeconds: requestedTimeoutSeconds,
     env: taskEnv,
+    executor,
   });
 
   const enableImmediateRecovery = process.env.WORKER_IMMEDIATE_DOOM_RECOVERY !== "false";
@@ -239,7 +271,7 @@ export async function executeTask(options: ExecuteOptions): Promise<ExecuteResul
     enableImmediateRecovery &&
     isDoomLoopFailure(openCodeResult.stderr)
   ) {
-    console.warn("[OpenCode] Doom loop detected. Retrying once in immediate recovery mode...");
+    console.warn(`[${executorLogTag}] Doom loop detected. Retrying once in immediate recovery mode...`);
     const recoveryTimeoutRaw = Number.parseInt(
       process.env.OPENCODE_RECOVERY_TIMEOUT_SECONDS ?? "420",
       10,
@@ -263,30 +295,31 @@ Never call todo/todoread/todowrite pseudo tools.`;
       model: recoveryModel,
       timeoutSeconds: recoveryTimeoutSeconds,
       env: taskEnv,
+      executor,
     });
     if (recovered.success) {
       openCodeResult = recovered;
     } else {
       openCodeResult = {
         ...recovered,
-        stderr: `${recovered.stderr}\n[OpenCode] Immediate recovery retry also failed.`,
+        stderr: `${recovered.stderr}\n[${executorLogTag}] Immediate recovery retry also failed.`,
       };
     }
   }
 
   if (!openCodeResult.success) {
-    console.error("OpenCode execution failed");
+    console.error(`${executorDisplayName} execution failed`);
     console.error("Exit code:", openCodeResult.exitCode);
     console.error("Stderr:", openCodeResult.stderr);
 
     return {
       success: false,
       openCodeResult,
-      error: `OpenCode failed with exit code ${openCodeResult.exitCode}: ${openCodeResult.stderr}`,
+      error: `${executorDisplayName} failed with exit code ${openCodeResult.exitCode}: ${openCodeResult.stderr}`,
     };
   }
 
-  console.log("OpenCode execution completed");
+  console.log(`${executorDisplayName} execution completed`);
   console.log("Duration:", Math.round(openCodeResult.durationMs / 1000), "seconds");
 
   return {
