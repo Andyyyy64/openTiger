@@ -24,16 +24,10 @@ export const TasksPage: React.FC = () => {
 
   return (
     <div className="p-6 text-term-fg">
-      <div className="flex justify-between items-center mb-8">
+      <div className="mb-8">
         <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
           &gt; Task_Scheduler
         </h1>
-        <Link
-          to="/tasks/new"
-          className="border border-term-tiger text-term-tiger px-4 py-2 text-sm uppercase hover:bg-term-tiger hover:text-black transition-colors"
-        >
-          [+ New Task]
-        </Link>
       </div>
 
       <div className="border border-term-border">

@@ -1,4 +1,4 @@
-import type { Task, Run, Agent, CreateTaskInput, Artifact } from "@openTiger/core";
+import type { Task, Run, Agent, Artifact } from "@openTiger/core";
 
 /**
  * Dashboard API Client
@@ -244,11 +244,6 @@ export type TaskView = Task & { retry?: TaskRetryInfo | null };
 export const tasksApi = {
   list: () => fetchApi<{ tasks: TaskView[] }>("/tasks").then((res) => res.tasks),
   get: (id: string) => fetchApi<{ task: TaskView }>(`/tasks/${id}`).then((res) => res.task),
-  create: (input: CreateTaskInput) =>
-    fetchApi<{ task: Task }>("/tasks", {
-      method: "POST",
-      body: JSON.stringify(input),
-    }).then((res) => res.task),
 };
 
 // 実行履歴関連
