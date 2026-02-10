@@ -63,7 +63,12 @@ function appendPlannerWarning(result: TaskGenerationResult, warning: string): Ta
 }
 
 function isTaskParseFailure(message: string): boolean {
-  return message.includes("Failed to parse LLM response");
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("failed to parse llm response") ||
+    normalized.includes("no valid json found in response") ||
+    (normalized.includes("json") && normalized.includes("parse"))
+  );
 }
 
 // 要件ファイルからタスクを生成

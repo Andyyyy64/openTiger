@@ -1,7 +1,10 @@
+const ANSI_ESCAPE_SEQUENCE = `${String.fromCharCode(27)}\\[[0-9;]*m`;
+const ANSI_ESCAPE_REGEX = new RegExp(ANSI_ESCAPE_SEQUENCE, "g");
+const CONTROL_CHARS_CLASS = `${String.fromCharCode(0)}-${String.fromCharCode(8)}${String.fromCharCode(11)}${String.fromCharCode(12)}${String.fromCharCode(14)}-${String.fromCharCode(31)}${String.fromCharCode(127)}`;
+const CONTROL_CHARS_REGEX = new RegExp(`[${CONTROL_CHARS_CLASS}]+`, "g");
+
 function stripControlChars(text: string): string {
-  return text
-    .replace(/\u001b\[[0-9;]*m/g, "")
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "");
+  return text.replace(ANSI_ESCAPE_REGEX, "").replace(CONTROL_CHARS_REGEX, "");
 }
 
 function extractCodeBlockCandidates(text: string): string[] {
@@ -38,13 +41,13 @@ function extractBalancedObjectCandidates(text: string): string[] {
         escaping = true;
         continue;
       }
-      if (ch === "\"") {
+      if (ch === '"') {
         inString = false;
       }
       continue;
     }
 
-    if (ch === "\"") {
+    if (ch === '"') {
       inString = true;
       continue;
     }
@@ -115,4 +118,3 @@ export function extractJsonObjectFromText<T>(
   const hint = parseErrors.length > 0 ? ` (parse errors: ${parseErrors[0]})` : "";
   throw new Error(`No valid JSON found in response${hint}`);
 }
-

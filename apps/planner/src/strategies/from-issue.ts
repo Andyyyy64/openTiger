@@ -19,8 +19,14 @@ export interface IssueAnalysisResult {
   issueNumber: number;
 }
 
+export type IssueTaskRole = "worker" | "tester" | "docser";
+
 // IssueからLLMプロンプトを構築
-function buildPromptFromIssue(issue: GitHubIssue, allowedPaths: string[]): string {
+function buildPromptFromIssue(
+  issue: GitHubIssue,
+  allowedPaths: string[],
+  explicitRole: IssueTaskRole,
+): string {
   return `
 あなたはソフトウェアエンジニアリングのタスク分割エキスパートです。
 以下のGitHub Issueを読み取り、実行可能なタスクに分割してください。
@@ -34,7 +40,7 @@ function buildPromptFromIssue(issue: GitHubIssue, allowedPaths: string[]): strin
 4. **範囲限定**: 変更するファイル/ディレクトリを明確にする
 5. **既存構成遵守**: 既存のモノレポ構成と技術スタックを必ず守る
 6. **許可パス遵守**: allowedPaths の外に触る必要があるタスクは作らない
-7. **役割分担**: 実装は worker、テスト作成/追加は tester、ドキュメント更新は docser に割り当てる
+7. **役割固定**: このIssueの担当ロールは固定で ${explicitRole}。全タスクの role は必ず ${explicitRole}
 
 ## 既存構成と技術スタックの厳守
 
@@ -73,7 +79,7 @@ ${allowedPaths.map((p) => `- ${p}`).join("\n")}
     {
       "title": "簡潔なタスク名",
       "goal": "機械判定可能な完了条件",
-      "role": "worker or tester or docser",
+      "role": "${explicitRole}",
       "context": {
         "files": ["関連ファイルパス"],
         "specs": "詳細仕様",
@@ -99,107 +105,95 @@ ${allowedPaths.map((p) => `- ${p}`).join("\n")}
  - 各タスクのcommandは成功/失敗を返すもの
 - devなど常駐コマンドは検証に入れない
 - フロントが絡むタスクはE2Eを必須とし、クリティカルパスを最低限カバーする
-- docs/**, README.md, ops/runbooks/** のみを触るタスクは role=docser を選ぶ
+- role は必ず ${explicitRole} を使用する（他ロールは不可）
 - riskLevelは "low" / "medium" / "high"
 - timeboxMinutesは30〜90の範囲
 - Issueのラベルからリスクレベルを推定
 `.trim();
 }
 
-function hasDocKeyword(text: string): boolean {
-  if (!text) {
-    return false;
+function normalizeRoleToken(value: string | null | undefined): IssueTaskRole | null {
+  if (!value) {
+    return null;
   }
-  return /(docs?|documentation|readme|runbook|guide|manual|changelog|ドキュメント|手順書|仕様書|設計書)/i.test(
-    text,
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "worker" || normalized === "tester" || normalized === "docser") {
+    return normalized;
+  }
+  return null;
+}
+
+function parseRoleFromLabels(labels: string[]): IssueTaskRole | null {
+  for (const raw of labels) {
+    const label = raw.trim().toLowerCase().replace(/\s+/g, "");
+    if (label === "role:worker" || label === "agent:worker" || label === "worker") {
+      return "worker";
+    }
+    if (label === "role:tester" || label === "agent:tester" || label === "tester") {
+      return "tester";
+    }
+    if (label === "role:docser" || label === "agent:docser" || label === "docser") {
+      return "docser";
+    }
+  }
+  return null;
+}
+
+function parseRoleFromInlineBody(body: string): IssueTaskRole | null {
+  if (!body) {
+    return null;
+  }
+  const inline = body.match(
+    /^(?:\s*)(?:agent|role|担当(?:エージェント)?|実行エージェント)\s*[:：]\s*(worker|tester|docser)\s*$/im,
   );
+  return normalizeRoleToken(inline?.[1] ?? null);
 }
 
-function isDocumentationPathPattern(path: string): boolean {
-  const normalized = path.trim().replace(/^\.\//, "").toLowerCase();
-  if (!normalized || normalized === "**" || normalized === "*") {
-    return false;
+function parseRoleFromSectionBody(body: string): IssueTaskRole | null {
+  if (!body) {
+    return null;
   }
-  if (normalized === "readme.md" || normalized.endsWith("/readme.md")) {
-    return true;
+  const lines = body.split(/\r?\n/);
+  let inRoleSection = false;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line.length === 0) {
+      continue;
+    }
+    if (/^#{1,6}\s*(agent|role|担当(?:エージェント)?|実行エージェント)\b/i.test(line)) {
+      inRoleSection = true;
+      continue;
+    }
+    if (inRoleSection && /^#{1,6}\s+/.test(line)) {
+      break;
+    }
+    if (!inRoleSection) {
+      continue;
+    }
+    const bullet = line.match(/^[-*]\s*(.+)$/)?.[1] ?? line;
+    const sectionRole = bullet.match(/\b(worker|tester|docser)\b/i)?.[1] ?? null;
+    const normalized = normalizeRoleToken(sectionRole);
+    if (normalized) {
+      return normalized;
+    }
   }
-  if (normalized === "docs" || normalized.startsWith("docs/")) {
-    return true;
-  }
-  if (normalized === "ops/runbooks" || normalized.startsWith("ops/runbooks/")) {
-    return true;
-  }
-  if (normalized.endsWith(".md") || normalized.endsWith(".mdx")) {
-    return true;
-  }
-  return false;
+  return null;
 }
 
-function isDocumentationOnlyPaths(allowedPaths: string[]): boolean {
-  if (allowedPaths.length === 0) {
-    return false;
+export function parseExplicitRoleFromIssue(issue: GitHubIssue): IssueTaskRole | null {
+  const fromLabel = parseRoleFromLabels(issue.labels);
+  if (fromLabel) {
+    return fromLabel;
   }
-  return allowedPaths.every((path) => isDocumentationPathPattern(path));
+  const fromInline = parseRoleFromInlineBody(issue.body);
+  if (fromInline) {
+    return fromInline;
+  }
+  return parseRoleFromSectionBody(issue.body);
 }
 
-function isDocserTaskCandidate(task: {
-  title?: string;
-  goal?: string;
-  context?: { files?: string[]; specs?: string; notes?: string };
-  allowedPaths?: string[];
-}): boolean {
-  const text = [
-    task.title,
-    task.goal,
-    task.context?.specs,
-    task.context?.notes,
-    ...(task.context?.files ?? []),
-  ]
-    .filter((value): value is string => typeof value === "string")
-    .join("\n");
-  if (hasDocKeyword(text)) {
-    return true;
-  }
-  return isDocumentationOnlyPaths(task.allowedPaths ?? []);
-}
-
-function resolveTaskRole(params: {
-  issueFallbackRole: "worker" | "tester" | "docser";
-  task: {
-    role?: string;
-    title: string;
-    goal: string;
-    context?: { files?: string[]; specs?: string; notes?: string };
-    allowedPaths: string[];
-  };
-}): "worker" | "tester" | "docser" {
-  const requestedRole = params.task.role as "worker" | "tester" | "docser" | undefined;
-  if (isDocserTaskCandidate(params.task)) {
-    return "docser";
-  }
-  return requestedRole ?? params.issueFallbackRole;
-}
-
-function inferRoleFromIssueContent(
-  issue: GitHubIssue,
-  allowedPaths: string[],
-): "worker" | "tester" | "docser" {
-  const labels = issue.labels.map((label) => label.toLowerCase());
-  if (labels.some((label) => label.includes("docs") || label.includes("docser"))) {
-    return "docser";
-  }
-  if (
-    labels.some((label) => label.includes("test") || label.includes("qa") || label.includes("e2e"))
-  ) {
-    return "tester";
-  }
-  if (isDocumentationOnlyPaths(allowedPaths)) {
-    return "docser";
-  }
-  if (hasDocKeyword(`${issue.title}\n${issue.body}`)) {
-    return "docser";
-  }
-  return "worker";
+function buildMissingRoleWarning(issueNumber: number): string {
+  return `Issue #${issueNumber}: explicit role is required. Add label role:worker|role:tester|role:docser or set "Agent: <role>" in body.`;
 }
 
 // ラベルからリスクレベルを推定
@@ -255,7 +249,16 @@ export async function generateTasksFromIssue(
     timeoutSeconds?: number;
   },
 ): Promise<IssueAnalysisResult> {
-  const prompt = buildPromptFromIssue(issue, options.allowedPaths);
+  const explicitRole = parseExplicitRoleFromIssue(issue);
+  if (!explicitRole) {
+    return {
+      tasks: [],
+      warnings: [buildMissingRoleWarning(issue.number)],
+      issueNumber: issue.number,
+    };
+  }
+
+  const prompt = buildPromptFromIssue(issue, options.allowedPaths, explicitRole);
   const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
 
   // レスポンスをパース
@@ -286,37 +289,36 @@ export async function generateTasksFromIssue(
 
   // タスクを変換
   const defaultRisk = inferRiskFromLabels(issue.labels);
-  const fallbackRole = inferRoleFromIssueContent(issue, options.allowedPaths);
-  const tasks: CreateTaskInput[] = parsed.tasks.map((task, index) => ({
-    title: task.title,
-    goal: task.goal,
-    role: resolveTaskRole({
-      issueFallbackRole: fallbackRole,
-      task: {
-        role: task.role,
-        title: task.title,
-        goal: task.goal,
-        context: task.context,
-        allowedPaths: task.allowedPaths,
+  const roleOverrideWarnings: string[] = [];
+  const tasks: CreateTaskInput[] = parsed.tasks.map((task, index) => {
+    const requestedRole = normalizeRoleToken(task.role ?? null);
+    if (requestedRole && requestedRole !== explicitRole) {
+      roleOverrideWarnings.push(
+        `Issue #${issue.number}: task "${task.title}" role "${requestedRole}" was overridden to "${explicitRole}".`,
+      );
+    }
+    return {
+      title: task.title,
+      goal: task.goal,
+      role: explicitRole,
+      context: {
+        ...task.context,
+        notes: `GitHub Issue #${issue.number}: ${issue.title}\n${task.context?.notes ?? ""}`,
       },
-    }),
-    context: {
-      ...task.context,
-      notes: `GitHub Issue #${issue.number}: ${issue.title}\n${task.context?.notes ?? ""}`,
-    },
-    allowedPaths: task.allowedPaths,
-    commands: task.commands,
-    priority: task.priority ?? (parsed.tasks.length - index) * 10,
-    riskLevel: (task.riskLevel as "low" | "medium" | "high") ?? defaultRisk,
-    dependencies: [],
-    timeboxMinutes: task.timeboxMinutes ?? 60,
-    targetArea: undefined,
-    touches: [],
-  }));
+      allowedPaths: task.allowedPaths,
+      commands: task.commands,
+      priority: task.priority ?? (parsed.tasks.length - index) * 10,
+      riskLevel: (task.riskLevel as "low" | "medium" | "high") ?? defaultRisk,
+      dependencies: [],
+      timeboxMinutes: task.timeboxMinutes ?? 60,
+      targetArea: undefined,
+      touches: [],
+    };
+  });
 
   return {
     tasks,
-    warnings: parsed.warnings ?? [],
+    warnings: [...(parsed.warnings ?? []), ...roleOverrideWarnings],
     issueNumber: issue.number,
   };
 }
@@ -327,12 +329,19 @@ export function generateSimpleTaskFromIssue(
   allowedPaths: string[],
 ): IssueAnalysisResult {
   const riskLevel = inferRiskFromLabels(issue.labels);
-  const role = inferRoleFromIssueContent(issue, allowedPaths);
+  const explicitRole = parseExplicitRoleFromIssue(issue);
+  if (!explicitRole) {
+    return {
+      tasks: [],
+      warnings: [buildMissingRoleWarning(issue.number)],
+      issueNumber: issue.number,
+    };
+  }
 
   const task: CreateTaskInput = {
     title: issue.title,
     goal: `Resolve GitHub Issue #${issue.number}`,
-    role,
+    role: explicitRole,
     context: {
       specs: issue.body,
       notes: `Labels: ${issue.labels.join(", ") || "none"}`,

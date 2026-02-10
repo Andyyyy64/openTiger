@@ -42,4 +42,3 @@ not json
     expect(parsed.tasks[0]?.title).toBe("c");
   });
 });
-

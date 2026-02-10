@@ -4,6 +4,8 @@ import { extractJsonObjectFromText } from "./json-response";
 const DEFAULT_PARSE_REGEN_RETRIES = 2;
 const DEFAULT_RECONCILE_TIMEOUT_SECONDS = 180;
 const MAX_OUTPUT_PREVIEW_CHARS = 4000;
+const ANSI_ESCAPE_SEQUENCE = `${String.fromCharCode(27)}\\[[0-9;]*m`;
+const ANSI_ESCAPE_REGEX = new RegExp(ANSI_ESCAPE_SEQUENCE, "g");
 
 function parseRetryCount(): number {
   const parsed = Number.parseInt(
@@ -29,7 +31,7 @@ function parseReconcileTimeout(baseTimeoutSeconds: number): number {
 }
 
 function clipOutput(text: string): string {
-  const normalized = text.replace(/\u001b\[[0-9;]*m/g, "").trim();
+  const normalized = text.replace(ANSI_ESCAPE_REGEX, "").trim();
   return normalized.slice(0, MAX_OUTPUT_PREVIEW_CHARS);
 }
 
@@ -150,7 +152,9 @@ export async function generateAndParseWithRetry<T>(options: {
   }
 
   if (outputs.length >= 2) {
-    console.warn(`[Planner] ${options.label} parse retries exhausted. Trying reconciliation pass...`);
+    console.warn(
+      `[Planner] ${options.label} parse retries exhausted. Trying reconciliation pass...`,
+    );
     const reconcile = await runOpenCode({
       workdir: options.workdir,
       task: buildReconcilePrompt(options.prompt, outputs),
@@ -175,4 +179,3 @@ export async function generateAndParseWithRetry<T>(options: {
     `Failed to parse LLM response after retries (${options.label}): ${parseErrors[0] ?? "unknown"}`,
   );
 }
-
