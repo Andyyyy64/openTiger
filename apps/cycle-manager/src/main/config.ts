@@ -14,6 +14,9 @@ export interface CycleManagerConfig {
   replanWorkdir: string; // Planner実行ディレクトリ
   replanRepoUrl?: string; // 差分判定に使うリポジトリURL
   replanBaseBranch: string; // 差分判定に使うベースブランチ
+  systemApiBaseUrl: string; // system API エンドポイント
+  issueSyncIntervalMs: number; // issue backlog 同期間隔
+  issueSyncTimeoutMs: number; // issue backlog 同期タイムアウト
   failedTaskRetryCooldownMs: number; // failedタスク再投入までの待機時間
   blockedTaskRetryCooldownMs: number; // blockedタスク再投入までの待機時間
   stuckRunTimeoutMs: number; // 停滞run判定までの時間
@@ -42,6 +45,11 @@ export const DEFAULT_CONFIG: CycleManagerConfig = {
   replanWorkdir: process.env.REPLAN_WORKDIR ?? process.cwd(),
   replanRepoUrl: process.env.REPLAN_REPO_URL ?? process.env.REPO_URL,
   replanBaseBranch: process.env.REPLAN_BASE_BRANCH ?? process.env.BASE_BRANCH ?? "main",
+  systemApiBaseUrl:
+    process.env.SYSTEM_API_BASE_URL ??
+    `http://127.0.0.1:${process.env.API_PORT?.trim() || "4301"}`,
+  issueSyncIntervalMs: parseInt(process.env.ISSUE_SYNC_INTERVAL_MS ?? "30000", 10),
+  issueSyncTimeoutMs: parseInt(process.env.ISSUE_SYNC_TIMEOUT_MS ?? "15000", 10),
   failedTaskRetryCooldownMs: parseInt(process.env.FAILED_TASK_RETRY_COOLDOWN_MS ?? "30000", 10),
   blockedTaskRetryCooldownMs: parseInt(process.env.BLOCKED_TASK_RETRY_COOLDOWN_MS ?? "120000", 10),
   stuckRunTimeoutMs: parseInt(process.env.STUCK_RUN_TIMEOUT_MS ?? "900000", 10),
@@ -58,6 +66,9 @@ export function logConfigSummary(config: CycleManagerConfig): void {
   console.log(`Max tasks per cycle: ${config.cycleConfig.maxTasksPerCycle}`);
   console.log(`Max failure rate: ${config.cycleConfig.maxFailureRate}`);
   console.log(`Auto replan: ${config.autoReplan}`);
+  console.log(`System API base: ${config.systemApiBaseUrl}`);
+  console.log(`Issue sync interval: ${config.issueSyncIntervalMs}ms`);
+  console.log(`Issue sync timeout: ${config.issueSyncTimeoutMs}ms`);
   if (config.autoReplan) {
     console.log(`Replan interval: ${config.replanIntervalMs}ms`);
     console.log(`Replan requirement: ${config.replanRequirementPath ?? "not set"}`);

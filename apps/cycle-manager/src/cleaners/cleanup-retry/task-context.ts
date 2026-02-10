@@ -22,14 +22,14 @@ export function isPrReviewTask(params: { title: string; goal: string; context: u
   if (params.goal.startsWith("Review and process open PR #")) {
     return true;
   }
-  if (params.title.includes("[PR] Review #")) {
+  if (params.title.startsWith("[PR] Review #")) {
     return true;
   }
   const context = normalizeContext(params.context);
   if (typeof context.pr?.number === "number") {
     return true;
   }
-  if (typeof context.issue?.number === "number" && params.title.includes("[PR]")) {
+  if (typeof context.issue?.number === "number" && params.title.startsWith("[PR]")) {
     return true;
   }
   return context.notes?.includes("Imported from open GitHub PR backlog") === true;

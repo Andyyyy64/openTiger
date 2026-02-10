@@ -28,8 +28,18 @@ import {
   shouldTriggerReplan,
   triggerReplan,
 } from "./replan";
+import { syncIssueBacklogViaPreflight } from "./backlog-preflight";
 
 const CYCLE_ENDING_CRITICAL_ANOMALIES = new Set(["stuck_task", "cost_spike"]);
+
+function hasTaskBacklog(state: Awaited<ReturnType<typeof captureSystemState>>): boolean {
+  return (
+    state.tasks.queued > 0 ||
+    state.tasks.running > 0 ||
+    state.tasks.blocked > 0 ||
+    state.tasks.failed > 0
+  );
+}
 
 // 監視ループ
 export async function runMonitorLoop(config: CycleManagerConfig): Promise<void> {
@@ -105,12 +115,46 @@ export async function runMonitorLoop(config: CycleManagerConfig): Promise<void> 
       });
     }
 
-    // タスク枯渇時はPlannerを再実行する
+    // タスク枯渇時の順序:
+    // 1) ローカルタスクが残っている間は処理継続
+    // 2) 空になったら issue/preflight を同期して issue を補充
+    // 3) issue も無ければ planner を再実行
     // replanInProgress を先にチェックして競合状態を防ぐ
     if (isReplanInProgress()) {
       // Planner 実行中は何もしない
     } else {
-      const systemState = await captureSystemState();
+      let systemState = await captureSystemState();
+
+      if (!hasTaskBacklog(systemState)) {
+        const issueSyncResult = await syncIssueBacklogViaPreflight(config);
+        if (!issueSyncResult.success) {
+          console.warn(
+            `[CycleManager] Skip replan: issue preflight failed (${issueSyncResult.reason ?? "unknown"})`,
+            issueSyncResult.warnings,
+          );
+          return;
+        }
+
+        if (issueSyncResult.generatedTaskCount > 0) {
+          console.log(
+            `[CycleManager] Issue preflight created ${issueSyncResult.generatedTaskCount} task(s). Prioritizing issue backlog.`,
+          );
+        }
+
+        if (issueSyncResult.hasIssueBacklog) {
+          console.log(
+            `[CycleManager] Issue backlog detected (${issueSyncResult.issueTaskBacklogCount}). Replan deferred.`,
+          );
+          return;
+        }
+
+        // preflight でタスクが作られた場合に備えて最新状態を再取得
+        systemState = await captureSystemState();
+        if (hasTaskBacklog(systemState)) {
+          return;
+        }
+      }
+
       const replanDecision = await shouldTriggerReplan(systemState, config);
       if (replanDecision.shouldRun) {
         await triggerReplan(systemState, replanDecision.signature, config);
