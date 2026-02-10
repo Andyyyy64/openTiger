@@ -114,33 +114,31 @@ export const SettingsPage: React.FC = () => {
 
   const grouped = useMemo<[string, SettingField[]][]>(() => {
     // 実行エンジン依存の項目だけを切り替え、共通設定は常に表示する。
-    return GROUPED_SETTINGS
-      .map(([group, fields]) => {
-        const filteredFields = fields.filter((field) => {
-          if (field.key === "LLM_EXECUTOR") {
-            return false;
-          }
-          if (field.key.startsWith("OPENCODE_")) {
-            return selectedExecutor === "opencode";
-          }
-          if (EXECUTOR_MODEL_KEYS.has(field.key)) {
-            return selectedExecutor === "opencode";
-          }
-          // Claude Code でも Anthropic API キー設定を必ず表示する。
-          if (field.key === "ANTHROPIC_API_KEY") {
-            return true;
-          }
-          if (API_KEY_KEYS.has(field.key)) {
-            return selectedExecutor === "opencode";
-          }
-          if (field.key.startsWith("CLAUDE_CODE_")) {
-            return selectedExecutor === "claude_code";
-          }
+    return GROUPED_SETTINGS.map(([group, fields]) => {
+      const filteredFields = fields.filter((field) => {
+        if (field.key === "LLM_EXECUTOR") {
+          return false;
+        }
+        if (field.key.startsWith("OPENCODE_")) {
+          return selectedExecutor === "opencode";
+        }
+        if (EXECUTOR_MODEL_KEYS.has(field.key)) {
+          return selectedExecutor === "opencode";
+        }
+        // Claude Code でも Anthropic API キー設定を必ず表示する。
+        if (field.key === "ANTHROPIC_API_KEY") {
           return true;
-        });
-        return [group, filteredFields] as [string, SettingField[]];
-      })
-      .filter(([, fields]) => fields.length > 0);
+        }
+        if (API_KEY_KEYS.has(field.key)) {
+          return selectedExecutor === "opencode";
+        }
+        if (field.key.startsWith("CLAUDE_CODE_")) {
+          return selectedExecutor === "claude_code";
+        }
+        return true;
+      });
+      return [group, filteredFields] as [string, SettingField[]];
+    }).filter(([, fields]) => fields.length > 0);
   }, [selectedExecutor]);
 
   const handleSave = () => {
@@ -216,7 +214,7 @@ export const SettingsPage: React.FC = () => {
       <SettingsHeader isSaving={mutation.isPending} onSave={handleSave} />
       {/* システム操作パネル */}
       <SystemControlPanel cleanup={cleanupPanel} stopAll={stopAllPanel} />
-      
+
       <section className="border border-term-border p-0">
         <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider">Executor_Selector</h2>
@@ -225,7 +223,9 @@ export const SettingsPage: React.FC = () => {
           <div className="max-w-xs">
             <select
               value={selectedExecutor}
-              onChange={(event) => updateValue("LLM_EXECUTOR", normalizeExecutor(event.target.value))}
+              onChange={(event) =>
+                updateValue("LLM_EXECUTOR", normalizeExecutor(event.target.value))
+              }
               className="w-full bg-black border border-term-border text-sm text-term-fg px-2 py-1 font-mono focus:border-term-tiger focus:outline-none"
             >
               {LLM_EXECUTOR_OPTIONS.map((option) => (
@@ -294,7 +294,10 @@ export const SettingsPage: React.FC = () => {
 
           {githubReposQuery.isError && (
             <div className="text-red-500 text-xs">
-              &gt; REPO_LIST_ERR: {githubReposQuery.error instanceof Error ? githubReposQuery.error.message : "Failed to load repositories"}
+              &gt; REPO_LIST_ERR:{" "}
+              {githubReposQuery.error instanceof Error
+                ? githubReposQuery.error.message
+                : "Failed to load repositories"}
             </div>
           )}
 

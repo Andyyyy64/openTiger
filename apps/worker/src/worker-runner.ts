@@ -510,7 +510,8 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
           taskStatus: "blocked",
           blockReason: "awaiting_judge",
           costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
-          errorMessage: "Conflict autofix produced no diff; returned to judge for mergeability check.",
+          errorMessage:
+            "Conflict autofix produced no diff; returned to judge for mergeability check.",
         });
 
         console.log("\n" + "=".repeat(60));

@@ -132,7 +132,9 @@ systemRoute.get("/github/repos", async (c) => {
       }))
       .filter((repo) => repo.owner.length > 0)
       .filter((repo) =>
-        ownerFilter ? repo.owner.toLowerCase() === ownerFilter || repo.fullName.includes(ownerFilter) : true,
+        ownerFilter
+          ? repo.owner.toLowerCase() === ownerFilter || repo.fullName.includes(ownerFilter)
+          : true,
       )
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
 

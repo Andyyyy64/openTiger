@@ -15,10 +15,7 @@ type SystemControlPanelProps = {
   stopAll: StopAllActionState;
 };
 
-export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({
-  cleanup,
-  stopAll,
-}) => {
+export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({ cleanup, stopAll }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
       <section className="border border-term-border p-0">

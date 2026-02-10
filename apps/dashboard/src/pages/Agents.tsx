@@ -8,7 +8,9 @@ const CLAUDE_CODE_DEFAULT_MODEL = "claude-sonnet-4-5";
 function isClaudeExecutor(value: string | undefined): boolean {
   if (!value) return false;
   const normalized = value.trim().toLowerCase();
-  return normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code";
+  return (
+    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
+  );
 }
 
 function normalizeClaudeModel(value: string | undefined): string | undefined {
@@ -134,7 +136,9 @@ export const AgentsPage: React.FC = () => {
                 </div>
 
                 <div className="col-span-2 text-xs text-zinc-400">
-                  <span>{useClaudeLabels ? "claude_code" : (agent.metadata?.provider ?? "--")}</span>
+                  <span>
+                    {useClaudeLabels ? "claude_code" : (agent.metadata?.provider ?? "--")}
+                  </span>
                   <span className="text-zinc-600 block">
                     {useClaudeLabels
                       ? (normalizeClaudeModel(agent.metadata?.model) ?? CLAUDE_CODE_DEFAULT_MODEL)
