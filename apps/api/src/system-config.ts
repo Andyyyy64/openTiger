@@ -26,6 +26,7 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "LOCAL_REPO_PATH", column: "localRepoPath", defaultValue: "" },
   { key: "LOCAL_WORKTREE_ROOT", column: "localWorktreeRoot", defaultValue: "" },
   { key: "BASE_BRANCH", column: "baseBranch", defaultValue: "main" },
+  { key: "LLM_EXECUTOR", column: "llmExecutor", defaultValue: "opencode" },
   { key: "OPENCODE_MODEL", column: "opencodeModel", defaultValue: "google/gemini-3-flash-preview" },
   {
     key: "OPENCODE_SMALL_MODEL",
@@ -39,6 +40,23 @@ export const CONFIG_FIELDS: ConfigField[] = [
     defaultValue: "30000",
   },
   { key: "OPENCODE_MAX_QUOTA_WAITS", column: "opencodeMaxQuotaWaits", defaultValue: "-1" },
+  {
+    key: "CLAUDE_CODE_PERMISSION_MODE",
+    column: "claudeCodePermissionMode",
+    defaultValue: "bypassPermissions",
+  },
+  { key: "CLAUDE_CODE_MAX_TURNS", column: "claudeCodeMaxTurns", defaultValue: "0" },
+  { key: "CLAUDE_CODE_ALLOWED_TOOLS", column: "claudeCodeAllowedTools", defaultValue: "" },
+  {
+    key: "CLAUDE_CODE_DISALLOWED_TOOLS",
+    column: "claudeCodeDisallowedTools",
+    defaultValue: "",
+  },
+  {
+    key: "CLAUDE_CODE_APPEND_SYSTEM_PROMPT",
+    column: "claudeCodeAppendSystemPrompt",
+    defaultValue: "",
+  },
   { key: "PLANNER_MODEL", column: "plannerModel", defaultValue: "google/gemini-3-pro-preview" },
   { key: "JUDGE_MODEL", column: "judgeModel", defaultValue: "google/gemini-3-pro-preview" },
   { key: "WORKER_MODEL", column: "workerModel", defaultValue: "google/gemini-3-flash-preview" },

@@ -26,6 +26,24 @@ async function ensureConfigColumns(): Promise<void> {
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_small_model" text DEFAULT 'google/gemini-2.5-flash' NOT NULL`,
   );
   await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "llm_executor" text DEFAULT 'opencode' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_permission_mode" text DEFAULT 'bypassPermissions' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_max_turns" text DEFAULT '0' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_allowed_tools" text DEFAULT '' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_disallowed_tools" text DEFAULT '' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_append_system_prompt" text DEFAULT '' NOT NULL`,
+  );
+  await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_count" text DEFAULT '1' NOT NULL`,
   );
   await db.execute(
