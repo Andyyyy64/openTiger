@@ -1,7 +1,7 @@
 import { db } from "@openTiger/db";
-import { tasks, runs, artifacts, leases, agents } from "@openTiger/db/schema";
+import { runs, artifacts } from "@openTiger/db/schema";
 import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
-import type { Task, Policy } from "@openTiger/core";
+import type { Task } from "@openTiger/core";
 import {
   DEFAULT_POLICY,
   getRepoMode,
@@ -14,15 +14,11 @@ import {
   createWorkBranch,
   checkoutExistingBranch,
   executeTask,
-  verifyChanges,
   commitAndPush,
   createTaskPR,
   ensureRemoteBaseBranch,
-  type VerifyResult,
 } from "./steps/index";
-import { checkoutBranch, getCurrentBranch } from "@openTiger/vcs";
 import { generateBranchName } from "./steps/branch";
-import type { VerificationCommandSource } from "./steps/verify/types";
 import {
   buildPrFetchRefspecs,
   resolveBranchBaseRef,
@@ -32,252 +28,21 @@ import {
   isNoCommitsBetweenError,
   isQuotaFailure,
   sanitizeRetryHint,
-  shouldAllowNoChanges,
   validateExpectedFiles,
 } from "./worker-task-helpers";
 import { buildTaskLogPath, setTaskLogPath } from "./worker-logging";
+import { finalizeTaskState } from "./worker-runner-state";
+import {
+  getRuntimeExecutorDisplayName,
+  isExecutionTimeout,
+  isConflictAutoFixTaskTitle,
+  restoreExpectedBranchContext,
+} from "./worker-runner-utils";
+import { attachExistingPrArtifact } from "./worker-runner-artifacts";
+import { runVerificationPhase } from "./worker-runner-verification";
+import type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 
-// Workerの実行設定
-export interface WorkerConfig {
-  agentId: string;
-  role?: string;
-  workspacePath: string;
-  repoUrl: string;
-  baseBranch?: string;
-  instructionsPath?: string;
-  model?: string;
-  policy?: Policy;
-  logPath?: string;
-}
-
-// 実行結果
-export interface WorkerResult {
-  success: boolean;
-  taskId: string;
-  runId?: string;
-  prUrl?: string;
-  error?: string;
-  costTokens?: number;
-}
-
-function isClaudeExecutorValue(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return (
-    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
-  );
-}
-
-function getRuntimeExecutorDisplayName(): string {
-  return isClaudeExecutorValue(process.env.LLM_EXECUTOR) ? "Claude Code" : "OpenCode";
-}
-
-function isExecutionTimeout(stderr: string, exitCode: number): boolean {
-  return (
-    exitCode === -1 &&
-    (stderr.includes("[OpenCode] Timeout exceeded") ||
-      stderr.includes("[ClaudeCode] Timeout exceeded"))
-  );
-}
-
-function parseRecoveryAttempts(name: string, fallback: number): number {
-  const parsed = Number.parseInt(process.env[name] ?? "", 10);
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-  return Math.max(0, parsed);
-}
-
-function summarizeVerificationFailure(stderr: string | undefined, maxChars = 400): string {
-  const normalized = sanitizeRetryHint(stderr ?? "");
-  if (!normalized) {
-    return "stderr unavailable";
-  }
-  if (normalized.length <= maxChars) {
-    return normalized;
-  }
-  return `${normalized.slice(0, maxChars)}...`;
-}
-
-function shouldAttemptVerifyRecovery(
-  verifyResult: VerifyResult,
-  allowExplicitRecovery: boolean,
-): boolean {
-  if (verifyResult.success || verifyResult.policyViolations.length > 0) {
-    return false;
-  }
-  const failedCommand = verifyResult.failedCommand?.trim();
-  if (!failedCommand) {
-    return false;
-  }
-  const source = verifyResult.failedCommandSource ?? "explicit";
-  if (source === "auto") {
-    return true;
-  }
-  if (!allowExplicitRecovery) {
-    return false;
-  }
-  return source === "explicit" || source === "light-check" || source === "guard";
-}
-
-function buildVerifyRecoveryHint(params: {
-  verifyResult: VerifyResult;
-  attempt: number;
-  maxAttempts: number;
-}): string {
-  const command = params.verifyResult.failedCommand ?? "(unknown command)";
-  const sourceLabel = params.verifyResult.failedCommandSource
-    ? ` [${params.verifyResult.failedCommandSource}]`
-    : "";
-  const stderrSummary = summarizeVerificationFailure(params.verifyResult.failedCommandStderr);
-  return (
-    `検証失敗を優先して復旧してください（${params.attempt}/${params.maxAttempts}）: ` +
-    `${command}${sourceLabel} が失敗。` +
-    `stderr: ${stderrSummary}. ` +
-    "最小限の修正で失敗コマンドが通る状態にしてください。"
-  );
-}
-
-function encodeVerifyReworkMarker(payload: {
-  failedCommand: string;
-  failedCommandSource?: VerificationCommandSource;
-  stderrSummary: string;
-}): string {
-  const encoded = encodeURIComponent(
-    JSON.stringify({
-      failedCommand: payload.failedCommand,
-      failedCommandSource: payload.failedCommandSource ?? "explicit",
-      stderrSummary: payload.stderrSummary,
-    }),
-  );
-  return `[verify-rework-json]${encoded}`;
-}
-
-function appendContextNotes(existingNotes: string | undefined, lines: string[]): string {
-  const base = existingNotes?.trim();
-  const additions = lines
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .join("\n");
-  if (!base) {
-    return additions;
-  }
-  if (!additions) {
-    return base;
-  }
-  return `${base}\n${additions}`;
-}
-
-async function restoreExpectedBranchContext(
-  repoPath: string,
-  expectedBranch: string,
-  executorDisplayName: string,
-): Promise<void> {
-  const currentBranch = await getCurrentBranch(repoPath);
-  if (currentBranch === expectedBranch) {
-    return;
-  }
-  console.warn(
-    `[Worker] Branch drift detected after ${executorDisplayName} execution: current=${currentBranch ?? "unknown"}, expected=${expectedBranch}`,
-  );
-  const restoreBranchResult = await checkoutBranch(repoPath, expectedBranch);
-  if (!restoreBranchResult.success) {
-    throw new Error(
-      `Failed to restore expected branch ${expectedBranch}: ${restoreBranchResult.stderr}`,
-    );
-  }
-  console.log(`[Worker] Restored branch context to ${expectedBranch}`);
-}
-
-interface FinalizeTaskStateOptions {
-  runId: string;
-  taskId: string;
-  agentId: string;
-  runStatus: "success" | "failed";
-  taskStatus: "done" | "blocked" | "failed";
-  blockReason: string | null;
-  costTokens?: number | null;
-  errorMessage?: string | null;
-}
-
-async function finalizeTaskState(options: FinalizeTaskStateOptions): Promise<void> {
-  const finishedAt = new Date();
-  const updatedAt = new Date();
-  const runUpdate: Partial<typeof runs.$inferInsert> = {
-    status: options.runStatus,
-    finishedAt,
-  };
-  if (options.costTokens !== undefined) {
-    runUpdate.costTokens = options.costTokens;
-  }
-  if (options.errorMessage !== undefined) {
-    runUpdate.errorMessage = options.errorMessage;
-  }
-
-  await db.transaction(async (tx) => {
-    await tx.update(runs).set(runUpdate).where(eq(runs.id, options.runId));
-
-    await tx
-      .update(tasks)
-      .set({
-        status: options.taskStatus,
-        blockReason: options.blockReason,
-        updatedAt,
-      })
-      .where(eq(tasks.id, options.taskId));
-
-    await tx.delete(leases).where(eq(leases.taskId, options.taskId));
-
-    await tx
-      .update(agents)
-      .set({ status: "idle", currentTaskId: null })
-      .where(eq(agents.id, options.agentId));
-  });
-}
-
-function isConflictAutoFixTaskTitle(title: string): boolean {
-  return /^\[AutoFix-Conflict\]\s+PR\s+#\d+/i.test(title.trim());
-}
-
-function buildGitHubPrUrl(repoUrl: string, prNumber: number): string | undefined {
-  try {
-    const normalizedRepoUrl = repoUrl.startsWith("git@github.com:")
-      ? repoUrl.replace("git@github.com:", "https://github.com/")
-      : repoUrl;
-    const parsed = new URL(normalizedRepoUrl);
-    if (!parsed.hostname.toLowerCase().includes("github.com")) {
-      return undefined;
-    }
-    const parts = parsed.pathname.split("/").filter((segment) => segment.length > 0);
-    const owner = parts[0];
-    const repo = parts[1]?.replace(/\.git$/i, "");
-    if (!owner || !repo) {
-      return undefined;
-    }
-    return `https://github.com/${owner}/${repo}/pull/${prNumber}`;
-  } catch {
-    return undefined;
-  }
-}
-
-async function attachExistingPrArtifact(params: {
-  runId: string;
-  prNumber: number;
-  repoUrl: string;
-}): Promise<string | undefined> {
-  const prUrl = buildGitHubPrUrl(params.repoUrl, params.prNumber);
-  await db.insert(artifacts).values({
-    runId: params.runId,
-    type: "pr",
-    ref: String(params.prNumber),
-    url: prUrl,
-    metadata: {
-      source: "existing_pr_context",
-      reused: true,
-    },
-  });
-  return prUrl;
-}
+export type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 
 // タスクを実行するメイン処理
 export async function runWorker(taskData: Task, config: WorkerConfig): Promise<WorkerResult> {
@@ -487,260 +252,28 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     }
 
     // Step 5: 変更内容を検証する
-    console.log("\n[5/7] Verifying changes...");
-    let verifyResult = await verifyChanges({
+    const verificationPhaseResult = await runVerificationPhase({
       repoPath,
-      commands: taskData.commands,
-      allowedPaths: verificationAllowedPaths,
-      policy: effectivePolicy,
+      taskData,
+      taskId,
+      runId,
+      agentId,
+      branchName,
       baseBranch,
-      headBranch: branchName,
-      // pnpm install による lockfile 変更を許容する
-      allowLockfileOutsidePaths: true,
-      // local mode では .env.example 作成を許容する
-      allowEnvExampleOutsidePaths: repoMode === "local",
-      allowNoChanges: shouldAllowNoChanges(taskData),
+      repoMode,
+      verificationAllowedPaths,
+      effectivePolicy,
+      instructionsPath,
+      model,
+      retryHints,
+      executeResult,
+      runtimeExecutorDisplayName,
     });
-
-    const isNoChangeFailure = (message: string | undefined): boolean => {
-      const normalized = (message ?? "").toLowerCase();
-      return (
-        normalized.includes("no changes were made") ||
-        normalized.includes("no relevant changes were made")
-      );
-    };
-
-    // 変更なしで失敗した場合も同一プロセス内で自己修復を試みる
-    if (!verifyResult.success && isNoChangeFailure(verifyResult.error)) {
-      const rawAttempts = Number.parseInt(
-        process.env.WORKER_NO_CHANGE_RECOVERY_ATTEMPTS ?? "1",
-        10,
-      );
-      const noChangeRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
-      for (let attempt = 1; attempt <= noChangeRecoveryAttempts; attempt += 1) {
-        const recoveryHint =
-          "変更が検出されませんでした。タスクの目的を満たすための変更を必ず行ってください。";
-        const recoveryHints = [recoveryHint, ...retryHints];
-        console.warn(
-          `[Worker] No changes detected; recovery attempt ${attempt}/${noChangeRecoveryAttempts}`,
-        );
-        executeResult = await executeTask({
-          repoPath,
-          task: taskData,
-          instructionsPath,
-          model,
-          retryHints: recoveryHints,
-          policy: effectivePolicy,
-        });
-        if (!executeResult.success) {
-          continue;
-        }
-        verifyResult = await verifyChanges({
-          repoPath,
-          commands: taskData.commands,
-          allowedPaths: verificationAllowedPaths,
-          policy: effectivePolicy,
-          baseBranch,
-          headBranch: branchName,
-          allowLockfileOutsidePaths: true,
-          allowEnvExampleOutsidePaths: repoMode === "local",
-          allowNoChanges: shouldAllowNoChanges(taskData),
-        });
-        if (verifyResult.success) {
-          break;
-        }
-      }
+    if (!verificationPhaseResult.success) {
+      return verificationPhaseResult.result;
     }
-
-    // allowedPaths違反は即失敗せず、同一プロセス内で自己修復を試みる
-    if (!verifyResult.success && verifyResult.policyViolations.length > 0) {
-      const rawAttempts = Number.parseInt(process.env.WORKER_POLICY_RECOVERY_ATTEMPTS ?? "1", 10);
-      const policyRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
-      for (let attempt = 1; attempt <= policyRecoveryAttempts; attempt += 1) {
-        const policyHint = `allowedPaths外の変更を取り除き、許可パスのみに修正を収めてください: ${verifyResult.policyViolations.join(", ")}`;
-        const recoveryHints = [policyHint, ...retryHints];
-        console.warn(
-          `[Worker] Policy violations detected; recovery attempt ${attempt}/${policyRecoveryAttempts}`,
-        );
-        executeResult = await executeTask({
-          repoPath,
-          task: taskData,
-          instructionsPath,
-          model,
-          retryHints: recoveryHints,
-          policy: effectivePolicy,
-        });
-        if (!executeResult.success) {
-          continue;
-        }
-        verifyResult = await verifyChanges({
-          repoPath,
-          commands: taskData.commands,
-          allowedPaths: verificationAllowedPaths,
-          policy: effectivePolicy,
-          baseBranch,
-          headBranch: branchName,
-          allowLockfileOutsidePaths: true,
-          allowEnvExampleOutsidePaths: repoMode === "local",
-          allowNoChanges: shouldAllowNoChanges(taskData),
-        });
-        if (verifyResult.success) {
-          break;
-        }
-      }
-    }
-
-    const verifyRecoveryAttempts = parseRecoveryAttempts("WORKER_VERIFY_RECOVERY_ATTEMPTS", 1);
-    const allowExplicitVerifyRecovery =
-      (process.env.WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT ?? "true").toLowerCase() !== "false";
-
-    if (
-      !verifyResult.success &&
-      shouldAttemptVerifyRecovery(verifyResult, allowExplicitVerifyRecovery)
-    ) {
-      for (let attempt = 1; attempt <= verifyRecoveryAttempts; attempt += 1) {
-        const failedCommand = verifyResult.failedCommand ?? "(unknown command)";
-        const recoveryHint = buildVerifyRecoveryHint({
-          verifyResult,
-          attempt,
-          maxAttempts: verifyRecoveryAttempts,
-        });
-        const recoveryHints = [recoveryHint, ...retryHints];
-        console.warn(
-          `[Worker] Verification failed at ${failedCommand}; recovery attempt ${attempt}/${verifyRecoveryAttempts}`,
-        );
-        executeResult = await executeTask({
-          repoPath,
-          task: taskData,
-          instructionsPath,
-          model,
-          retryHints: recoveryHints,
-          policy: effectivePolicy,
-          verificationRecovery: {
-            attempt,
-            failedCommand,
-            failedCommandSource: verifyResult.failedCommandSource,
-            failedCommandStderr: verifyResult.failedCommandStderr,
-          },
-        });
-
-        if (!executeResult.success) {
-          const isTimeout = isExecutionTimeout(
-            executeResult.openCodeResult.stderr,
-            executeResult.openCodeResult.exitCode,
-          );
-          if (isTimeout) {
-            console.warn(
-              "[Worker] Verification recovery execution timed out; continuing to re-verify changes.",
-            );
-          } else {
-            continue;
-          }
-        }
-
-        await restoreExpectedBranchContext(repoPath, branchName, runtimeExecutorDisplayName);
-        verifyResult = await verifyChanges({
-          repoPath,
-          commands: taskData.commands,
-          allowedPaths: verificationAllowedPaths,
-          policy: effectivePolicy,
-          baseBranch,
-          headBranch: branchName,
-          allowLockfileOutsidePaths: true,
-          allowEnvExampleOutsidePaths: repoMode === "local",
-          allowNoChanges: shouldAllowNoChanges(taskData),
-        });
-        if (verifyResult.success) {
-          break;
-        }
-        if (!shouldAttemptVerifyRecovery(verifyResult, allowExplicitVerifyRecovery)) {
-          break;
-        }
-      }
-    }
-
-    if (!verifyResult.success) {
-      if (verifyResult.policyViolations.length > 0) {
-        const errorMessage =
-          verifyResult.error ?? `Policy violations: ${verifyResult.policyViolations.join(", ")}`;
-        console.warn("[Worker] Policy violations detected; deferring to rework flow.");
-        await finalizeTaskState({
-          runId,
-          taskId,
-          agentId,
-          runStatus: "failed",
-          taskStatus: "blocked",
-          blockReason: "needs_rework",
-          costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
-          errorMessage,
-        });
-        return {
-          success: false,
-          taskId,
-          runId,
-          error: errorMessage,
-        };
-      }
-      if (!verifyResult.failedCommand?.trim()) {
-        throw new Error(verifyResult.error ?? "Verification commands failed");
-      }
-      const failedCommand = verifyResult.failedCommand ?? "(unknown command)";
-      const failedSource = verifyResult.failedCommandSource ?? "explicit";
-      const stderrSummary = summarizeVerificationFailure(
-        verifyResult.failedCommandStderr ?? verifyResult.error,
-      );
-      const verifyMarker = encodeVerifyReworkMarker({
-        failedCommand,
-        failedCommandSource: failedSource,
-        stderrSummary,
-      });
-      const existingNotes = taskData.context?.notes;
-      const markerPrefix = "[verify-rework-json]";
-      const hasVerifyMarker = existingNotes?.includes(markerPrefix) ?? false;
-      const notesToAppend = hasVerifyMarker
-        ? []
-        : [
-            "[verify-rework] Verification command failure requires focused rework.",
-            `failed_command: ${failedCommand}`,
-            `failed_source: ${failedSource}`,
-            `failed_stderr: ${stderrSummary}`,
-            verifyMarker,
-          ];
-      if (notesToAppend.length > 0) {
-        const updatedContext = {
-          ...(taskData.context ?? {}),
-          notes: appendContextNotes(existingNotes, notesToAppend),
-        };
-        await db
-          .update(tasks)
-          .set({
-            context: updatedContext,
-            updatedAt: new Date(),
-          })
-          .where(eq(tasks.id, taskId));
-      }
-
-      const errorMessage =
-        verifyResult.error ??
-        `Verification failed at ${failedCommand} [${failedSource}]: ${stderrSummary}`;
-      console.warn("[Worker] Verification failure detected; deferring to rework flow.");
-      await finalizeTaskState({
-        runId,
-        taskId,
-        agentId,
-        runStatus: "failed",
-        taskStatus: "blocked",
-        blockReason: "needs_rework",
-        costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
-        errorMessage,
-      });
-      return {
-        success: false,
-        taskId,
-        runId,
-        error: errorMessage,
-      };
-    }
+    const verifyResult = verificationPhaseResult.verifyResult;
+    executeResult = verificationPhaseResult.executeResult;
 
     if (verifyResult.changedFiles.length === 0) {
       console.log("\n[6/7] Skipping commit/PR...");
