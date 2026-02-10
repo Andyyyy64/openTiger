@@ -106,7 +106,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     .filter(
       (task) =>
         task.goal.startsWith("Review and process open PR #") ||
-        task.title.includes("[PR] Review #"),
+        task.title.startsWith("[PR] Review #"),
     )
     .map((task) => task.id);
   if (misqueuedPrReviewTaskIds.length > 0) {
