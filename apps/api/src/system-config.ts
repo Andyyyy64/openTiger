@@ -45,6 +45,11 @@ export const CONFIG_FIELDS: ConfigField[] = [
     column: "claudeCodePermissionMode",
     defaultValue: "bypassPermissions",
   },
+  {
+    key: "CLAUDE_CODE_MODEL",
+    column: "claudeCodeModel",
+    defaultValue: "claude-sonnet-4-5",
+  },
   { key: "CLAUDE_CODE_MAX_TURNS", column: "claudeCodeMaxTurns", defaultValue: "0" },
   { key: "CLAUDE_CODE_ALLOWED_TOOLS", column: "claudeCodeAllowedTools", defaultValue: "" },
   {

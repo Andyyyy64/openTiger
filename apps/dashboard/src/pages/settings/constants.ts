@@ -9,6 +9,14 @@ export const CLAUDE_PERMISSION_MODE_OPTIONS = [
   "dontAsk",
   "plan",
 ] as const;
+export const CLAUDE_CODE_MODEL_OPTIONS = [
+  "claude-sonnet-4-5",
+  "claude-sonnet-4-5-20250929",
+  "claude-sonnet-4-20250514",
+  "claude-opus-4-5",
+  "claude-opus-4-5-20251101",
+  "claude-opus-4-20250514",
+] as const;
 // OpenCodeの対応モデル一覧
 // Reference: https://opencode.ai/docs/providers
 export const MODEL_OPTIONS = [
@@ -223,6 +231,14 @@ export const SETTINGS: SettingField[] = [
     options: CLAUDE_PERMISSION_MODE_OPTIONS,
   },
   {
+    key: "CLAUDE_CODE_MODEL",
+    label: "ClaudeCode_Model",
+    description: "Model for Claude Code executor",
+    group: "Models",
+    type: "select",
+    options: CLAUDE_CODE_MODEL_OPTIONS,
+  },
+  {
     key: "CLAUDE_CODE_MAX_TURNS",
     label: "ClaudeCode_MaxTurns",
     description: "Max turns for claude -p (0 uses CLI default)",
@@ -426,6 +442,7 @@ export const FIELD_DISPLAY_ORDER_BY_GROUP: Record<string, readonly string[]> = {
     "OPENCODE_QUOTA_RETRY_DELAY_MS",
     "OPENCODE_MAX_QUOTA_WAITS",
     "CLAUDE_CODE_PERMISSION_MODE",
+    "CLAUDE_CODE_MODEL",
     "CLAUDE_CODE_MAX_TURNS",
     "CLAUDE_CODE_ALLOWED_TOOLS",
     "CLAUDE_CODE_DISALLOWED_TOOLS",

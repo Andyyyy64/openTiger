@@ -133,6 +133,7 @@ export const config = pgTable("config", {
   claudeCodePermissionMode: text("claude_code_permission_mode")
     .default("bypassPermissions")
     .notNull(),
+  claudeCodeModel: text("claude_code_model").default("claude-sonnet-4-5").notNull(),
   claudeCodeMaxTurns: text("claude_code_max_turns").default("0").notNull(),
   claudeCodeAllowedTools: text("claude_code_allowed_tools").default("").notNull(),
   claudeCodeDisallowedTools: text("claude_code_disallowed_tools").default("").notNull(),

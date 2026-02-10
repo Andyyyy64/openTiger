@@ -32,6 +32,9 @@ async function ensureConfigColumns(): Promise<void> {
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_permission_mode" text DEFAULT 'bypassPermissions' NOT NULL`,
   );
   await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_model" text DEFAULT 'claude-sonnet-4-5' NOT NULL`,
+  );
+  await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_max_turns" text DEFAULT '0' NOT NULL`,
   );
   await db.execute(

@@ -28,13 +28,17 @@ async function main() {
   const repoUrl = process.env.REPO_URL ?? "";
   const baseBranch = process.env.BASE_BRANCH ?? "main";
   const repoMode = getRepoMode();
+  const llmExecutor = (process.env.LLM_EXECUTOR ?? "opencode").trim().toLowerCase();
   const agentModel =
-    agentRole === "tester"
-      ? (process.env.TESTER_MODEL ?? process.env.OPENCODE_MODEL)
-      : agentRole === "docser"
-        ? (process.env.DOCSER_MODEL ?? process.env.OPENCODE_MODEL)
-        : (process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL);
-  const effectiveModel = agentModel ?? "google/gemini-3-flash-preview";
+    llmExecutor === "claude_code"
+      ? process.env.CLAUDE_CODE_MODEL
+      : agentRole === "tester"
+        ? (process.env.TESTER_MODEL ?? process.env.OPENCODE_MODEL)
+        : agentRole === "docser"
+          ? (process.env.DOCSER_MODEL ?? process.env.OPENCODE_MODEL)
+          : (process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL);
+  const effectiveModel =
+    agentModel ?? (llmExecutor === "claude_code" ? "claude-sonnet-4-5" : "google/gemini-3-flash-preview");
   // 環境変数があればそちらを優先する
   const instructionsPath =
     agentRole === "tester"

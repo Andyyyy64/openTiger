@@ -48,6 +48,11 @@ const CONFIG_FIELDS: ConfigField[] = [
     column: "claudeCodePermissionMode",
     defaultValue: "bypassPermissions",
   },
+  {
+    key: "CLAUDE_CODE_MODEL",
+    column: "claudeCodeModel",
+    defaultValue: "claude-sonnet-4-5",
+  },
   { key: "CLAUDE_CODE_MAX_TURNS", column: "claudeCodeMaxTurns", defaultValue: "0" },
   { key: "CLAUDE_CODE_ALLOWED_TOOLS", column: "claudeCodeAllowedTools", defaultValue: "" },
   {
@@ -203,6 +208,9 @@ async function ensureConfigColumns(): Promise<void> {
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_permission_mode" text DEFAULT 'bypassPermissions' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_model" text DEFAULT 'claude-sonnet-4-5' NOT NULL`,
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_max_turns" text DEFAULT '0' NOT NULL`,

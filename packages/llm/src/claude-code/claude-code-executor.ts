@@ -26,6 +26,14 @@ function resolvePermissionMode(options: OpenCodeOptions): string {
   return CLAUDE_PERMISSION_MODES.has(raw) ? raw : CLAUDE_CODE_DEFAULT_PERMISSION_MODE;
 }
 
+function resolveClaudeModel(options: OpenCodeOptions): string {
+  const configured = normalizeClaudeModel(readRuntimeEnv(options, "CLAUDE_CODE_MODEL"));
+  if (configured) {
+    return configured;
+  }
+  return normalizeClaudeModel(options.model) ?? CLAUDE_CODE_DEFAULT_MODEL;
+}
+
 function extractAssistantTextFromEvent(event: unknown): string {
   if (!event || typeof event !== "object") {
     return "";
@@ -63,7 +71,7 @@ export async function executeClaudeCodeOnce(
 ): Promise<Omit<OpenCodeResult, "retryCount">> {
   const startTime = Date.now();
   const prompt = await buildOpenCodePrompt(options);
-  const model = normalizeClaudeModel(options.model) ?? CLAUDE_CODE_DEFAULT_MODEL;
+  const model = resolveClaudeModel(options);
   const permissionMode = resolvePermissionMode(options);
   const maxTurns = parseIntegerEnvValue(
     readRuntimeEnv(options, "CLAUDE_CODE_MAX_TURNS"),
