@@ -130,80 +130,110 @@ export function parseDependencyIssueNumbersFromIssueBody(body: string): number[]
   return Array.from(numbers);
 }
 
-function hasDocKeyword(text: string): boolean {
-  if (!text) {
-    return false;
+export type IssueTaskRole = "worker" | "tester" | "docser";
+
+function normalizeRoleToken(value: string | null | undefined): IssueTaskRole | null {
+  if (!value) {
+    return null;
   }
-  return /(docs?|documentation|readme|runbook|guide|manual|changelog|ドキュメント|手順書|仕様書|設計書)/i.test(
-    text,
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "worker" || normalized === "tester" || normalized === "docser") {
+    return normalized;
+  }
+  return null;
+}
+
+function parseRoleFromLabels(labels: string[]): IssueTaskRole | null {
+  for (const raw of labels) {
+    const label = raw.trim().toLowerCase().replace(/\s+/g, "");
+    if (label === "role:worker" || label === "agent:worker" || label === "worker") {
+      return "worker";
+    }
+    if (label === "role:tester" || label === "agent:tester" || label === "tester") {
+      return "tester";
+    }
+    if (label === "role:docser" || label === "agent:docser" || label === "docser") {
+      return "docser";
+    }
+  }
+  return null;
+}
+
+function parseRoleFromInlineBody(body: string): IssueTaskRole | null {
+  if (!body) {
+    return null;
+  }
+
+  const inline = body.match(
+    /^(?:\s*)(?:agent|role|担当(?:エージェント)?|実行エージェント)\s*[:：]\s*(worker|tester|docser)\s*$/im,
   );
+  return normalizeRoleToken(inline?.[1] ?? null);
 }
 
-function hasDocumentationPathMention(text: string): boolean {
-  if (!text) {
-    return false;
+function parseRoleFromSectionBody(body: string): IssueTaskRole | null {
+  if (!body) {
+    return null;
   }
-  return /(?:^|[\s`'"])(?:docs\/[^\s`'"]*|readme\.md|ops\/runbooks\/[^\s`'"]*|[a-z0-9_./-]+\.mdx?)(?:$|[\s`'"])/i.test(
-    text,
-  );
+
+  const lines = body.split(/\r?\n/);
+  let inRoleSection = false;
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (line.length === 0) {
+      continue;
+    }
+
+    if (/^#{1,6}\s*(agent|role|担当(?:エージェント)?|実行エージェント)\b/i.test(line)) {
+      inRoleSection = true;
+      continue;
+    }
+
+    if (inRoleSection && /^#{1,6}\s+/.test(line)) {
+      break;
+    }
+
+    if (!inRoleSection) {
+      continue;
+    }
+
+    const bullet = line.match(/^[-*]\s*(.+)$/)?.[1] ?? line;
+    const sectionRole = bullet.match(/\b(worker|tester|docser)\b/i)?.[1] ?? null;
+    const normalized = normalizeRoleToken(sectionRole);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return null;
 }
 
-function isDocumentationPathPattern(path: string): boolean {
-  const normalized = path.trim().replace(/^\.\//, "").toLowerCase();
-  if (!normalized || normalized === "**" || normalized === "*") {
-    return false;
+export function parseExplicitRoleFromIssue(params: {
+  labels: string[];
+  body?: string;
+}): IssueTaskRole | null {
+  const fromLabel = parseRoleFromLabels(params.labels);
+  if (fromLabel) {
+    return fromLabel;
   }
-  if (normalized === "readme.md" || normalized.endsWith("/readme.md")) {
-    return true;
+  const body = params.body ?? "";
+  const fromInlineBody = parseRoleFromInlineBody(body);
+  if (fromInlineBody) {
+    return fromInlineBody;
   }
-  if (normalized === "docs" || normalized.startsWith("docs/")) {
-    return true;
-  }
-  if (normalized === "ops/runbooks" || normalized.startsWith("ops/runbooks/")) {
-    return true;
-  }
-  if (normalized.endsWith(".md") || normalized.endsWith(".mdx")) {
-    return true;
-  }
-  return false;
-}
-
-function isDocumentationOnlyPaths(allowedPaths: string[]): boolean {
-  if (allowedPaths.length === 0) {
-    return false;
-  }
-  return allowedPaths.every((path) => isDocumentationPathPattern(path));
+  return parseRoleFromSectionBody(body);
 }
 
 export function inferRoleFromIssue(params: {
   labels: string[];
-  title?: string;
   body?: string;
-  allowedPaths?: string[];
-}): "worker" | "tester" | "docser" {
-  const labels = params.labels;
-  const title = params.title ?? "";
-  const body = params.body ?? "";
-  const allowedPaths = params.allowedPaths ?? [];
-  const lower = labels.map((label) => label.toLowerCase());
-  if (lower.some((label) => label.includes("docs") || label.includes("docser"))) {
-    return "docser";
-  }
-  if (isDocumentationOnlyPaths(allowedPaths)) {
-    return "docser";
-  }
-  if (hasDocKeyword(`${title}\n${body}`) || hasDocumentationPathMention(`${title}\n${body}`)) {
-    return "docser";
-  }
-  if (
-    lower.some((label) => label.includes("test") || label.includes("qa") || label.includes("e2e"))
-  ) {
-    return "tester";
-  }
-  return "worker";
+}): IssueTaskRole | null {
+  return parseExplicitRoleFromIssue({
+    labels: params.labels,
+    body: params.body,
+  });
 }
 
-export function inferRoleFromLabels(labels: string[]): "worker" | "tester" | "docser" {
+export function inferRoleFromLabels(labels: string[]): IssueTaskRole | null {
   return inferRoleFromIssue({ labels });
 }
 

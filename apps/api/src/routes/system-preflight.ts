@@ -6,7 +6,8 @@ import { join, resolve } from "node:path";
 import {
   parseAllowedPathsFromIssueBody,
   parseDependencyIssueNumbersFromIssueBody,
-  inferRoleFromIssue,
+  parseExplicitRoleFromIssue,
+  type IssueTaskRole,
   inferRiskFromLabels,
   inferPriorityFromLabels,
   extractIssueNumberFromTaskContext,
@@ -65,7 +66,7 @@ type TaskIssueLink = {
   id: string;
   status: string;
   updatedAt: Date;
-  role: "worker" | "tester" | "docser";
+  role: IssueTaskRole;
 };
 
 export type SystemPreflightSummary = {
@@ -115,7 +116,7 @@ async function resolveIssueTaskCommands(): Promise<string[]> {
   return [];
 }
 
-function normalizeTaskRole(role: string | null | undefined): "worker" | "tester" | "docser" {
+function normalizeTaskRole(role: string | null | undefined): IssueTaskRole {
   if (role === "tester" || role === "docser") {
     return role;
   }
@@ -126,28 +127,20 @@ function shouldRetargetIssueTaskRole(status: string): boolean {
   return status === "queued" || status === "blocked" || status === "failed";
 }
 
-function resolveIssueRole(issue: OpenIssueSnapshot): "worker" | "tester" | "docser" {
-  const allowedPaths = parseAllowedPathsFromIssueBody(issue.body);
-  return inferRoleFromIssue({
+function resolveIssueRole(issue: OpenIssueSnapshot): IssueTaskRole | null {
+  return parseExplicitRoleFromIssue({
     labels: issue.labels,
-    title: issue.title,
     body: issue.body,
-    allowedPaths,
   });
 }
 
 async function createTaskFromIssue(
   issue: OpenIssueSnapshot,
+  role: IssueTaskRole,
   commands: string[],
   dependencyTaskIds: string[] = [],
 ): Promise<string | null> {
   const allowedPaths = parseAllowedPathsFromIssueBody(issue.body);
-  const role = inferRoleFromIssue({
-    labels: issue.labels,
-    title: issue.title,
-    body: issue.body,
-    allowedPaths,
-  });
   const riskLevel = inferRiskFromLabels(issue.labels);
   const priority = inferPriorityFromLabels(issue.labels);
   const notes = `Imported from GitHub Issue #${issue.number}`;
@@ -329,32 +322,38 @@ export async function buildPreflightSummary(options: {
   const generatedIssueTaskIds = new Map<number, string>();
 
   for (const issue of openIssues) {
-    const desiredRole = resolveIssueRole(issue);
     if (prLinkedIssueNumbers.has(issue.number)) {
       summary.github.skippedIssueNumbers.push(issue.number);
       continue;
     }
 
+    const desiredRole = resolveIssueRole(issue);
     const linkedTasks = issueTaskMap.get(issue.number) ?? [];
-    const roleMismatchedTaskIds = linkedTasks
-      .filter((task) => shouldRetargetIssueTaskRole(task.status) && task.role !== desiredRole)
-      .map((task) => task.id);
-    if (roleMismatchedTaskIds.length > 0) {
-      await db
-        .update(tasks)
-        .set({
-          role: desiredRole,
-          updatedAt: new Date(),
-        })
-        .where(inArray(tasks.id, roleMismatchedTaskIds));
-      const roleMismatchedSet = new Set(roleMismatchedTaskIds);
-      for (const linkedTask of linkedTasks) {
-        if (roleMismatchedSet.has(linkedTask.id)) {
-          linkedTask.role = desiredRole;
+    if (desiredRole) {
+      const roleMismatchedTaskIds = linkedTasks
+        .filter((task) => shouldRetargetIssueTaskRole(task.status) && task.role !== desiredRole)
+        .map((task) => task.id);
+      if (roleMismatchedTaskIds.length > 0) {
+        await db
+          .update(tasks)
+          .set({
+            role: desiredRole,
+            updatedAt: new Date(),
+          })
+          .where(inArray(tasks.id, roleMismatchedTaskIds));
+        const roleMismatchedSet = new Set(roleMismatchedTaskIds);
+        for (const linkedTask of linkedTasks) {
+          if (roleMismatchedSet.has(linkedTask.id)) {
+            linkedTask.role = desiredRole;
+          }
         }
+        summary.github.warnings.push(
+          `Issue #${issue.number}: adjusted ${roleMismatchedTaskIds.length} task role(s) to ${desiredRole}.`,
+        );
       }
+    } else if (linkedTasks.length > 0) {
       summary.github.warnings.push(
-        `Issue #${issue.number}: adjusted ${roleMismatchedTaskIds.length} task role(s) to ${desiredRole}.`,
+        `Issue #${issue.number}: explicit role is missing. Existing task role(s) were kept as-is.`,
       );
     }
     const isDone = linkedTasks.some((task) => task.status === "done");
@@ -377,7 +376,15 @@ export async function buildPreflightSummary(options: {
       continue;
     }
 
-    const createdTaskId = await createTaskFromIssue(issue, commands);
+    if (!desiredRole) {
+      summary.github.issueTaskBacklogCount += 1;
+      summary.github.warnings.push(
+        `Issue #${issue.number}: explicit role is required. Add label role:worker|role:tester|role:docser or set "Agent: <role>" in body.`,
+      );
+      continue;
+    }
+
+    const createdTaskId = await createTaskFromIssue(issue, desiredRole, commands);
     if (createdTaskId) {
       generatedIssueTaskIds.set(issue.number, createdTaskId);
       const current = issueTaskMap.get(issue.number) ?? [];
