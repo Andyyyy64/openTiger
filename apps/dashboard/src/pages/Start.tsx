@@ -218,13 +218,24 @@ export const StartPage: React.FC = () => {
 
       const hasRequirementContent = content.trim().length > 0;
       if (hasRequirementContent) {
-        const syncResult = await systemApi.syncRequirement({
-          content,
-        });
-        if (syncResult.committed) {
-          warnings.push("Requirement snapshot committed to docs/requirement.md");
-        } else if (syncResult.commitReason === "no_changes") {
-          warnings.push("Requirement snapshot is already up to date");
+        try {
+          const syncResult = await systemApi.syncRequirement({
+            content,
+          });
+          if (syncResult.committed) {
+            warnings.push("Requirement snapshot committed to docs/requirement.md");
+          } else if (syncResult.commitReason === "no_changes") {
+            warnings.push("Requirement snapshot is already up to date");
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Requirement snapshot sync failed";
+          if (message.includes("Requirement target repository is unresolved")) {
+            warnings.push(
+              "Requirement snapshot target is unresolved. Planner will use a transient requirement file for this run.",
+            );
+          } else {
+            throw error;
+          }
         }
       }
       const preflight = await systemApi.preflight({
@@ -350,16 +361,40 @@ export const StartPage: React.FC = () => {
     onSuccess: (repo) => {
       setRepoMessage(`> REPO_READY: ${repo.owner}/${repo.name}`);
       setSelectedRepoFullName(`${repo.owner}/${repo.name}`);
-      queryClient.invalidateQueries({ queryKey: ["config"] });
-      queryClient.invalidateQueries({ queryKey: ["system", "github-repos"] });
+      void configApi
+        .update({
+          REPO_MODE: "git",
+          GITHUB_OWNER: repo.owner,
+          GITHUB_REPO: repo.name,
+          REPO_URL: repo.url,
+          BASE_BRANCH: repo.defaultBranch,
+        })
+        .then(() => {
+          setRepoOwner(repo.owner);
+          setRepoName(repo.name);
+          setRepoMessage(`> REPO_SELECTED: ${repo.owner}/${repo.name}`);
+        })
+        .catch((error) => {
+          const message = error instanceof Error ? error.message : "Repository apply failed";
+          setRepoMessage(`> REPO_ERR: ${message}`);
+        })
+        .finally(() => {
+          queryClient.invalidateQueries({ queryKey: ["config"] });
+          queryClient.invalidateQueries({ queryKey: ["system", "github-repos"] });
+        });
     },
     onError: (error) => {
       setRepoMessage(error instanceof Error ? `> REPO_ERR: ${error.message}` : "> REPO_FAIL");
     },
   });
   const applyRepoMutation = useMutation({
-    mutationFn: async (repo: GitHubRepoListItem) =>
+    mutationFn: async (
+      repo: Pick<GitHubRepoListItem, "owner" | "name" | "url" | "defaultBranch"> & {
+        fullName?: string;
+      },
+    ) =>
       configApi.update({
+        REPO_MODE: "git",
         GITHUB_OWNER: repo.owner,
         GITHUB_REPO: repo.name,
         REPO_URL: repo.url,
@@ -368,7 +403,8 @@ export const StartPage: React.FC = () => {
     onSuccess: (_, repo) => {
       setRepoOwner(repo.owner);
       setRepoName(repo.name);
-      setRepoMessage(`> REPO_SELECTED: ${repo.fullName}`);
+      const repoFullName = repo.fullName ?? `${repo.owner}/${repo.name}`;
+      setRepoMessage(`> REPO_SELECTED: ${repoFullName}`);
       queryClient.invalidateQueries({ queryKey: ["config"] });
       queryClient.invalidateQueries({ queryKey: ["system", "github-repos"] });
     },
