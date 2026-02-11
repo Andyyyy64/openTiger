@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -27,6 +27,49 @@ let replanInProgress = false;
 let lastReplanAt: number | null = null;
 let warnedMissingRequirementPath = false;
 
+function resolveGitHubAuthMode(rawValue: string | undefined): "gh" | "token" {
+  return rawValue?.trim().toLowerCase() === "token" ? "token" : "gh";
+}
+
+function resolveGitHubToken(): string {
+  const mode = resolveGitHubAuthMode(process.env.GITHUB_AUTH_MODE);
+  if (mode === "token") {
+    const token = process.env.GITHUB_TOKEN?.trim();
+    if (!token) {
+      throw new Error(
+        "GitHub auth mode is 'token' but GITHUB_TOKEN is not set. Set GITHUB_TOKEN or switch GITHUB_AUTH_MODE to 'gh'.",
+      );
+    }
+    return token;
+  }
+
+  const result = spawnSync("gh", ["auth", "token"], {
+    env: process.env,
+    encoding: "utf-8",
+  });
+  if (result.error) {
+    if ("code" in result.error && result.error.code === "ENOENT") {
+      throw new Error(
+        "GitHub auth mode is 'gh' but GitHub CLI is not installed. Install `gh` from https://cli.github.com/ and run `gh auth login`.",
+      );
+    }
+    throw new Error(`Failed to execute \`gh auth token\`: ${result.error.message}`);
+  }
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || "").trim();
+    throw new Error(
+      `GitHub auth mode is 'gh' but no authenticated session was found. Run \`gh auth login\`${detail ? ` (${detail})` : ""}.`,
+    );
+  }
+  const token = result.stdout.trim();
+  if (!token) {
+    throw new Error(
+      "GitHub auth mode is 'gh' but `gh auth token` returned an empty value. Re-run `gh auth login`.",
+    );
+  }
+  return token;
+}
+
 export function isReplanInProgress(): boolean {
   return replanInProgress;
 }
@@ -46,11 +89,19 @@ async function computeRequirementHash(requirementPath: string): Promise<string |
 }
 
 async function fetchRepoHeadSha(repoUrl: string, baseBranch: string): Promise<string | undefined> {
-  const token = process.env.GITHUB_TOKEN;
-  const authenticatedUrl =
-    token && repoUrl.startsWith("https://github.com/")
-      ? repoUrl.replace("https://github.com/", `https://x-access-token:${token}@github.com/`)
-      : repoUrl;
+  let authenticatedUrl = repoUrl;
+  if (repoUrl.startsWith("https://github.com/")) {
+    try {
+      const token = resolveGitHubToken();
+      authenticatedUrl = repoUrl.replace(
+        "https://github.com/",
+        `https://x-access-token:${token}@github.com/`,
+      );
+    } catch (error) {
+      console.warn("[CycleManager] GitHub auth resolution failed:", error);
+      return;
+    }
+  }
 
   return new Promise((resolveResult) => {
     const child = spawn("git", ["ls-remote", authenticatedUrl, baseBranch], {
@@ -130,7 +181,7 @@ async function fetchLocalHeadSha(workdir: string): Promise<string | undefined> {
 async function computeReplanSignature(
   config: CycleManagerConfig,
 ): Promise<ReplanSignature | undefined> {
-  // 要件とリポジトリの状態をまとめて署名し、差異判定に使う
+  // Sign requirement and repo state for diff detection
   if (!config.replanRequirementPath) {
     return;
   }
@@ -228,7 +279,7 @@ export async function shouldTriggerReplan(
   if (!config.autoReplan || replanInProgress) {
     return { shouldRun: false, reason: "disabled_or_running" };
   }
-  // Plannerが実行中なら再計画を避けて二重生成を防ぐ
+  // Avoid replan while Planner is running to prevent duplicate generation
   const [plannerBusy] = await db
     .select({ id: agents.id })
     .from(agents)
@@ -290,8 +341,8 @@ export async function shouldTriggerReplan(
   if (pendingJudgeRun) {
     return { shouldRun: false, reason: "pending_judge_runs" };
   }
-  // Judge待ちPR/blockedタスクが残っている間は再計画しない。
-  // PR消化前の新規plan生成を防いで重複実行を避ける。
+  // Do not replan while PRs awaiting Judge or blocked tasks remain
+  // Avoid new plan generation before PRs are consumed to prevent duplicate execution
   if (state.tasks.blocked > 0) {
     return { shouldRun: false, reason: "blocked_tasks_present" };
   }
@@ -301,7 +352,7 @@ export async function shouldTriggerReplan(
   const lastPlanAt = await getLastPlanCreatedAt();
   const nowMs = Date.now();
   const planAgeMs = lastPlanAt ? nowMs - lastPlanAt.getTime() : null;
-  // 直近のPlanがあれば同一間隔内の再計画を避ける
+  // Skip replan within same interval if a recent Plan exists
   if (lastPlanAt && planAgeMs !== null && planAgeMs < config.replanIntervalMs) {
     console.log("[CycleManager] Skip replan: recent plan exists", {
       lastPlanAt: lastPlanAt.toISOString(),
@@ -310,7 +361,7 @@ export async function shouldTriggerReplan(
     });
     return { shouldRun: false, reason: "recent_plan" };
   }
-  // デバッグ: 再計画判定の状態をログ
+  // Debug: log replan decision state
   console.log("[CycleManager] Replan check", {
     lastPlanAt: lastPlanAt?.toISOString() ?? "none",
     planAgeMs,
@@ -324,7 +375,7 @@ export async function shouldTriggerReplan(
   const signature = await computeReplanSignature(config);
   const skipSameSignature = process.env.REPLAN_SKIP_SAME_SIGNATURE === "true";
   if (skipSameSignature && signature) {
-    // 直近の成功時と同じ署名なら差異がないので再計画しない
+    // No replan if signature matches last success (no diff)
     const lastSignature = await getLastPlanSignature();
     if (lastSignature && lastSignature === signature.signature) {
       return { shouldRun: false, signature, reason: "no_diff" };
@@ -454,7 +505,7 @@ export async function triggerReplan(
   signature: ReplanSignature | undefined,
   config: CycleManagerConfig,
 ): Promise<void> {
-  // 競合状態防止: 既に実行中なら何もしない
+  // Prevent race: do nothing if already running
   if (replanInProgress) {
     console.log("[CycleManager] triggerReplan called but already in progress, skipping");
     return;
@@ -507,7 +558,7 @@ export async function triggerReplan(
     env: plannerEnv,
   });
 
-  // Plannerの標準出力をそのまま流す
+  // Stream Planner stdout directly
   child.stdout.on("data", (data: Buffer) => {
     process.stdout.write(data);
   });

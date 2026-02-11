@@ -1,6 +1,6 @@
 import type { FailureCategory } from "./types";
 
-// 最大リトライ回数（-1で無制限。上限超過時は再作業へ切り替えて復旧を止めない）
+// Max retry count (-1 = unlimited; on exceed, switch to rework instead of stopping recovery)
 const MAX_RETRY_COUNT = (() => {
   const parsed = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1", 10);
   return Number.isFinite(parsed) ? parsed : -1;
@@ -29,7 +29,7 @@ export function isRetryAllowed(retryCount: number): boolean {
 export function resolveCategoryRetryLimit(category: FailureCategory): number {
   const categoryLimit = CATEGORY_RETRY_LIMIT[category];
   if (isUnlimitedRetry()) {
-    // 無制限モードでも非リトライカテゴリは再作業へ切り替える判断材料として残す
+    // Even in unlimited mode, keep non-retry categories for rework decision
     return categoryLimit <= 0 ? 0 : -1;
   }
   return Math.min(categoryLimit, MAX_RETRY_COUNT);

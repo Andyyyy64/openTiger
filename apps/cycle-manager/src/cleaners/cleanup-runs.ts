@@ -3,9 +3,9 @@ import { runs, tasks } from "@openTiger/db/schema";
 import { and, eq, inArray, lt } from "drizzle-orm";
 import { recordEvent } from "../monitors/event-logger";
 
-// 実行中だが進行していないRunをキャンセル
+// Cancel stuck runs (running but no progress)
 export async function cancelStuckRuns(
-  maxDurationMs: number = parseInt(process.env.STUCK_RUN_TIMEOUT_MS ?? "900000", 10), // デフォルト15分
+  maxDurationMs: number = parseInt(process.env.STUCK_RUN_TIMEOUT_MS ?? "900000", 10), // default 15 min
 ): Promise<number> {
   const threshold = new Date(Date.now() - maxDurationMs);
 
@@ -28,7 +28,7 @@ export async function cancelStuckRuns(
     })
     .where(inArray(runs.id, runIds));
 
-  // 対応するタスクをfailedに
+  // Set corresponding tasks to failed
   const taskIds = stuckRuns.map((r) => r.taskId);
   await db
     .update(tasks)

@@ -3,7 +3,7 @@ import { cycles, tasks, runs, agents } from "@openTiger/db/schema";
 import { eq, count, sql, and, gte, lte, inArray, lt } from "drizzle-orm";
 import type { CycleStats, StateSnapshot } from "@openTiger/core";
 
-// システム状態のスナップショット
+// System state snapshot
 export interface SystemState {
   timestamp: Date;
   tasks: {
@@ -31,9 +31,9 @@ export interface SystemState {
   } | null;
 }
 
-// 現在のシステム状態を取得
+// Capture current system state
 export async function captureSystemState(): Promise<SystemState> {
-  // タスク状態の集計
+  // Aggregate task status
   const taskStats = await db
     .select({
       status: tasks.status,
@@ -56,7 +56,7 @@ export async function captureSystemState(): Promise<SystemState> {
     }
   }
 
-  // Run状態の集計
+  // Aggregate run status
   const runStats = await db
     .select({
       status: runs.status,
@@ -78,7 +78,7 @@ export async function captureSystemState(): Promise<SystemState> {
     }
   }
 
-  // エージェント状態の集計
+  // Aggregate agent status
   const agentStats = await db
     .select({
       status: agents.status,
@@ -99,7 +99,7 @@ export async function captureSystemState(): Promise<SystemState> {
     }
   }
 
-  // 現在のサイクル情報
+  // Current cycle info
   const [currentCycle] = await db
     .select()
     .from(cycles)
@@ -122,9 +122,9 @@ export async function captureSystemState(): Promise<SystemState> {
   };
 }
 
-// 状態をファイルに永続化
+// Persist state
 export async function persistState(state: SystemState): Promise<void> {
-  // 現在のサイクルに状態スナップショットを保存
+  // Save state snapshot to current cycle
   if (!state.cycle?.id) {
     return;
   }
@@ -133,7 +133,7 @@ export async function persistState(state: SystemState): Promise<void> {
     pendingTaskCount: state.tasks.queued,
     runningTaskCount: state.tasks.running,
     activeAgentCount: state.agents.busy,
-    queuedJobCount: 0, // BullMQから取得する場合は別途実装
+    queuedJobCount: 0, // TODO: fetch from BullMQ if needed
     timestamp: state.timestamp,
   };
 
@@ -145,12 +145,12 @@ export async function persistState(state: SystemState): Promise<void> {
     .where(eq(cycles.id, state.cycle.id));
 }
 
-// サイクル統計を更新
+// Update cycle stats
 export async function updateCycleStats(cycleId: string, stats: CycleStats): Promise<void> {
   await db.update(cycles).set({ stats }).where(eq(cycles.id, cycleId));
 }
 
-// サイクル履歴を取得
+// Get cycle history
 export async function getCycleHistory(
   limit: number = 10,
 ): Promise<Array<typeof cycles.$inferSelect>> {
@@ -161,7 +161,7 @@ export async function getCycleHistory(
     .limit(limit);
 }
 
-// 指定期間のシステムメトリクス
+// Get system metrics for period
 export async function getSystemMetrics(
   startTime: Date,
   endTime: Date,
@@ -205,7 +205,7 @@ export async function getSystemMetrics(
   };
 }
 
-// ヘルスチェック結果
+// Health check result
 export interface HealthCheckResult {
   healthy: boolean;
   checks: {
@@ -220,11 +220,11 @@ export interface HealthCheckResult {
   details: Record<string, unknown>;
 }
 
-// システムヘルスチェック
+// Perform system health check
 export async function performHealthCheck(): Promise<HealthCheckResult> {
   const details: Record<string, unknown> = {};
 
-  // DB接続チェック
+  // DB connection check
   let dbHealthy = false;
   try {
     await db
@@ -236,7 +236,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
     details.dbError = error instanceof Error ? error.message : "Unknown error";
   }
 
-  // アクティブエージェントチェック
+  // Active agent check
   const agentThreshold = new Date(Date.now() - 2 * 60 * 1000);
   const [agentCount] = await db
     .select({ count: count() })
@@ -248,7 +248,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
   const hasActiveAgents = activeAgentCount > 0;
   details.activeAgentCount = activeAgentCount;
 
-  // 停滞タスクチェック
+  // Stuck task check
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const [stuckCount] = await db
     .select({ count: count() })
@@ -257,7 +257,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
   const noStuckTasks = (stuckCount?.count ?? 0) === 0;
   details.stuckTaskCount = stuckCount?.count ?? 0;
 
-  // SLO: queued -> running 5分以内
+  // SLO: queued -> running within 5 min
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
   const [queuedSloViolation] = await db
     .select({ count: count() })
@@ -267,7 +267,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
   const queueLatencyWithinSlo = queuedSloViolationCount === 0;
   details.queuedOver5mCount = queuedSloViolationCount;
 
-  // SLO: blocked 30分以内に自動処理
+  // SLO: blocked auto-handled within 30 min
   const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
   const [blockedSloViolation] = await db
     .select({ count: count() })
@@ -301,7 +301,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
       queueLatencyWithinSlo,
       blockedWithinSlo,
       retryExhaustionWithinLimit,
-      withinCostLimits: true, // 別途実装
+      withinCostLimits: true, // TODO: implement separately
     },
     details,
   };

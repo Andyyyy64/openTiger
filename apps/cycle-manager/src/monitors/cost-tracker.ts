@@ -4,20 +4,20 @@ import { and, gte, lte, count, sum } from "drizzle-orm";
 import { SYSTEM_ENTITY_ID } from "@openTiger/core";
 import { recordEvent } from "./event-logger";
 
-// コスト追跡設定
+// Cost tracking config
 interface CostConfig {
-  dailyTokenLimit: number; // 日次トークン上限
-  hourlyTokenLimit: number; // 時間あたりトークン上限
-  warningThreshold: number; // 警告閾値（0-1）
+  dailyTokenLimit: number; // daily token limit
+  hourlyTokenLimit: number; // hourly token limit
+  warningThreshold: number; // warning threshold (0-1)
 }
 
 const defaultCostConfig: CostConfig = {
   dailyTokenLimit: parseInt(process.env.DAILY_TOKEN_LIMIT ?? "-1", 10),
   hourlyTokenLimit: parseInt(process.env.HOURLY_TOKEN_LIMIT ?? "-1", 10),
-  warningThreshold: 0.8, // 80%で警告
+  warningThreshold: 0.8, // warn at 80%
 };
 
-// コストサマリー
+// Cost summary
 interface CostSummary {
   period: string;
   totalTokens: number;
@@ -28,7 +28,7 @@ interface CostSummary {
   costPerSuccessfulTask: number;
 }
 
-// 期間別コスト集計
+// Cost aggregation by period
 export async function getCostByPeriod(startTime: Date, endTime: Date): Promise<CostSummary> {
   const result = await db
     .select({
@@ -70,7 +70,7 @@ export async function getCostByPeriod(startTime: Date, endTime: Date): Promise<C
   };
 }
 
-// 今日のコスト取得
+// Get today's cost
 export async function getTodayCost(): Promise<CostSummary> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -80,7 +80,7 @@ export async function getTodayCost(): Promise<CostSummary> {
   return getCostByPeriod(today, tomorrow);
 }
 
-// 直近1時間のコスト取得
+// Get last hour cost
 export async function getLastHourCost(): Promise<CostSummary> {
   const now = new Date();
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
@@ -88,7 +88,7 @@ export async function getLastHourCost(): Promise<CostSummary> {
   return getCostByPeriod(oneHourAgo, now);
 }
 
-// コスト制限チェック
+// Check cost limits
 export async function checkCostLimits(config: CostConfig = defaultCostConfig): Promise<{
   isWithinLimits: boolean;
   dailyUsage: number;
@@ -105,7 +105,7 @@ export async function checkCostLimits(config: CostConfig = defaultCostConfig): P
   const dailyLimit = config.dailyTokenLimit;
   const hourlyLimit = config.hourlyTokenLimit;
 
-  // 制限が0以下のときは無制限として扱う
+  // Treat limit <= 0 as unlimited
   const dailyUsageRatio = dailyLimit > 0 ? todayCost.totalTokens / dailyLimit : 0;
   if (dailyLimit > 0) {
     if (dailyUsageRatio >= 1) {
@@ -137,7 +137,7 @@ export async function checkCostLimits(config: CostConfig = defaultCostConfig): P
   };
 }
 
-// コスト効率の分析
+// Analyze cost efficiency
 export async function analyzeCostEfficiency(days: number = 7): Promise<{
   tokensPerSuccessfulTask: number;
   successRate: number;
@@ -148,7 +148,7 @@ export async function analyzeCostEfficiency(days: number = 7): Promise<{
   const midTime = new Date(Date.now() - (days / 2) * 24 * 60 * 60 * 1000);
   const endTime = new Date();
 
-  // 前半と後半で比較
+  // Compare first and second half
   const firstHalf = await getCostByPeriod(startTime, midTime);
   const secondHalf = await getCostByPeriod(midTime, endTime);
 
@@ -159,7 +159,7 @@ export async function analyzeCostEfficiency(days: number = 7): Promise<{
   const tokensPerSuccessfulTask = totalSuccessful > 0 ? totalTokens / totalSuccessful : 0;
   const successRate = totalRuns > 0 ? totalSuccessful / totalRuns : 0;
 
-  // トレンド判定
+  // Determine trend
   let trend: "improving" | "stable" | "degrading" = "stable";
   const recommendations: string[] = [];
 
@@ -192,7 +192,7 @@ export async function analyzeCostEfficiency(days: number = 7): Promise<{
   };
 }
 
-// コストアラートを記録
+// Record cost alert
 export async function recordCostAlert(
   alertType: string,
   details: Record<string, unknown>,

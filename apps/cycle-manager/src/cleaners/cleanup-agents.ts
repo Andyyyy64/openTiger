@@ -4,9 +4,9 @@ import { and, eq, inArray, lt, not } from "drizzle-orm";
 import { SYSTEM_ENTITY_ID } from "@openTiger/core";
 import { recordEvent } from "../monitors/event-logger";
 
-// オフラインエージェントをリセット
+// Reset offline agents
 export async function resetOfflineAgents(): Promise<number> {
-  // ハートビートが一定時間ない（10分以上）エージェントを検出
+  // Detect agents with no heartbeat for 10+ min
   const threshold = new Date(Date.now() - 10 * 60 * 1000);
 
   const offlineAgents = await db

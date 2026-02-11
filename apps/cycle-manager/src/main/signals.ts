@@ -6,7 +6,7 @@ type TimerSnapshot = {
   statsTimer: ReturnType<typeof setInterval> | null;
 };
 
-// SIGINT/SIGTERMで安全に停止する
+// Gracefully stop on SIGINT/SIGTERM
 export function setupSignalHandlers(getTimers: () => TimerSnapshot): void {
   const shutdown = async (signal: string) => {
     console.log(`\n[Shutdown] Received ${signal}, stopping Cycle Manager...`);
@@ -16,7 +16,7 @@ export function setupSignalHandlers(getTimers: () => TimerSnapshot): void {
     if (timers.cleanupTimer) clearInterval(timers.cleanupTimer);
     if (timers.statsTimer) clearInterval(timers.statsTimer);
 
-    // 現在のサイクルを終了
+    // End current cycle
     const state = getCycleState();
     if (state.isRunning) {
       await endCurrentCycle("shutdown");

@@ -1,4 +1,4 @@
-// 監視モジュールのエクスポート
+// Monitor module exports
 export * from "./event-logger";
 export * from "./cost-tracker";
 export * from "./anomaly-detector";

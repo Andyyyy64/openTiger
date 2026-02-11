@@ -3,11 +3,11 @@ import { tasks, leases } from "@openTiger/db/schema";
 import { and, eq, inArray, lt } from "drizzle-orm";
 import { recordEvent } from "../monitors/event-logger";
 
-// 期限切れリースをクリーンアップ
+// Clean up expired leases
 export async function cleanupExpiredLeases(): Promise<number> {
   const now = new Date();
 
-  // 期限切れリースを取得
+  // Fetch expired leases
   const expired = await db
     .select({ id: leases.id, taskId: leases.taskId })
     .from(leases)
@@ -17,11 +17,11 @@ export async function cleanupExpiredLeases(): Promise<number> {
     return 0;
   }
 
-  // リースを削除
+  // Delete leases
   const leaseIds = expired.map((l) => l.id);
   await db.delete(leases).where(inArray(leases.id, leaseIds));
 
-  // 対応するタスクをqueuedに戻す
+  // Revert corresponding tasks to queued
   const taskIds = expired.map((l) => l.taskId);
   await db
     .update(tasks)

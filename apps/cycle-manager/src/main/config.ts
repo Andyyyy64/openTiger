@@ -2,26 +2,26 @@ import type { CycleConfig } from "@openTiger/core";
 import { existsSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 
-// Cycle Manager設定
+// Cycle Manager config
 export interface CycleManagerConfig {
   cycleConfig: CycleConfig;
-  monitorIntervalMs: number; // 監視間隔
-  cleanupIntervalMs: number; // クリーンアップ間隔
-  statsIntervalMs: number; // 統計更新間隔
-  autoStartCycle: boolean; // 自動サイクル開始
-  autoReplan: boolean; // タスク枯渇時に再計画
-  replanIntervalMs: number; // 再計画の最小間隔
-  replanRequirementPath?: string; // 要件ファイルのパス
-  replanCommand: string; // Planner実行コマンド
-  replanWorkdir: string; // Planner実行ディレクトリ
-  replanRepoUrl?: string; // 差分判定に使うリポジトリURL
-  replanBaseBranch: string; // 差分判定に使うベースブランチ
-  systemApiBaseUrl: string; // system API エンドポイント
-  issueSyncIntervalMs: number; // issue backlog 同期間隔
-  issueSyncTimeoutMs: number; // issue backlog 同期タイムアウト
-  failedTaskRetryCooldownMs: number; // failedタスク再投入までの待機時間
-  blockedTaskRetryCooldownMs: number; // blockedタスク再投入までの待機時間
-  stuckRunTimeoutMs: number; // 停滞run判定までの時間
+  monitorIntervalMs: number; // Monitor interval
+  cleanupIntervalMs: number; // Cleanup interval
+  statsIntervalMs: number; // Stats update interval
+  autoStartCycle: boolean; // Auto-start cycle
+  autoReplan: boolean; // Replan when task backlog depleted
+  replanIntervalMs: number; // Min replan interval
+  replanRequirementPath?: string; // Requirement file path
+  replanCommand: string; // Planner command
+  replanWorkdir: string; // Planner workdir
+  replanRepoUrl?: string; // Repo URL for diff check
+  replanBaseBranch: string; // Base branch for diff check
+  systemApiBaseUrl: string; // System API endpoint
+  issueSyncIntervalMs: number; // Issue backlog sync interval
+  issueSyncTimeoutMs: number; // Issue backlog sync timeout
+  failedTaskRetryCooldownMs: number; // Cooldown before requeue failed
+  blockedTaskRetryCooldownMs: number; // Cooldown before requeue blocked
+  stuckRunTimeoutMs: number; // Stuck run threshold
 }
 
 function resolveRequirementPath(
@@ -35,7 +35,7 @@ function resolveRequirementPath(
     return requirementPath;
   }
 
-  // 起動ディレクトリ配下に無い場合は上位ディレクトリも順に探索する
+  // Search parent dirs if not under launch dir
   let currentDir = resolve(workdir);
   while (true) {
     const candidate = resolve(currentDir, requirementPath);
@@ -49,7 +49,7 @@ function resolveRequirementPath(
     currentDir = parentDir;
   }
 
-  // 見つからない場合も決定的なパスを返し、後段で明示的にエラーを出す
+  // Return deterministic path; error explicitly later if not found
   return resolve(workdir, requirementPath);
 }
 
@@ -59,10 +59,10 @@ const defaultReplanRequirementPath = resolveRequirementPath(
   defaultReplanWorkdir,
 );
 
-// デフォルト設定
+// Default config
 export const DEFAULT_CONFIG: CycleManagerConfig = {
   cycleConfig: {
-    maxDurationMs: parseInt(process.env.CYCLE_MAX_DURATION_MS ?? String(4 * 60 * 60 * 1000), 10), // 4時間
+    maxDurationMs: parseInt(process.env.CYCLE_MAX_DURATION_MS ?? String(4 * 60 * 60 * 1000), 10), // 4h
     maxTasksPerCycle: parseInt(process.env.CYCLE_MAX_TASKS ?? "100", 10),
     maxFailureRate: parseFloat(process.env.CYCLE_MAX_FAILURE_RATE ?? "0.3"),
     minTasksForFailureCheck: 10,
@@ -91,7 +91,7 @@ export const DEFAULT_CONFIG: CycleManagerConfig = {
   stuckRunTimeoutMs: parseInt(process.env.STUCK_RUN_TIMEOUT_MS ?? "900000", 10),
 };
 
-// 主要設定のログをまとめて出力する
+// Log main config summary
 export function logConfigSummary(config: CycleManagerConfig): void {
   console.log(`Monitor interval: ${config.monitorIntervalMs}ms`);
   console.log(`Cleanup interval: ${config.cleanupIntervalMs}ms`);

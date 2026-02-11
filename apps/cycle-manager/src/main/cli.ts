@@ -3,7 +3,7 @@ import { performFullCleanup } from "../cleaners/index";
 import { getDetectedAnomalies, clearAnomalies } from "../monitors/index";
 import { performHealthCheck } from "../state-manager";
 
-// CLIコマンド処理
+// CLI command handling
 export async function handleCommand(command: string): Promise<void> {
   switch (command) {
     case "status": {

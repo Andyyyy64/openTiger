@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 失敗タスクを即座に再キューするユーティリティ
+// Utility to immediately requeue failed tasks
 import { db } from "@openTiger/db";
 import { tasks, events } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";

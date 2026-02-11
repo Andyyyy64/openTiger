@@ -3,7 +3,7 @@ import { cycles, tasks, runs, agents, leases } from "@openTiger/db/schema";
 import { eq, and, gte, sql, count, sum } from "drizzle-orm";
 import type { CycleConfig, CycleStats, StateSnapshot, CycleTriggerType } from "@openTiger/core";
 
-// サイクル制御の状態
+// Cycle control state
 interface CycleState {
   cycleId: string | null;
   cycleNumber: number;
@@ -17,7 +17,7 @@ let currentState: CycleState = {
   cycleNumber: 0,
   startedAt: null,
   config: {
-    maxDurationMs: 4 * 60 * 60 * 1000, // 4時間
+    maxDurationMs: 4 * 60 * 60 * 1000, // 4 hours
     maxTasksPerCycle: 100,
     maxFailureRate: 0.3, // 30%
     minTasksForFailureCheck: 10,
@@ -29,12 +29,12 @@ let currentState: CycleState = {
   isRunning: false,
 };
 
-// 設定を更新
+// Update config
 export function updateConfig(config: Partial<CycleConfig>): void {
   currentState.config = { ...currentState.config, ...config };
 }
 
-// 現在のサイクル状態を取得
+// Get current cycle state
 export function getCycleState(): CycleState {
   return { ...currentState };
 }
@@ -67,9 +67,9 @@ export async function captureStateSnapshot(): Promise<StateSnapshot> {
   };
 }
 
-// サイクル統計を計算
+// Calculate cycle stats
 export async function calculateCycleStats(cycleStartedAt: Date): Promise<CycleStats> {
-  // サイクル開始以降のRun統計を取得
+  // Get run stats since cycle start
   const runStats = await db
     .select({
       status: runs.status,
@@ -96,7 +96,7 @@ export async function calculateCycleStats(cycleStartedAt: Date): Promise<CycleSt
     totalTokens += Number(stat.tokens) || 0;
   }
 
-  // アクティブWorker数をピーク値として取得（簡易版: 現在値）
+  // Get active worker count (simplified: current value as peak)
   const [activeWorkers] = await db
     .select({ count: count() })
     .from(agents)
@@ -115,24 +115,24 @@ export async function calculateCycleStats(cycleStartedAt: Date): Promise<CycleSt
   };
 }
 
-// 新しいサイクルを開始
+// Start new cycle
 export async function startNewCycle(): Promise<string> {
-  // 前のサイクルが実行中なら終了
+  // End previous cycle if running
   if (currentState.isRunning && currentState.cycleId) {
     await endCurrentCycle("new_cycle_start");
   }
 
-  // 次のサイクル番号を取得
+  // Get next cycle number
   const [lastCycle] = await db
     .select({ maxNumber: sql<number>`MAX(${cycles.number})` })
     .from(cycles);
 
   const nextNumber = (lastCycle?.maxNumber ?? 0) + 1;
 
-  // 状態スナップショットを取得
+  // Capture state snapshot
   const snapshot = await captureStateSnapshot();
 
-  // 新しいサイクルを作成
+  // Create new cycle
   const [newCycle] = await db
     .insert(cycles)
     .values({
@@ -169,16 +169,16 @@ export async function startNewCycle(): Promise<string> {
   return newCycle.id;
 }
 
-// 現在のサイクルを終了
+// End current cycle
 export async function endCurrentCycle(reason: string): Promise<void> {
   if (!currentState.cycleId || !currentState.startedAt) {
     return;
   }
 
-  // 最終統計を計算
+  // Calculate final stats
   const stats = await calculateCycleStats(currentState.startedAt);
 
-  // サイクルを終了状態に更新
+  // Update cycle to completed
   await db
     .update(cycles)
     .set({
@@ -197,7 +197,7 @@ export async function endCurrentCycle(reason: string): Promise<void> {
   currentState.isRunning = false;
 }
 
-// 時間ベースのサイクル終了判定
+// Time-based cycle end check
 export function shouldEndByTime(): boolean {
   if (!currentState.startedAt || !currentState.config.maxDurationMs) {
     return false;
@@ -207,7 +207,7 @@ export function shouldEndByTime(): boolean {
   return elapsed >= currentState.config.maxDurationMs;
 }
 
-// タスク数ベースのサイクル終了判定
+// Task-count based cycle end check
 export async function shouldEndByTaskCount(): Promise<boolean> {
   if (!currentState.startedAt || !currentState.config.maxTasksPerCycle) {
     return false;
@@ -221,7 +221,7 @@ export async function shouldEndByTaskCount(): Promise<boolean> {
   return (result?.count ?? 0) >= currentState.config.maxTasksPerCycle;
 }
 
-// 失敗率ベースのサイクル終了判定
+// Failure-rate based cycle end check
 export async function shouldEndByFailureRate(): Promise<boolean> {
   if (!currentState.startedAt || !currentState.config.maxFailureRate) {
     return false;
@@ -230,7 +230,7 @@ export async function shouldEndByFailureRate(): Promise<boolean> {
   const stats = await calculateCycleStats(currentState.startedAt);
   const totalTasks = stats.tasksCompleted + stats.tasksFailed;
 
-  // 最小タスク数に達していない場合はチェックしない
+  // Don't check if min task count not met
   if (totalTasks < currentState.config.minTasksForFailureCheck) {
     return false;
   }
@@ -239,22 +239,22 @@ export async function shouldEndByFailureRate(): Promise<boolean> {
   return failureRate >= currentState.config.maxFailureRate;
 }
 
-// サイクル終了判定を実行
+// Run cycle end checks
 export async function checkCycleEnd(): Promise<{
   shouldEnd: boolean;
   triggerType: CycleTriggerType | null;
 }> {
-  // 時間ベースチェック
+  // Time-based check
   if (shouldEndByTime()) {
     return { shouldEnd: true, triggerType: "time" };
   }
 
-  // タスク数ベースチェック
+  // Task-count based check
   if (await shouldEndByTaskCount()) {
     return { shouldEnd: true, triggerType: "task_count" };
   }
 
-  // 失敗率ベースチェック
+  // Failure-rate based check
   if (await shouldEndByFailureRate()) {
     return { shouldEnd: true, triggerType: "failure_rate" };
   }
@@ -262,7 +262,7 @@ export async function checkCycleEnd(): Promise<{
   return { shouldEnd: false, triggerType: null };
 }
 
-// 最新のサイクルを復元
+// Restore latest cycle
 export async function restoreLatestCycle(): Promise<boolean> {
   const [latestCycle] = await db
     .select()

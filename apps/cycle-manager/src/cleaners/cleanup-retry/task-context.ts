@@ -2,7 +2,7 @@ import type { BlockReason, NormalizedContext } from "./types";
 
 export function normalizeBlockReason(reason: string | null): BlockReason | null {
   if (reason === "needs_human") {
-    // legacy互換: needs_humanはawaiting_judgeとして回収する
+    // Legacy: treat needs_human as awaiting_judge
     return "awaiting_judge";
   }
   if (reason === "awaiting_judge" || reason === "needs_rework" || reason === "quota_wait") {

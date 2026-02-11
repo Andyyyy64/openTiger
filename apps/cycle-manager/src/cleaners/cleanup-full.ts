@@ -6,7 +6,7 @@ import { recordEvent } from "../monitors/event-logger";
 import { cleanupExpiredLeases } from "./cleanup-leases";
 import { resetOfflineAgents } from "./cleanup-agents";
 
-// クリーンアップ結果
+// Cleanup result
 interface CleanupResult {
   leasesReleased: number;
   agentsReset: number;
@@ -14,35 +14,35 @@ interface CleanupResult {
   runsCancelled: number;
 }
 
-// サイクル終了時のフルクリーンアップ
+// Full cleanup on cycle end
 export async function performFullCleanup(
   preserveTaskState: boolean = true,
 ): Promise<CleanupResult> {
   console.log("[Cleanup] Starting full cleanup...");
 
-  // 1. 期限切れリースをクリーンアップ
+  // 1. Clean up expired leases
   const leasesReleased = await cleanupExpiredLeases();
 
-  // 2. 全リースを解放
+  // 2. Release all leases
   const allLeases = await db.select().from(leases);
   if (allLeases.length > 0) {
     await db.delete(leases);
     console.log(`[Cleanup] Released ${allLeases.length} active leases`);
   }
 
-  // 3. オフラインエージェントをリセット
+  // 3. Reset offline agents
   const agentsReset = await resetOfflineAgents();
 
-  // 4. 全エージェントをidleに
+  // 4. Set all agents to idle
   await db
     .update(agents)
     .set({ status: "idle", currentTaskId: null })
     .where(not(eq(agents.status, "offline")));
 
-  // 5. 実行中タスクをリセット
+  // 5. Reset running tasks
   let tasksReset = 0;
   if (!preserveTaskState) {
-    // 全タスクをqueuedに戻す
+    // Revert all tasks to queued
     const result = await db
       .update(tasks)
       .set({ status: "queued", blockReason: null, updatedAt: new Date() })
@@ -50,7 +50,7 @@ export async function performFullCleanup(
       .returning({ id: tasks.id });
     tasksReset = result.length;
   } else {
-    // runningタスクのみqueuedに
+    // Revert only running tasks to queued
     const result = await db
       .update(tasks)
       .set({ status: "queued", blockReason: null, updatedAt: new Date() })
@@ -59,7 +59,7 @@ export async function performFullCleanup(
     tasksReset = result.length;
   }
 
-  // 6. 実行中Runをキャンセル
+  // 6. Cancel running runs
   const runResult = await db
     .update(runs)
     .set({

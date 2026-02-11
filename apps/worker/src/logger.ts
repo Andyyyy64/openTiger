@@ -1,9 +1,9 @@
-// 構造化ログ出力モジュール
+// Structured logging module
 
-// ログレベル
+// Log level
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
-// ログエントリの構造
+// Log entry structure
 export interface LogEntry {
   timestamp: string;
   level: LogLevel;
@@ -17,7 +17,7 @@ export interface LogEntry {
   metadata?: Record<string, unknown>;
 }
 
-// ログ出力設定
+// Logger config
 export interface LoggerConfig {
   component: string;
   taskId?: string;
@@ -27,7 +27,7 @@ export interface LoggerConfig {
   jsonOutput?: boolean;
 }
 
-// ログレベルの優先度
+// Log level priority
 const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   debug: 0,
   info: 1,
@@ -35,7 +35,7 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
   error: 3,
 };
 
-// 構造化ロガー
+// Structured logger
 export class Logger {
   private config: LoggerConfig;
 
@@ -47,7 +47,7 @@ export class Logger {
     };
   }
 
-  // 子ロガーを作成（追加のコンテキストを持つ）
+  // Create child logger with extra context
   child(context: Partial<LoggerConfig>): Logger {
     return new Logger({
       ...this.config,
@@ -55,9 +55,9 @@ export class Logger {
     });
   }
 
-  // ログエントリを出力
+  // Output log entry
   private log(level: LogLevel, message: string, metadata?: Record<string, unknown>): void {
-    // ログレベルのフィルタリング
+    // Filter by log level
     if (LOG_LEVEL_PRIORITY[level] < LOG_LEVEL_PRIORITY[this.config.minLevel ?? "info"]) {
       return;
     }
@@ -74,10 +74,10 @@ export class Logger {
     };
 
     if (this.config.jsonOutput) {
-      // JSON形式で出力
+      // Output as JSON
       console.log(JSON.stringify(entry));
     } else {
-      // 人間が読みやすい形式で出力
+      // Output in human-readable format
       const prefix = this.formatPrefix(entry);
       const metaStr = metadata ? ` ${JSON.stringify(metadata)}` : "";
 
@@ -94,7 +94,7 @@ export class Logger {
     }
   }
 
-  // プレフィックスをフォーマット
+  // Format prefix
   private formatPrefix(entry: LogEntry): string {
     const time = entry.timestamp.split("T")[1]?.slice(0, 8) ?? "";
     const level = entry.level.toUpperCase().padEnd(5);
@@ -104,7 +104,7 @@ export class Logger {
     return `${time} ${level} [${component}]${context}`;
   }
 
-  // 各ログレベルのメソッド
+  // Per-level log methods
   debug(message: string, metadata?: Record<string, unknown>): void {
     this.log("debug", message, metadata);
   }
@@ -121,12 +121,12 @@ export class Logger {
     this.log("error", message, metadata);
   }
 
-  // ステップ開始をログ
+  // Log step start
   stepStart(step: string, description: string): void {
     this.info(`[${step}] ${description}`, { step, event: "step_start" });
   }
 
-  // ステップ完了をログ
+  // Log step complete
   stepComplete(step: string, durationMs: number): void {
     this.info(`[${step}] Completed in ${durationMs}ms`, {
       step,
@@ -135,7 +135,7 @@ export class Logger {
     });
   }
 
-  // ステップ失敗をログ
+  // Log step failure
   stepFailed(step: string, error: string): void {
     this.error(`[${step}] Failed: ${error}`, {
       step,
@@ -144,12 +144,12 @@ export class Logger {
     });
   }
 
-  // タスク開始をログ
+  // Log task start
   taskStart(taskTitle: string): void {
     this.info(`Starting task: ${taskTitle}`, { event: "task_start" });
   }
 
-  // タスク完了をログ
+  // Log task complete
   taskComplete(durationMs: number, prUrl?: string): void {
     this.info("Task completed successfully", {
       event: "task_complete",
@@ -158,7 +158,7 @@ export class Logger {
     });
   }
 
-  // タスク失敗をログ
+  // Log task failure
   taskFailed(error: string, attempt?: number, maxAttempts?: number): void {
     this.error(`Task failed: ${error}`, {
       event: "task_failed",
@@ -168,7 +168,7 @@ export class Logger {
     });
   }
 
-  // リトライをログ
+  // Log retry
   retry(attempt: number, maxAttempts: number, reason: string): void {
     this.warn(`Retrying (${attempt}/${maxAttempts}): ${reason}`, {
       event: "retry",
@@ -179,7 +179,7 @@ export class Logger {
   }
 }
 
-// デフォルトのWorkerロガーを作成
+// Create default worker logger
 export function createWorkerLogger(agentId: string, taskId?: string, runId?: string): Logger {
   return new Logger({
     component: "worker",

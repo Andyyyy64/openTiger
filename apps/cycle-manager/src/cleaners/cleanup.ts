@@ -1,4 +1,4 @@
-// クリーンアップ処理の公開窓口
+// Cleanup module public interface
 export { cleanupExpiredLeases } from "./cleanup-leases";
 export { resetOfflineAgents } from "./cleanup-agents";
 export { cancelStuckRuns } from "./cleanup-runs";

@@ -32,7 +32,7 @@ function sanitizeCommandsForMissingScript(
   }
   const failedCommand = extractFailedVerificationCommand(errorMessage);
   if (!failedCommand) {
-    // 失敗コマンドを特定できない場合は explicit command を空にして自動検証へフォールバック
+    // If failed command unknown, clear explicit command for auto-verify fallback
     return [];
   }
   const normalizedFailed = failedCommand.trim();
@@ -43,7 +43,7 @@ function sanitizeCommandsForMissingScript(
   return filtered;
 }
 
-// 失敗したタスクを再キューイング（即時、全件）
+// Requeue failed tasks (immediate, all)
 export async function requeueFailedTasks(): Promise<number> {
   const result = await db
     .update(tasks)
@@ -62,13 +62,13 @@ export async function requeueFailedTasks(): Promise<number> {
   return result.length;
 }
 
-// 失敗タスクをクールダウン後に再キュー（リトライ回数制限付き）
+// Requeue failed tasks after cooldown (with retry limit)
 export async function requeueFailedTasksWithCooldown(
-  cooldownMs: number = 2 * 60 * 1000, // デフォルト2分に短縮（自己復旧を早める）
+  cooldownMs: number = 2 * 60 * 1000, // Default 2min (faster self-recovery)
 ): Promise<number> {
   const cutoff = new Date(Date.now() - cooldownMs);
 
-  // 失敗したタスクを取得
+  // Fetch failed tasks
   const failedTasks = await db
     .select({
       id: tasks.id,
@@ -86,7 +86,7 @@ export async function requeueFailedTasksWithCooldown(
     return 0;
   }
 
-  // クールダウン経過済みのタスクをフィルタ
+  // Filter tasks past cooldown
   const eligibleTasks = failedTasks.filter((task) => {
     return task.updatedAt < cutoff;
   });
@@ -207,7 +207,7 @@ export async function requeueFailedTasksWithCooldown(
         .where(eq(tasks.id, task.id));
 
       await recordEvent({
-        // 再試行上限に達しても止めずに再作業へ切り替える
+        // Continue to rework even when retry limit reached
         type: "task.recovery_escalated",
         entityType: "task",
         entityId: task.id,

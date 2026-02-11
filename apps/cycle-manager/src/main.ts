@@ -5,13 +5,13 @@ import { DEFAULT_CONFIG, logConfigSummary, type CycleManagerConfig } from "./mai
 import { runCleanupLoop, runMonitorLoop, runStatsLoop } from "./main/loops";
 import { setupSignalHandlers } from "./main/signals";
 
-// Cycle Managerの状態
+// Cycle Manager state
 let monitorTimer: ReturnType<typeof setInterval> | null = null;
 let cleanupTimer: ReturnType<typeof setInterval> | null = null;
 let statsTimer: ReturnType<typeof setInterval> | null = null;
 let activeConfig: CycleManagerConfig = { ...DEFAULT_CONFIG };
 
-// メイン処理
+// Main entry
 async function main(): Promise<void> {
   setupProcessLogging(process.env.OPENTIGER_LOG_NAME ?? "cycle-manager", {
     label: "Cycle Manager",
@@ -26,17 +26,17 @@ async function main(): Promise<void> {
   logConfigSummary(activeConfig);
   console.log("=".repeat(60));
 
-  // シグナルハンドラーを設定
+  // Setup signal handlers
   setupSignalHandlers(() => ({ monitorTimer, cleanupTimer, statsTimer }));
 
-  // コマンドライン引数をチェック
+  // Check CLI args
   const args = process.argv.slice(2);
   if (args.length > 0 && args[0] !== "--daemon") {
     await handleCommand(args[0] ?? "");
     process.exit(0);
   }
 
-  // 既存のサイクルを復元、なければ新規開始
+  // Restore existing cycle or start new one
   const restored = await restoreLatestCycle();
   if (!restored && activeConfig.autoStartCycle) {
     await startNewCycle();
@@ -44,22 +44,22 @@ async function main(): Promise<void> {
     console.log("[CycleManager] No active cycle found. Use 'new-cycle' to start.");
   }
 
-  // 監視を開始
+  // Start monitoring
 
-  // 監視ループ
+  // Monitor loop
   monitorTimer = setInterval(() => runMonitorLoop(activeConfig), activeConfig.monitorIntervalMs);
 
-  // クリーンアップループ
+  // Cleanup loop
   cleanupTimer = setInterval(() => runCleanupLoop(activeConfig), activeConfig.cleanupIntervalMs);
 
-  // 統計更新ループ
+  // Stats update loop
   statsTimer = setInterval(runStatsLoop, activeConfig.statsIntervalMs);
 
   console.log("[CycleManager] Started monitoring loops");
 
-  // デーモンモードで実行
+  // Run in daemon mode
   await new Promise(() => {
-    // 永続的に実行
+    // Run indefinitely
   });
 }
 

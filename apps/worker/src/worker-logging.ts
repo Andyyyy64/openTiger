@@ -5,7 +5,7 @@ const logStreams = new Set<ReturnType<typeof createWriteStream>>();
 let taskLogStream: ReturnType<typeof createWriteStream> | null = null;
 
 export function setTaskLogPath(logPath?: string): void {
-  // タスク単位でログを切り替える
+  // Switch log stream per task
   if (taskLogStream) {
     logStreams.delete(taskLogStream);
     taskLogStream.end();
@@ -42,7 +42,7 @@ export function setupProcessLogging(agentId: string): string | undefined {
   const stream = createWriteStream(logPath, { flags: "a" });
   logStreams.add(stream);
 
-  // 標準出力と標準エラーをログにも書き込む
+  // Write stdout/stderr to log as well
   const stdoutWrite = process.stdout.write.bind(process.stdout);
   const stderrWrite = process.stderr.write.bind(process.stderr);
 

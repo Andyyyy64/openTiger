@@ -166,7 +166,7 @@ async function hasActiveAutoFixTaskForPr(
   return Boolean(activeAutoFix?.id);
 }
 
-// blockedタスクをクールダウン後に再キュー（リトライ回数制限付き）
+// Requeue blocked tasks after cooldown (with retry limit)
 export async function requeueBlockedTasksWithCooldown(
   cooldownMs: number = 5 * 60 * 1000,
 ): Promise<number> {
@@ -239,7 +239,7 @@ export async function requeueBlockedTasksWithCooldown(
 
     const retryAtMs = task.updatedAt.getTime() + requiredCooldownMs;
     const cooldownPassed = retryAtMs <= Date.now();
-    // 復旧を止めないため、上限に関わらずcooldownだけで再処理する
+    // Do not block recovery; reprocess based on cooldown regardless of limit
     if (!cooldownPassed) {
       continue;
     }
@@ -292,7 +292,7 @@ export async function requeueBlockedTasksWithCooldown(
         continue;
       }
 
-      // needs_rework は親タスクをfailed化し、分割した再作業タスクを自動生成する
+      // needs_rework: fail parent task and auto-create split rework tasks
       const context = normalizeContext(task.context);
       if (isConflictAutoFixTaskTitle(task.title)) {
         const sourceTaskId =
@@ -443,7 +443,7 @@ export async function requeueBlockedTasksWithCooldown(
 
     if (reason === "awaiting_judge") {
       if (await hasPendingJudgeRun(task.id)) {
-        // Judge未処理の成功Runが残っている間は再実行しない
+        // Do not rerun while Judge-unprocessed success runs remain
         continue;
       }
       const recoveredRunId = await restoreLatestJudgeRun(task.id);

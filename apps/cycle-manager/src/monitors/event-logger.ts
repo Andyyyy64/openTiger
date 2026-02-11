@@ -2,7 +2,7 @@ import { db } from "@openTiger/db";
 import { events, runs } from "@openTiger/db/schema";
 import { eq, and, gte, lte, sql, count, sum } from "drizzle-orm";
 
-// イベント記録用の入力型
+// Event record input type
 interface EventInput {
   type: string;
   entityType: string;
@@ -11,7 +11,7 @@ interface EventInput {
   payload?: Record<string, unknown>;
 }
 
-// イベントを記録
+// Record event
 export async function recordEvent(input: EventInput): Promise<string> {
   const [event] = await db
     .insert(events)
@@ -31,7 +31,7 @@ export async function recordEvent(input: EventInput): Promise<string> {
   return event.id;
 }
 
-// 特定期間のイベントを取得
+// Get events in time range
 export async function getEventsByTimeRange(
   startTime: Date,
   endTime: Date,
@@ -50,7 +50,7 @@ export async function getEventsByTimeRange(
     .orderBy(sql`${events.createdAt} DESC`);
 }
 
-// イベントタイプ別の集計
+// Aggregate events by type
 export async function getEventCountsByType(
   startTime: Date,
   endTime?: Date,
@@ -76,7 +76,7 @@ export async function getEventCountsByType(
   return counts;
 }
 
-// コスト集計（トークン使用量）
+// Cost aggregation (token usage)
 export async function getCostSummary(
   startTime: Date,
   endTime?: Date,
@@ -109,7 +109,7 @@ export async function getCostSummary(
   };
 }
 
-// 日次コストサマリー
+// Daily cost summary
 export async function getDailyCostSummary(days: number = 7): Promise<
   Array<{
     date: string;
@@ -137,7 +137,7 @@ export async function getDailyCostSummary(days: number = 7): Promise<
   }));
 }
 
-// サイクルイベントのログ出力
+// Log cycle event
 export async function logCycleEvent(
   cycleId: string,
   eventType: string,

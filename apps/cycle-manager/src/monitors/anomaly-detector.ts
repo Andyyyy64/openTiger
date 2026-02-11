@@ -5,31 +5,31 @@ import { SYSTEM_ENTITY_ID, type AnomalyAlert } from "@openTiger/core";
 import { recordEvent } from "./event-logger";
 import { getLastHourCost } from "./cost-tracker";
 
-// 異常検知設定
+// Anomaly detection config
 interface AnomalyConfig {
-  // 失敗率閾値
+  // Failure rate thresholds
   failureRateWarning: number;
   failureRateCritical: number;
-  // コスト急増閾値（前時間比）
+  // Cost spike threshold (vs previous hour)
   costSpikeRatio: number;
-  // タスク停滞時間（分）
+  // Stuck task threshold (min)
   stuckTaskMinutes: number;
-  // 進捗なし判定時間（分）
+  // No-progress threshold (min)
   noProgressMinutes: number;
-  // エージェントタイムアウト（分）
+  // Agent timeout (min)
   agentTimeoutMinutes: number;
 }
 
 const defaultAnomalyConfig: AnomalyConfig = {
   failureRateWarning: 0.2,
   failureRateCritical: 0.4,
-  costSpikeRatio: 2.0, // 2倍以上で警告
+  costSpikeRatio: 2.0, // Warn when 2x or more
   stuckTaskMinutes: 60,
   noProgressMinutes: 30,
   agentTimeoutMinutes: 10,
 };
 
-// 検知された異常のリスト
+// List of detected anomalies
 let detectedAnomalies: AnomalyAlert[] = [];
 const anomalyLastReportedAt = new Map<string, number>();
 const ANOMALY_REPEAT_COOLDOWN_MS = (() => {
@@ -54,17 +54,17 @@ function rememberAnomalySignature(signature: string, nowMs: number): void {
   }
 }
 
-// 異常リストを取得
+// Get anomaly list
 export function getDetectedAnomalies(): AnomalyAlert[] {
   return [...detectedAnomalies];
 }
 
-// 異常リストをクリア
+// Clear anomaly list
 export function clearAnomalies(): void {
   detectedAnomalies = [];
 }
 
-// 異常を記録
+// Record anomaly
 async function reportAnomaly(alert: AnomalyAlert): Promise<boolean> {
   const signature = buildAnomalySignature(alert);
   const nowMs = Date.now();
@@ -91,7 +91,7 @@ async function reportAnomaly(alert: AnomalyAlert): Promise<boolean> {
   return true;
 }
 
-// 失敗率チェック
+// Failure rate check
 export async function checkFailureRate(
   config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert | null> {
@@ -119,7 +119,7 @@ export async function checkFailureRate(
 
   const totalCount = successCount + failedCount;
   if (totalCount < 5) {
-    // サンプルが少なすぎる
+    // Too few samples
     return null;
   }
 
@@ -152,13 +152,13 @@ export async function checkFailureRate(
   return null;
 }
 
-// コスト急増チェック
+// Cost spike check
 export async function checkCostSpike(
   config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert | null> {
   const lastHour = await getLastHourCost();
 
-  // 前の1時間と比較
+  // Compare with previous hour
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
@@ -172,7 +172,7 @@ export async function checkCostSpike(
   const previousTokens = Number(previousResult[0]?.tokens) || 0;
 
   if (previousTokens === 0) {
-    return null; // 比較対象がない
+    return null; // No baseline
   }
 
   const ratio = lastHour.totalTokens / previousTokens;
@@ -196,7 +196,7 @@ export async function checkCostSpike(
   return null;
 }
 
-// 停滞タスクチェック
+// Stuck task check
 export async function checkStuckTasks(
   config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert[]> {
@@ -236,25 +236,25 @@ export async function checkStuckTasks(
   return alerts;
 }
 
-// 進捗なしチェック
+// No-progress check
 export async function checkNoProgress(
   config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert | null> {
   const threshold = new Date(Date.now() - config.noProgressMinutes * 60 * 1000);
 
-  // 直近の完了Runを確認
+  // Check recent completed runs
   const [recentCompleted] = await db
     .select({ count: count() })
     .from(runs)
     .where(and(gte(runs.finishedAt, threshold), eq(runs.status, "success")));
 
-  // アクティブなワーカー数を確認
+  // Check active worker count
   const [activeWorkers] = await db
     .select({ count: count() })
     .from(agents)
     .where(eq(agents.status, "busy"));
 
-  // ワーカーがいるのに進捗がない場合
+  // Workers active but no progress
   if ((activeWorkers?.count ?? 0) > 0 && (recentCompleted?.count ?? 0) === 0) {
     const alert: AnomalyAlert = {
       type: "no_progress",
@@ -273,7 +273,7 @@ export async function checkNoProgress(
   return null;
 }
 
-// エージェントタイムアウトチェック
+// Agent timeout check
 export async function checkAgentTimeouts(
   config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert[]> {
@@ -315,29 +315,29 @@ export async function checkAgentTimeouts(
   return alerts;
 }
 
-// 全異常検知を実行
+// Run all anomaly checks
 export async function runAllAnomalyChecks(
   config: AnomalyConfig = defaultAnomalyConfig,
 ): Promise<AnomalyAlert[]> {
   const alerts: AnomalyAlert[] = [];
 
-  // 失敗率チェック
+  // Failure rate check
   const failureAlert = await checkFailureRate(config);
   if (failureAlert) alerts.push(failureAlert);
 
-  // コスト急増チェック
+  // Cost spike check
   const costAlert = await checkCostSpike(config);
   if (costAlert) alerts.push(costAlert);
 
-  // 停滞タスクチェック
+  // Stuck task check
   const stuckAlerts = await checkStuckTasks(config);
   alerts.push(...stuckAlerts);
 
-  // 進捗なしチェック
+  // No-progress check
   const progressAlert = await checkNoProgress(config);
   if (progressAlert) alerts.push(progressAlert);
 
-  // エージェントタイムアウトチェック
+  // Agent timeout check
   const agentAlerts = await checkAgentTimeouts(config);
   alerts.push(...agentAlerts);
 
