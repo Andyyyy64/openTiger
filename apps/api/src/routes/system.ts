@@ -14,6 +14,7 @@ import { canControlSystem } from "./system-auth";
 import {
   CANONICAL_REQUIREMENT_PATH,
   readRequirementFile,
+  resolveRequirementRepoRoot,
   resolveRequirementPath,
   syncRequirementSnapshot,
 } from "./system-requirements";
@@ -302,9 +303,16 @@ systemRoute.get("/requirements", async (c) => {
   }
 
   try {
+    const configRow = await ensureConfigRow();
+    const requirementRepoRoot = resolveRequirementRepoRoot({
+      repoMode: configRow.repoMode,
+      localRepoPath: configRow.localRepoPath,
+      replanWorkdir: configRow.replanWorkdir,
+    });
     const requirementPath = await resolveRequirementPath(
       c.req.query("path"),
       CANONICAL_REQUIREMENT_PATH,
+      { repoRoot: requirementRepoRoot },
     );
     const content = await readRequirementFile(requirementPath);
     return c.json({ path: requirementPath, content });
@@ -328,12 +336,18 @@ systemRoute.post("/requirements", async (c) => {
   }
 
   try {
+    const configRow = await ensureConfigRow();
+    const requirementRepoRoot = resolveRequirementRepoRoot({
+      repoMode: configRow.repoMode,
+      localRepoPath: configRow.localRepoPath,
+      replanWorkdir: configRow.replanWorkdir,
+    });
     const result = await syncRequirementSnapshot({
       inputPath: path,
       content,
       commitSnapshot: true,
+      repoRoot: requirementRepoRoot,
     });
-    const configRow = await ensureConfigRow();
     if (configRow.replanRequirementPath.trim() !== CANONICAL_REQUIREMENT_PATH) {
       await db
         .update(configTable)

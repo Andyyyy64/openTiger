@@ -1,9 +1,11 @@
 import {
   CANONICAL_REQUIREMENT_PATH,
+  resolveRequirementRepoRoot,
   resolveRequirementPath,
   resolveRepoRoot,
   syncRequirementSnapshot,
 } from "../system-requirements";
+import { ensureConfigRow } from "../../config-store";
 import { parseIndexedProcessName } from "./helpers";
 import { managedProcesses } from "./state";
 import type { ProcessDefinition } from "./types";
@@ -19,15 +21,25 @@ function buildPlannerDefinition(index: number): ProcessDefinition {
     kind: "planner",
     supportsStop: true,
     buildStart: async (payload) => {
+      const configRow = await ensureConfigRow();
+      const requirementRepoRoot = resolveRequirementRepoRoot({
+        repoMode: configRow.repoMode,
+        localRepoPath: configRow.localRepoPath,
+        replanWorkdir: configRow.replanWorkdir,
+      });
       const requirementPath = await resolveRequirementPath(
         payload.requirementPath,
         CANONICAL_REQUIREMENT_PATH,
-        { allowMissing: Boolean(payload.content) },
+        {
+          allowMissing: Boolean(payload.content),
+          repoRoot: requirementRepoRoot,
+        },
       );
       if (payload.content) {
         await syncRequirementSnapshot({
           inputPath: payload.requirementPath,
           content: payload.content,
+          repoRoot: requirementRepoRoot,
         });
       }
       return {

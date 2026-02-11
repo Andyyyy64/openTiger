@@ -11,13 +11,42 @@ export function resolveRepoRoot(): string {
   return resolve(import.meta.dirname, "../../../..");
 }
 
+type RequirementRepoRootConfig = {
+  repoMode?: string | null;
+  localRepoPath?: string | null;
+  replanWorkdir?: string | null;
+};
+
+function normalizeOptionalPath(value: string | null | undefined): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? resolve(trimmed) : undefined;
+}
+
+export function resolveRequirementRepoRoot(config: RequirementRepoRootConfig): string {
+  const systemRepoRoot = resolveRepoRoot();
+  const replanWorkdir = normalizeOptionalPath(config.replanWorkdir);
+  if (replanWorkdir && replanWorkdir !== systemRepoRoot) {
+    return replanWorkdir;
+  }
+  const localRepoPath = normalizeOptionalPath(config.localRepoPath);
+  if (localRepoPath && localRepoPath !== systemRepoRoot) {
+    return localRepoPath;
+  }
+  throw new Error(
+    "Requirement target repository is unresolved. Configure REPLAN_WORKDIR or LOCAL_REPO_PATH to a non-openTiger repository.",
+  );
+}
+
 function isSubPath(baseDir: string, targetDir: string): boolean {
   const relativePath = relative(baseDir, targetDir);
   return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
 }
 
-function resolvePathInRepo(rawPath: string): string {
-  const baseDir = resolveRepoRoot();
+function resolvePathInRepo(rawPath: string, repoRoot: string): string {
+  const baseDir = resolve(repoRoot);
   const resolved = resolve(baseDir, rawPath);
   // Prevent file operations outside the repository
   if (!isSubPath(baseDir, resolved)) {
@@ -29,8 +58,14 @@ function resolvePathInRepo(rawPath: string): string {
 export async function resolveRequirementPath(
   input?: string,
   fallback?: string,
-  options: { allowMissing?: boolean } = {},
+  options: { allowMissing?: boolean; repoRoot?: string } = {},
 ): Promise<string> {
+  const repoRoot = options.repoRoot?.trim();
+  if (!repoRoot) {
+    throw new Error(
+      "Requirement target repository is unresolved. Configure REPLAN_WORKDIR or LOCAL_REPO_PATH first.",
+    );
+  }
   // Handle UI input and environment variables uniformly
   const candidate =
     input?.trim() ||
@@ -40,7 +75,7 @@ export async function resolveRequirementPath(
   if (!candidate) {
     throw new Error("Requirement file path is required");
   }
-  const resolved = resolvePathInRepo(candidate);
+  const resolved = resolvePathInRepo(candidate, repoRoot);
   if (!options.allowMissing) {
     const fileStat = await stat(resolved);
     if (!fileStat.isFile()) {
@@ -90,12 +125,14 @@ async function runGit(
   }
 }
 
-async function commitRequirementSnapshotIfChanged(relativePath: string): Promise<{
+async function commitRequirementSnapshotIfChanged(
+  relativePath: string,
+  repoRoot: string,
+): Promise<{
   committed: boolean;
   reason?: string;
   error?: string;
 }> {
-  const repoRoot = resolveRepoRoot();
   const gitRepoCheck = await runGit(repoRoot, ["rev-parse", "--is-inside-work-tree"]);
   if (!gitRepoCheck.success || gitRepoCheck.stdout !== "true") {
     return {
@@ -152,23 +189,31 @@ export async function syncRequirementSnapshot(params: {
   inputPath?: string;
   content: string;
   commitSnapshot?: boolean;
+  repoRoot?: string;
 }): Promise<{
   requirementPath: string;
   canonicalPath: string;
   committed: boolean;
   commitReason?: string;
 }> {
+  const rawRepoRoot = params.repoRoot?.trim();
+  if (!rawRepoRoot) {
+    throw new Error(
+      "Requirement target repository is unresolved. Configure REPLAN_WORKDIR or LOCAL_REPO_PATH first.",
+    );
+  }
+  const targetRepoRoot = resolve(rawRepoRoot);
   const requirementPath = await resolveRequirementPath(
     params.inputPath,
     CANONICAL_REQUIREMENT_PATH,
-    { allowMissing: true },
+    { allowMissing: true, repoRoot: targetRepoRoot },
   );
   await writeRequirementFile(requirementPath, params.content);
 
   const canonicalPath = await resolveRequirementPath(
     CANONICAL_REQUIREMENT_PATH,
     CANONICAL_REQUIREMENT_PATH,
-    { allowMissing: true },
+    { allowMissing: true, repoRoot: targetRepoRoot },
   );
   if (canonicalPath !== requirementPath) {
     await writeRequirementFile(canonicalPath, params.content);
@@ -183,7 +228,10 @@ export async function syncRequirementSnapshot(params: {
     };
   }
 
-  const commitResult = await commitRequirementSnapshotIfChanged(CANONICAL_REQUIREMENT_PATH);
+  const commitResult = await commitRequirementSnapshotIfChanged(
+    CANONICAL_REQUIREMENT_PATH,
+    targetRepoRoot,
+  );
   if (commitResult.error) {
     throw new Error(commitResult.error);
   }

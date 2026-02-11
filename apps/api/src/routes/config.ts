@@ -105,7 +105,11 @@ configRoute.patch("/", zValidator("json", updateSchema), async (c) => {
     const warnings: string[] = [];
     if (autoReplanEnabled) {
       const requirementPath = nextConfig.REPLAN_REQUIREMENT_PATH?.trim();
-      const replanWorkdir = nextConfig.REPLAN_WORKDIR?.trim() || process.cwd();
+      const repoMode = nextConfig.REPO_MODE?.trim().toLowerCase();
+      const localRepoPath = nextConfig.LOCAL_REPO_PATH?.trim();
+      const replanWorkdir =
+        nextConfig.REPLAN_WORKDIR?.trim() ||
+        (repoMode === "local" && localRepoPath ? localRepoPath : process.cwd());
       if (requirementPath) {
         const candidate = await resolveRequirementPathCandidate(requirementPath, replanWorkdir);
         if (!candidate.found) {
