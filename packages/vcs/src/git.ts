@@ -642,6 +642,54 @@ export async function cleanUntracked(cwd: string): Promise<GitResult> {
   return execGit(["clean", "-fd"], cwd);
 }
 
+// Discard changes for specific paths while preserving other worktree modifications.
+// This restores tracked paths and cleans untracked files/directories only for the given targets.
+export async function discardChangesForPaths(cwd: string, paths: string[]): Promise<GitResult> {
+  const normalizedPaths = Array.from(
+    new Set(paths.map((path) => path.trim()).filter((path) => path.length > 0)),
+  );
+  if (normalizedPaths.length === 0) {
+    return {
+      success: true,
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+    };
+  }
+
+  const stdoutParts: string[] = [];
+  const stderrParts: string[] = [];
+  let allSucceeded = true;
+
+  for (const path of normalizedPaths) {
+    const trackedResult = await execGit(["ls-files", "--error-unmatch", "--", path], cwd);
+    if (trackedResult.success) {
+      const restoreResult = await execGit(["restore", "--staged", "--worktree", "--", path], cwd);
+      if (!restoreResult.success) {
+        allSucceeded = false;
+        stderrParts.push(`[restore:${path}] ${restoreResult.stderr || "restore failed"}`);
+      } else if (restoreResult.stdout) {
+        stdoutParts.push(restoreResult.stdout);
+      }
+    }
+
+    const cleanResult = await execGit(["clean", "-fd", "--", path], cwd);
+    if (!cleanResult.success) {
+      allSucceeded = false;
+      stderrParts.push(`[clean:${path}] ${cleanResult.stderr || "clean failed"}`);
+    } else if (cleanResult.stdout) {
+      stdoutParts.push(cleanResult.stdout);
+    }
+  }
+
+  return {
+    success: allSucceeded,
+    stdout: stdoutParts.join("\n").trim(),
+    stderr: stderrParts.join("\n").trim(),
+    exitCode: allSucceeded ? 0 : 1,
+  };
+}
+
 // Get working tree diff
 export async function getWorkingTreeDiff(cwd: string): Promise<GitResult> {
   return execGit(["diff", "HEAD", "--no-color"], cwd);

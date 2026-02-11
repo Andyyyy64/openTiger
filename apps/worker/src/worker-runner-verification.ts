@@ -1,6 +1,7 @@
 import { db } from "@openTiger/db";
 import { tasks } from "@openTiger/db/schema";
 import type { Policy, Task } from "@openTiger/core";
+import { discardChangesForPaths } from "@openTiger/vcs";
 import { eq } from "drizzle-orm";
 import { executeTask, verifyChanges, type ExecuteResult, type VerifyResult } from "./steps/index";
 import { shouldAllowNoChanges } from "./worker-task-helpers";
@@ -45,6 +46,29 @@ type VerificationPhaseResult =
       success: false;
       result: WorkerResult;
     };
+
+function extractPolicyViolationPaths(violations: string[]): string[] {
+  const paths = new Set<string>();
+  for (const violation of violations) {
+    const markerIndex = violation.indexOf(":");
+    if (markerIndex === -1) {
+      continue;
+    }
+    const rawPath = violation.slice(markerIndex + 1).trim();
+    if (!rawPath) {
+      continue;
+    }
+    const normalized =
+      (rawPath.startsWith('"') && rawPath.endsWith('"')) ||
+      (rawPath.startsWith("'") && rawPath.endsWith("'"))
+        ? rawPath.slice(1, -1)
+        : rawPath;
+    if (normalized.length > 0) {
+      paths.add(normalized);
+    }
+  }
+  return Array.from(paths);
+}
 
 function shouldEnableNoChangeVerificationFallback(): boolean {
   const mode = (process.env.WORKER_NO_CHANGE_CONFIRM_MODE ?? "verify").trim().toLowerCase();
@@ -181,6 +205,46 @@ export async function runVerificationPhase(
     const rawAttempts = Number.parseInt(process.env.WORKER_POLICY_RECOVERY_ATTEMPTS ?? "1", 10);
     const policyRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
     for (let attempt = 1; attempt <= policyRecoveryAttempts; attempt += 1) {
+      await restoreExpectedBranchContext(repoPath, branchName, runtimeExecutorDisplayName);
+      const violatingPaths = extractPolicyViolationPaths(verifyResult.policyViolations);
+      if (violatingPaths.length > 0) {
+        const cleanupResult = await discardChangesForPaths(repoPath, violatingPaths);
+        if (!cleanupResult.success) {
+          console.warn(
+            `[Worker] Failed to clean policy-violating paths before recovery: ${cleanupResult.stderr || "(no stderr)"}`,
+          );
+        } else {
+          console.log(
+            `[Worker] Cleaned policy-violating paths before recovery: ${violatingPaths.join(", ")}`,
+          );
+        }
+
+        const verifyAfterCleanup = await verifyChanges({
+          repoPath,
+          commands: taskData.commands,
+          allowedPaths: verificationAllowedPaths,
+          policy: effectivePolicy,
+          baseBranch,
+          headBranch: branchName,
+          allowLockfileOutsidePaths: true,
+          allowEnvExampleOutsidePaths: repoMode === "local",
+          allowNoChanges: shouldAllowNoChanges(taskData),
+        });
+        verifyResult = verifyAfterCleanup;
+        if (verifyResult.success) {
+          console.log(
+            "[Worker] Verification passed after cleaning policy-violating paths; skipping recovery execution.",
+          );
+          break;
+        }
+        if (verifyResult.policyViolations.length === 0) {
+          console.log(
+            "[Worker] Policy violations cleared after cleanup; deferring remaining failures to standard verification recovery.",
+          );
+          break;
+        }
+      }
+
       const policyHint = `Remove changes outside allowedPaths and confine edits to allowed paths only: ${verifyResult.policyViolations.join(", ")}`;
       const recoveryHints = [policyHint, ...retryHints];
       console.warn(
