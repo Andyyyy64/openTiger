@@ -1,6 +1,6 @@
 # 🐯openTiger
 
-<img src="assets/avatar.png" alt="openTiger" width="200" />
+<img src="assets/avatar.png" alt="openTiger" width="320" />
 
 **Never-stalling autonomous development orchestration.**
 
