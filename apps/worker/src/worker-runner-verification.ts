@@ -171,7 +171,10 @@ export async function runVerificationPhase(
   const allowExplicitVerifyRecovery =
     (process.env.WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT ?? "true").toLowerCase() !== "false";
 
-  if (!verifyResult.success && shouldAttemptVerifyRecovery(verifyResult, allowExplicitVerifyRecovery)) {
+  if (
+    !verifyResult.success &&
+    shouldAttemptVerifyRecovery(verifyResult, allowExplicitVerifyRecovery)
+  ) {
     for (let attempt = 1; attempt <= verifyRecoveryAttempts; attempt += 1) {
       const failedCommand = verifyResult.failedCommand ?? "(unknown command)";
       const recoveryHint = buildVerifyRecoveryHint({
@@ -298,7 +301,8 @@ export async function runVerificationPhase(
     }
 
     const errorMessage =
-      verifyResult.error ?? `Verification failed at ${failedCommand} [${failedSource}]: ${stderrSummary}`;
+      verifyResult.error ??
+      `Verification failed at ${failedCommand} [${failedSource}]: ${stderrSummary}`;
     console.warn("[Worker] Verification failure detected; deferring to rework flow.");
     await finalizeTaskState({
       runId,

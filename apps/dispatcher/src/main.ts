@@ -82,8 +82,7 @@ function logNoIdleAgent(requiredRole: string): void {
     return;
   }
 
-  const suffix =
-    state.suppressed > 0 ? ` (${state.suppressed} similar events suppressed)` : "";
+  const suffix = state.suppressed > 0 ? ` (${state.suppressed} similar events suppressed)` : "";
   console.log(`[Dispatch] No idle ${requiredRole} agent available${suffix}`);
   noIdleLogState.set(requiredRole, { lastLoggedAt: now, suppressed: 0 });
 }

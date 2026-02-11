@@ -97,7 +97,11 @@ function escapeSqlLikePattern(input: string): string {
   return input.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
 }
 
-function extractPrNumberForTask(task: { title: string; goal: string; context: unknown }): number | null {
+function extractPrNumberForTask(task: {
+  title: string;
+  goal: string;
+  context: unknown;
+}): number | null {
   const context = normalizeContext(task.context);
   if (typeof context.pr?.number === "number" && Number.isInteger(context.pr.number)) {
     return context.pr.number;
@@ -126,7 +130,10 @@ function isConflictAutoFixTaskTitle(title: string): boolean {
   return title.toLowerCase().includes("[autofix-conflict]");
 }
 
-async function hasActiveAutoFixTaskForPr(prNumber: number, currentTaskId: string): Promise<boolean> {
+async function hasActiveAutoFixTaskForPr(
+  prNumber: number,
+  currentTaskId: string,
+): Promise<boolean> {
   const statusFilter = inArray(tasks.status, ["queued", "running", "blocked"]);
   const conflictPattern = `${escapeSqlLikePattern(`${CONFLICT_AUTOFIX_PREFIX}${prNumber}`)}%`;
   const [activeConflict] = await db

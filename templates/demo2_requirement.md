@@ -66,23 +66,23 @@ To make autonomous iteration stable, the first milestone must focus on a small, 
 
 ## Risk Assessment
 
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| Boot sequence instability causes non-deterministic failures in QEMU | high | Keep early boot logging explicit and add smoke tests for boot markers |
-| Trap/interrupt misconfiguration blocks progress in later kernel stages | high | Implement trap setup with incremental verification and isolated tests |
-| Scheduler bugs create hidden starvation or deadlock | medium | Start with minimal round-robin behavior and add deterministic task tests |
-| Memory allocator corruption causes cascading failures | high | Add allocator invariants and targeted allocation/free test cases |
-| Scope expansion slows autonomous iteration | medium | Keep this milestone strictly baseline and defer advanced OS features |
+| Risk                                                                   | Impact | Mitigation                                                               |
+| ---------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------ |
+| Boot sequence instability causes non-deterministic failures in QEMU    | high   | Keep early boot logging explicit and add smoke tests for boot markers    |
+| Trap/interrupt misconfiguration blocks progress in later kernel stages | high   | Implement trap setup with incremental verification and isolated tests    |
+| Scheduler bugs create hidden starvation or deadlock                    | medium | Start with minimal round-robin behavior and add deterministic task tests |
+| Memory allocator corruption causes cascading failures                  | high   | Add allocator invariants and targeted allocation/free test cases         |
+| Scope expansion slows autonomous iteration                             | medium | Keep this milestone strictly baseline and defer advanced OS features     |
 
 ## Notes
 
 Use a milestone-first strategy:
 
-1) boot + console,
-2) trap/timer,
-3) allocator,
-4) scheduler,
-5) command interface,
-6) smoke tests and docs.
+1. boot + console,
+2. trap/timer,
+3. allocator,
+4. scheduler,
+5. command interface,
+6. smoke tests and docs.
 
 For openTiger operation, ensure there is a stable non-interactive verification command (for example a smoke test script that runs QEMU headless and validates log output).
