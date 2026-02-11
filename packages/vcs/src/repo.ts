@@ -1,8 +1,9 @@
 import { Octokit } from "@octokit/rest";
-import { getOctokit, getRepoInfo } from "./client";
+import { getOctokit, getRepoInfo, resolveGitHubToken } from "./client";
 
 export interface CreateRepoOptions {
-  token: string;
+  token?: string;
+  authMode?: string;
   owner: string;
   name: string;
   description?: string;
@@ -33,9 +34,13 @@ async function fetchRepo(octokit: Octokit, owner: string, repo: string): Promise
   };
 }
 
-// GitHub上にリポジトリを作成する
+// Create repository on GitHub
 export async function createRepo(options: CreateRepoOptions): Promise<RepoCreateInfo> {
-  const octokit = new Octokit({ auth: options.token });
+  const token = resolveGitHubToken({
+    token: options.token,
+    authMode: options.authMode,
+  });
+  const octokit = new Octokit({ auth: token });
   const owner = options.owner;
   const name = options.name;
   const description = options.description ?? "";
@@ -76,7 +81,7 @@ export async function createRepo(options: CreateRepoOptions): Promise<RepoCreate
   }
 }
 
-// 既存リポジトリのデフォルトブランチを設定する
+// Set default branch for existing repository
 export async function setRepositoryDefaultBranch(defaultBranch: string): Promise<void> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();

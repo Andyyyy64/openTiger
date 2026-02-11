@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { resolveGitHubToken } from "./client";
 
-// Git操作の結果
+// Result of git operation
 export interface GitResult {
   success: boolean;
   stdout: string;
@@ -22,7 +23,7 @@ export interface DiffStats {
   }>;
 }
 
-// Gitコマンドを実行
+// Execute git command
 async function execGit(args: string[], cwd: string): Promise<GitResult> {
   return new Promise((resolve) => {
     const rawTimeoutMs = Number.parseInt(
@@ -34,7 +35,7 @@ async function execGit(args: string[], cwd: string): Promise<GitResult> {
       cwd,
       env: {
         ...globalThis.process.env,
-        GIT_TERMINAL_PROMPT: "0", // インタラクティブな入力を無効化
+        GIT_TERMINAL_PROMPT: "0", // Disable interactive prompts
       },
     });
 
@@ -157,30 +158,34 @@ export async function removeWorktree(options: {
   return execGit(["worktree", "remove", "--force", worktreePath], baseRepoPath);
 }
 
-// リポジトリをクローン
+// Clone repository
 export async function cloneRepo(
   repoUrl: string,
   destPath: string,
   branch?: string,
   token?: string,
+  authMode?: string,
 ): Promise<GitResult> {
-  // PR競合解消でmerge-base計算が必要になるため shallow clone は使わない
+  // Avoid shallow clone; merge-base needed for PR conflict resolution
   const args = ["clone"];
 
   let authenticatedUrl = repoUrl;
-  if (token && repoUrl.startsWith("https://github.com/")) {
+  if (repoUrl.startsWith("https://github.com/")) {
+    const resolvedToken = resolveGitHubToken({
+      token,
+      authMode,
+    });
     authenticatedUrl = repoUrl.replace(
       "https://github.com/",
-      `https://x-access-token:${token}@github.com/`,
+      `https://x-access-token:${resolvedToken}@github.com/`,
     );
   }
 
-  // ブランチ指定がある場合でも、まずはクローンを優先するためにここでは指定しない
-  // または、エラー時にフォールバックするロジックにする
+  // Do not specify branch here to prioritize clone first; fallback on error
   const cloneArgs = [...args, authenticatedUrl, destPath];
   const result = await execGit(cloneArgs, ".");
 
-  // 特定のブランチを指定してクローンしようとして失敗した場合、ブランチ指定なしで再試行
+  // If clone with branch fails, retry without branch
   if (!result.success && branch) {
     console.warn(`Failed to clone branch ${branch}, retrying without branch specification...`);
     return execGit([...args, authenticatedUrl, destPath], ".");
@@ -189,7 +194,7 @@ export async function cloneRepo(
   return result;
 }
 
-// 最新を取得
+// Fetch latest
 export async function fetchLatest(cwd: string): Promise<GitResult> {
   return execGit(["fetch", "origin"], cwd);
 }
@@ -206,13 +211,13 @@ export async function fetchRefspecs(cwd: string, refspecs: string[]): Promise<Gi
   return execGit(["fetch", "origin", ...refspecs], cwd);
 }
 
-// ブランチを作成してチェックアウト
+// Create branch and checkout
 export async function createBranch(
   cwd: string,
   branchName: string,
   baseRef = "main",
 ): Promise<GitResult> {
-  // 指定したベース参照（branch/ref）からブランチ作成を優先
+  // Prefer creating branch from given base ref
   const fromRefResult = await execGit(["checkout", "-B", branchName, baseRef], cwd);
   if (fromRefResult.success) {
     return fromRefResult;
@@ -221,7 +226,7 @@ export async function createBranch(
     return fromRefResult;
   }
 
-  // 互換性のため main/branch 起点の従来フローにフォールバック
+  // Fallback to legacy main/branch flow for compatibility
   const checkoutResult = await execGit(["checkout", baseRef], cwd);
   if (checkoutResult.success) {
     await execGit(["pull", "origin", baseRef], cwd);
@@ -231,15 +236,15 @@ export async function createBranch(
   return execGit(["checkout", "-B", branchName], cwd);
 }
 
-// 現在のブランチ名を取得
+// Get current branch name
 export async function getCurrentBranch(cwd: string): Promise<string | null> {
-  // 通常のリポジトリ用
+  // Normal repository
   const result = await execGit(["rev-parse", "--abbrev-ref", "HEAD"], cwd);
   if (result.success) {
     return result.stdout;
   }
 
-  // 空のリポジトリ（コミットがない状態）用
+  // Empty repo (no commits)
   const symbolicResult = await execGit(["symbolic-ref", "--short", "HEAD"], cwd);
   return symbolicResult.success ? symbolicResult.stdout : null;
 }
@@ -280,12 +285,12 @@ export async function abortRebase(cwd: string): Promise<GitResult> {
   return execGit(["rebase", "--abort"], cwd);
 }
 
-// 変更をステージング
+// Stage changes
 export async function stageChanges(cwd: string, paths: string[] = ["."]): Promise<GitResult> {
   return execGit(["add", ...paths], cwd);
 }
 
-// コミット
+// Commit
 export async function commit(cwd: string, message: string): Promise<GitResult> {
   return execGit(["commit", "-m", message], cwd);
 }
@@ -314,7 +319,7 @@ export async function removeAllFiles(cwd: string): Promise<GitResult> {
   return execGit(["rm", "-rf", "."], cwd);
 }
 
-// プッシュ
+// Push
 export async function push(cwd: string, branch: string, force = false): Promise<GitResult> {
   const args = ["push", "origin", branch];
   if (force) {
@@ -323,7 +328,7 @@ export async function push(cwd: string, branch: string, force = false): Promise<
   return execGit(args, cwd);
 }
 
-// 差分を取得
+// Get diff
 export async function getDiff(cwd: string, staged = false): Promise<GitResult> {
   const args = ["diff"];
   if (staged) {
@@ -340,7 +345,7 @@ export async function getDiffBetweenRefs(
   return execGit(["diff", `${baseRef}...${headRef}`], cwd);
 }
 
-// 初回コミットの差分を取得
+// Get diff from root (initial commit)
 export async function getDiffFromRoot(cwd: string): Promise<GitResult> {
   return execGit(["show", "--root", "--pretty=", "--no-color", "HEAD"], cwd);
 }
@@ -410,7 +415,7 @@ export async function refExists(cwd: string, ref: string): Promise<boolean> {
 }
 
 export async function getChangedFilesFromRoot(cwd: string): Promise<string[]> {
-  // 初回コミットの場合は作業ツリーではなくコミットの内容を参照する
+  // For initial commit, refer to commit content not work tree
   const result = await execGit(["show", "--name-only", "--pretty=", "--root", "HEAD"], cwd);
   if (!result.success) {
     return [];
@@ -422,7 +427,7 @@ export async function getChangedFilesFromRoot(cwd: string): Promise<string[]> {
 }
 
 export async function getDiffStatsFromRoot(cwd: string): Promise<DiffStats> {
-  // 初回コミットの場合は作業ツリーではなくコミットの内容を参照する
+  // For initial commit, refer to commit content not work tree
   const result = await execGit(["show", "--numstat", "--pretty=", "--root", "HEAD"], cwd);
   if (!result.success) {
     return {
@@ -462,9 +467,9 @@ export async function getDiffStatsFromRoot(cwd: string): Promise<DiffStats> {
   };
 }
 
-// 変更されたファイル一覧を取得
+// Get changed files list
 export async function getChangedFiles(cwd: string): Promise<string[]> {
-  // statusのフォーマット依存を避け、diff + untracked を個別に集約する
+  // Avoid status format dependency; aggregate diff + untracked separately
   const [unstaged, staged, untracked] = await Promise.all([
     execGit(["diff", "--name-only"], cwd),
     execGit(["diff", "--name-only", "--cached"], cwd),
@@ -484,7 +489,7 @@ export async function getChangedFiles(cwd: string): Promise<string[]> {
   return Array.from(new Set(files));
 }
 
-// 変更行数を取得
+// Get change stats
 export async function getChangeStats(
   cwd: string,
 ): Promise<{ additions: number; deletions: number }> {
@@ -518,7 +523,7 @@ export async function getChangeStats(
   let additions = unstagedStats.additions + stagedStats.additions;
   let deletions = unstagedStats.deletions + stagedStats.deletions;
 
-  // 未追跡ファイルはnumstatに現れないため、追加行として概算する
+  // Untracked files not in numstat; approximate as additions
   if (untracked.success && untracked.stdout) {
     const files = untracked.stdout
       .split("\n")
@@ -538,7 +543,7 @@ export async function getChangeStats(
   return { additions, deletions };
 }
 
-// 指定ファイルだけの変更行数を取得
+// Get change stats for specified files only
 export async function getChangeStatsForFiles(
   cwd: string,
   files: string[],
@@ -606,7 +611,7 @@ export async function getChangeStatsForFiles(
   return { additions, deletions };
 }
 
-// ブランチを削除
+// Delete branch
 export async function deleteBranch(
   cwd: string,
   branchName: string,
@@ -616,33 +621,33 @@ export async function deleteBranch(
   return execGit(args, cwd);
 }
 
-// リモートブランチを削除
+// Delete remote branch
 export async function deleteRemoteBranch(cwd: string, branchName: string): Promise<GitResult> {
   return execGit(["push", "origin", "--delete", branchName], cwd);
 }
 
-// リモートブランチが存在するかチェック
+// Check if remote branch exists
 export async function remoteBranchExists(cwd: string, branchName: string): Promise<boolean> {
   const result = await execGit(["ls-remote", "--heads", "origin", branchName], cwd);
   return result.success && result.stdout.includes(`refs/heads/${branchName}`);
 }
 
-// 変更を破棄してクリーンな状態に
+// Discard changes for clean state
 export async function resetHard(cwd: string, ref = "HEAD"): Promise<GitResult> {
   return execGit(["reset", "--hard", ref], cwd);
 }
 
-// 未追跡ファイルを削除
+// Remove untracked files
 export async function cleanUntracked(cwd: string): Promise<GitResult> {
   return execGit(["clean", "-fd"], cwd);
 }
 
-// 作業ツリーのdiffを取得
+// Get working tree diff
 export async function getWorkingTreeDiff(cwd: string): Promise<GitResult> {
   return execGit(["diff", "HEAD", "--no-color"], cwd);
 }
 
-// 未追跡ファイル一覧を取得
+// Get untracked files
 export async function getUntrackedFiles(cwd: string): Promise<string[]> {
   const result = await execGit(["ls-files", "--others", "--exclude-standard"], cwd);
   if (!result.success) {
@@ -654,22 +659,22 @@ export async function getUntrackedFiles(cwd: string): Promise<string[]> {
     .filter((line) => line.length > 0);
 }
 
-// 変更をまとめてステージする
+// Stage all changes
 export async function stageAll(cwd: string): Promise<GitResult> {
   return execGit(["add", "-A"], cwd);
 }
 
-// 変更をコミットする
+// Commit changes
 export async function commitChanges(cwd: string, message: string): Promise<GitResult> {
   return execGit(["commit", "-m", message], cwd);
 }
 
-// 変更をstashに退避する
+// Stash changes
 export async function stashChanges(cwd: string, message: string): Promise<GitResult> {
   return execGit(["stash", "push", "-u", "-m", message], cwd);
 }
 
-// 最新のstash参照を取得（stash@{n} 形式）
+// Get latest stash ref (stash@{n} format)
 export async function getLatestStashRef(cwd: string): Promise<string | undefined> {
   const result = await execGit(["stash", "list", "-1", "--pretty=format:%gd"], cwd);
   if (!result.success || !result.stdout) {
@@ -678,12 +683,12 @@ export async function getLatestStashRef(cwd: string): Promise<string | undefined
   return result.stdout.trim();
 }
 
-// stashを適用する
+// Apply stash
 export async function applyStash(cwd: string, stashRef: string): Promise<GitResult> {
   return execGit(["stash", "apply", stashRef], cwd);
 }
 
-// stashを削除する
+// Drop stash
 export async function dropStash(cwd: string, stashRef: string): Promise<GitResult> {
   return execGit(["stash", "drop", stashRef], cwd);
 }
