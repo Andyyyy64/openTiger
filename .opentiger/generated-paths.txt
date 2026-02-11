@@ -1,0 +1,15 @@
+# Additional generated artifact patterns for Worker verification.
+# One glob pattern per line.
+# Blank lines and lines starting with "#" are ignored.
+#
+# This file is optional. It is merged with:
+# - built-in generated patterns
+# - WORKER_EXTRA_GENERATED_PATHS (env, comma-separated)
+#
+# Examples:
+# qemu.log
+# serial.log
+# reports/**
+# **/*.lst
+# **/*.dump
+

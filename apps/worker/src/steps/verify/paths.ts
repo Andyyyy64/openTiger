@@ -1,4 +1,4 @@
-import { access, readdir } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { minimatch } from "minimatch";
 import { parseCommand } from "./command-parser";
@@ -40,6 +40,79 @@ export function isGeneratedPath(path: string): boolean {
     return true;
   }
   return matchesPattern(path, GENERATED_PATHS);
+}
+
+function parseExtraGeneratedPathsFromEnv(): string[] {
+  return (process.env.WORKER_EXTRA_GENERATED_PATHS ?? "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function dedupePatterns(patterns: string[]): string[] {
+  const unique = new Set<string>();
+  for (const pattern of patterns) {
+    const normalized = pattern.trim();
+    if (normalized.length === 0) {
+      continue;
+    }
+    unique.add(normalized);
+  }
+  return Array.from(unique);
+}
+
+async function loadGeneratedPathsFromTextFile(path: string): Promise<string[]> {
+  try {
+    const content = await readFile(path, "utf-8");
+    return content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("#"));
+  } catch {
+    return [];
+  }
+}
+
+type GeneratedPathsJson = {
+  paths?: unknown;
+  patterns?: unknown;
+};
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string").map((item) => item.trim());
+}
+
+async function loadGeneratedPathsFromJsonFile(path: string): Promise<string[]> {
+  try {
+    const content = await readFile(path, "utf-8");
+    const parsed = JSON.parse(content) as GeneratedPathsJson;
+    return [...toStringArray(parsed.paths), ...toStringArray(parsed.patterns)].filter(
+      (entry) => entry.length > 0,
+    );
+  } catch {
+    return [];
+  }
+}
+
+export async function resolveGeneratedPathPatterns(repoPath: string): Promise<string[]> {
+  const envPatterns = parseExtraGeneratedPathsFromEnv();
+  const textPatterns = await loadGeneratedPathsFromTextFile(
+    join(repoPath, ".opentiger/generated-paths.txt"),
+  );
+  const jsonPatterns = await loadGeneratedPathsFromJsonFile(
+    join(repoPath, ".opentiger/generated-paths.json"),
+  );
+  return dedupePatterns([...GENERATED_PATHS, ...envPatterns, ...textPatterns, ...jsonPatterns]);
+}
+
+export function isGeneratedPathWithPatterns(path: string, patterns: string[]): boolean {
+  if (isOpenTigerTempPath(path)) {
+    return true;
+  }
+  return matchesPattern(path, patterns);
 }
 
 export function mergeAllowedPaths(current: string[], extra: string[]): string[] {

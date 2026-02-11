@@ -20,10 +20,11 @@ import { buildOpenCodeEnv } from "../../env";
 import {
   detectLockfilePaths,
   includesInstallCommand,
-  isGeneratedPath,
+  isGeneratedPathWithPatterns,
   isGeneratedTypeScriptOutput,
   mergeAllowedPaths,
   normalizePathForMatch,
+  resolveGeneratedPathPatterns,
   touchesPackageManifest,
 } from "./paths";
 import { checkPolicyViolations } from "./policy";
@@ -286,11 +287,12 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
   const finalAllowedPaths = allowEnvExampleOutsidePaths
     ? mergeAllowedPaths(effectiveAllowedPaths, ENV_EXAMPLE_PATHS)
     : effectiveAllowedPaths;
+  const generatedPathPatterns = await resolveGeneratedPathPatterns(repoPath);
   // Exclude artifacts to build policy-check target
   const relevantFiles = [];
   let filteredGeneratedCount = 0;
   for (const file of changedFiles) {
-    if (isGeneratedPath(file)) {
+    if (isGeneratedPathWithPatterns(file, generatedPathPatterns)) {
       filteredGeneratedCount += 1;
       continue;
     }
