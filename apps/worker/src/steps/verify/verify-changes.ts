@@ -217,7 +217,7 @@ export function shouldSkipExplicitCommandFailure(params: {
   return params.isDocOnlyChange || params.isNoOpChange;
 }
 
-// 変更を検証
+// Verify changes
 export async function verifyChanges(options: VerifyOptions): Promise<VerifyResult> {
   const {
     repoPath,
@@ -234,7 +234,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
   console.log("Verifying changes...");
   await cleanupOpenCodeTempDirs(repoPath);
 
-  // 変更されたファイルを取得
+  // Get changed files
   let changedFiles = (await getChangedFiles(repoPath)).map((file) => normalizePathForMatch(file));
   changedFiles = Array.from(new Set(changedFiles.filter((file) => file.length > 0)));
   let stats: { additions: number; deletions: number } = { additions: 0, deletions: 0 };
@@ -242,7 +242,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
   let committedDiffRef: { base: string; head: string } | null = null;
   let usesRootDiff = false;
 
-  // コミット済み差分がない場合はbase/headで比較する
+  // If no committed diff, compare base vs head
   if (changedFiles.length === 0 && baseBranch && headBranch) {
     const committedFiles = await getChangedFilesBetweenRefs(repoPath, baseBranch, headBranch);
     if (committedFiles.length > 0) {
@@ -259,7 +259,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
     } else {
       const baseExists = await refExists(repoPath, baseBranch);
       if (!baseExists) {
-        // baseが無い初回コミットはroot diffとして評価する
+        // First commit without base: evaluate as root diff
         const rootFiles = await getChangedFilesFromRoot(repoPath);
         if (rootFiles.length > 0) {
           changedFiles = rootFiles
@@ -286,7 +286,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
   const finalAllowedPaths = allowEnvExampleOutsidePaths
     ? mergeAllowedPaths(effectiveAllowedPaths, ENV_EXAMPLE_PATHS)
     : effectiveAllowedPaths;
-  // 生成物を除外してポリシー判定対象を作る
+  // Exclude artifacts to build policy-check target
   const relevantFiles = [];
   let filteredGeneratedCount = 0;
   for (const file of changedFiles) {
@@ -329,10 +329,10 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
     };
   }
 
-  // 変更統計を取得
+  // Get change stats
   if (!usesCommittedDiff) {
     if (filteredGeneratedCount > 0) {
-      // 生成物が大量にある場合でも、判定対象の実変更だけで統計を出す。
+      // Use only actual changes for stats even when artifacts are numerous
       stats = await getChangeStatsForFiles(repoPath, relevantFiles);
     } else {
       stats = await getChangeStats(repoPath);
@@ -340,7 +340,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
   }
   console.log(`Changes: +${stats.additions} -${stats.deletions}`);
 
-  // ポリシー違反をチェック
+  // Check policy violations
   const policyViolations = checkPolicyViolations(relevantFiles, stats, finalAllowedPaths, policy);
 
   if (policyViolations.length > 0) {
@@ -374,14 +374,14 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
   const isLightCheckStrict =
     (process.env.WORKER_LIGHT_CHECK_MODE ?? "llm").toLowerCase() === "strict";
 
-  // 検証コマンドが無い場合はLLMの簡易チェックに寄せる
+  // Fall back to LLM light check when no verification commands
   const runLightCheck = async (): Promise<CommandResult> => {
     const mode = (process.env.WORKER_LIGHT_CHECK_MODE ?? "llm").toLowerCase();
     if (mode === "off" || mode === "skip") {
-      return buildLightCheckResult("簡易チェックは無効化されています。");
+      return buildLightCheckResult("Light check is disabled.");
     }
 
-    // 差分の取得元に合わせてdiffを揃える
+    // Align diff with the source of changes
     const diffResult = committedDiffRef
       ? await getDiffBetweenRefs(repoPath, committedDiffRef.base, committedDiffRef.head)
       : usesRootDiff
@@ -390,26 +390,27 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
     const maxChars = Number.parseInt(process.env.WORKER_LIGHT_CHECK_MAX_CHARS ?? "12000", 10);
     const clippedDiff = diffResult.success ? diffResult.stdout.slice(0, Math.max(0, maxChars)) : "";
     const prompt = `
-あなたはコード変更の簡易チェック担当です。以下の変更内容から重大な問題がないかだけを確認してください。
-ツール呼び出しは禁止です。判断は与えられた情報のみで行ってください。
-結論は必ずJSONで返してください。
+You are responsible for a lightweight code-change sanity check.
+Review the changes below and only flag potentially serious issues.
+Do not call tools. Use only the information provided here.
+Return JSON only.
 
-## 変更ファイル
+## Changed Files
 ${changedFiles.map((file) => `- ${file}`).join("\n")}
 
-## 変更統計
+## Diff Stats
 - additions: ${stats.additions}
 - deletions: ${stats.deletions}
 
-## 変更差分（抜粋）
+## Diff Excerpt
 ${clippedDiff || "(diff unavailable)"}
 
-## 出力形式
+## Output Format
 \`\`\`json
 {
   "verdict": "pass" | "warn",
-  "summary": "短い所感",
-  "concerns": ["気になる点があれば列挙、無ければ空配列"]
+  "summary": "Short summary",
+  "concerns": ["List concerns, or [] if none"]
 }
 \`\`\`
 `.trim();
@@ -437,7 +438,7 @@ ${clippedDiff || "(diff unavailable)"}
       const payload = jsonMatch?.[1] ?? jsonMatch?.[0];
       if (!payload) {
         return buildLightCheckResult(
-          "簡易チェックの応答を解析できませんでした。",
+          "Failed to parse light-check response.",
           !isLightCheckStrict,
         );
       }
@@ -447,22 +448,22 @@ ${clippedDiff || "(diff unavailable)"}
         concerns?: string[];
       };
       const verdict = parsed.verdict ?? "warn";
-      const summary = parsed.summary ?? "簡易チェックの要約がありません。";
+      const summary = parsed.summary ?? "Light-check summary was not provided.";
       const concerns = Array.isArray(parsed.concerns) ? parsed.concerns.join(" / ") : "";
-      const message = concerns ? `${summary}\n懸念: ${concerns}` : summary;
+      const message = concerns ? `${summary}\nConcerns: ${concerns}` : summary;
       if (verdict === "warn" && isLightCheckStrict) {
         return buildLightCheckResult(message, false);
       }
       return buildLightCheckResult(message);
     } catch (error) {
       return buildLightCheckResult(
-        `簡易チェックの実行に失敗しましたが処理は続行します: ${String(error)}`,
+        `Light check failed, but processing will continue: ${String(error)}`,
         !isLightCheckStrict,
       );
     }
   };
 
-  // 検証コマンドを実行
+  // Run verification commands
   const commandResults: CommandResult[] = [];
   let allPassed = true;
   let ranEffectiveCommand = false;
@@ -616,7 +617,7 @@ ${clippedDiff || "(diff unavailable)"}
       failedCommandSource = source;
       failedCommandStderr = output;
       allPassed = false;
-      break; // 最初の失敗で停止
+      break; // Stop on first failure
     }
   }
 

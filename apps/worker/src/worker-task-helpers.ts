@@ -2,7 +2,7 @@ import { access, stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Task } from "@openTiger/core";
 
-// 制御文字を直接書かずにANSIエスケープを除去する
+// Strip ANSI escape sequences without writing control chars directly
 const ANSI_ESCAPE_REGEX = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
 function hasGlobPattern(path: string): boolean {
@@ -52,9 +52,6 @@ export function shouldAllowNoChanges(task: Task): boolean {
   const expectedFiles = task.context?.files ?? [];
   const commands = task.commands ?? [];
   const allowHints = [
-    "検証",
-    "ビルド",
-    "確認",
     "verification",
     "verify",
     "validation",
@@ -77,19 +74,6 @@ export function shouldAllowNoChanges(task: Task): boolean {
     "migrate",
     "schema",
     "seed",
-    "初期化",
-    "セットアップ",
-    "構成",
-    "土台",
-    "実装",
-    "追加",
-    "作成",
-    "修正",
-    "変更",
-    "更新",
-    "導入",
-    "構築",
-    "開発",
     "implement",
     "add",
     "create",
@@ -105,17 +89,17 @@ export function shouldAllowNoChanges(task: Task): boolean {
   const denies = denyHints.some((hint) => text.includes(hint));
   const verificationOnly = isVerificationOnlyCommands(commands);
 
-  // 生成/実装対象ファイルが明示されるタスクは差分必須
+  // Task with explicit target files requires diff
   if (expectedFiles.length > 0) {
     return false;
   }
 
-  // worker は原則として差分必須。検証専用ロールのみ変更なしを許可する
+  // worker usually requires diff; only verification-only roles allow no changes
   if (role === "worker") {
     return allows && !denies;
   }
 
-  // tester/docser の検証専用タスクは変更なしでも成功扱いにする
+  // Verification-only tester/docser tasks succeed without changes
   return (allows && !denies) || verificationOnly;
 }
 
@@ -132,12 +116,12 @@ function isVerificationOnlyCommands(commands: string[]): boolean {
     dbCommandPattern,
   ];
 
-  // 検証コマンドのみで構成されていれば変更なしを許可する
+  // Allow no changes if commands are verification-only
   return commands.every((command) => verificationPatterns.some((pattern) => pattern.test(command)));
 }
 
 export async function validateExpectedFiles(repoPath: string, task: Task): Promise<string[]> {
-  // タスクの期待ファイルが存在するか事前に確認する
+  // Pre-check whether task expected files exist
   const files = task.context?.files ?? [];
   if (files.length === 0) {
     return [];
@@ -151,7 +135,7 @@ export async function validateExpectedFiles(repoPath: string, task: Task): Promi
       continue;
     }
 
-    // .env は運用で生成されるため期待ファイルの対象外にする
+    // Exclude .env from expected files (generated at runtime)
     if (/(^|\/)\.env(\.|$)/.test(normalizedFile)) {
       continue;
     }
@@ -174,12 +158,12 @@ export async function validateExpectedFiles(repoPath: string, task: Task): Promi
       continue;
     }
 
-    // 指定パスを最初に確認する
+    // Check specified path first
     if (await pathExists(targetPath)) {
       continue;
     }
 
-    // 見つからなければ一般的なパターンを試す
+    // Fall back to common patterns if not found
     const pathParts = normalizedFile.split("/");
     const foundAlternative = await (async () => {
       // packages/xxx/file.ts -> packages/xxx/src/file.ts

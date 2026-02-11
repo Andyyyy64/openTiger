@@ -286,7 +286,7 @@ export async function executeTask(options: ExecuteOptions): Promise<ExecuteResul
     process.env.OPENCODE_MODEL ??
     "google/gemini-3-flash-preview";
 
-  // 実行環境から選択中のLLM実行エンジンを判定してログ表示を揃える。
+  // Infer selected LLM engine from env for consistent logging
   const taskEnv = await buildOpenCodeEnv(repoPath);
   const executor = resolveExecutorKindFromEnv(taskEnv);
   const executorDisplayName = getExecutorDisplayName(executor);

@@ -22,10 +22,10 @@ function isOpenTigerTempPath(path: string): boolean {
   );
 }
 
-// パスがパターンに合致するか判定する
+// Check if path matches pattern
 export function matchesPattern(path: string, patterns: string[]): boolean {
   const normalizedPath = normalizePathForMatch(path);
-  // Playwrightの`.last-run.json`などドットファイルも含める
+  // Include dotfiles like Playwright .last-run.json
   return patterns.some((pattern) => {
     const normalizedPattern = normalizePathForMatch(pattern);
     return (

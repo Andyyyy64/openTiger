@@ -5,7 +5,7 @@ import { DEV_COMMAND_WARMUP_MS, DEV_PORT_IN_USE_PATTERNS } from "./constants";
 import { parseCommand } from "./command-parser";
 import type { CommandResult } from "./types";
 
-// コマンドを実行
+// Execute command
 export async function runCommand(
   command: string,
   cwd: string,
@@ -83,7 +83,7 @@ function buildPortOverrideCommand(command: string, port: number): string | null 
   return `${command} --port ${port}`;
 }
 
-// Vite系の「ポート使用中」エラーを検知して退避起動する
+// Detect Vite "port in use" errors and start on fallback port
 function shouldRetryDevWithPort(stderr: string): boolean {
   return DEV_PORT_IN_USE_PATTERNS.some((pattern) => pattern.test(stderr));
 }
@@ -144,7 +144,7 @@ async function runDevCommandOnce(
           globalThis.process.kill(-child.pid, signal);
           return;
         } catch {
-          // フォールバックで単体プロセスを止める
+          // Kill single process as fallback
         }
       }
       child.kill(signal);
@@ -194,7 +194,7 @@ async function runDevCommandOnce(
   });
 }
 
-// devは常駐プロセスなので短時間起動だけ確認する
+// dev is long-running; only verify short startup
 export async function runDevCommand(
   command: string,
   cwd: string,

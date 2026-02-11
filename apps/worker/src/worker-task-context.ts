@@ -1,6 +1,6 @@
 import type { Task } from "@openTiger/core";
 
-// タスクに紐づくPR情報を扱う
+// Handle PR info associated with task
 
 interface TaskPrContext {
   number: number;

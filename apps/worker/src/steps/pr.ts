@@ -18,7 +18,7 @@ import { getRepoMode } from "@openTiger/core";
 import type { Task } from "@openTiger/core";
 
 export interface CreatePROptions {
-  repoPath: string; // リポジトリパスを追加
+  repoPath: string; // Repository path
   branchName: string;
   task: Task;
   baseBranch?: string;
@@ -34,7 +34,7 @@ export interface CreatePRResult {
   error?: string;
 }
 
-// PR本文を生成
+// Generate PR body
 function generatePRBody(options: CreatePROptions): string {
   const { task, changedFiles, stats, verificationResults } = options;
   const issue = task.context?.issue;
@@ -61,7 +61,7 @@ function generatePRBody(options: CreatePROptions): string {
     lines.splice(lines.length - 1, 0, issueLine);
   }
 
-  // 変更統計
+  // Change stats
   lines.push(
     "## Changes",
     "",
@@ -69,7 +69,7 @@ function generatePRBody(options: CreatePROptions): string {
     "",
   );
 
-  // 変更ファイル一覧
+  // Changed files list
   if (changedFiles.length > 0) {
     lines.push("<details>", "<summary>Changed files</summary>", "");
     for (const file of changedFiles) {
@@ -78,7 +78,7 @@ function generatePRBody(options: CreatePROptions): string {
     lines.push("", "</details>", "");
   }
 
-  // 検証結果
+  // Verification result
   lines.push("## Verification", "");
   for (const result of verificationResults) {
     const icon = result.success ? "✅" : "❌";
@@ -86,7 +86,7 @@ function generatePRBody(options: CreatePROptions): string {
   }
   lines.push("");
 
-  // 自動生成ラベル
+  // Auto-generated labels
   lines.push(
     "---",
     "",
@@ -98,7 +98,7 @@ function generatePRBody(options: CreatePROptions): string {
   return lines.join("\n");
 }
 
-// agent ブランチを push する前にベースブランチをリモートに確保する
+// Ensure base branch on remote before pushing agent branch
 export async function ensureRemoteBaseBranch(
   repoPath: string,
   baseBranch: string,
@@ -124,8 +124,8 @@ export async function ensureRemoteBaseBranch(
 
   const originalBranch = (await getCurrentBranch(repoPath)) ?? currentBranch;
 
-  // 空リポジトリ時は orphan で base を作り、currentBranch を rebase して
-  // PRの「No commits between」「no history in common」を同時に防ぐ
+  // For empty repo: create base via orphan, rebase currentBranch to avoid
+  // PR "No commits between" and "no history in common"
   console.log(`[Worker] Base branch ${baseBranch} does not exist on remote. Bootstrapping...`);
 
   const orphanResult = await createOrphanBranch(repoPath, baseBranch);
@@ -207,7 +207,7 @@ export async function ensureRemoteBaseBranch(
   return { success: true, created: true };
 }
 
-// PRを作成または更新
+// Create or update PR
 export async function createTaskPR(options: CreatePROptions): Promise<CreatePRResult> {
   const repoMode = getRepoMode();
   if (repoMode === "local") {
@@ -224,7 +224,7 @@ export async function createTaskPR(options: CreatePROptions): Promise<CreatePRRe
   const title = `[openTiger] ${task.title}`;
   const body = generatePRBody(options);
 
-  // リスクレベルに応じたラベル
+  // Labels by risk level
   const labels = ["agent", "autogen", `${task.riskLevel}-risk`];
 
   try {
@@ -259,7 +259,8 @@ export async function createTaskPR(options: CreatePROptions): Promise<CreatePRRe
       head: branchName,
       base: baseBranch,
       labels,
-      draft: task.riskLevel === "high", // 高リスクはdraftで作成
+      // Draft PRs delay merge throughput in autonomous mode.
+      draft: false,
     });
 
     console.log(`PR created: ${pr.url}`);

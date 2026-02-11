@@ -1,4 +1,4 @@
-// ポリシー判定から除外する生成物パターン
+// Artifact patterns excluded from policy checks
 export const GENERATED_PATHS = [
   ".openTiger-opencode-*",
   ".openTiger-opencode-*/**",
@@ -22,7 +22,7 @@ export const GENERATED_PATHS = [
   "**/coverage/**",
   "**/playwright-report/**",
   "**/test-results/**",
-  // Judgeのスクラッチリポジトリは成果物扱いしない
+  // Judge scratch repo not treated as artifact
   "apps/judge/test-repo",
   "apps/judge/test-repo/**",
   "apps/judge/repro",

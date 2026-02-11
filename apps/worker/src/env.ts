@@ -108,7 +108,7 @@ async function resolveDefaultOpenCodeConfigPath(cwd: string): Promise<string | u
       await access(candidate);
       return candidate;
     } catch {
-      // 次の候補を確認する
+      // Try next candidate
     }
   }
   return undefined;
@@ -215,8 +215,8 @@ export async function buildOpenCodeEnv(cwd: string): Promise<Record<string, stri
     }
   }
 
-  // Quota待機はWorkerプロセス内でsleepせず、タスクをblockedで手放して後段で再試行する。
-  // 明示的に無効化したい場合のみ環境変数でオフにできる。
+  // On quota wait: do not sleep in Worker; release task as blocked for retry later.
+  // Use env var to disable if needed.
   const handoffQuotaWait =
     (process.env.WORKER_QUOTA_HANDOFF_TO_QUEUE ?? "true").toLowerCase() !== "false";
   if (handoffQuotaWait) {

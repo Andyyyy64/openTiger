@@ -87,9 +87,9 @@ export async function runVerificationPhase(
     policy: effectivePolicy,
     baseBranch,
     headBranch: branchName,
-    // pnpm install による lockfile 変更を許容する
+    // Allow lockfile changes from pnpm install
     allowLockfileOutsidePaths: true,
-    // local mode では .env.example 作成を許容する
+    // Allow .env.example creation in local mode
     allowEnvExampleOutsidePaths: repoMode === "local",
     allowNoChanges: shouldAllowNoChanges(taskData),
   });
@@ -102,13 +102,13 @@ export async function runVerificationPhase(
     );
   };
 
-  // 変更なしで失敗した場合も同一プロセス内で自己修復を試みる
+  // Attempt self-repair within same process even when failing with no changes
   if (!verifyResult.success && isNoChangeFailure(verifyResult.error)) {
     const rawAttempts = Number.parseInt(process.env.WORKER_NO_CHANGE_RECOVERY_ATTEMPTS ?? "1", 10);
     const noChangeRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
     for (let attempt = 1; attempt <= noChangeRecoveryAttempts; attempt += 1) {
       const recoveryHint =
-        "変更が検出されませんでした。タスクの目的を満たすための変更を必ず行ってください。";
+        "No changes detected. Make changes required to meet the task goal.";
       const recoveryHints = [recoveryHint, ...retryHints];
       console.warn(
         `[Worker] No changes detected; recovery attempt ${attempt}/${noChangeRecoveryAttempts}`,
@@ -141,7 +141,7 @@ export async function runVerificationPhase(
     }
   }
 
-  // 差分ゼロでも検証コマンド実行で成立するケースを no-op 成功として扱う
+  // Treat as no-op success when verification passes despite zero diff
   if (
     !verifyResult.success &&
     isNoChangeFailure(verifyResult.error) &&
@@ -177,12 +177,12 @@ export async function runVerificationPhase(
     }
   }
 
-  // allowedPaths違反は即失敗せず、同一プロセス内で自己修復を試みる
+  // On allowedPaths violation, attempt self-repair within same process instead of immediate fail
   if (!verifyResult.success && verifyResult.policyViolations.length > 0) {
     const rawAttempts = Number.parseInt(process.env.WORKER_POLICY_RECOVERY_ATTEMPTS ?? "1", 10);
     const policyRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
     for (let attempt = 1; attempt <= policyRecoveryAttempts; attempt += 1) {
-      const policyHint = `allowedPaths外の変更を取り除き、許可パスのみに修正を収めてください: ${verifyResult.policyViolations.join(", ")}`;
+      const policyHint = `Remove changes outside allowedPaths and confine edits to allowed paths only: ${verifyResult.policyViolations.join(", ")}`;
       const recoveryHints = [policyHint, ...retryHints];
       console.warn(
         `[Worker] Policy violations detected; recovery attempt ${attempt}/${policyRecoveryAttempts}`,

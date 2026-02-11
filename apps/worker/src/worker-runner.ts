@@ -44,7 +44,7 @@ import type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 
 export type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 
-// タスクを実行するメイン処理
+// Main task execution
 export async function runWorker(taskData: Task, config: WorkerConfig): Promise<WorkerResult> {
   const {
     agentId,
@@ -81,7 +81,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     );
   }
 
-  // 実行レコードを作成する
+  // Create run record
   const runRecords = await db
     .insert(runs)
     .values({
@@ -109,7 +109,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
   try {
     const localBranchName = repoMode === "local" ? generateBranchName(agentId, taskId) : undefined;
 
-    // Step 1: リポジトリをチェックアウトする
+    // Step 1: Checkout repository
     console.log("\n[1/7] Checking out repository...");
     const checkoutResult = await checkoutRepository({
       repoUrl,
@@ -132,7 +132,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     worktreeBasePath = checkoutResult.baseRepoPath;
     worktreePath = checkoutResult.worktreePath;
 
-    // Step 2: 作業用ブランチを作成する
+    // Step 2: Create working branch
     let branchName: string;
     if (taskPrContext?.headRef) {
       console.log("\n[2/7] Checking out PR branch...");
@@ -165,7 +165,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       branchName = branchResult.branchName;
     }
 
-    // ブランチを成果物として記録する
+    // Record branch as artifact
     await db.insert(artifacts).values({
       runId,
       type: "branch",
@@ -186,7 +186,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       });
     }
 
-    // Step 3: 選択中のLLM実行エンジンでタスクを実行する
+    // Step 3: Execute task with selected LLM engine
     const runtimeExecutorDisplayName = getRuntimeExecutorDisplayName();
     console.log(`\n[3/7] Executing task with ${runtimeExecutorDisplayName}...`);
     const previousFailures = await db
@@ -230,7 +230,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
         executeResult.openCodeResult.exitCode,
       );
       if (isTimeout) {
-        // タイムアウトでも変更がある可能性があるため検証へ進む
+        // Proceed to verify; changes may exist even on timeout
         console.warn(
           `[Worker] ${runtimeExecutorDisplayName} timed out, but continuing to verify changes...`,
         );
@@ -239,19 +239,19 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       }
     }
 
-    // 実行中に別ブランチへ移動した場合は、PR対象ブランチへ戻してから後続処理を行う
+    // If switched branch during execution, return to PR target branch before next steps
     await restoreExpectedBranchContext(repoPath, branchName, runtimeExecutorDisplayName);
 
-    // Step 4: 期待ファイルの存在を確認する
+    // Step 4: Verify expected files exist
     console.log("\n[4/7] Checking expected files...");
     const missingFiles = await validateExpectedFiles(repoPath, taskData);
     if (missingFiles.length > 0) {
-      // 期待ファイルがなくても検証コマンドで判断する
+      // Fallback to verification command to decide
       console.warn(`[Worker] Warning: Expected files not found: ${missingFiles.join(", ")}`);
       console.warn("[Worker] Continuing with verification commands...");
     }
 
-    // Step 5: 変更内容を検証する
+    // Step 5: Verify changes
     const verificationPhaseResult = await runVerificationPhase({
       repoPath,
       taskData,
@@ -338,7 +338,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       };
     }
 
-    // Step 6: コミットして push する
+    // Step 6: Commit and push
     console.log("\n[6/7] Committing and pushing...");
     const commitResult = await commitAndPush({
       repoPath,
@@ -412,7 +412,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       };
     }
 
-    // コミットを成果物として記録する
+    // Record commit as artifact
     await db.insert(artifacts).values({
       runId,
       type: "commit",
@@ -424,9 +424,9 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       },
     });
 
-    // Step 7: PRを作成する
+    // Step 7: Create PR
     console.log("\n[7/7] Creating PR...");
-    // 空リポジトリ対策でベースブランチを保証する
+    // Guarantee base branch for empty repo
     if (repoMode === "git") {
       const baseResult = await ensureRemoteBaseBranch(repoPath, baseBranch, branchName);
       if (!baseResult.success) {
@@ -472,7 +472,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       throw new Error(prResult.error);
     }
 
-    // PRを成果物として記録する
+    // Record PR as artifact
     if (prResult.pr) {
       await db.insert(artifacts).values({
         runId,
@@ -485,7 +485,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
         },
       });
     } else if (repoMode === "git") {
-      // 直接 push した場合の記録
+      // Record when pushed directly
       await db.insert(artifacts).values({
         runId,
         type: "commit",
@@ -496,7 +496,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       });
     }
 
-    // PRがある場合はJudge待ち状態にする
+    // If PR exists, set to awaiting Judge
     const needsReview = repoMode === "local" || Boolean(prResult.pr);
     const nextStatus = needsReview ? "blocked" : "done";
     await finalizeTaskState({

@@ -36,11 +36,11 @@ function isNonFastForwardPush(stderr: string, stdout: string): boolean {
   );
 }
 
-// コミットメッセージを生成
+// Generate commit message
 function generateCommitMessage(task: Task, changedFiles: string[]): string {
   const lines: string[] = [`[openTiger] ${task.title}`, "", `Task ID: ${task.id}`, "", "Changes:"];
 
-  // 変更ファイルを追加（最大10ファイル）
+  // Add changed files (max 10)
   const filesToShow = changedFiles.slice(0, 10);
   for (const file of filesToShow) {
     lines.push(`- ${file}`);
@@ -53,7 +53,7 @@ function generateCommitMessage(task: Task, changedFiles: string[]): string {
   return lines.join("\n");
 }
 
-// 変更をコミットしてプッシュ
+// Commit and push changes
 export async function commitAndPush(options: CommitOptions): Promise<CommitResult> {
   const { repoPath, branchName, task, changedFiles } = options;
   const repoMode = getRepoMode();
@@ -80,7 +80,7 @@ export async function commitAndPush(options: CommitOptions): Promise<CommitResul
 
   console.log("Staging changes...");
 
-  // 変更をステージング
+  // Stage changes
   const stageResult = await stageChanges(repoPath, changedFiles);
   if (!stageResult.success) {
     return {
@@ -91,13 +91,13 @@ export async function commitAndPush(options: CommitOptions): Promise<CommitResul
     };
   }
 
-  // コミットメッセージを生成
+  // Generate commit message
   const commitMessage = generateCommitMessage(task, changedFiles);
   let committed = true;
 
   console.log("Committing...");
 
-  // コミット
+  // Commit
   const commitResult = await commit(repoPath, commitMessage);
   if (!commitResult.success) {
     const combinedRaw = `${commitResult.stdout}\n${commitResult.stderr}`.trim();
@@ -126,7 +126,7 @@ export async function commitAndPush(options: CommitOptions): Promise<CommitResul
   console.log("Pushing to remote...");
 
   if (repoMode === "git") {
-    // プッシュ
+    // Push
     let pushResult = await push(repoPath, branchName);
     if (!pushResult.success) {
       if (

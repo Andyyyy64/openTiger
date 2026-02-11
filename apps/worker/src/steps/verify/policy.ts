@@ -1,7 +1,7 @@
 import type { Policy } from "@openTiger/core";
 import { matchesPattern } from "./paths";
 
-// ポリシー違反をチェック
+// Check policy violations
 export function checkPolicyViolations(
   changedFiles: string[],
   _stats: { additions: number; deletions: number },
@@ -10,7 +10,7 @@ export function checkPolicyViolations(
 ): string[] {
   const violations: string[] = [];
 
-  // 許可パス外の変更チェック
+  // Check for changes outside allowed paths
   for (const file of changedFiles) {
     const isAllowed = matchesPattern(file, allowedPaths);
     const isDenied = matchesPattern(file, policy.deniedPaths);

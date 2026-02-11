@@ -1,4 +1,4 @@
-// Workerステップのエクスポート
+// Worker step exports
 export * from "./checkout";
 export * from "./branch";
 export * from "./execute";

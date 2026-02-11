@@ -13,14 +13,14 @@ export interface BranchResult {
   error?: string;
 }
 
-// ブランチ名を生成
+// Generate branch name
 export function generateBranchName(agentId: string, taskId: string): string {
   // Use first 8 characters of UUID
   const shortTaskId = taskId.slice(0, 8);
   return `agent/${agentId}/${shortTaskId}`;
 }
 
-// 作業ブランチを作成
+// Create working branch
 export async function createWorkBranch(options: BranchOptions): Promise<BranchResult> {
   const { repoPath, agentId, taskId, baseRef = "main" } = options;
 
@@ -38,7 +38,7 @@ export async function createWorkBranch(options: BranchOptions): Promise<BranchRe
     };
   }
 
-  // 作成されたブランチを確認
+  // Verify branch was created
   const currentBranch = await getCurrentBranch(repoPath);
   if (currentBranch !== branchName) {
     return {
@@ -62,7 +62,7 @@ export interface CheckoutBranchOptions {
   baseRef?: string;
 }
 
-// 既存ブランチがあれば切り替え、なければリモート参照から復元する
+// Switch to existing branch or restore from remote ref
 export async function checkoutExistingBranch(
   options: CheckoutBranchOptions,
 ): Promise<BranchResult> {

@@ -1,32 +1,32 @@
 import { spawn } from "node:child_process";
 
-// Docker実行オプション
+// Docker run options
 export interface DockerExecOptions {
-  // 使用するDockerイメージ
+  // Docker image to use
   image: string;
   // Working directory inside container
   workdir: string;
-  // ホスト側のディレクトリをマウント
+  // Mount host directories
   mounts?: Array<{
     hostPath: string;
     containerPath: string;
     readonly?: boolean;
   }>;
-  // 環境変数
+  // Environment variables
   env?: Record<string, string>;
   // Timeout (seconds)
   timeoutSeconds?: number;
-  // ネットワーク設定
+  // Network config
   network?: "none" | "host" | "bridge";
-  // メモリ制限（バイト）
+  // Memory limit (bytes)
   memoryLimit?: number;
-  // CPU制限（コア数）
+  // CPU limit (cores)
   cpuLimit?: number;
-  // ユーザーID（セキュリティ）
+  // User ID (security)
   user?: string;
 }
 
-// Docker実行結果
+// Docker run result
 export interface DockerExecResult {
   success: boolean;
   exitCode: number;
@@ -36,16 +36,16 @@ export interface DockerExecResult {
   containerId?: string;
 }
 
-// デフォルトのDockerオプション
+// Default Docker options
 const DEFAULT_OPTIONS: Partial<DockerExecOptions> = {
-  network: "none", // ネットワーク無効化
+  network: "none", // Disable network
   memoryLimit: 4 * 1024 * 1024 * 1024, // 4GB
   cpuLimit: 2,
   timeoutSeconds: 3600,
-  user: "1001:1001", // 非rootユーザー
+  user: "1001:1001", // Non-root user
 };
 
-// 許可された環境変数のリスト
+// Allowed env vars
 const ALLOWED_ENV_VARS = [
   "ANTHROPIC_API_KEY",
   "GEMINI_API_KEY",
@@ -57,7 +57,7 @@ const ALLOWED_ENV_VARS = [
   "TZ",
 ];
 
-// 禁止コマンドのリスト
+// Denied commands
 const FORBIDDEN_COMMANDS = [
   "rm -rf /",
   "chmod",
@@ -101,7 +101,7 @@ export async function runInDocker(
   const opts = { ...DEFAULT_OPTIONS, ...options };
   const startTime = Date.now();
 
-  // コマンドのバリデーション
+  // Validate command
   if (!isCommandAllowed(command)) {
     return {
       success: false,
@@ -112,34 +112,34 @@ export async function runInDocker(
     };
   }
 
-  // docker run コマンドを構築
+  // Build docker run command
   const dockerArgs: string[] = ["run", "--rm"];
 
-  // ネットワーク設定
+  // Network config
   if (opts.network) {
     dockerArgs.push(`--network=${opts.network}`);
   }
 
-  // メモリ制限
+  // Memory limit
   if (opts.memoryLimit) {
     dockerArgs.push(`--memory=${opts.memoryLimit}`);
-    dockerArgs.push(`--memory-swap=${opts.memoryLimit}`); // スワップも制限
+    dockerArgs.push(`--memory-swap=${opts.memoryLimit}`); // Limit swap too
   }
 
-  // CPU制限
+  // CPU limit
   if (opts.cpuLimit) {
     dockerArgs.push(`--cpus=${opts.cpuLimit}`);
   }
 
-  // ユーザー指定
+  // User override
   if (opts.user) {
     dockerArgs.push(`--user=${opts.user}`);
   }
 
-  // 作業ディレクトリ
+  // Working directory
   dockerArgs.push(`--workdir=${opts.workdir}`);
 
-  // マウント設定
+  // Mount config
   if (opts.mounts) {
     for (const mount of opts.mounts) {
       const readonlyFlag = mount.readonly ? ":ro" : "";
@@ -147,7 +147,7 @@ export async function runInDocker(
     }
   }
 
-  // 環境変数
+  // Environment variables
   if (opts.env) {
     const filteredEnv = filterEnvVars(opts.env);
     for (const [key, value] of Object.entries(filteredEnv)) {
@@ -155,15 +155,15 @@ export async function runInDocker(
     }
   }
 
-  // セキュリティ設定
-  dockerArgs.push("--security-opt=no-new-privileges"); // 権限昇格を禁止
-  dockerArgs.push("--cap-drop=ALL"); // すべてのcapabilityを削除
-  dockerArgs.push("--read-only"); // ルートファイルシステムを読み取り専用に
+  // Security settings
+  dockerArgs.push("--security-opt=no-new-privileges"); // Disable privilege escalation
+  dockerArgs.push("--cap-drop=ALL"); // Drop all capabilities
+  dockerArgs.push("--read-only"); // Read-only root filesystem
 
-  // tmpディレクトリは書き込み可能にする
+  // Make tmp writable
   dockerArgs.push("--tmpfs=/tmp:rw,noexec,nosuid,size=1g");
 
-  // イメージとコマンド
+  // Image and command
   dockerArgs.push(opts.image);
   dockerArgs.push(...command);
 
@@ -205,7 +205,7 @@ export async function runInDocker(
   });
 }
 
-// OpenCode実行用のDocker設定を生成
+// Build Docker config for OpenCode execution
 export function createOpenCodeDockerOptions(
   workspacePath: string,
   env?: Record<string, string>,
@@ -221,11 +221,12 @@ export function createOpenCodeDockerOptions(
       },
     ],
     env: {
-      // OpenCode用の環境変数
+      // OpenCode env vars
       GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
-      // GitHub認証（PR作成用）
+      // GitHub auth (for PR creation)
+      GITHUB_AUTH_MODE: process.env.GITHUB_AUTH_MODE ?? "gh",
       GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? "",
-      // 追加の環境変数
+      // Extra env vars
       ...env,
     },
     network: "bridge", // OpenCode requires API communication
@@ -235,7 +236,7 @@ export function createOpenCodeDockerOptions(
   };
 }
 
-// サンドボックス内でOpenCodeを実行
+// Run OpenCode in sandbox
 export async function runOpenCodeInSandbox(
   workspacePath: string,
   task: string,
@@ -244,7 +245,7 @@ export async function runOpenCodeInSandbox(
 ): Promise<DockerExecResult> {
   const options = createOpenCodeDockerOptions(workspacePath, additionalEnv);
 
-  // OpenCode コマンドを構築
+  // Build OpenCode command
   const command = ["opencode", "run", task];
 
   return runInDocker(command, options);

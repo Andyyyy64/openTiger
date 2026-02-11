@@ -52,7 +52,7 @@ async function removeDirWithRetry(path: string): Promise<void> {
   });
 }
 
-// リポジトリをチェックアウト
+// Checkout repository
 export async function checkoutRepository(options: CheckoutOptions): Promise<CheckoutResult> {
   const {
     repoUrl,
@@ -91,7 +91,7 @@ export async function checkoutRepository(options: CheckoutOptions): Promise<Chec
           };
         }
       }
-      // worktreeを作るために最低1コミットを用意しておく
+      // Ensure at least one commit for worktree
       const commitResult = await ensureInitialCommit(localRepoPath);
       if (!commitResult.success) {
         return {
@@ -157,7 +157,7 @@ export async function checkoutRepository(options: CheckoutOptions): Promise<Chec
       await removeDirWithRetry(repoPath);
     }
 
-    // 作業ディレクトリを作成
+    // Create work dir
     await mkdir(workspacePath, { recursive: true });
 
     console.log(`Cloning repository to: ${repoPath}`);
@@ -204,23 +204,23 @@ export async function checkoutRepository(options: CheckoutOptions): Promise<Chec
   }
 }
 
-// 既存のリポジトリをリフレッシュ
+// Refresh existing repository
 export async function refreshRepository(repoPath: string): Promise<boolean> {
-  // 変更を破棄
+  // Discard changes
   const resetResult = await resetHard(repoPath);
   if (!resetResult.success) {
     console.error("Reset failed:", resetResult.stderr);
     return false;
   }
 
-  // 未追跡ファイルを削除
+  // Remove untracked files
   const cleanResult = await cleanUntracked(repoPath);
   if (!cleanResult.success) {
     console.error("Clean failed:", cleanResult.stderr);
     return false;
   }
 
-  // 最新を取得
+  // Fetch latest
   const fetchResult = await fetchLatest(repoPath);
   if (!fetchResult.success) {
     console.error("Fetch failed:", fetchResult.stderr);

@@ -74,10 +74,10 @@ export function buildVerifyRecoveryHint(params: {
     : "";
   const stderrSummary = summarizeVerificationFailure(params.verifyResult.failedCommandStderr);
   return (
-    `検証失敗を優先して復旧してください（${params.attempt}/${params.maxAttempts}）: ` +
-    `${command}${sourceLabel} が失敗。` +
+    `Prioritize recovery for verification failure (${params.attempt}/${params.maxAttempts}): ` +
+    `${command}${sourceLabel} failed. ` +
     `stderr: ${stderrSummary}. ` +
-    "最小限の修正で失敗コマンドが通る状態にしてください。"
+    "Apply the smallest possible fix to make the failed command pass."
   );
 }
 

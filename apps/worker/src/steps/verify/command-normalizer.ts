@@ -14,7 +14,7 @@ export function matchDeniedCommand(command: string, deniedCommands: string[]): s
         return denied;
       }
     } catch {
-      // 非正規表現として扱う
+      // Treat as literal, not regex
     }
 
     if (lowerTarget.includes(pattern.toLowerCase())) {

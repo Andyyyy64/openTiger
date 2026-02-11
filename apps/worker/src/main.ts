@@ -17,7 +17,7 @@ export { runWorker, type WorkerConfig, type WorkerResult } from "./worker-runner
 
 const activeTaskIds = new Set<string>();
 
-// キューからタスクを受け取り実行するエントリポイント
+// Entry point: receive tasks from queue and execute
 async function main() {
   const workerIndex = process.env.WORKER_INDEX;
   const agentRole = process.env.AGENT_ROLE ?? "worker";
@@ -39,8 +39,8 @@ async function main() {
           : (process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL);
   const effectiveModel =
     agentModel ??
-    (llmExecutor === "claude_code" ? "claude-sonnet-4-5" : "google/gemini-3-flash-preview");
-  // 環境変数があればそちらを優先する
+    (llmExecutor === "claude_code" ? "claude-opus-4-6" : "google/gemini-3-flash-preview");
+  // Prefer env if set
   const instructionsPath =
     agentRole === "tester"
       ? (process.env.TESTER_INSTRUCTIONS_PATH ??
@@ -64,8 +64,8 @@ async function main() {
 
   const logPath = setupProcessLogging(agentId);
 
-  // エージェント登録
-  // 同一役割の古いエージェントが残っている場合は起動時に削除する
+  // Register agent
+  // Remove stale agents with same role on startup
   if (workerIndex) {
     await db.delete(agents).where(eq(agents.id, agentId));
   }
@@ -83,7 +83,7 @@ async function main() {
       status: "idle", // Register as idle at startup
       lastHeartbeat: new Date(),
       metadata: {
-        model: effectiveModel, // 役割ごとのモデルを記録する
+        model: effectiveModel, // Record model per role
         provider: "gemini",
       },
     })
@@ -95,7 +95,7 @@ async function main() {
       },
     });
 
-  // ハートビート開始
+  // Start heartbeat
   const heartbeatTimer = startHeartbeat(agentId);
   let queueWorker: ReturnType<typeof createTaskWorker> | null = null;
   const disposeShutdownHandlers = setupWorkerShutdownHandlers({
@@ -110,12 +110,12 @@ async function main() {
   console.log(`Base branch: ${baseBranch}`);
   console.log("Waiting for tasks...");
 
-  // TODO: BullMQ からのタスク受信を実装する
-  // 現状は環境変数の TASK_ID を単発実行として扱う
+  // TODO: Implement task receipt from BullMQ
+  // For now treat TASK_ID from env as one-shot execution
   const taskId = process.env.TASK_ID;
 
   if (taskId) {
-    // 単発実行モード
+    // One-shot mode
     const [taskData] = await db.select().from(tasks).where(eq(tasks.id, taskId));
 
     if (!taskData) {
@@ -146,7 +146,7 @@ async function main() {
     process.exit(result.success ? 0 : 1);
   }
 
-  // キュー待機モード（常駐モード）
+  // Queue wait mode (resident)
   console.log(`${agentLabel} ${agentId} entering queue mode...`);
 
   queueWorker = createTaskWorker(async (job: Job<TaskJobData>) => {
@@ -166,7 +166,7 @@ async function main() {
     const [taskData] = await db.select().from(tasks).where(eq(tasks.id, job.data.taskId));
 
     if (!taskData) {
-      // DB クリーンアップ後の残ジョブは無視する
+      // Ignore leftover jobs after DB cleanup
       console.warn(`[Queue] Task not found in DB (likely cleaned up): ${job.data.taskId}`);
       return;
     }
@@ -180,8 +180,8 @@ async function main() {
         .limit(1);
 
       if (activeRuns.length === 0) {
-        // ロック競合直後は別ワーカーの run 作成待ちの可能性がある
-        // 直近更新なら誤復旧を避けるため静かにスキップする
+        // Right after lock contention, another worker may be creating run
+        // Skip quietly if recently updated to avoid wrong recovery
         const updatedAtMs = taskData.updatedAt?.getTime?.() ?? 0;
         const recentlyUpdated = Date.now() - updatedAtMs < 2 * 60 * 1000;
         if (taskData.status === "running" && recentlyUpdated) {
@@ -191,7 +191,7 @@ async function main() {
           return;
         }
 
-        // run が存在せず更新も古い場合は不整合として復旧する
+        // Recover as mismatch if run missing and update is stale
         await db.delete(leases).where(eq(leases.taskId, job.data.taskId));
         await db
           .update(tasks)

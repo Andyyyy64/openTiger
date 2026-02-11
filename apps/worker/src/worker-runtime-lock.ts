@@ -53,7 +53,7 @@ export async function acquireTaskRuntimeLock(taskId: string): Promise<TaskRuntim
           return acquireTaskRuntimeLock(taskId);
         }
       } catch {
-        // ロック情報が壊れていても二重起動は避ける
+        // Avoid double-start even if lock info corrupted
       }
       return null;
     }

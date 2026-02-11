@@ -1,4 +1,4 @@
-// サンドボックス実行モジュール
+// Sandbox execution module
 export {
   runInDocker,
   runOpenCodeInSandbox,

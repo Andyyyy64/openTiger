@@ -2,8 +2,8 @@ import { db } from "@openTiger/db";
 import { tasks, runs, leases, agents } from "@openTiger/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 
-// ハートビートの間隔（ミリ秒）
-const HEARTBEAT_INTERVAL = 30000; // 30秒
+// Heartbeat interval (ms)
+const HEARTBEAT_INTERVAL = 30000; // 30s
 
 export async function recoverInterruptedAgentRuns(agentId: string): Promise<number> {
   const staleRuns = await db
@@ -43,7 +43,7 @@ export async function recoverInterruptedAgentRuns(agentId: string): Promise<numb
   return staleRuns.length;
 }
 
-// ハートビートを送信する関数
+// Send heartbeat
 export function startHeartbeat(agentId: string): NodeJS.Timeout {
   return setInterval(async () => {
     try {
@@ -51,7 +51,7 @@ export function startHeartbeat(agentId: string): NodeJS.Timeout {
         .update(agents)
         .set({
           lastHeartbeat: new Date(),
-          // offline復帰のみ許可してbusy状態を上書きしない
+          // Only allow offline recovery; do not overwrite busy
           status: sql`CASE WHEN ${agents.status} = 'offline' THEN 'idle' ELSE ${agents.status} END`,
         })
         .where(eq(agents.id, agentId));
