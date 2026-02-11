@@ -20,6 +20,20 @@ const CLAUDE_PERMISSION_MODES = new Set([
   "plan",
 ]);
 
+function parseBooleanFlag(raw: string | undefined, fallback: boolean): boolean {
+  if (raw === undefined) {
+    return fallback;
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "n", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+}
+
 function resolvePermissionMode(options: OpenCodeOptions): string {
   const raw =
     readRuntimeEnv(options, "CLAUDE_CODE_PERMISSION_MODE") ?? CLAUDE_CODE_DEFAULT_PERMISSION_MODE;
@@ -32,6 +46,11 @@ function resolveClaudeModel(options: OpenCodeOptions): string {
     return configured;
   }
   return normalizeClaudeModel(options.model) ?? CLAUDE_CODE_DEFAULT_MODEL;
+}
+
+function resolveEchoStdout(options: OpenCodeOptions): boolean {
+  const fromRuntime = readRuntimeEnv(options, "CLAUDE_CODE_ECHO_STDOUT");
+  return parseBooleanFlag(fromRuntime, true);
 }
 
 function extractAssistantTextFromEvent(event: unknown): string {
@@ -70,6 +89,7 @@ export async function executeClaudeCodeOnce(
   options: OpenCodeOptions,
 ): Promise<Omit<OpenCodeResult, "retryCount">> {
   const startTime = Date.now();
+  const echoStdout = resolveEchoStdout(options);
   const prompt = await buildOpenCodePrompt(options);
   const model = resolveClaudeModel(options);
   const permissionMode = resolvePermissionMode(options);
@@ -168,7 +188,9 @@ export async function executeClaudeCodeOnce(
     try {
       parsed = JSON.parse(trimmed);
     } catch {
-      process.stdout.write(`${line}\n`);
+      if (echoStdout) {
+        process.stdout.write(`${line}\n`);
+      }
       return;
     }
 
@@ -181,10 +203,14 @@ export async function executeClaudeCodeOnce(
       ) {
         const delta = assistantText.slice(lastPrintedAssistantText.length).trimStart();
         if (delta.length > 0) {
-          process.stdout.write(`${delta}\n`);
+          if (echoStdout) {
+            process.stdout.write(`${delta}\n`);
+          }
         }
       } else {
-        process.stdout.write(`${assistantText}\n`);
+        if (echoStdout) {
+          process.stdout.write(`${assistantText}\n`);
+        }
       }
       lastPrintedAssistantText = assistantText;
     }

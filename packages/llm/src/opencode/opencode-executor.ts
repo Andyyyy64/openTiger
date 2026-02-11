@@ -25,10 +25,31 @@ import {
   normalizeForPromptDetection,
 } from "./opencode-helpers";
 
+function parseBooleanFlag(raw: string | undefined, fallback: boolean): boolean {
+  if (raw === undefined) {
+    return fallback;
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (["1", "true", "yes", "y", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "n", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+}
+
+function resolveEchoStdout(options: OpenCodeOptions): boolean {
+  const fromTaskEnv = options.env?.OPENCODE_ECHO_STDOUT;
+  const fromProcessEnv = process.env.OPENCODE_ECHO_STDOUT;
+  return parseBooleanFlag(fromTaskEnv ?? fromProcessEnv, true);
+}
+
 export async function executeOpenCodeOnce(
   options: OpenCodeOptions,
 ): Promise<Omit<OpenCodeResult, "retryCount">> {
   const startTime = Date.now();
+  const echoStdout = resolveEchoStdout(options);
   const resolvedIdleTimeoutSeconds =
     Number.isFinite(DEFAULT_IDLE_TIMEOUT_SECONDS) && DEFAULT_IDLE_TIMEOUT_SECONDS > 0
       ? DEFAULT_IDLE_TIMEOUT_SECONDS
@@ -228,7 +249,9 @@ export async function executeOpenCodeOnce(
     lastVisibleProgressAt = Date.now();
     detectPermissionPrompt(chunk);
     // Output logs in real-time
-    process.stdout.write(chunk);
+    if (echoStdout) {
+      process.stdout.write(chunk);
+    }
     for (const line of chunk.split(/\r?\n/)) {
       pushChunkAndDetectDoomLoop(line);
       if (/\[tool_call:\s*todo(?:read|write)\b/i.test(line)) {
