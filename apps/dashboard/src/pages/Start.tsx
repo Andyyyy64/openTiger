@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { configApi, logsApi, systemApi, type SystemProcess } from "../lib/api";
+import {
+  configApi,
+  logsApi,
+  systemApi,
+  type GitHubRepoListItem,
+  type SystemProcess,
+} from "../lib/api";
 import { NeofetchPanel } from "../components/NeofetchPanel";
 
 const MAX_PLANNERS = 1;
@@ -75,12 +81,37 @@ export const StartPage: React.FC = () => {
   const [startResult, setStartResult] = useState<StartResult | null>(null);
   const [repoOwner, setRepoOwner] = useState("");
   const [repoName, setRepoName] = useState("");
+  const [selectedRepoFullName, setSelectedRepoFullName] = useState("");
   const [repoMessage, setRepoMessage] = useState("");
+  const [isRepoManagerOpen, setIsRepoManagerOpen] = useState(false);
 
   const { data: config } = useQuery({
     queryKey: ["config"],
     queryFn: () => configApi.get(),
   });
+  const configValues = config?.config ?? {};
+  const repoMode = (configValues.REPO_MODE ?? "git").toLowerCase();
+  const isGitMode = repoMode === "git";
+  const githubAuthMode = (configValues.GITHUB_AUTH_MODE ?? "gh").trim().toLowerCase();
+  const requiresGithubToken = githubAuthMode === "token";
+  const hasGithubAuth = requiresGithubToken ? Boolean(configValues.GITHUB_TOKEN?.trim()) : true;
+  const repoUrl = configValues.REPO_URL?.trim();
+  const isRepoMissing =
+    isGitMode && !repoUrl && (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO);
+  const currentRepoName =
+    configValues.GITHUB_OWNER && configValues.GITHUB_REPO
+      ? `${configValues.GITHUB_OWNER}/${configValues.GITHUB_REPO}`
+      : "--";
+  const githubReposQuery = useQuery({
+    queryKey: ["system", "github-repos", configValues.GITHUB_OWNER?.trim() ?? ""],
+    queryFn: () => systemApi.listGithubRepos({ owner: configValues.GITHUB_OWNER?.trim() || undefined }),
+    enabled: hasGithubAuth,
+  });
+  const githubRepos = useMemo(() => githubReposQuery.data ?? [], [githubReposQuery.data]);
+  const selectedRepo = useMemo(
+    () => githubRepos.find((repo) => repo.fullName === selectedRepoFullName) ?? null,
+    [githubRepos, selectedRepoFullName],
+  );
 
   const { data: health, isError: isHealthError } = useQuery({
     queryKey: ["system", "health"],
@@ -129,6 +160,24 @@ export const StartPage: React.FC = () => {
       setRepoName(config.config.GITHUB_REPO);
     }
   }, [config?.config, repoName, repoOwner]);
+  useEffect(() => {
+    if (selectedRepoFullName) return;
+    if (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO) return;
+    const fullName = `${configValues.GITHUB_OWNER}/${configValues.GITHUB_REPO}`;
+    if (githubRepos.some((repo) => repo.fullName === fullName)) {
+      setSelectedRepoFullName(fullName);
+    }
+  }, [
+    configValues.GITHUB_OWNER,
+    configValues.GITHUB_REPO,
+    githubRepos,
+    selectedRepoFullName,
+  ]);
+  useEffect(() => {
+    if (isRepoMissing) {
+      setIsRepoManagerOpen(true);
+    }
+  }, [isRepoMissing]);
 
   const clearLogsMutation = useMutation({
     mutationFn: () => logsApi.clear(),
@@ -300,7 +349,28 @@ export const StartPage: React.FC = () => {
     },
     onSuccess: (repo) => {
       setRepoMessage(`> REPO_READY: ${repo.owner}/${repo.name}`);
+      setSelectedRepoFullName(`${repo.owner}/${repo.name}`);
       queryClient.invalidateQueries({ queryKey: ["config"] });
+      queryClient.invalidateQueries({ queryKey: ["system", "github-repos"] });
+    },
+    onError: (error) => {
+      setRepoMessage(error instanceof Error ? `> REPO_ERR: ${error.message}` : "> REPO_FAIL");
+    },
+  });
+  const applyRepoMutation = useMutation({
+    mutationFn: async (repo: GitHubRepoListItem) =>
+      configApi.update({
+        GITHUB_OWNER: repo.owner,
+        GITHUB_REPO: repo.name,
+        REPO_URL: repo.url,
+        BASE_BRANCH: repo.defaultBranch,
+      }),
+    onSuccess: (_, repo) => {
+      setRepoOwner(repo.owner);
+      setRepoName(repo.name);
+      setRepoMessage(`> REPO_SELECTED: ${repo.fullName}`);
+      queryClient.invalidateQueries({ queryKey: ["config"] });
+      queryClient.invalidateQueries({ queryKey: ["system", "github-repos"] });
     },
     onError: (error) => {
       setRepoMessage(error instanceof Error ? `> REPO_ERR: ${error.message}` : "> REPO_FAIL");
@@ -315,17 +385,8 @@ export const StartPage: React.FC = () => {
     },
   });
 
-  const configValues = config?.config ?? {};
   const executionEnvironment = normalizeExecutionEnvironment(configValues.EXECUTION_ENVIRONMENT);
   const launchModeLabel = executionEnvironment === "sandbox" ? "docker" : "process";
-  const repoMode = (configValues.REPO_MODE ?? "git").toLowerCase();
-  const isGitMode = repoMode === "git";
-  const githubAuthMode = (configValues.GITHUB_AUTH_MODE ?? "gh").trim().toLowerCase();
-  const requiresGithubToken = githubAuthMode === "token";
-  const hasGithubAuth = requiresGithubToken ? Boolean(configValues.GITHUB_TOKEN?.trim()) : true;
-  const repoUrl = configValues.REPO_URL?.trim();
-  const isRepoMissing =
-    isGitMode && !repoUrl && (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO);
   const workerCount = parseCount(configValues.WORKER_COUNT, 1, "Worker").count;
   const testerCount = parseCount(configValues.TESTER_COUNT, 1, "Tester").count;
   const docserCount = parseCount(configValues.DOCSER_COUNT, 1, "Docser").count;
@@ -512,20 +573,76 @@ export const StartPage: React.FC = () => {
           </div>
 
           <div className="p-4 flex-1 flex flex-col gap-4">
-            {isRepoMissing && (
-              <div className="border border-term-border p-3 text-xs font-mono space-y-2">
-                <div className="text-zinc-400">GitHub Repo Setup (git mode)</div>
-                <div className="flex gap-2">
+            <div className="border border-term-border p-3 text-xs font-mono space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-zinc-400">Current Git Repository</div>
+                <button
+                  onClick={() => setIsRepoManagerOpen((prev) => !prev)}
+                  className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors"
+                >
+                  {isRepoManagerOpen ? "[ CLOSE_REPO ]" : "[ CHANGE_REPO ]"}
+                </button>
+              </div>
+              <div className="space-y-1 text-[11px]">
+                <div className="text-zinc-300">{currentRepoName}</div>
+                {repoUrl ? (
+                  <a
+                    href={repoUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-block text-term-tiger hover:underline break-all"
+                  >
+                    {repoUrl}
+                  </a>
+                ) : (
+                  <div className="text-yellow-500">Repo URL is not configured</div>
+                )}
+              </div>
+            </div>
+            {isRepoManagerOpen && (
+              <div className="border border-term-border p-3 text-xs font-mono space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2">
+                  <select
+                    value={selectedRepoFullName}
+                    onChange={(event) => setSelectedRepoFullName(event.target.value)}
+                    disabled={!hasGithubAuth || githubReposQuery.isLoading || githubRepos.length === 0}
+                    className="w-full bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none disabled:opacity-50"
+                  >
+                    <option value="" disabled>
+                      -- SELECT REPOSITORY --
+                    </option>
+                    {githubRepos.map((repo) => (
+                      <option key={repo.fullName} value={repo.fullName}>
+                        {repo.fullName}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => githubReposQuery.refetch()}
+                    disabled={!hasGithubAuth || githubReposQuery.isFetching}
+                    className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
+                  >
+                    {githubReposQuery.isFetching ? "[ REFRESHING ]" : "[ REFRESH ]"}
+                  </button>
+                  <button
+                    onClick={() => selectedRepo && applyRepoMutation.mutate(selectedRepo)}
+                    disabled={!selectedRepo || applyRepoMutation.isPending}
+                    className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
+                  >
+                    {applyRepoMutation.isPending ? "[ APPLYING ]" : "[ APPLY ]"}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2">
                   <input
                     type="text"
-                    className="flex-1 bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none placeholder-zinc-700"
+                    className="w-full bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none placeholder-zinc-700"
                     value={repoOwner}
                     onChange={(event) => setRepoOwner(event.target.value)}
                     placeholder="GitHub owner"
                   />
                   <input
                     type="text"
-                    className="flex-1 bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none placeholder-zinc-700"
+                    className="w-full bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none placeholder-zinc-700"
                     value={repoName}
                     onChange={(event) => setRepoName(event.target.value)}
                     placeholder="Repository name"
@@ -535,7 +652,7 @@ export const StartPage: React.FC = () => {
                     disabled={!hasGithubAuth || createRepoMutation.isPending}
                     className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
                   >
-                    [ CREATE ]
+                    {createRepoMutation.isPending ? "[ CREATING ]" : "[ CREATE_NEW ]"}
                   </button>
                 </div>
                 {!hasGithubAuth && (
@@ -543,9 +660,15 @@ export const StartPage: React.FC = () => {
                     `GITHUB_AUTH_MODE=token` requires `GITHUB_TOKEN` in System config
                   </div>
                 )}
-                {repoMessage && (
-                  <div className="text-[10px] text-zinc-500 font-mono">{repoMessage}</div>
+                {githubReposQuery.isError && (
+                  <div className="text-red-500">
+                    &gt; REPO_LIST_ERR:{" "}
+                    {githubReposQuery.error instanceof Error
+                      ? githubReposQuery.error.message
+                      : "Failed to load repositories"}
+                  </div>
                 )}
+                {repoMessage && <div className="text-[10px] text-zinc-500">{repoMessage}</div>}
               </div>
             )}
             <div className="flex items-center justify-between">
