@@ -22,24 +22,40 @@ function buildPlannerDefinition(index: number): ProcessDefinition {
     supportsStop: true,
     buildStart: async (payload) => {
       const configRow = await ensureConfigRow();
-      const requirementRepoRoot = resolveRequirementRepoRoot({
-        repoMode: configRow.repoMode,
-        localRepoPath: configRow.localRepoPath,
-        replanWorkdir: configRow.replanWorkdir,
-      });
+      const isGitMode = (configRow.repoMode ?? "git").trim().toLowerCase() === "git";
+      const fallbackRequirementPath = ".opentiger/runtime/requirement.md";
+      let useTransientRequirementSnapshot = false;
+      const effectiveRequirementRepoRoot = (() => {
+        try {
+          return resolveRequirementRepoRoot({
+            repoMode: configRow.repoMode,
+            localRepoPath: configRow.localRepoPath,
+            replanWorkdir: configRow.replanWorkdir,
+          });
+        } catch (error) {
+          if (isGitMode && payload.content) {
+            useTransientRequirementSnapshot = true;
+            return resolveRepoRoot();
+          }
+          throw error;
+        }
+      })();
       const requirementPath = await resolveRequirementPath(
         payload.requirementPath,
-        CANONICAL_REQUIREMENT_PATH,
+        useTransientRequirementSnapshot ? fallbackRequirementPath : CANONICAL_REQUIREMENT_PATH,
         {
           allowMissing: Boolean(payload.content),
-          repoRoot: requirementRepoRoot,
+          repoRoot: effectiveRequirementRepoRoot,
         },
       );
       if (payload.content) {
         await syncRequirementSnapshot({
-          inputPath: payload.requirementPath,
+          inputPath:
+            payload.requirementPath ??
+            (useTransientRequirementSnapshot ? fallbackRequirementPath : undefined),
           content: payload.content,
-          repoRoot: requirementRepoRoot,
+          commitSnapshot: !useTransientRequirementSnapshot,
+          repoRoot: effectiveRequirementRepoRoot,
         });
       }
       return {
