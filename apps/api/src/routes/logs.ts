@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { open, stat, readdir, readFile, rm } from "node:fs/promises";
-import { join, resolve, relative } from "node:path";
+import { basename, join, resolve, relative } from "node:path";
 import { getAuthInfo } from "../middleware/index";
 import { canControlSystem } from "./system-auth";
 
@@ -117,6 +117,42 @@ async function findLatestSystemLog(logDir: string, processNames: string[]): Prom
   return join(logDir, latest);
 }
 
+async function findLatestTaskLog(logDir: string, agentAliases: string[]): Promise<string | null> {
+  const taskLogRoot = join(logDir, "tasks");
+  if (!(await pathExists(taskLogRoot))) {
+    return null;
+  }
+
+  let taskLogFiles: string[] = [];
+  try {
+    taskLogFiles = await collectLogFiles(taskLogRoot);
+  } catch {
+    return null;
+  }
+
+  const aliasPrefixes = agentAliases.map((alias) => `${alias}-`);
+  const candidateFiles = taskLogFiles.filter((filePath) => {
+    const fileName = basename(filePath);
+    return aliasPrefixes.some((prefix) => fileName.startsWith(prefix));
+  });
+
+  let latestPath: string | null = null;
+  let latestMtimeMs = Number.NEGATIVE_INFINITY;
+  for (const filePath of candidateFiles) {
+    try {
+      const fileStat = await stat(filePath);
+      if (fileStat.mtimeMs > latestMtimeMs) {
+        latestMtimeMs = fileStat.mtimeMs;
+        latestPath = filePath;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return latestPath;
+}
+
 async function resolveAgentLogPath(logDir: string, agentId: string): Promise<string | null> {
   const aliases = buildAgentNameAliases(agentId);
 
@@ -127,7 +163,12 @@ async function resolveAgentLogPath(logDir: string, agentId: string): Promise<str
     }
   }
 
-  return findLatestSystemLog(logDir, aliases);
+  const latestSystemLog = await findLatestSystemLog(logDir, aliases);
+  if (latestSystemLog) {
+    return latestSystemLog;
+  }
+
+  return findLatestTaskLog(logDir, aliases);
 }
 
 function parseAllLimit(value: string | undefined): number {
