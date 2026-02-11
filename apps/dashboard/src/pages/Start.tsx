@@ -4,7 +4,6 @@ import { configApi, logsApi, systemApi, type SystemProcess } from "../lib/api";
 import { NeofetchPanel } from "../components/NeofetchPanel";
 
 const MAX_PLANNERS = 1;
-const DEFAULT_REQUIREMENT_PATH = "docs/requirement.md";
 
 const STATUS_LABELS: Record<SystemProcess["status"], string> = {
   idle: "IDLE",
@@ -71,9 +70,7 @@ function normalizeExecutionEnvironment(value: string | undefined): ExecutionEnvi
 
 export const StartPage: React.FC = () => {
   const queryClient = useQueryClient();
-  const [requirementPath, setRequirementPath] = useState(DEFAULT_REQUIREMENT_PATH);
   const [content, setContent] = useState("");
-  const [loadMessage, setLoadMessage] = useState("");
   const [clearLogMessage, setClearLogMessage] = useState("");
   const [startResult, setStartResult] = useState<StartResult | null>(null);
   const [repoOwner, setRepoOwner] = useState("");
@@ -125,27 +122,13 @@ export const StartPage: React.FC = () => {
 
   useEffect(() => {
     if (!config?.config) return;
-    if (config.config.REPLAN_REQUIREMENT_PATH && requirementPath === DEFAULT_REQUIREMENT_PATH) {
-      setRequirementPath(config.config.REPLAN_REQUIREMENT_PATH);
-    }
     if (!repoOwner && config.config.GITHUB_OWNER) {
       setRepoOwner(config.config.GITHUB_OWNER);
     }
     if (!repoName && config.config.GITHUB_REPO) {
       setRepoName(config.config.GITHUB_REPO);
     }
-  }, [config?.config, requirementPath, repoName, repoOwner]);
-
-  const loadMutation = useMutation({
-    mutationFn: (path: string) => systemApi.requirement(path),
-    onSuccess: (data) => {
-      setContent(data.content);
-      setLoadMessage(`> READ_OK: ${data.path}`);
-    },
-    onError: (error) => {
-      setLoadMessage(error instanceof Error ? `> READ_ERR: ${error.message}` : "> READ_FAIL");
-    },
-  });
+  }, [config?.config, repoName, repoOwner]);
 
   const clearLogsMutation = useMutation({
     mutationFn: () => logsApi.clear(),
@@ -187,7 +170,6 @@ export const StartPage: React.FC = () => {
       const hasRequirementContent = content.trim().length > 0;
       if (hasRequirementContent) {
         const syncResult = await systemApi.syncRequirement({
-          path: requirementPath,
           content,
         });
         if (syncResult.committed) {
@@ -251,7 +233,7 @@ export const StartPage: React.FC = () => {
       );
       for (let i = 1; i <= plannerStartCount; i += 1) {
         const plannerName = i === 1 ? "planner" : `planner-${i}`;
-        await startProcess(plannerName, { requirementPath, content });
+        await startProcess(plannerName, { content });
       }
       if (recommendations.startDispatcher) {
         await startProcess("dispatcher");
@@ -566,38 +548,19 @@ export const StartPage: React.FC = () => {
                 )}
               </div>
             )}
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-zinc-500 uppercase">Input Source</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  className="flex-1 bg-black border border-term-border px-3 py-1 text-sm text-term-fg focus:border-term-tiger focus:outline-none placeholder-zinc-700"
-                  value={requirementPath}
-                  onChange={(event) => setRequirementPath(event.target.value)}
-                  placeholder="path/to/requirement.md"
-                />
-                <button
-                  onClick={() => loadMutation.mutate(requirementPath)}
-                  disabled={loadMutation.isPending}
-                  className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-sm uppercase transition-colors disabled:opacity-50"
-                >
-                  [ LOAD ]
-                </button>
-                <button
-                  onClick={() => clearLogsMutation.mutate()}
-                  disabled={clearLogsMutation.isPending}
-                  className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-sm uppercase transition-colors disabled:opacity-50"
-                >
-                  [ CLEAR_LOG ]
-                </button>
-              </div>
-              {(loadMessage || clearLogMessage) && (
-                <div className="text-[10px] text-zinc-500 font-mono mt-1 space-y-1">
-                  {loadMessage && <div>{loadMessage}</div>}
-                  {clearLogMessage && <div>{clearLogMessage}</div>}
-                </div>
-              )}
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-zinc-500 uppercase">Requirement Input (Paste)</label>
+              <button
+                onClick={() => clearLogsMutation.mutate()}
+                disabled={clearLogsMutation.isPending}
+                className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-sm uppercase transition-colors disabled:opacity-50"
+              >
+                [ CLEAR_LOG ]
+              </button>
             </div>
+            {clearLogMessage && (
+              <div className="text-[10px] text-zinc-500 font-mono -mt-2">{clearLogMessage}</div>
+            )}
 
             <textarea
               className="flex-1 bg-black border border-term-border p-3 text-xs font-mono text-zinc-300 focus:border-term-tiger focus:outline-none resize-none min-h-[150px]"
