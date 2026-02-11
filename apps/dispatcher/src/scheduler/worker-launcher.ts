@@ -264,7 +264,11 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
     const readonlySuffix = mount.readonly ? ":ro" : "";
     mountArgs.push("--volume", `${mount.hostPath}:${mount.containerPath}${readonlySuffix}`);
   }
-  if (isClaudeExecutor(allEnv.LLM_EXECUTOR) && claudeAuthMounts.length === 0 && !allEnv.ANTHROPIC_API_KEY) {
+  if (
+    isClaudeExecutor(allEnv.LLM_EXECUTOR) &&
+    claudeAuthMounts.length === 0 &&
+    !allEnv.ANTHROPIC_API_KEY
+  ) {
     console.warn(
       "[Dispatcher] Claude executor is enabled for sandbox, but no host Claude auth directory was found. " +
         "Run `claude /login` on host or set CLAUDE_AUTH_DIR / CLAUDE_CONFIG_DIR.",

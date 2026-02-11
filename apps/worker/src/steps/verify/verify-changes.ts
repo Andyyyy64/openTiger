@@ -437,10 +437,7 @@ ${clippedDiff || "(diff unavailable)"}
       const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/) ?? raw.match(/\{[\s\S]*\}/);
       const payload = jsonMatch?.[1] ?? jsonMatch?.[0];
       if (!payload) {
-        return buildLightCheckResult(
-          "Failed to parse light-check response.",
-          !isLightCheckStrict,
-        );
+        return buildLightCheckResult("Failed to parse light-check response.", !isLightCheckStrict);
       }
       const parsed = JSON.parse(payload) as {
         verdict?: "pass" | "warn";

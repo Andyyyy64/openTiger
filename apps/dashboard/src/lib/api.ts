@@ -333,9 +333,7 @@ export const systemApi = {
     }),
   claudeAuthStatus: (environment?: "host" | "sandbox") =>
     fetchApi<ClaudeAuthStatus>(
-      `/system/claude/auth${
-        environment ? `?environment=${encodeURIComponent(environment)}` : ""
-      }`,
+      `/system/claude/auth${environment ? `?environment=${encodeURIComponent(environment)}` : ""}`,
     ),
   neofetch: () => fetchApi<HostNeofetchInfo>("/system/host/neofetch"),
 };

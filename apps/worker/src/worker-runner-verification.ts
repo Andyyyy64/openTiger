@@ -107,8 +107,7 @@ export async function runVerificationPhase(
     const rawAttempts = Number.parseInt(process.env.WORKER_NO_CHANGE_RECOVERY_ATTEMPTS ?? "1", 10);
     const noChangeRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
     for (let attempt = 1; attempt <= noChangeRecoveryAttempts; attempt += 1) {
-      const recoveryHint =
-        "No changes detected. Make changes required to meet the task goal.";
+      const recoveryHint = "No changes detected. Make changes required to meet the task goal.";
       const recoveryHints = [recoveryHint, ...retryHints];
       console.warn(
         `[Worker] No changes detected; recovery attempt ${attempt}/${noChangeRecoveryAttempts}`,

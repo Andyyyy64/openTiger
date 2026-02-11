@@ -2,12 +2,7 @@ import type { Requirement } from "./parser";
 import type { PlannedTaskInput, TaskGenerationResult } from "./strategies/index";
 
 // Root config files allowed for modification by initialization tasks
-export const INIT_ALLOWED_PATHS = [
-  ".gitignore",
-  "README.md",
-  "docs/**",
-  "scripts/**",
-];
+export const INIT_ALLOWED_PATHS = [".gitignore", "README.md", "docs/**", "scripts/**"];
 
 const INIT_ROOT_FILES = [
   "Makefile",
@@ -64,7 +59,10 @@ function isInitializationTask(task: PlannedTaskInput): boolean {
   const hasInitKeyword =
     ["init", "initialize", "bootstrap", "setup", "scaffold", "workspace", "foundation"].some(
       (hint) => title.includes(hint),
-    ) || ["init", "setup", "bootstrap", "foundation"].some((hint) => task.title.toLowerCase().includes(hint));
+    ) ||
+    ["init", "setup", "bootstrap", "foundation"].some((hint) =>
+      task.title.toLowerCase().includes(hint),
+    );
   if (hasInitKeyword) {
     return true;
   }
@@ -269,8 +267,7 @@ export function generateInitializationTasks(requirement: Requirement): TaskGener
     requirement.allowedPaths.length > 0 ? requirement.allowedPaths.slice(0, 8) : ["README.md"];
   const task: PlannedTaskInput = {
     title: "Initialize repository foundation",
-    goal:
-      "Create the minimum project foundation within allowed paths so follow-up tasks can proceed.",
+    goal: "Create the minimum project foundation within allowed paths so follow-up tasks can proceed.",
     role: "worker",
     context: {
       files: bootstrapTargets,

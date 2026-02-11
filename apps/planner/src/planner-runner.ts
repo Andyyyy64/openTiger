@@ -295,7 +295,7 @@ export async function planFromRequirement(
     result = {
       ...result,
       tasks: [...result.tasks, docserTask],
-        warnings: [...result.warnings, "Added docser task for undocumented code."],
+      warnings: [...result.warnings, "Added docser task for undocumented code."],
     };
   }
 

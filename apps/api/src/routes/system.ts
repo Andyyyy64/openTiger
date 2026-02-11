@@ -154,7 +154,9 @@ systemRoute.get("/claude/auth", async (c) => {
   const executionEnvironment =
     c.req.query("environment") !== undefined
       ? requestedEnvironment
-      : normalizeExecutionEnvironment(configRow.executionEnvironment ?? process.env.EXECUTION_ENVIRONMENT);
+      : normalizeExecutionEnvironment(
+          configRow.executionEnvironment ?? process.env.EXECUTION_ENVIRONMENT,
+        );
   const result = runClaudeAuthCheck(executionEnvironment);
   const checkedAt = new Date().toISOString();
   const stdout = typeof result.stdout === "string" ? result.stdout : "";
