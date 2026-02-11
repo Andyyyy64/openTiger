@@ -1,12 +1,12 @@
 # 🐯openTiger
 
-![openTiger](assets/avatar.png)
+<img src="assets/avatar.png" alt="openTiger" width="200" />
 
 **Never-stalling autonomous development orchestration.**
 
 openTiger continuously runs requirement-to-task generation, implementation, review, and recovery using multiple agents.
 
-![openTiger UI](assets/ui.png)
+<img src="assets/ui.png" alt="openTiger UI" width="720" />
 
 ## What It Can Do
 
