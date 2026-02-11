@@ -4,7 +4,7 @@ import { db } from "@openTiger/db";
 import { agents, leases, runs, tasks } from "@openTiger/db/schema";
 import { ensureConfigRow } from "../../config-store";
 import { getAuthInfo } from "../../middleware/index";
-import { buildPreflightSummary } from "../system-preflight";
+import { buildPreflightSummary, parseBooleanSetting, parseCountSetting } from "../system-preflight";
 import { canControlSystem } from "../system-auth";
 import { listProcessDefinitions, resolveProcessDefinition } from "./definitions";
 import {
@@ -20,6 +20,20 @@ const AGENT_LIVENESS_WINDOW_MS = Number.parseInt(
   process.env.SYSTEM_AGENT_LIVENESS_WINDOW_MS ?? "120000",
   10,
 );
+const PROCESS_SELF_HEAL_ENABLED = process.env.SYSTEM_PROCESS_SELF_HEAL !== "false";
+const PROCESS_SELF_HEAL_INTERVAL_MS = Number.parseInt(
+  process.env.SYSTEM_PROCESS_SELF_HEAL_INTERVAL_MS ?? "30000",
+  10,
+);
+const PROCESS_SELF_HEAL_STARTUP_GRACE_MS = Number.parseInt(
+  process.env.SYSTEM_PROCESS_SELF_HEAL_STARTUP_GRACE_MS ?? "120000",
+  10,
+);
+
+let processSelfHealTimer: NodeJS.Timeout | null = null;
+let processSelfHealInFlight = false;
+
+type ConfigRow = Awaited<ReturnType<typeof ensureConfigRow>>;
 
 function resolveBoundAgentId(processName: string): string | null {
   if (processName === "planner") {
@@ -72,8 +86,148 @@ async function detectLiveBoundAgent(processName: string): Promise<{
   };
 }
 
+function resolveExpectedManagedProcessNames(configRow: ConfigRow): string[] {
+  const processNames = new Set<string>();
+  const dispatcherEnabled = parseBooleanSetting(configRow.dispatcherEnabled, true);
+  const cycleManagerEnabled = parseBooleanSetting(configRow.cycleManagerEnabled, true);
+  const judgeEnabled = parseBooleanSetting(configRow.judgeEnabled, true);
+
+  if (dispatcherEnabled) {
+    processNames.add("dispatcher");
+  }
+  if (cycleManagerEnabled) {
+    processNames.add("cycle-manager");
+  }
+  if (judgeEnabled) {
+    const judgeCount = parseCountSetting(configRow.judgeCount, 1);
+    for (let index = 1; index <= judgeCount; index += 1) {
+      processNames.add(index === 1 ? "judge" : `judge-${index}`);
+    }
+  }
+
+  if (dispatcherEnabled) {
+    const workerCount = parseCountSetting(configRow.workerCount, 1);
+    const testerCount = parseCountSetting(configRow.testerCount, 1);
+    const docserCount = parseCountSetting(configRow.docserCount, 1);
+    for (let index = 1; index <= workerCount; index += 1) {
+      processNames.add(`worker-${index}`);
+    }
+    for (let index = 1; index <= testerCount; index += 1) {
+      processNames.add(`tester-${index}`);
+    }
+    for (let index = 1; index <= docserCount; index += 1) {
+      processNames.add(`docser-${index}`);
+    }
+  }
+
+  return Array.from(processNames.values());
+}
+
+function shouldSkipSelfHeal(runtime: ProcessRuntime | undefined): boolean {
+  if (!runtime) {
+    return false;
+  }
+  return runtime.stopRequested === true;
+}
+
+async function ensureProcessHealthy(processName: string): Promise<void> {
+  const definition = resolveProcessDefinition(processName);
+  if (!definition || !definition.autoRestart) {
+    return;
+  }
+
+  const runtime = managedProcesses.get(definition.name);
+  if (shouldSkipSelfHeal(runtime)) {
+    return;
+  }
+
+  const discoveredAgent = await detectLiveBoundAgent(processName);
+  if (discoveredAgent.alive) {
+    if (!runtime || runtime.status !== "running") {
+      managedProcesses.set(definition.name, {
+        ...(runtime ?? { status: "running" as const }),
+        status: "running",
+        stopRequested: false,
+        finishedAt: undefined,
+        exitCode: null,
+        signal: null,
+        message:
+          `Detected existing live agent ${discoveredAgent.agentId}` +
+          (discoveredAgent.lastHeartbeat
+            ? ` (heartbeat=${discoveredAgent.lastHeartbeat})`
+            : ""),
+      });
+    }
+    return;
+  }
+
+  const now = Date.now();
+  const startupGraceMs =
+    Number.isFinite(PROCESS_SELF_HEAL_STARTUP_GRACE_MS) && PROCESS_SELF_HEAL_STARTUP_GRACE_MS >= 0
+      ? PROCESS_SELF_HEAL_STARTUP_GRACE_MS
+      : 120000;
+  const startedAtMs = runtime?.startedAt ? Date.parse(runtime.startedAt) : Number.NaN;
+  const withinStartupGrace =
+    Number.isFinite(startedAtMs) && now - startedAtMs < startupGraceMs && runtime?.status === "running";
+  if (withinStartupGrace) {
+    return;
+  }
+
+  // process は生きているが heartbeat が落ちているケースでは、強制的に再起動して復旧させる
+  if (runtime?.status === "running" && runtime.process && !runtime.stopRequested) {
+    stopManagedProcess(definition);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+
+  await startManagedProcess(definition, {});
+}
+
+async function runProcessSelfHealTick(): Promise<void> {
+  if (!PROCESS_SELF_HEAL_ENABLED) {
+    return;
+  }
+  if (processSelfHealInFlight) {
+    return;
+  }
+  processSelfHealInFlight = true;
+  try {
+    const configRow = await ensureConfigRow();
+    const expectedProcesses = resolveExpectedManagedProcessNames(configRow);
+    for (const processName of expectedProcesses) {
+      try {
+        await ensureProcessHealthy(processName);
+      } catch (error) {
+        console.error(`[System] Self-heal failed for ${processName}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error("[System] Self-heal tick failed:", error);
+  } finally {
+    processSelfHealInFlight = false;
+  }
+}
+
+function startProcessSelfHealLoop(): void {
+  if (!PROCESS_SELF_HEAL_ENABLED || processSelfHealTimer) {
+    return;
+  }
+  const intervalMs =
+    Number.isFinite(PROCESS_SELF_HEAL_INTERVAL_MS) && PROCESS_SELF_HEAL_INTERVAL_MS > 0
+      ? PROCESS_SELF_HEAL_INTERVAL_MS
+      : 30000;
+  processSelfHealTimer = setInterval(() => {
+    void runProcessSelfHealTick();
+  }, intervalMs);
+  if (typeof processSelfHealTimer.unref === "function") {
+    processSelfHealTimer.unref();
+  }
+  void runProcessSelfHealTick();
+}
+
 // APIルートの公開窓口
 export function registerProcessManagerRoutes(systemRoute: Hono): void {
+  startProcessSelfHealLoop();
+
   systemRoute.get("/processes", (c) => {
     const auth = getAuthInfo(c);
     if (!canControlSystem(auth.method)) {
@@ -351,6 +505,27 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
             "cycle-manager",
           ]),
         );
+
+      // stop-all 直後に自動復旧ループが即時再起動しないよう、対象プロセスを明示停止状態として記録
+      const configRow = await ensureConfigRow();
+      const expectedProcesses = resolveExpectedManagedProcessNames(configRow);
+      for (const processName of expectedProcesses) {
+        const definition = resolveProcessDefinition(processName);
+        if (!definition) {
+          continue;
+        }
+        const current = managedProcesses.get(definition.name);
+        managedProcesses.set(definition.name, {
+          ...(current ?? { status: "stopped" }),
+          status: "stopped",
+          stopRequested: true,
+          process: null,
+          finishedAt: new Date().toISOString(),
+          message: "Stopped by stop-all",
+          restartScheduled: false,
+          restartTimer: undefined,
+        });
+      }
     } catch (error) {
       console.error("[System] stop-all cleanup failed:", error);
     }
