@@ -1,31 +1,34 @@
 import {
-  resolveRepoRoot,
+  CANONICAL_REQUIREMENT_PATH,
   resolveRequirementPath,
-  writeRequirementFile,
+  resolveRepoRoot,
+  syncRequirementSnapshot,
 } from "../system-requirements";
 import { parseIndexedProcessName } from "./helpers";
 import { managedProcesses } from "./state";
 import type { ProcessDefinition } from "./types";
 
-// 起動可能なプロセス定義を集約する
+// Process definitions that can be started
 const MAX_PLANNER_PROCESSES = 1;
-
 function buildPlannerDefinition(index: number): ProcessDefinition {
   return {
     name: "planner",
     label: "Planner",
-    description: "requirementsからタスクを生成",
+    description: "Generate tasks from requirements",
     group: "Planner",
     kind: "planner",
     supportsStop: true,
     buildStart: async (payload) => {
       const requirementPath = await resolveRequirementPath(
         payload.requirementPath,
-        "requirement.md",
+        CANONICAL_REQUIREMENT_PATH,
         { allowMissing: Boolean(payload.content) },
       );
       if (payload.content) {
-        await writeRequirementFile(requirementPath, payload.content);
+        await syncRequirementSnapshot({
+          inputPath: payload.requirementPath,
+          content: payload.content,
+        });
       }
       return {
         command: "pnpm",
@@ -42,7 +45,7 @@ function buildJudgeDefinition(index: number): ProcessDefinition {
   return {
     name,
     label: index === 1 ? "Judge" : `Judge #${index}`,
-    description: "レビュー判定の常駐プロセス",
+    description: "Resident review process",
     group: "Core",
     kind: "service",
     supportsStop: true,
@@ -69,10 +72,10 @@ function buildWorkerRoleDefinition(
       : `${role === "worker" ? "Worker" : "Tester"} #${index}`;
   const description =
     role === "worker"
-      ? "実装ワーカー"
+      ? "Implementation worker"
       : role === "tester"
-        ? "テスト専用ワーカー"
-        : "ドキュメント更新ワーカー";
+        ? "Test-only worker"
+        : "Documentation update worker";
   return {
     name,
     label,
@@ -119,7 +122,7 @@ const processDefinitions: ProcessDefinition[] = [
   {
     name: "dispatcher",
     label: "Dispatcher",
-    description: "タスク割当の常駐プロセス",
+    description: "Resident task dispatch process",
     group: "Core",
     kind: "service",
     supportsStop: true,
@@ -133,7 +136,7 @@ const processDefinitions: ProcessDefinition[] = [
   {
     name: "cycle-manager",
     label: "Cycle Manager",
-    description: "長時間運用の管理プロセス",
+    description: "Long-running management process",
     group: "Core",
     kind: "service",
     supportsStop: true,
@@ -147,7 +150,7 @@ const processDefinitions: ProcessDefinition[] = [
   {
     name: "db-up",
     label: "Database Start",
-    description: "Postgres/Redisを起動",
+    description: "Start Postgres/Redis",
     group: "Database",
     kind: "database",
     supportsStop: false,
@@ -160,7 +163,7 @@ const processDefinitions: ProcessDefinition[] = [
   {
     name: "db-down",
     label: "Database Stop",
-    description: "Postgres/Redisを停止",
+    description: "Stop Postgres/Redis",
     group: "Database",
     kind: "database",
     supportsStop: false,
@@ -173,7 +176,7 @@ const processDefinitions: ProcessDefinition[] = [
   {
     name: "db-push",
     label: "Database Push",
-    description: "スキーマを反映",
+    description: "Apply schema",
     group: "Database",
     kind: "command",
     supportsStop: false,

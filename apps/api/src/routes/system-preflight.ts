@@ -120,7 +120,7 @@ async function resolveIssueTaskCommands(): Promise<string[]> {
   } catch {
     // Fallback to safe default if unable to retrieve
   }
-  // ここでは固定コマンドを使わず、簡易チェックに委ねる
+  // Do not use fixed commands here; rely on light check
   return [];
 }
 
@@ -341,7 +341,7 @@ export async function buildPreflightSummary(options: {
   const githubContext = resolveGitHubContext(options.configRow);
   if (!githubContext) {
     summary.github.warnings.push(
-      "GitHub token/owner/repo is not fully configured. Skipping issue and PR preflight.",
+      "GitHub auth/owner/repo is not fully configured. Skipping issue and PR preflight.",
     );
     return summary;
   }

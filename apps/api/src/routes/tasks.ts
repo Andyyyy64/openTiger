@@ -208,7 +208,7 @@ function buildRetryInfo(
     };
   }
 
-  // 上限到達でも復旧を止めないため、再作業として扱う
+  // Treat as rework even at limit to keep recovery going
   if (isRetryExhausted(retryCount, retryLimit)) {
     const retryAtMs = new Date(task.updatedAt).getTime() + FAILED_TASK_RETRY_COOLDOWN_MS;
     const retryInSeconds = Math.max(0, Math.ceil((retryAtMs - now) / 1000));
@@ -226,7 +226,7 @@ function buildRetryInfo(
   const failure = classifyFailure(latestFailureMessage ?? null);
   const categoryRetryLimit = resolveCategoryRetryLimit(failure.category, retryLimit);
 
-  // 非リトライ判定も再作業へ切り替えて継続する
+  // Switch to rework for non-retry too; continue recovery
   if (!failure.retryable || retryCount >= categoryRetryLimit) {
     const retryAtMs = new Date(task.updatedAt).getTime() + FAILED_TASK_RETRY_COOLDOWN_MS;
     const retryInSeconds = Math.max(0, Math.ceil((retryAtMs - now) / 1000));

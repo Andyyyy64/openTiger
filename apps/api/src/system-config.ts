@@ -16,6 +16,7 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "DISPATCHER_ENABLED", column: "dispatcherEnabled", defaultValue: "true" },
   { key: "JUDGE_ENABLED", column: "judgeEnabled", defaultValue: "true" },
   { key: "CYCLE_MANAGER_ENABLED", column: "cycleManagerEnabled", defaultValue: "true" },
+  { key: "EXECUTION_ENVIRONMENT", column: "executionEnvironment", defaultValue: "host" },
   { key: "WORKER_COUNT", column: "workerCount", defaultValue: "1" },
   { key: "TESTER_COUNT", column: "testerCount", defaultValue: "1" },
   { key: "DOCSER_COUNT", column: "docserCount", defaultValue: "1" },
@@ -26,7 +27,7 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "LOCAL_REPO_PATH", column: "localRepoPath", defaultValue: "" },
   { key: "LOCAL_WORKTREE_ROOT", column: "localWorktreeRoot", defaultValue: "" },
   { key: "BASE_BRANCH", column: "baseBranch", defaultValue: "main" },
-  { key: "LLM_EXECUTOR", column: "llmExecutor", defaultValue: "opencode" },
+  { key: "LLM_EXECUTOR", column: "llmExecutor", defaultValue: "claude_code" },
   { key: "OPENCODE_MODEL", column: "opencodeModel", defaultValue: "google/gemini-3-flash-preview" },
   {
     key: "OPENCODE_SMALL_MODEL",
@@ -48,7 +49,7 @@ export const CONFIG_FIELDS: ConfigField[] = [
   {
     key: "CLAUDE_CODE_MODEL",
     column: "claudeCodeModel",
-    defaultValue: "claude-sonnet-4-5",
+    defaultValue: "claude-opus-4-6",
   },
   { key: "CLAUDE_CODE_MAX_TURNS", column: "claudeCodeMaxTurns", defaultValue: "0" },
   { key: "CLAUDE_CODE_ALLOWED_TOOLS", column: "claudeCodeAllowedTools", defaultValue: "" },
@@ -73,7 +74,7 @@ export const CONFIG_FIELDS: ConfigField[] = [
   {
     key: "REPLAN_REQUIREMENT_PATH",
     column: "replanRequirementPath",
-    defaultValue: "requirement.md",
+    defaultValue: "docs/requirement.md",
   },
   { key: "REPLAN_INTERVAL_MS", column: "replanIntervalMs", defaultValue: "60000" },
   {
@@ -83,6 +84,7 @@ export const CONFIG_FIELDS: ConfigField[] = [
   },
   { key: "REPLAN_WORKDIR", column: "replanWorkdir", defaultValue: "" },
   { key: "REPLAN_REPO_URL", column: "replanRepoUrl", defaultValue: "" },
+  { key: "GITHUB_AUTH_MODE", column: "githubAuthMode", defaultValue: "gh" },
   { key: "GITHUB_TOKEN", column: "githubToken", defaultValue: "" },
   { key: "GITHUB_OWNER", column: "githubOwner", defaultValue: "" },
   { key: "GITHUB_REPO", column: "githubRepo", defaultValue: "" },

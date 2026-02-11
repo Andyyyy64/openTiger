@@ -1,19 +1,297 @@
 import { Hono } from "hono";
 import { eq, sql } from "drizzle-orm";
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { db } from "@openTiger/db";
 import { config as configTable } from "@openTiger/db/schema";
 import { ensureConfigRow } from "../config-store";
 import { getAuthInfo } from "../middleware/index";
-import { createRepo, getOctokit } from "@openTiger/vcs";
+import { createRepo, getOctokit, resolveGitHubAuthMode } from "@openTiger/vcs";
 import { obliterateAllQueues } from "@openTiger/queue";
 import { parseBooleanSetting, parseCountSetting, buildPreflightSummary } from "./system-preflight";
 import { canControlSystem } from "./system-auth";
-import { readRequirementFile, resolveRequirementPath } from "./system-requirements";
+import {
+  CANONICAL_REQUIREMENT_PATH,
+  readRequirementFile,
+  resolveRequirementPath,
+  syncRequirementSnapshot,
+} from "./system-requirements";
 import { registerProcessManagerRoutes } from "./system-process-manager";
 
 const systemRoute = new Hono();
 
 registerProcessManagerRoutes(systemRoute);
+
+const CLAUDE_AUTH_FAILURE_MARKERS = [
+  "/login",
+  "authentication_failed",
+  "does not have access to claude code",
+  "api key source",
+];
+const CLAUDE_SANDBOX_RUNTIME_ERROR_MARKERS = [
+  "cannot connect to the docker daemon",
+  "permission denied while trying to connect to the docker daemon socket",
+];
+const CLAUDE_SANDBOX_IMAGE_ERROR_MARKERS = [
+  "unable to find image",
+  "pull access denied",
+  "manifest unknown",
+];
+const CLAUDE_SANDBOX_CLI_MISSING_MARKERS = [
+  "executable file not found in $path",
+  "claude: not found",
+];
+
+type ExecutionEnvironment = "host" | "sandbox";
+
+function isClaudeAuthFailure(output: string): boolean {
+  const normalized = output.toLowerCase();
+  return CLAUDE_AUTH_FAILURE_MARKERS.some((marker) => normalized.includes(marker));
+}
+
+function includesAnyMarker(output: string, markers: string[]): boolean {
+  const normalized = output.toLowerCase();
+  return markers.some((marker) => normalized.includes(marker));
+}
+
+function normalizeExecutionEnvironment(value: string | undefined): ExecutionEnvironment {
+  return value?.trim().toLowerCase() === "sandbox" ? "sandbox" : "host";
+}
+
+function resolveSandboxDockerImage(): string {
+  return process.env.SANDBOX_DOCKER_IMAGE ?? "openTiger/worker:latest";
+}
+
+function resolveSandboxDockerNetwork(): string {
+  return process.env.SANDBOX_DOCKER_NETWORK ?? "bridge";
+}
+
+function resolveClaudeAuthMountArgs(): string[] {
+  const hostHome = process.env.HOME?.trim();
+  const claudeHomeOverride = process.env.CLAUDE_AUTH_DIR?.trim();
+  const claudeConfigOverride = process.env.CLAUDE_CONFIG_DIR?.trim();
+  const candidates = [
+    claudeHomeOverride
+      ? {
+          hostPath: resolve(claudeHomeOverride),
+          containerPath: "/home/worker/.claude",
+        }
+      : null,
+    claudeConfigOverride
+      ? {
+          hostPath: resolve(claudeConfigOverride),
+          containerPath: "/home/worker/.config/claude",
+        }
+      : null,
+    hostHome
+      ? {
+          hostPath: join(hostHome, ".claude"),
+          containerPath: "/home/worker/.claude",
+        }
+      : null,
+    hostHome
+      ? {
+          hostPath: join(hostHome, ".config", "claude"),
+          containerPath: "/home/worker/.config/claude",
+        }
+      : null,
+  ];
+  const mountArgs: string[] = [];
+  const seenContainerPaths = new Set<string>();
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    if (seenContainerPaths.has(candidate.containerPath)) {
+      continue;
+    }
+    if (!existsSync(candidate.hostPath)) {
+      continue;
+    }
+    mountArgs.push("--volume", `${candidate.hostPath}:${candidate.containerPath}:ro`);
+    seenContainerPaths.add(candidate.containerPath);
+  }
+  return mountArgs;
+}
+
+function runClaudeAuthCheck(environment: ExecutionEnvironment) {
+  if (environment === "sandbox") {
+    const dockerArgs = [
+      "run",
+      "--rm",
+      "--network",
+      resolveSandboxDockerNetwork(),
+      "--add-host",
+      "host.docker.internal:host-gateway",
+      ...resolveClaudeAuthMountArgs(),
+      resolveSandboxDockerImage(),
+      "claude",
+      "-p",
+      "Respond with exactly OK.",
+      "--output-format",
+      "text",
+    ];
+    return spawnSync("docker", dockerArgs, {
+      encoding: "utf-8",
+      timeout: 20000,
+    });
+  }
+  return spawnSync("claude", ["-p", "Respond with exactly OK.", "--output-format", "text"], {
+    encoding: "utf-8",
+    timeout: 15000,
+  });
+}
+
+systemRoute.get("/claude/auth", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  const configRow = await ensureConfigRow();
+  const requestedEnvironment = normalizeExecutionEnvironment(c.req.query("environment"));
+  const executionEnvironment =
+    c.req.query("environment") !== undefined
+      ? requestedEnvironment
+      : normalizeExecutionEnvironment(configRow.executionEnvironment ?? process.env.EXECUTION_ENVIRONMENT);
+  const result = runClaudeAuthCheck(executionEnvironment);
+  const checkedAt = new Date().toISOString();
+  const stdout = typeof result.stdout === "string" ? result.stdout : "";
+  const stderr = typeof result.stderr === "string" ? result.stderr : "";
+  const combined = `${stdout}\n${stderr}`.trim();
+
+  if (result.error) {
+    const errorCode = (result.error as NodeJS.ErrnoException).code;
+    if (errorCode === "ENOENT") {
+      return c.json({
+        available: false,
+        authenticated: false,
+        executionEnvironment,
+        checkedAt,
+        message:
+          executionEnvironment === "sandbox"
+            ? "Docker command was not found. Install Docker and ensure the daemon is available."
+            : "Claude Code CLI was not found. Install Claude Code CLI and complete `/login` first.",
+      });
+    }
+    return c.json({
+      available: false,
+      authenticated: false,
+      executionEnvironment,
+      checkedAt,
+      message: `Failed to check Claude Code auth: ${result.error.message}`,
+    });
+  }
+
+  if (executionEnvironment === "sandbox") {
+    if (includesAnyMarker(combined, CLAUDE_SANDBOX_RUNTIME_ERROR_MARKERS)) {
+      return c.json({
+        available: false,
+        authenticated: false,
+        executionEnvironment,
+        checkedAt,
+        message: "Docker daemon is not reachable. Check Docker Desktop / dockerd status.",
+      });
+    }
+    if (includesAnyMarker(combined, CLAUDE_SANDBOX_IMAGE_ERROR_MARKERS)) {
+      return c.json({
+        available: false,
+        authenticated: false,
+        executionEnvironment,
+        checkedAt,
+        message:
+          "Sandbox worker image is unavailable. Build or pull SANDBOX_DOCKER_IMAGE (default: openTiger/worker:latest).",
+      });
+    }
+    if (includesAnyMarker(combined, CLAUDE_SANDBOX_CLI_MISSING_MARKERS)) {
+      return c.json({
+        available: false,
+        authenticated: false,
+        executionEnvironment,
+        checkedAt,
+        message:
+          "Claude CLI is not installed in sandbox image. Rebuild worker image with @anthropic-ai/claude-code.",
+      });
+    }
+  }
+
+  if (isClaudeAuthFailure(combined)) {
+    return c.json({
+      available: true,
+      authenticated: false,
+      executionEnvironment,
+      checkedAt,
+      message:
+        executionEnvironment === "sandbox"
+          ? "Claude Code is not authenticated in sandbox. Run `claude /login` on host and mount Claude auth directories."
+          : "Claude Code is not authenticated. Run `claude` and complete `/login`.",
+    });
+  }
+
+  if (result.status === 0) {
+    return c.json({
+      available: true,
+      authenticated: true,
+      executionEnvironment,
+      checkedAt,
+    });
+  }
+
+  // Avoid false-positive warnings when auth failure is not explicit
+  return c.json({
+    available: true,
+    authenticated: true,
+    executionEnvironment,
+    checkedAt,
+    message:
+      "Claude auth check returned a non-auth error; skipping warning to avoid false positives.",
+  });
+});
+
+systemRoute.get("/host/neofetch", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  const checkedAt = new Date().toISOString();
+  const result = spawnSync("neofetch", [], {
+    encoding: "utf-8",
+    timeout: 10000,
+  });
+
+  if (result.error) {
+    const errorCode = (result.error as NodeJS.ErrnoException).code;
+    if (errorCode === "ENOENT") {
+      return c.json({
+        available: false,
+        checkedAt,
+      });
+    }
+    return c.json({
+      available: false,
+      checkedAt,
+      message: `Failed to execute neofetch: ${result.error.message}`,
+    });
+  }
+
+  const stdout = typeof result.stdout === "string" ? result.stdout : "";
+  const output = stdout.trimEnd();
+  if ((result.status ?? 1) !== 0 || output.length === 0) {
+    return c.json({
+      available: false,
+      checkedAt,
+      message: "neofetch command did not return a usable output.",
+    });
+  }
+
+  return c.json({
+    available: true,
+    checkedAt,
+    output,
+  });
+});
 
 systemRoute.get("/requirements", async (c) => {
   const auth = getAuthInfo(c);
@@ -22,12 +300,51 @@ systemRoute.get("/requirements", async (c) => {
   }
 
   try {
-    const requirementPath = await resolveRequirementPath(c.req.query("path"), "requirement.md");
+    const requirementPath = await resolveRequirementPath(
+      c.req.query("path"),
+      CANONICAL_REQUIREMENT_PATH,
+    );
     const content = await readRequirementFile(requirementPath);
     return c.json({ path: requirementPath, content });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load requirement";
     return c.json({ error: message }, 400);
+  }
+});
+
+systemRoute.post("/requirements", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  const rawBody = await c.req.json().catch(() => ({}));
+  const path = typeof rawBody?.path === "string" ? rawBody.path : undefined;
+  const content = typeof rawBody?.content === "string" ? rawBody.content : "";
+  if (content.trim().length === 0) {
+    return c.json({ error: "Requirement content is empty" }, 400);
+  }
+
+  try {
+    const result = await syncRequirementSnapshot({
+      inputPath: path,
+      content,
+      commitSnapshot: true,
+    });
+    const configRow = await ensureConfigRow();
+    if (configRow.replanRequirementPath.trim() !== CANONICAL_REQUIREMENT_PATH) {
+      await db
+        .update(configTable)
+        .set({
+          replanRequirementPath: CANONICAL_REQUIREMENT_PATH,
+          updatedAt: new Date(),
+        })
+        .where(eq(configTable.id, configRow.id));
+    }
+    return c.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to save requirement";
+    return c.json({ error: message }, 500);
   }
 });
 
@@ -47,9 +364,10 @@ systemRoute.post("/github/repo", async (c) => {
   const owner = ownerInput || configRow.githubOwner;
   const repo = repoInput || configRow.githubRepo;
   const token = configRow.githubToken?.trim();
+  const authMode = resolveGitHubAuthMode(configRow.githubAuthMode);
 
-  if (!token) {
-    return c.json({ error: "GitHub token is not configured" }, 400);
+  if (authMode === "token" && !token) {
+    return c.json({ error: "GITHUB_TOKEN is required when GITHUB_AUTH_MODE is token" }, 400);
   }
   if (!owner) {
     return c.json({ error: "GitHub owner is required" }, 400);
@@ -61,6 +379,7 @@ systemRoute.post("/github/repo", async (c) => {
   try {
     const info = await createRepo({
       token,
+      authMode,
       owner,
       name: repo,
       description,
@@ -108,12 +427,16 @@ systemRoute.get("/github/repos", async (c) => {
   const ownerFilter = c.req.query("owner")?.trim().toLowerCase();
   const configRow = await ensureConfigRow();
   const token = configRow.githubToken?.trim();
-  if (!token) {
-    return c.json({ error: "GitHub token is not configured" }, 400);
+  const authMode = resolveGitHubAuthMode(configRow.githubAuthMode);
+  if (authMode === "token" && !token) {
+    return c.json({ error: "GITHUB_TOKEN is required when GITHUB_AUTH_MODE is token" }, 400);
   }
 
   try {
-    const octokit = getOctokit({ token });
+    const octokit = getOctokit({
+      token,
+      authMode,
+    });
     const rows = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
       affiliation: "owner,collaborator,organization_member",
       sort: "updated",

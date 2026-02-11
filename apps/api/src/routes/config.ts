@@ -98,27 +98,19 @@ configRoute.patch("/", zValidator("json", updateSchema), async (c) => {
     const nextConfig = { ...currentConfig, ...updates };
 
     const autoReplanEnabled = parseBoolean(nextConfig.AUTO_REPLAN, true);
-    if (autoReplanEnabled) {
-      if (!nextConfig.REPLAN_REQUIREMENT_PATH?.trim()) {
-        return c.json(
-          { error: "REPLAN_REQUIREMENT_PATH is required when AUTO_REPLAN is true" },
-          400,
-        );
-      }
-      if (!nextConfig.REPLAN_WORKDIR?.trim()) {
-        return c.json({ error: "REPLAN_WORKDIR is required when AUTO_REPLAN is true" }, 400);
-      }
+    if (autoReplanEnabled && !nextConfig.REPLAN_REQUIREMENT_PATH?.trim()) {
+      return c.json({ error: "REPLAN_REQUIREMENT_PATH is required when AUTO_REPLAN is true" }, 400);
     }
 
     const warnings: string[] = [];
     if (autoReplanEnabled) {
       const requirementPath = nextConfig.REPLAN_REQUIREMENT_PATH?.trim();
-      const replanWorkdir = nextConfig.REPLAN_WORKDIR?.trim();
-      if (requirementPath && replanWorkdir) {
+      const replanWorkdir = nextConfig.REPLAN_WORKDIR?.trim() || process.cwd();
+      if (requirementPath) {
         const candidate = await resolveRequirementPathCandidate(requirementPath, replanWorkdir);
         if (!candidate.found) {
           warnings.push(
-            `Replan requirement file が見つかりません: ${requirementPath} (resolved candidate: ${candidate.resolvedPath})`,
+            `Replan requirement file not found: ${requirementPath} (resolved candidate: ${candidate.resolvedPath})`,
           );
         }
       }

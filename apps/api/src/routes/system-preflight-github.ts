@@ -1,9 +1,15 @@
-import { getOctokit, getRepoInfo } from "@openTiger/vcs";
+import {
+  getOctokit,
+  getRepoInfo,
+  resolveGitHubAuthMode,
+  type GitHubAuthMode,
+} from "@openTiger/vcs";
 import { config as configTable } from "@openTiger/db/schema";
 import { parseLinkedIssueNumbersFromPr } from "./system-issue-utils";
 
 export type GitHubContext = {
-  token: string;
+  authMode: GitHubAuthMode;
+  token?: string;
   owner: string;
   repo: string;
 };
@@ -30,17 +36,24 @@ export type OpenPrSnapshot = {
 };
 
 export function resolveGitHubContext(configRow: ConfigRow): GitHubContext | null {
+  const authMode = resolveGitHubAuthMode(configRow.githubAuthMode);
   const token = configRow.githubToken?.trim();
   const owner = configRow.githubOwner?.trim();
   const repo = configRow.githubRepo?.trim();
-  if (!token || !owner || !repo) {
+  if (!owner || !repo) {
     return null;
   }
-  return { token, owner, repo };
+  if (authMode === "token" && !token) {
+    return null;
+  }
+  return { authMode, token: token || undefined, owner, repo };
 }
 
 export async function fetchOpenIssues(context: GitHubContext): Promise<OpenIssueSnapshot[]> {
-  const octokit = getOctokit({ token: context.token });
+  const octokit = getOctokit({
+    token: context.token,
+    authMode: context.authMode,
+  });
   const { owner, repo } = getRepoInfo({
     owner: context.owner,
     repo: context.repo,
@@ -67,7 +80,10 @@ export async function fetchOpenIssues(context: GitHubContext): Promise<OpenIssue
 }
 
 export async function fetchOpenPrCount(context: GitHubContext): Promise<OpenPrSnapshot> {
-  const octokit = getOctokit({ token: context.token });
+  const octokit = getOctokit({
+    token: context.token,
+    authMode: context.authMode,
+  });
   const { owner, repo } = getRepoInfo({
     owner: context.owner,
     repo: context.repo,

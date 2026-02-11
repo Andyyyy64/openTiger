@@ -35,7 +35,7 @@ function resolveLogDir(): string {
   if (process.env.OPENTIGER_RAW_LOG_DIR) {
     return process.env.OPENTIGER_RAW_LOG_DIR;
   }
-  // APIの作業ディレクトリに依存せず、リポジトリ直下を基準にする
+  // Use repo root, independent of API working directory
   return join(resolve(import.meta.dirname, "../../../.."), "raw-logs");
 }
 
@@ -73,6 +73,10 @@ async function clearLogDir(logDir: string): Promise<{ removed: number; failed: n
 
 function buildAgentNameAliases(agentId: string): string[] {
   const aliases = new Set<string>([agentId]);
+  const hasExplicitIndex = /-\d+$/.test(agentId);
+  if (hasExplicitIndex) {
+    return Array.from(aliases);
+  }
   const withoutIndex = agentId.replace(/-\d+$/, "");
   if (withoutIndex && withoutIndex !== agentId) {
     aliases.add(withoutIndex);

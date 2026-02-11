@@ -3,7 +3,7 @@ export function normalizeAllowedPathToken(token: string): string[] {
   value = value.replace(/^`+|`+$/g, "");
   value = value.replace(/^"+|"+$/g, "");
   value = value.replace(/^'+|'+$/g, "");
-  // Markdownのエスケープ(\*\*)を元に戻す
+  // Restore Markdown escapes (\*\*)
   value = value.replace(/\\([*?])/g, "$1");
   value = value.replace(/^\.\//, "");
   value = value.trim();

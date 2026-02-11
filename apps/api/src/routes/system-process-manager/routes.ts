@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@openTiger/db";
-import { agents, leases, runs, tasks } from "@openTiger/db/schema";
+import { agents, config as configTable, leases, runs, tasks } from "@openTiger/db/schema";
 import { ensureConfigRow } from "../../config-store";
 import { getAuthInfo } from "../../middleware/index";
 import { buildPreflightSummary, parseBooleanSetting, parseCountSetting } from "../system-preflight";
@@ -29,6 +29,7 @@ const PROCESS_SELF_HEAL_STARTUP_GRACE_MS = Number.parseInt(
   process.env.SYSTEM_PROCESS_SELF_HEAL_STARTUP_GRACE_MS ?? "120000",
   10,
 );
+const CANONICAL_REQUIREMENT_PATH = "docs/requirement.md";
 
 let processSelfHealTimer: NodeJS.Timeout | null = null;
 let processSelfHealInFlight = false;
@@ -91,6 +92,8 @@ function resolveExpectedManagedProcessNames(configRow: ConfigRow): string[] {
   const dispatcherEnabled = parseBooleanSetting(configRow.dispatcherEnabled, true);
   const cycleManagerEnabled = parseBooleanSetting(configRow.cycleManagerEnabled, true);
   const judgeEnabled = parseBooleanSetting(configRow.judgeEnabled, true);
+  const executionEnvironment = (configRow.executionEnvironment ?? "host").trim().toLowerCase();
+  const sandboxExecution = executionEnvironment === "sandbox";
 
   if (dispatcherEnabled) {
     processNames.add("dispatcher");
@@ -105,7 +108,7 @@ function resolveExpectedManagedProcessNames(configRow: ConfigRow): string[] {
     }
   }
 
-  if (dispatcherEnabled) {
+  if (dispatcherEnabled && !sandboxExecution) {
     const workerCount = parseCountSetting(configRow.workerCount, 1);
     const testerCount = parseCountSetting(configRow.testerCount, 1);
     const docserCount = parseCountSetting(configRow.docserCount, 1);
@@ -130,6 +133,15 @@ function shouldSkipSelfHeal(runtime: ProcessRuntime | undefined): boolean {
   return runtime.stopRequested === true;
 }
 
+async function hasRunningRunForAgent(agentId: string): Promise<boolean> {
+  const [runningRun] = await db
+    .select({ id: runs.id })
+    .from(runs)
+    .where(and(eq(runs.agentId, agentId), eq(runs.status, "running")))
+    .limit(1);
+  return Boolean(runningRun?.id);
+}
+
 async function ensureProcessHealthy(processName: string): Promise<void> {
   const definition = resolveProcessDefinition(processName);
   if (!definition || !definition.autoRestart) {
@@ -138,6 +150,16 @@ async function ensureProcessHealthy(processName: string): Promise<void> {
 
   const runtime = managedProcesses.get(definition.name);
   if (shouldSkipSelfHeal(runtime)) {
+    return;
+  }
+
+  const boundAgentId = resolveBoundAgentId(processName);
+  if (!boundAgentId) {
+    // Processes without agent heartbeat (e.g. dispatcher/cycle-manager) are not restarted if running
+    if (runtime?.status === "running") {
+      return;
+    }
+    await startManagedProcess(definition, {});
     return;
   }
 
@@ -153,11 +175,15 @@ async function ensureProcessHealthy(processName: string): Promise<void> {
         signal: null,
         message:
           `Detected existing live agent ${discoveredAgent.agentId}` +
-          (discoveredAgent.lastHeartbeat
-            ? ` (heartbeat=${discoveredAgent.lastHeartbeat})`
-            : ""),
+          (discoveredAgent.lastHeartbeat ? ` (heartbeat=${discoveredAgent.lastHeartbeat})` : ""),
       });
     }
+    return;
+  }
+
+  const hasRunningRun = await hasRunningRunForAgent(boundAgentId);
+  if (hasRunningRun && runtime?.status === "running") {
+    // Do not kill process while tasks are running to avoid job interruption
     return;
   }
 
@@ -168,12 +194,14 @@ async function ensureProcessHealthy(processName: string): Promise<void> {
       : 120000;
   const startedAtMs = runtime?.startedAt ? Date.parse(runtime.startedAt) : Number.NaN;
   const withinStartupGrace =
-    Number.isFinite(startedAtMs) && now - startedAtMs < startupGraceMs && runtime?.status === "running";
+    Number.isFinite(startedAtMs) &&
+    now - startedAtMs < startupGraceMs &&
+    runtime?.status === "running";
   if (withinStartupGrace) {
     return;
   }
 
-  // process は生きているが heartbeat が落ちているケースでは、強制的に再起動して復旧させる
+  // If process is alive but heartbeat is down, force restart to recover
   if (runtime?.status === "running" && runtime.process && !runtime.stopRequested) {
     stopManagedProcess(definition);
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -224,7 +252,7 @@ function startProcessSelfHealLoop(): void {
   void runProcessSelfHealTick();
 }
 
-// APIルートの公開窓口
+// API route entry point
 export function registerProcessManagerRoutes(systemRoute: Hono): void {
   startProcessSelfHealLoop();
 
@@ -326,6 +354,15 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
       }
       if (definition.kind === "planner") {
         const configRow = await ensureConfigRow();
+        if (rawContent && configRow.replanRequirementPath.trim() !== CANONICAL_REQUIREMENT_PATH) {
+          await db
+            .update(configTable)
+            .set({
+              replanRequirementPath: CANONICAL_REQUIREMENT_PATH,
+              updatedAt: new Date(),
+            })
+            .where(eq(configTable.id, configRow.id));
+        }
         const preflight = await buildPreflightSummary({
           configRow,
           autoCreateIssueTasks: false,
@@ -506,7 +543,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
           ]),
         );
 
-      // stop-all 直後に自動復旧ループが即時再起動しないよう、対象プロセスを明示停止状態として記録
+      // Record process as explicitly stopped so auto-recovery does not restart immediately after stop-all
       const configRow = await ensureConfigRow();
       const expectedProcesses = resolveExpectedManagedProcessNames(configRow);
       for (const processName of expectedProcesses) {

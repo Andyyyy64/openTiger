@@ -8,7 +8,7 @@ import { describeCommand, resolveLogDir } from "./helpers";
 import { managedProcesses, processStartPromises } from "./state";
 import type { ProcessDefinition, ProcessInfo, ProcessRuntime, StartPayload } from "./types";
 
-// プロセス起動・停止と自動再起動の実行をまとめる
+// Process start/stop and auto-restart orchestration
 const AUTO_RESTART_ENABLED = process.env.SYSTEM_PROCESS_AUTO_RESTART !== "false";
 const AUTO_RESTART_DELAY_MS = Number.parseInt(
   process.env.SYSTEM_PROCESS_AUTO_RESTART_DELAY_MS ?? "2000",
@@ -42,6 +42,16 @@ type ForceStopSummary = {
   killed: number;
   pids: number[];
 };
+
+type LaunchMode = "process" | "docker";
+
+function resolveExecutionEnvironment(rawValue: string | undefined): "host" | "sandbox" {
+  return rawValue?.trim().toLowerCase() === "sandbox" ? "sandbox" : "host";
+}
+
+function resolveLaunchMode(executionEnvironment: "host" | "sandbox"): LaunchMode {
+  return executionEnvironment === "sandbox" ? "docker" : "process";
+}
 
 function isPidAlive(pid: number): boolean {
   try {
@@ -339,6 +349,8 @@ export async function startManagedProcess(
 
     const configRow = await ensureConfigRow();
     const configEnv = configToEnv(configRow);
+    const executionEnvironment = resolveExecutionEnvironment(configEnv.EXECUTION_ENVIRONMENT);
+    const launchMode = resolveLaunchMode(executionEnvironment);
     const command = await definition.buildStart(payload);
     const startedAt = new Date().toISOString();
     const logDir = resolveLogDir();
@@ -352,14 +364,19 @@ export async function startManagedProcess(
         ...process.env,
         ...configEnv,
         ...command.env,
+        // Apply executor selector value to launcher config at start
+        EXECUTION_ENVIRONMENT: executionEnvironment,
+        LAUNCH_MODE: launchMode,
         OPENTIGER_LOG_DIR: logDir,
       },
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
-    // Stream logs to file for tracking
+    // Stream system-managed process stdout to file and parent terminal for monitoring
     child.stdout?.pipe(logStream);
     child.stderr?.pipe(logStream);
+    child.stdout?.pipe(process.stdout, { end: false });
+    child.stderr?.pipe(process.stderr, { end: false });
 
     const runtime: ProcessRuntime = {
       status: "running",
@@ -444,7 +461,7 @@ export function stopManagedProcess(definition: ProcessDefinition): ProcessInfo {
       stopRequested: true,
       restartScheduled: false,
       restartTimer: undefined,
-      message: "停止要求済み",
+      message: "Stop requested",
     };
     managedProcesses.set(definition.name, nextRuntime);
     return buildProcessInfo(definition, nextRuntime);
@@ -460,7 +477,7 @@ export function stopManagedProcess(definition: ProcessDefinition): ProcessInfo {
       stopRequested: true,
       restartScheduled: false,
       restartTimer: undefined,
-      message: "停止済み（管理対象プロセス未接続）",
+      message: "Stopped (managed process not connected)",
     };
     managedProcesses.set(definition.name, nextRuntime);
     return buildProcessInfo(definition, nextRuntime);
@@ -469,7 +486,7 @@ export function stopManagedProcess(definition: ProcessDefinition): ProcessInfo {
   runtime.stopRequested = true;
   runtime.restartScheduled = false;
   runtime.restartTimer = undefined;
-  runtime.message = "停止要求済み";
+  runtime.message = "Stop requested";
   managedProcesses.set(definition.name, runtime);
 
   const processRef = runtime.process;
