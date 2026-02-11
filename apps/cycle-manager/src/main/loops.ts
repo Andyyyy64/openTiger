@@ -30,7 +30,7 @@ import {
 } from "./replan";
 import { syncIssueBacklogViaPreflight } from "./backlog-preflight";
 
-const CYCLE_ENDING_CRITICAL_ANOMALIES = new Set(["stuck_task", "cost_spike"]);
+const CYCLE_ENDING_CRITICAL_ANOMALIES = new Set(["stuck_task"]);
 const CRITICAL_ANOMALY_RESTART_COOLDOWN_MS = (() => {
   const raw = Number.parseInt(
     process.env.CYCLE_CRITICAL_ANOMALY_RESTART_COOLDOWN_MS ?? "300000",
@@ -145,8 +145,9 @@ export async function runMonitorLoop(config: CycleManagerConfig): Promise<void> 
           );
         }
       } else if (criticalAnomalies.length > 0) {
+        const nonRestartingTypes = criticalAnomalies.map((anomaly) => anomaly.type).join(", ");
         console.warn(
-          "[CycleManager] Critical anomaly detected, but cycle restart skipped (non-recoverable by restart)",
+          `[CycleManager] Critical anomaly detected, but cycle restart skipped (non-restart type: ${nonRestartingTypes})`,
         );
       }
     }
