@@ -288,7 +288,7 @@ export async function runVerificationPhase(
         ];
     if (notesToAppend.length > 0) {
       const updatedContext = {
-        ...(taskData.context ?? {}),
+        ...taskData.context,
         notes: appendContextNotes(existingNotes, notesToAppend),
       };
       await db

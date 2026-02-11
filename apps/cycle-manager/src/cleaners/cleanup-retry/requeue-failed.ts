@@ -13,6 +13,36 @@ import {
 import { isPrReviewTask } from "./task-context";
 import type { BlockReason } from "./types";
 
+function extractFailedVerificationCommand(errorMessage: string | null | undefined): string | null {
+  const raw = (errorMessage ?? "").trim();
+  if (!raw) {
+    return null;
+  }
+  const match = raw.match(/verification failed at\s+(.+?)\s+\[/i);
+  const command = match?.[1]?.trim();
+  return command && command.length > 0 ? command : null;
+}
+
+function sanitizeCommandsForMissingScript(
+  commands: string[],
+  errorMessage: string | null | undefined,
+): string[] {
+  if (commands.length === 0) {
+    return [];
+  }
+  const failedCommand = extractFailedVerificationCommand(errorMessage);
+  if (!failedCommand) {
+    // 失敗コマンドを特定できない場合は explicit command を空にして自動検証へフォールバック
+    return [];
+  }
+  const normalizedFailed = failedCommand.trim();
+  const filtered = commands.filter((command) => command.trim() !== normalizedFailed);
+  if (filtered.length === commands.length) {
+    return [];
+  }
+  return filtered;
+}
+
 // 失敗したタスクを再キューイング（即時、全件）
 export async function requeueFailedTasks(): Promise<number> {
   const result = await db
@@ -45,6 +75,7 @@ export async function requeueFailedTasksWithCooldown(
       title: tasks.title,
       goal: tasks.goal,
       context: tasks.context,
+      commands: tasks.commands,
       updatedAt: tasks.updatedAt,
       retryCount: tasks.retryCount,
     })
@@ -125,6 +156,39 @@ export async function requeueFailedTasksWithCooldown(
       task.id,
       latestRun?.errorMessage ?? null,
     );
+
+    if (failure.reason === "verification_command_missing_script") {
+      const adjustedCommands = sanitizeCommandsForMissingScript(
+        task.commands ?? [],
+        latestRun?.errorMessage ?? null,
+      );
+      await db
+        .update(tasks)
+        .set({
+          status: "queued",
+          blockReason: null,
+          commands: adjustedCommands,
+          retryCount: nextRetryCount,
+          updatedAt: new Date(),
+        })
+        .where(eq(tasks.id, task.id));
+      await recordEvent({
+        type: "task.requeued",
+        entityType: "task",
+        entityId: task.id,
+        payload: {
+          reason: "verification_command_missing_script_adjusted",
+          retryCount: nextRetryCount,
+          previousCommands: task.commands ?? [],
+          nextCommands: adjustedCommands,
+        },
+      });
+      console.log(
+        `[Cleanup] Requeued failed task with adjusted commands: ${task.id} (missing verification script)`,
+      );
+      requeued++;
+      continue;
+    }
 
     if (!globalRetryAllowed || !failure.retryable || !categoryRetryAllowed || repeatedFailure) {
       const blockReason: Extract<BlockReason, "needs_rework"> = repeatedFailure
