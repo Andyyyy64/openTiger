@@ -1,4 +1,4 @@
-import { stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 export function clipText(text: string, maxLength: number): string {
@@ -63,15 +63,32 @@ export async function pathIsFile(path: string): Promise<boolean> {
 }
 
 export async function isRepoUninitialized(workdir: string): Promise<boolean> {
-  const hasApps = await pathIsDirectory(join(workdir, "apps"));
-  const hasPackages = await pathIsDirectory(join(workdir, "packages"));
-
-  if (hasApps || hasPackages) {
-    return false;
+  const entries = await readdir(workdir, { withFileTypes: true });
+  const filtered = entries.filter((entry) => entry.name !== ".git");
+  if (filtered.length === 0) {
+    return true;
   }
 
-  const hasRootPackage = await pathIsFile(join(workdir, "package.json"));
-  const hasWorkspace = await pathIsFile(join(workdir, "pnpm-workspace.yaml"));
+  for (const entry of filtered) {
+    if (entry.name !== "docs") {
+      return false;
+    }
+    const docsEntries = await readdir(join(workdir, "docs"), { withFileTypes: true }).catch(
+      () => [],
+    );
+    const meaningfulDocsEntries = docsEntries.filter((docsEntry) => {
+      if (docsEntry.name === "requirement.md") {
+        return false;
+      }
+      if (docsEntry.name === ".gitkeep") {
+        return false;
+      }
+      return true;
+    });
+    if (meaningfulDocsEntries.length > 0) {
+      return false;
+    }
+  }
 
-  return !hasRootPackage && !hasWorkspace;
+  return true;
 }

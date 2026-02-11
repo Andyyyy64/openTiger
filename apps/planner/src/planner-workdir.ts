@@ -2,9 +2,10 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
+import { resolveGitHubAuthMode, resolveGitHubToken } from "@openTiger/vcs";
 import type { PlannerConfig } from "./planner-config";
 
-// Plannerが参照する作業ディレクトリを用意
+// Prepare workdir for Planner
 export async function preparePlannerWorkdir(config: PlannerConfig): Promise<{
   workdir: string;
   cleanup: () => Promise<void>;
@@ -20,30 +21,39 @@ export async function preparePlannerWorkdir(config: PlannerConfig): Promise<{
   console.log(`[Planner] Using remote repo: ${config.repoUrl}`);
   const tempDir = await mkdtemp(join(tmpdir(), "openTiger-planner-"));
   const repoDir = join(tempDir, "repo");
-  const token = process.env.GITHUB_TOKEN;
-  const cloneResult = await gitCloneRepo(config.repoUrl, repoDir, token, config.baseBranch);
+  try {
+    const cloneResult = await gitCloneRepo(config.repoUrl, repoDir, config.baseBranch);
 
-  if (!cloneResult.success) {
-    await rm(tempDir, { recursive: true, force: true });
-    throw new Error(`Planner failed to clone repo: ${cloneResult.stderr}`);
-  }
+    if (!cloneResult.success) {
+      throw new Error(`Planner failed to clone repo: ${cloneResult.stderr}`);
+    }
 
-  return {
-    workdir: repoDir,
-    cleanup: async () => {
+    return {
+      workdir: repoDir,
+      cleanup: async () => {
+        await rm(tempDir, { recursive: true, force: true });
+      },
+    };
+  } catch (error) {
+    try {
       await rm(tempDir, { recursive: true, force: true });
-    },
-  };
+    } catch {
+      // Prioritize original clone failure over temp dir cleanup failure
+    }
+    throw error;
+  }
 }
 
 export async function gitCloneRepo(
   repoUrl: string,
   destPath: string,
-  token?: string,
   baseBranch?: string,
 ): Promise<{ success: boolean; stderr: string }> {
   let authenticatedUrl = repoUrl;
-  if (token && repoUrl.startsWith("https://github.com/")) {
+  if (repoUrl.startsWith("https://github.com/")) {
+    const token = resolveGitHubToken({
+      authMode: resolveGitHubAuthMode(process.env.GITHUB_AUTH_MODE),
+    });
     authenticatedUrl = repoUrl.replace(
       "https://github.com/",
       `https://x-access-token:${token}@github.com/`,
@@ -55,7 +65,7 @@ export async function gitCloneRepo(
       const child = spawn("git", args, {
         env: {
           ...process.env,
-          GIT_TERMINAL_PROMPT: "0", // 認証待ちで止めない
+          GIT_TERMINAL_PROMPT: "0", // Do not wait for auth prompt
         },
       });
 

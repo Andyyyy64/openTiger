@@ -17,19 +17,19 @@ export async function hasRootCheckScript(workdir: string): Promise<boolean> {
   return typeof checkScript === "string";
 }
 
-// 実行コマンドの具体形は verify.contract / LLM 計画で補完する
+// Concrete commands filled by verify.contract / LLM plan
 export async function resolveCheckVerificationCommand(
   _workdir: string,
 ): Promise<string | undefined> {
   return undefined;
 }
 
-// 常駐系コマンドはPlannerから直接提案しない
+// Do not propose long-running commands from Planner
 export async function resolveDevVerificationCommand(_workdir: string): Promise<string | undefined> {
   return undefined;
 }
 
-// E2Eの追加可否は task-policies と verify.contract / LLM 計画で判断する
+// E2E add via task-policies and verify.contract / LLM plan
 export async function resolveE2EVerificationCommand(_workdir: string): Promise<string | undefined> {
   return undefined;
 }

@@ -1,34 +1,16 @@
 import type { Requirement } from "./parser";
 import type { PlannedTaskInput, TaskGenerationResult } from "./strategies/index";
 
-// 初期化タスクで変更を許可するルート設定ファイル
+// Root config files allowed for modification by initialization tasks
 export const INIT_ALLOWED_PATHS = [
-  "package.json",
-  "pnpm-workspace.yaml",
-  "yarn-workspace.yaml",
-  "workspace.json",
-  "workspaces.json",
-  "pnpm-lock.yaml",
-  "package-lock.json",
-  "yarn.lock",
-  "bun.lock",
-  "bun.lockb",
   ".gitignore",
-  "tsconfig.json",
-  "tsconfig.*.json",
-  ".eslintrc.*",
-  ".prettierrc*",
-  "biome.json",
-  "turbo.json",
-  "docker-compose.yml",
-  "Dockerfile",
-  ".env.example",
   "README.md",
-  "apps/**",
-  "packages/**",
+  "docs/**",
+  "scripts/**",
 ];
 
 const INIT_ROOT_FILES = [
+  "Makefile",
   "package.json",
   "pnpm-workspace.yaml",
   "yarn-workspace.yaml",
@@ -41,6 +23,9 @@ const INIT_ROOT_FILES = [
   "bun.lockb",
   ".gitignore",
   "tsconfig.json",
+  "Cargo.toml",
+  "go.mod",
+  "pyproject.toml",
 ];
 
 const LOCKFILE_PATHS = [
@@ -51,8 +36,7 @@ const LOCKFILE_PATHS = [
   "bun.lockb",
 ];
 
-// docser はドキュメント整備が主務だが、package.json の scripts 補完や
-// .env.example の追記など軽微なルート変更が必要になるケースを許容する
+// docser focuses on documentation but may need minor root changes (e.g. package.json scripts, .env.example)
 export const DOCSER_ALLOWED_PATHS = [
   "docs/**",
   "ops/**",
@@ -76,34 +60,20 @@ function mergeAllowedPaths(current: string[], extra: string[]): string[] {
 }
 
 function isInitializationTask(task: PlannedTaskInput): boolean {
+  const title = task.title.toLowerCase();
+  const hasInitKeyword =
+    ["init", "initialize", "bootstrap", "setup", "scaffold", "workspace", "foundation"].some(
+      (hint) => title.includes(hint),
+    ) || ["init", "setup", "bootstrap", "foundation"].some((hint) => task.title.toLowerCase().includes(hint));
+  if (hasInitKeyword) {
+    return true;
+  }
+
   const files = task.context?.files ?? [];
   if (files.some((file) => INIT_ROOT_FILES.includes(file))) {
     return true;
   }
-
-  const allowed = task.allowedPaths ?? [];
-  const rootEvidence = [...allowed, ...files].some(
-    (path) =>
-      INIT_ROOT_FILES.includes(path) ||
-      path === "apps/" ||
-      path === "packages/" ||
-      path === "apps/**" ||
-      path === "packages/**",
-  );
-
-  if (!rootEvidence) {
-    return false;
-  }
-
-  const title = task.title.toLowerCase();
-  return (
-    ["init", "initialize", "bootstrap", "setup", "scaffold", "monorepo", "workspace"].some((hint) =>
-      title.includes(hint),
-    ) ||
-    ["初期化", "セットアップ", "モノレポ", "ワークスペース"].some((hint) =>
-      task.title.includes(hint),
-    )
-  );
+  return false;
 }
 
 function normalizeVerificationCommands(commands: string[]): string[] {
@@ -136,7 +106,7 @@ export function normalizeGeneratedTasks(result: TaskGenerationResult): TaskGener
       };
     }
 
-    // AIが依存追加を行う可能性があるため、全タスクで lockfile の変更を許可する
+    // Allow lockfile changes for all tasks since AI may add dependencies
     normalized = {
       ...normalized,
       allowedPaths: mergeAllowedPaths(normalized.allowedPaths, LOCKFILE_PATHS),
@@ -148,7 +118,7 @@ export function normalizeGeneratedTasks(result: TaskGenerationResult): TaskGener
   return { ...result, tasks };
 }
 
-// テスト関連の手がかりから担当ロールを推定する
+// Infer role from test-related clues
 function inferTaskRole(task: PlannedTaskInput): "worker" | "tester" {
   const hintText = [task.title, task.goal, task.context?.specs, task.context?.notes]
     .filter((value): value is string => typeof value === "string")
@@ -160,8 +130,8 @@ function inferTaskRole(task: PlannedTaskInput): "worker" | "tester" {
     /\bvitest\b/,
     /\bcypress\b/,
     /\btest(s)?\s*(add|create|write|implement|update|fix)\b/,
-    /テスト(追加|作成|実装|更新|修正|強化)/,
-    /フレーク|flaky/,
+    /test\s*(add|creat|implement|updat|fix|strengthen)/i,
+    /flak|flaky/i,
   ];
   if (testerPatterns.some((pattern) => pattern.test(hintText))) {
     return "tester";
@@ -188,7 +158,7 @@ export function applyTaskRolePolicy(result: TaskGenerationResult): TaskGeneratio
 }
 
 function ensureDevCommand(commands: string[]): string[] {
-  // `dev` は常駐プロセスになりやすく検証用途には不向きなので自動補完しない
+  // Do not auto-suggest dev; it tends to be a long-running process and is poor for verification
   return commands;
 }
 
@@ -213,7 +183,7 @@ export function applyVerificationCommandPolicy(
   result: TaskGenerationResult,
   _checkScriptAvailable: boolean,
 ): TaskGenerationResult {
-  // コマンド文字列を正規化し、重複や空値を除外する
+  // Normalize command strings and drop duplicates/empties
   const tasks = result.tasks.map((task) => {
     const filtered = normalizeVerificationCommands(task.commands);
     if (filtered.length === task.commands.length) {
@@ -236,9 +206,9 @@ function taskRequiresE2E(task: PlannedTaskInput): boolean {
     /\bcypress\b/,
     /critical path/,
     /user flow/,
-    /エンドツーエンド/,
-    /クリティカルパス/,
-    /ユーザーフロー/,
+    /e2e|end-?to-?end/i,
+    /critical\s*path/i,
+    /user\s*flow/i,
   ];
   if (explicitE2ePatterns.some((pattern) => pattern.test(text))) {
     return true;
@@ -253,7 +223,7 @@ function hasE2ECommand(commands: string[]): boolean {
   return commands.some((command) => /\b(e2e|playwright|cypress)\b/i.test(command));
 }
 
-// E2E要件が明示されたtesterタスクにのみE2E検証を補う
+// Add E2E verification only to tester tasks with explicit E2E requirements
 export function applyTesterCommandPolicy(
   result: TaskGenerationResult,
   e2eCommand?: string,
@@ -295,13 +265,17 @@ function requiresLockfile(commands: string[]): boolean {
 
 export function generateInitializationTasks(requirement: Requirement): TaskGenerationResult {
   const allowedPaths = mergeAllowedPaths(requirement.allowedPaths, INIT_ALLOWED_PATHS);
+  const bootstrapTargets =
+    requirement.allowedPaths.length > 0 ? requirement.allowedPaths.slice(0, 8) : ["README.md"];
   const task: PlannedTaskInput = {
-    title: "モノレポ構成の初期化",
-    goal: "ワークスペース構成と依存関係の基盤が整備され、検証コマンドが定義されている",
+    title: "Initialize repository foundation",
+    goal:
+      "Create the minimum project foundation within allowed paths so follow-up tasks can proceed.",
     role: "worker",
     context: {
-      files: ["package.json", ".gitignore", "apps/", "packages/"],
-      specs: "apps/ と packages/ の土台と最小限のpackage.jsonを用意する",
+      files: bootstrapTargets,
+      specs:
+        "For an empty repository, create the minimum directory/build foundation aligned with In Scope requirements.",
       notes: requirement.goal,
     },
     allowedPaths,
@@ -318,7 +292,7 @@ export function generateInitializationTasks(requirement: Requirement): TaskGener
   return {
     tasks: [task],
     warnings: [
-      "モノレポ構成が見つからないため初期化タスクのみ生成しました。初期化完了後にPlannerを再実行してください。",
+      "Repository is empty, so only an initialization task was generated. Re-run Planner after initialization.",
     ],
     totalEstimatedMinutes: task.timeboxMinutes ?? 45,
   };
@@ -362,7 +336,7 @@ export function sanitizeTaskDependencyIndexes(result: TaskGenerationResult): Tas
     tasks,
     warnings: [
       ...result.warnings,
-      `依存関係に循環/未来参照の可能性があったため ${correctedTaskCount} 件を補正しました。`,
+      `Corrected ${correctedTaskCount} dependency(ies) for possible cycles or forward references.`,
     ],
   };
 }
@@ -434,7 +408,7 @@ export function reduceRedundantDependencyIndexes(
     tasks,
     warnings: [
       ...result.warnings,
-      `依存関係の冗長辺を ${removedEdgeCount} 件削除し、並列実行性を補正しました。`,
+      `Removed ${removedEdgeCount} redundant dependency edge(s) to improve parallelism.`,
     ],
   };
 }
@@ -455,7 +429,7 @@ export function ensureInitializationTaskForUninitializedRepo(
   if (initTaskIndex === -1) {
     const bootstrapTask = generateInitializationTasks(requirement).tasks[0];
     if (bootstrapTask) {
-      // 先頭に差し込み、既存依存インデックスを1つ後ろへずらす
+      // Prepend and shift existing dependency indexes by one
       const shiftedTasks = tasks.map((task) => ({
         ...task,
         dependsOnIndexes: (task.dependsOnIndexes ?? []).map((dep) => dep + 1),
@@ -489,14 +463,14 @@ export function ensureInitializationTaskForUninitializedRepo(
   });
 
   const filteredWarnings = result.warnings.filter((warning) => {
-    // 初期化タスクを補った後は「初期化未タスク化」警告を残さない
-    return !(warning.includes("allowedPaths") && warning.includes("タスク化していません"));
+    // Drop "init not taskified" warning after injecting init task
+    return !(warning.includes("allowedPaths") && warning.includes("not taskified"));
   });
 
   const warnings = injected
     ? [
         ...filteredWarnings,
-        "リポジトリ初期化タスクを自動追加し、他タスクはその完了に依存するよう補正しました。",
+        "Injected repository initialization task; other tasks now depend on it.",
       ]
     : filteredWarnings;
 

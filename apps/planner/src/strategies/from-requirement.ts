@@ -4,9 +4,9 @@ import type { CodebaseInspection } from "../inspection";
 import { getPlannerOpenCodeEnv } from "../opencode-config";
 import { generateAndParseWithRetry } from "../llm-json-retry";
 
-// タスク生成結果
+// Task generation result
 export interface PlannedTaskInput extends CreateTaskInput {
-  dependsOnIndexes?: number[]; // LLMの依存関係インデックスを保持して後で解決する
+  dependsOnIndexes?: number[]; // Preserve LLM dep indexes for later resolution
 }
 
 export interface TaskGenerationResult {
@@ -15,73 +15,73 @@ export interface TaskGenerationResult {
   totalEstimatedMinutes: number;
 }
 
-// LLMに渡すプロンプトを構築
+// Build prompt for LLM
 function buildPrompt(requirement: Requirement, inspection?: CodebaseInspection): string {
   const inspectionBlock = inspection
     ? `
-## 差分点検結果（必ず参照）
-概要: ${inspection.summary}
-既に満たしている点:
-${inspection.satisfied.length > 0 ? inspection.satisfied.map((item) => `- ${item}`).join("\n") : "(なし)"}
-ギャップ:
-${inspection.gaps.length > 0 ? inspection.gaps.map((item) => `- ${item}`).join("\n") : "(なし)"}
-根拠:
-${inspection.evidence.length > 0 ? inspection.evidence.map((item) => `- ${item}`).join("\n") : "(なし)"}
-補足:
-${inspection.notes.length > 0 ? inspection.notes.map((item) => `- ${item}`).join("\n") : "(なし)"}
+## Codebase Inspection (Required Context)
+Summary: ${inspection.summary}
+Already Satisfied:
+${inspection.satisfied.length > 0 ? inspection.satisfied.map((item) => `- ${item}`).join("\n") : "(none)"}
+Gaps:
+${inspection.gaps.length > 0 ? inspection.gaps.map((item) => `- ${item}`).join("\n") : "(none)"}
+Evidence:
+${inspection.evidence.length > 0 ? inspection.evidence.map((item) => `- ${item}`).join("\n") : "(none)"}
+Notes:
+${inspection.notes.length > 0 ? inspection.notes.map((item) => `- ${item}`).join("\n") : "(none)"}
 `.trim()
-    : "## 差分点検結果（必ず参照）\n(差分点検が未実施のためタスク生成は不可)";
+    : "## Codebase Inspection (Required Context)\n(Inspection was not available, so reliable task generation is not possible.)";
 
   return `
-あなたはソフトウェアエンジニアリングのタスク分割エキスパートです。
-以下の要件定義と差分点検結果を読み取り、実行可能なタスクに分割してください。
-ツール呼び出しは禁止です。与えられた情報だけで判断してください。
-差分点検の gaps に含まれる項目のみをタスク化し、satisfied に該当するものはタスク化しないでください。
-gaps が空の場合は tasks を空配列にし、warnings に「差分なし」などの説明を入れてください。
+You are an expert in decomposing software requirements into executable engineering tasks.
+Read the requirement and inspection result below, then produce actionable tasks.
+Do not call any tools. Reason only from the information provided here.
+Create tasks only for items in inspection.gaps. Do not create tasks for inspection.satisfied items.
+If gaps is empty, return an empty tasks array and include a warning such as "No meaningful implementation gaps found."
 
-## タスク分割の原則
+## Task Decomposition Principles
 
-1. **粒度**: 1タスク = 30〜90分で完了できるサイズ
-2. **判定可能**: テストやコマンドで成功/失敗を判定できる
-3. **独立性**: 可能な限り他のタスクに依存しない
-4. **範囲限定**: 変更するファイル/ディレクトリを明確にする
-5. **既存構成遵守**: 既存のモノレポ構成と技術スタックを必ず守る
-6. **許可パス遵守**: allowedPaths の外に触る必要があるタスクは作らない
-7. **役割分担**: 実装は worker、テスト作成/追加は tester に割り当てる
+1. **Size**: each task should be completable in 30-90 minutes
+2. **Verifiable**: completion must be checkable by tests or commands
+3. **Independence**: minimize unnecessary dependencies
+4. **Scoped changes**: clearly specify file/directory boundaries
+5. **Respect existing structure**: follow the current repository layout and stack
+6. **Respect allowed paths**: do not create tasks requiring changes outside allowedPaths
+7. **Role split**: implementation tasks use worker; test authoring tasks use tester
 
-## 既存構成と技術スタックの厳守
+## Structure and Stack Rules
 
-- 既存のディレクトリ構成（apps/ と packages/）を前提にする
-- 既存の採用技術を尊重し、要件の技術スタックに従う
-- 要件にない新規ツールやフレームワークを持ち込まない
-- 新規アプリ追加は要件に明示がある場合のみ
+- Respect the existing directory layout (do not hard-code any specific layout)
+- Respect technologies already used in the project
+- Do not introduce unrequested tools or frameworks
+- Add new apps/modules only if explicitly required
 
-## allowedPaths の扱い
+## allowedPaths Rules
 
-- allowedPaths 外の変更が必要ならタスクを作らず warnings に理由を書く
-- 依存関係の追加やルート変更が必要なら「依存関係タスク」に分離する
-- 依存関係タスクの allowedPaths にはルートの必要ファイルを含める
+- If a task needs changes outside allowedPaths, skip creating it and explain why in warnings
+- If root/dependency changes are required, split them into a dedicated dependency task
+- Ensure such dependency task includes required root files in allowedPaths
 
-## 要件定義
+## Requirement
 
 ### Goal
 ${requirement.goal}
 
 ### Background
-${requirement.background || "(なし)"}
+${requirement.background || "(none)"}
 
 ### Constraints
-${requirement.constraints.length > 0 ? requirement.constraints.map((c) => `- ${c}`).join("\n") : "(なし)"}
+${requirement.constraints.length > 0 ? requirement.constraints.map((c) => `- ${c}`).join("\n") : "(none)"}
 
 ### Acceptance Criteria
 ${requirement.acceptanceCriteria.map((c) => `- ${c}`).join("\n")}
 
 ### Scope
 #### In Scope
-${requirement.scope.inScope.map((s) => `- ${s}`).join("\n") || "(なし)"}
+${requirement.scope.inScope.map((s) => `- ${s}`).join("\n") || "(none)"}
 
 #### Out of Scope
-${requirement.scope.outOfScope.map((s) => `- ${s}`).join("\n") || "(なし)"}
+${requirement.scope.outOfScope.map((s) => `- ${s}`).join("\n") || "(none)"}
 
 ### Allowed Paths
 ${requirement.allowedPaths.map((p) => `- ${p}`).join("\n")}
@@ -90,53 +90,52 @@ ${requirement.allowedPaths.map((p) => `- ${p}`).join("\n")}
 ${
   requirement.riskAssessment.length > 0
     ? requirement.riskAssessment.map((r) => `- ${r.risk} (${r.impact}): ${r.mitigation}`).join("\n")
-    : "(なし)"
+    : "(none)"
 }
 
 ### Notes
-${requirement.notes || "(なし)"}
+${requirement.notes || "(none)"}
 
 ${inspectionBlock}
 
-## 出力形式
-
-以下のJSON形式で出力してください。他のテキストは出力しないでください。
+## Output Format
+Return JSON only. Do not include any extra text.
 
 \`\`\`json
 {
   "tasks": [
     {
-      "title": "簡潔なタスク名",
-      "goal": "機械判定可能な完了条件（テストが通る、コマンドが成功する等）",
+      "title": "Short task title",
+      "goal": "Machine-verifiable completion condition",
       "role": "worker or tester",
       "context": {
-        "files": ["関連ファイルパス"],
-        "specs": "詳細仕様",
-        "notes": "補足情報"
+        "files": ["Relevant file paths"],
+        "specs": "Detailed implementation spec",
+        "notes": "Additional context"
       },
-      "allowedPaths": ["変更許可パス（glob）"],
-      "commands": ["リポジトリのscriptsに合わせた検証コマンド（lint/test/typecheckなど）"],
+      "allowedPaths": ["Allowed change paths (glob)"],
+      "commands": ["Verification commands aligned with repo scripts (lint/test/typecheck, etc.)"],
       "priority": 10,
       "riskLevel": "low",
       "dependsOn": [],
       "timeboxMinutes": 60
     }
   ],
-  "warnings": ["警告メッセージ"]
+  "warnings": ["Any warning message"]
 }
 \`\`\`
 
-## 注意事項
+## Constraints
 
-- タスクは実行順序を考慮し、dependsOnで依存関係を明示（インデックスで参照）
-- dependsOn は「前提成果物がないと着手不可な場合」のみに限定し、並列可能なタスクには依存を張らない
-- 同じ依存を重複して直列化しない（必要最小限の依存辺にする）
-- 各タスクのcommandは必ず成功/失敗を返すもの
-- 検証コマンドは必ず成功/失敗を返し、ホットリロード前提の dev 起動は求めない
-- E2Eは要件で明示された場合のみ要求し、既存ツールで最小のクリティカルパスをカバーする
-- riskLevelは "low" / "medium" / "high" のいずれか
-- timeboxMinutesは30〜90の範囲で
-- 曖昧なゴール（「改善する」等）は避ける
+- Express dependencies in dependsOn using task indexes
+- Use dependencies only when truly required; keep parallelism high
+- Avoid redundant dependency chains
+- Every command must produce clear success/failure
+- Do not require long-running dev servers as verification commands
+- Require E2E only when explicitly asked and keep it minimal
+- riskLevel must be one of "low" / "medium" / "high"
+- timeboxMinutes must be between 30 and 90
+- Avoid vague goals such as "improve" or "optimize"
 `.trim();
 }
 
@@ -162,7 +161,7 @@ function isTaskGenerationPayload(value: unknown): value is {
   return Array.isArray(record.tasks);
 }
 
-// 依存関係をインデックスからタスクIDへの参照に変換
+// Resolve dep indexes to task ID references
 function resolveDependencies(
   tasks: Array<{
     title: string;
@@ -177,7 +176,7 @@ function resolveDependencies(
     timeboxMinutes?: number;
   }>,
 ): PlannedTaskInput[] {
-  // 一旦全タスクを生成（依存関係は後で解決）
+  // Generate all tasks first; resolve deps later
   const taskInputs: PlannedTaskInput[] = tasks.map((task, index) => ({
     title: task.title,
     goal: task.goal,
@@ -185,9 +184,9 @@ function resolveDependencies(
     context: task.context,
     allowedPaths: task.allowedPaths,
     commands: task.commands,
-    priority: task.priority ?? (tasks.length - index) * 10, // 順序から優先度を設定
+    priority: task.priority ?? (tasks.length - index) * 10, // Set priority from order
     riskLevel: (task.riskLevel as "low" | "medium" | "high") ?? "low",
-    dependencies: [], // 後で設定
+    dependencies: [], // Set later
     dependsOnIndexes: task.dependsOn?.filter((dep) => Number.isInteger(dep)) ?? [],
     timeboxMinutes: task.timeboxMinutes ?? 60,
     targetArea: undefined,
@@ -197,7 +196,7 @@ function resolveDependencies(
   return taskInputs;
 }
 
-// 要件からタスクを生成
+// Generate tasks from requirement
 export async function generateTasksFromRequirement(
   requirement: Requirement,
   options: {
@@ -210,7 +209,7 @@ export async function generateTasksFromRequirement(
   const prompt = buildPrompt(requirement, options.inspection);
   const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
 
-  // レスポンスをパース
+  // Parse response
   const parsed = await generateAndParseWithRetry<{
     tasks: Array<{
       title: string;
@@ -227,19 +226,19 @@ export async function generateTasksFromRequirement(
     warnings?: string[];
   }>({
     workdir: options.workdir,
-    model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
+    model: plannerModel, // Planner prefers high-quality model for planning
     prompt,
     timeoutSeconds: options.timeoutSeconds ?? 300,
-    // Plannerはプロンプト内の情報だけで判断するためツールを使わない
+    // Planner judges only from prompt; no tools
     env: getPlannerOpenCodeEnv(),
     guard: isTaskGenerationPayload,
     label: "Task generation",
   });
 
-  // タスクを変換
+  // Transform tasks
   const tasks = resolveDependencies(parsed.tasks);
 
-  // 合計見積もり時間
+  // Total estimated time
   const totalEstimatedMinutes = tasks.reduce((sum, t) => sum + (t.timeboxMinutes ?? 60), 0);
 
   return {
@@ -249,11 +248,11 @@ export async function generateTasksFromRequirement(
   };
 }
 
-// タスクをLLMなしでシンプルに生成（フォールバック用）
+// Generate simple tasks without LLM (fallback)
 export function generateSimpleTasks(requirement: Requirement): TaskGenerationResult {
   const tasks: PlannedTaskInput[] = [];
 
-  // 受け入れ条件からタスクを生成
+  // Generate tasks from acceptance criteria
   requirement.acceptanceCriteria.forEach((criterion, index) => {
     tasks.push({
       title: `Implement: ${criterion.slice(0, 50)}${criterion.length > 50 ? "..." : ""}`,
@@ -264,7 +263,7 @@ export function generateSimpleTasks(requirement: Requirement): TaskGenerationRes
         notes: requirement.notes,
       },
       allowedPaths: requirement.allowedPaths,
-      // 検証コマンドを固定化せず、実装内容に応じて簡易チェックへ寄せる
+      // Do not fix commands; rely on light check per implementation
       commands: [],
       priority: (requirement.acceptanceCriteria.length - index) * 10,
       riskLevel: determineRiskLevel(requirement),
@@ -283,9 +282,9 @@ export function generateSimpleTasks(requirement: Requirement): TaskGenerationRes
   };
 }
 
-// リスクレベルを判定
+// Determine risk level
 function determineRiskLevel(requirement: Requirement): "low" | "medium" | "high" {
-  // 高リスクの項目があれば全体も高リスク
+  // High-risk item makes overall high-risk
   if (requirement.riskAssessment.some((r) => r.impact === "high")) {
     return "high";
   }

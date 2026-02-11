@@ -28,15 +28,15 @@ function formatJudgeFeedbackEntry(payload: Record<string, unknown>): string | un
   const details: string[] = [];
 
   if (reasons.length > 0) {
-    details.push(`理由: ${reasons.join(" / ")}`);
+    details.push(`Reasons: ${reasons.join(" / ")}`);
   }
 
   if (suggestions.length > 0) {
-    details.push(`改善案: ${suggestions.join(" / ")}`);
+    details.push(`Suggestions: ${suggestions.join(" / ")}`);
   }
 
   if (codeIssues.length > 0) {
-    details.push(`指摘: ${codeIssues.join(" / ")}`);
+    details.push(`Issues: ${codeIssues.join(" / ")}`);
   }
 
   const label = prNumber ? `PR #${prNumber}` : "PR";
@@ -48,7 +48,7 @@ function formatJudgeFeedbackEntry(payload: Record<string, unknown>): string | un
 }
 
 export async function loadJudgeFeedback(limit: number = 5): Promise<string | undefined> {
-  // Judgeのレビュー結果を直近分だけ取得する
+  // Fetch recent Judge review results only
   const rows = await db
     .select({
       payload: events.payload,
@@ -79,12 +79,12 @@ export function attachJudgeFeedbackToRequirement(
   requirement: Requirement,
   feedback: string | undefined,
 ): Requirement {
-  // 要件のノートにJudgeの結果を補足する
+  // Append Judge result to requirement notes
   if (!feedback) {
     return requirement;
   }
 
-  const feedbackBlock = `Judgeフィードバック:\n${feedback}`;
+  const feedbackBlock = `Judge Feedback:\n${feedback}`;
   const notes = requirement.notes ? `${requirement.notes}\n\n${feedbackBlock}` : feedbackBlock;
 
   return { ...requirement, notes };
@@ -94,12 +94,12 @@ export function attachJudgeFeedbackToTasks(
   result: TaskGenerationResult,
   feedback: string | undefined,
 ): TaskGenerationResult {
-  // Workerに引き継ぐためタスクのノートへ反映する
+  // Reflect feedback in task notes for Worker handoff
   if (!feedback) {
     return result;
   }
 
-  const feedbackBlock = `Judgeフィードバック:\n${feedback}`;
+  const feedbackBlock = `Judge Feedback:\n${feedback}`;
   const tasks = result.tasks.map((task) => {
     const context = task.context ?? {};
     const notes = context.notes ? `${context.notes}\n\n${feedbackBlock}` : feedbackBlock;
@@ -120,7 +120,7 @@ export function attachInspectionToRequirement(
   requirement: Requirement,
   inspectionNotes: string | undefined,
 ): Requirement {
-  // 差分点検の内容を要件に残してタスク生成へ引き継ぐ
+  // Attach inspection content to requirement for task generation
   if (!inspectionNotes) {
     return requirement;
   }
@@ -165,12 +165,12 @@ export function attachExistingTasksToRequirement(
   requirement: Requirement,
   hints: string | undefined,
 ): Requirement {
-  // 既存タスクを共有して重複した計画の生成を抑える
+  // Share existing tasks to reduce duplicate planning
   if (!hints) {
     return requirement;
   }
 
-  const block = `既存タスク（重複回避の参考）:\n${hints}`;
+  const block = `Existing Tasks (for duplicate avoidance):\n${hints}`;
   const notes = requirement.notes ? `${requirement.notes}\n\n${block}` : block;
   return { ...requirement, notes };
 }
@@ -179,7 +179,7 @@ export function attachInspectionToTasks(
   result: TaskGenerationResult,
   inspectionNotes: string | undefined,
 ): TaskGenerationResult {
-  // 差分点検の内容をWorkerにも共有して探索を深める
+  // Share inspection content with Worker for deeper exploration
   if (!inspectionNotes) {
     return result;
   }

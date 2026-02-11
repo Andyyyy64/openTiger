@@ -2,7 +2,7 @@ import type { CreateTaskInput } from "@openTiger/core";
 import { getPlannerOpenCodeEnv } from "../opencode-config";
 import { generateAndParseWithRetry } from "../llm-json-retry";
 
-// GitHub Issue情報
+// GitHub Issue info
 export interface GitHubIssue {
   number: number;
   title: string;
@@ -12,7 +12,7 @@ export interface GitHubIssue {
   milestone?: string;
 }
 
-// Issue解析結果
+// Issue analysis result
 export interface IssueAnalysisResult {
   tasks: CreateTaskInput[];
   warnings: string[];
@@ -21,39 +21,39 @@ export interface IssueAnalysisResult {
 
 export type IssueTaskRole = "worker" | "tester" | "docser";
 
-// IssueからLLMプロンプトを構築
+// Build LLM prompt from Issue
 function buildPromptFromIssue(
   issue: GitHubIssue,
   allowedPaths: string[],
   explicitRole: IssueTaskRole,
 ): string {
   return `
-あなたはソフトウェアエンジニアリングのタスク分割エキスパートです。
-以下のGitHub Issueを読み取り、実行可能なタスクに分割してください。
-ツール呼び出しは禁止です。与えられた情報だけで判断してください。
+You are an expert in decomposing software engineering work into executable tasks.
+Read the GitHub Issue below and split it into actionable tasks.
+Do not call tools. Reason only from the information provided here.
 
-## タスク分割の原則
+## Task Decomposition Principles
 
-1. **粒度**: 1タスク = 30〜90分で完了できるサイズ
-2. **判定可能**: テストやコマンドで成功/失敗を判定できる
-3. **独立性**: 可能な限り他のタスクに依存しない
-4. **範囲限定**: 変更するファイル/ディレクトリを明確にする
-5. **既存構成遵守**: 既存のモノレポ構成と技術スタックを必ず守る
-6. **許可パス遵守**: allowedPaths の外に触る必要があるタスクは作らない
-7. **役割固定**: このIssueの担当ロールは固定で ${explicitRole}。全タスクの role は必ず ${explicitRole}
+1. **Size**: each task should be completable in 30-90 minutes
+2. **Verifiable**: completion must be checkable by tests or commands
+3. **Independence**: minimize unnecessary dependencies
+4. **Scoped changes**: clearly specify file/directory boundaries
+5. **Respect existing structure**: follow the current repository layout and stack
+6. **Respect allowed paths**: do not create tasks requiring changes outside allowedPaths
+7. **Fixed role**: this issue role is fixed to ${explicitRole}; every task role must be ${explicitRole}
 
-## 既存構成と技術スタックの厳守
+## Structure and Stack Rules
 
-- 既存のディレクトリ構成（apps/ と packages/）を前提にする
-- 既存の採用技術を尊重し、Issueの前提に従う
-- 要件にない新規ツールやフレームワークを持ち込まない
-- 新規アプリ追加はIssueに明示がある場合のみ
+- Respect the existing directory layout (do not hard-code a specific layout)
+- Respect technologies already used in the project and issue assumptions
+- Do not introduce unrequested tools or frameworks
+- Add new apps/modules only if explicitly requested in the issue
 
-## allowedPaths の扱い
+## allowedPaths Rules
 
-- allowedPaths 外の変更が必要ならタスクを作らず warnings に理由を書く
-- 依存関係の追加やルート変更が必要なら「依存関係タスク」に分離する
-- 依存関係タスクの allowedPaths にはルートの必要ファイルを含める
+- If a task needs changes outside allowedPaths, skip it and explain the reason in warnings
+- If root/dependency changes are required, split them into a dedicated dependency task
+- Ensure such dependency task includes required root files in allowedPaths
 
 ## GitHub Issue #${issue.number}
 
@@ -69,24 +69,23 @@ ${issue.body || "(empty)"}
 ### Allowed Paths
 ${allowedPaths.map((p) => `- ${p}`).join("\n")}
 
-## 出力形式
-
-以下のJSON形式で出力してください。他のテキストは出力しないでください。
+## Output Format
+Return JSON only. Do not include any extra text.
 
 \`\`\`json
 {
   "tasks": [
     {
-      "title": "簡潔なタスク名",
-      "goal": "機械判定可能な完了条件",
+      "title": "Short task title",
+      "goal": "Machine-verifiable completion condition",
       "role": "${explicitRole}",
       "context": {
-        "files": ["関連ファイルパス"],
-        "specs": "詳細仕様",
-        "notes": "補足情報"
+        "files": ["Relevant file paths"],
+        "specs": "Detailed implementation spec",
+        "notes": "Additional context"
       },
-      "allowedPaths": ["変更許可パス"],
-      "commands": ["リポジトリのscriptsに合わせた検証コマンド（lint/test/typecheckなど）"],
+      "allowedPaths": ["Allowed change paths"],
+      "commands": ["Verification commands aligned with repo scripts (lint/test/typecheck, etc.)"],
       "priority": 10,
       "riskLevel": "low",
       "dependsOn": [],
@@ -97,18 +96,17 @@ ${allowedPaths.map((p) => `- ${p}`).join("\n")}
 }
 \`\`\`
 
-## 注意事項
+## Constraints
 
-- タスクは実行順序を考慮し、dependsOnで依存関係を明示
-- dependsOn は必要最小限にし、並列で進められるタスクは依存を付けない
-- 依存を過剰に張って直列化しない
- - 各タスクのcommandは成功/失敗を返すもの
-- devなど常駐コマンドは検証に入れない
-- フロントが絡むタスクはE2Eを必須とし、クリティカルパスを最低限カバーする
-- role は必ず ${explicitRole} を使用する（他ロールは不可）
-- riskLevelは "low" / "medium" / "high"
-- timeboxMinutesは30〜90の範囲
-- Issueのラベルからリスクレベルを推定
+- Consider execution order and express required dependencies via dependsOn
+- Keep dependsOn minimal; avoid unnecessary serialization
+- Every command must return clear success/failure
+- Do not include long-running commands such as dev servers for verification
+- For frontend-related work, include minimum critical-path E2E coverage
+- role must always be ${explicitRole} (no other roles allowed)
+- riskLevel must be one of "low" / "medium" / "high"
+- timeboxMinutes must be between 30 and 90
+- Infer riskLevel from issue labels when possible
 `.trim();
 }
 
@@ -144,7 +142,7 @@ function parseRoleFromInlineBody(body: string): IssueTaskRole | null {
     return null;
   }
   const inline = body.match(
-    /^(?:\s*[-*]\s*)?(?:agent(?:\s*role)?|role|担当(?:エージェント)?|実行エージェント)\s*[:：]\s*(worker|tester|docser)\s*$/im,
+    /^(?:\s*[-*]\s*)?(?:agent(?:\s*role)?|role)\s*[:：]\s*(worker|tester|docser)\s*$/im,
   );
   return normalizeRoleToken(inline?.[1] ?? null);
 }
@@ -160,7 +158,7 @@ function parseRoleFromSectionBody(body: string): IssueTaskRole | null {
     if (line.length === 0) {
       continue;
     }
-    if (/^#{1,6}\s*(agent|role|担当(?:エージェント)?|実行エージェント)\b/i.test(line)) {
+    if (/^#{1,6}\s*(agent|role)\b/i.test(line)) {
       inRoleSection = true;
       continue;
     }
@@ -196,7 +194,7 @@ function buildMissingRoleWarning(issueNumber: number): string {
   return `Issue #${issueNumber}: explicit role is required. Add label role:worker|role:tester|role:docser or set "Agent: <role>" / "Role: <role>" in body.`;
 }
 
-// ラベルからリスクレベルを推定
+// Infer risk level from labels
 function inferRiskFromLabels(labels: string[]): "low" | "medium" | "high" {
   const lowercaseLabels = labels.map((l) => l.toLowerCase());
 
@@ -239,7 +237,7 @@ function isIssueTaskPayload(value: unknown): value is {
   return Array.isArray(record.tasks);
 }
 
-// GitHub Issueからタスクを生成
+// Generate tasks from GitHub Issue
 export async function generateTasksFromIssue(
   issue: GitHubIssue,
   options: {
@@ -261,7 +259,7 @@ export async function generateTasksFromIssue(
   const prompt = buildPromptFromIssue(issue, options.allowedPaths, explicitRole);
   const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
 
-  // レスポンスをパース
+  // Parse response
   const parsed = await generateAndParseWithRetry<{
     tasks: Array<{
       title: string;
@@ -278,16 +276,16 @@ export async function generateTasksFromIssue(
     warnings?: string[];
   }>({
     workdir: options.workdir,
-    model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
+    model: plannerModel, // Planner prefers high-quality model for planning
     prompt,
     timeoutSeconds: options.timeoutSeconds ?? 300,
-    // Plannerはプロンプト内の情報だけで判断するためツールを使わない
+    // Planner judges only from prompt; no tools
     env: getPlannerOpenCodeEnv(),
     guard: isIssueTaskPayload,
     label: "Issue task generation",
   });
 
-  // タスクを変換
+  // Transform tasks
   const defaultRisk = inferRiskFromLabels(issue.labels);
   const roleOverrideWarnings: string[] = [];
   const tasks: CreateTaskInput[] = parsed.tasks.map((task, index) => {
@@ -323,7 +321,7 @@ export async function generateTasksFromIssue(
   };
 }
 
-// IssueからシンプルにタスクをLLMなしで生成（フォールバック用）
+// Generate simple tasks from Issue without LLM (fallback)
 export function generateSimpleTaskFromIssue(
   issue: GitHubIssue,
   allowedPaths: string[],
@@ -347,7 +345,7 @@ export function generateSimpleTaskFromIssue(
       notes: `Labels: ${issue.labels.join(", ") || "none"}`,
     },
     allowedPaths,
-    // 検証コマンドは固定せず、簡易チェックに委ねる
+    // Do not fix commands; rely on light check
     commands: [],
     priority: 50,
     riskLevel,

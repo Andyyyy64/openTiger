@@ -57,15 +57,15 @@ export function buildDocserTaskForGap(params: {
   dependsOnIndexes: number[];
 }): PlannedTaskInput {
   const notes = [
-    `要件: ${params.requirement.goal}`,
-    "ドキュメント未整備を検知したためdocserで整備する。",
+    `Requirement: ${params.requirement.goal}`,
+    "Documentation gaps were detected and should be addressed by docser.",
     `docGap: ${JSON.stringify(params.docGap)}`,
-    "docs/README.md が存在しない場合は最小構成で作成する。",
+    "If docs/README.md does not exist, create a minimal version.",
   ].join("\n");
   const commands = params.checkCommand ? [params.checkCommand] : [];
   return {
-    title: "ドキュメント整備",
-    goal: "docs/README.md を含むドキュメントが実装と整合し、検証コマンドが成功する",
+    title: "Documentation alignment",
+    goal: "Ensure docs including docs/README.md match implementation and verification commands pass.",
     role: "docser",
     context: {
       files: ["docs/README.md", "README.md", "docs/**"],

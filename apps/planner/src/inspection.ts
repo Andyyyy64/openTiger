@@ -226,7 +226,7 @@ async function buildRepoSnapshot(workdir: string, requirement: Requirement): Pro
     readOptionalFile(join(workdir, "docs/architecture.md"), MAX_ARCH_CHARS),
   ]);
 
-  // 許可パスに該当するファイルと抜粋を集めて差分点検の根拠を確保する
+  // Collect files matching allowed paths and excerpts for inspection evidence
   const { matchedFiles, unmatchedAllowedPaths } = filterFilesByAllowedPaths(
     fileList,
     requirement.allowedPaths,
@@ -249,15 +249,15 @@ async function buildRepoSnapshot(workdir: string, requirement: Requirement): Pro
 }
 
 function buildInspectionPrompt(requirement: Requirement, snapshot: RepoSnapshot): string {
-  const readmeBlock = snapshot.readme ? `\n## README (抜粋)\n${snapshot.readme}` : "";
+  const readmeBlock = snapshot.readme ? `\n## README (Excerpt)\n${snapshot.readme}` : "";
   const architectureBlock = snapshot.architecture
-    ? `\n## docs/architecture.md (抜粋)\n${snapshot.architecture}`
+    ? `\n## docs/architecture.md (Excerpt)\n${snapshot.architecture}`
     : "";
 
   const allowedPathBlock =
     snapshot.unmatchedAllowedPaths.length > 0
       ? `\nUnmatched allowedPaths:\n${snapshot.unmatchedAllowedPaths.map((path) => `- ${path}`).join("\n")}`
-      : "\nUnmatched allowedPaths:\n(なし)";
+      : "\nUnmatched allowedPaths:\n(none)";
   const excerptBlock =
     snapshot.excerpts.length > 0
       ? snapshot.excerpts
@@ -266,18 +266,18 @@ function buildInspectionPrompt(requirement: Requirement, snapshot: RepoSnapshot)
               `### ${excerpt.path}${excerpt.truncated ? " (truncated)" : ""}\n\`\`\`\n${excerpt.excerpt}\n\`\`\``,
           )
           .join("\n\n")
-      : "(該当ファイルが見つかりませんでした)";
+      : "(No relevant files were found.)";
 
   return `
-あなたは要件と実装の差分を点検するエキスパートです。
-以下の要件とリポジトリ情報を読み、未実装/不足/矛盾の可能性を抽出してください。
-タスクではなく差分の列挙を目的にします。
-ツール呼び出しは禁止です。与えられた情報だけで判断してください。
-必ずコード抜粋を根拠に差分を判定し、差分がない場合は gaps を空にしてください。
-抜粋には行番号が付いているため、根拠は「path: 行番号|内容」を引用してください。
-抜粋に含まれない内容は未確認として扱い、gapには含めないでください。
+You are an expert in auditing requirement-to-implementation gaps.
+Read the requirement and repository snapshot below, then identify possible missing, insufficient, or contradictory implementations.
+This task is gap inspection, not task planning.
+Do not call tools. Reason only from the information provided here.
+You must use the provided code excerpts as evidence. If no gap is found, return an empty gaps array.
+Excerpts include line numbers, so cite evidence in the form "path: line|content".
+If something is not present in excerpts, treat it as unverified and do not include it as a gap.
 
-## 要件
+## Requirement
 ### Goal
 ${requirement.goal}
 
@@ -285,26 +285,26 @@ ${requirement.goal}
 ${requirement.acceptanceCriteria.map((c) => `- ${c}`).join("\n")}
 
 ### Constraints
-${requirement.constraints.length > 0 ? requirement.constraints.map((c) => `- ${c}`).join("\n") : "(なし)"}
+${requirement.constraints.length > 0 ? requirement.constraints.map((c) => `- ${c}`).join("\n") : "(none)"}
 
 ### Scope
 In Scope:
-${requirement.scope.inScope.map((s) => `- ${s}`).join("\n") || "(なし)"}
+${requirement.scope.inScope.map((s) => `- ${s}`).join("\n") || "(none)"}
 
 Out of Scope:
-${requirement.scope.outOfScope.map((s) => `- ${s}`).join("\n") || "(なし)"}
+${requirement.scope.outOfScope.map((s) => `- ${s}`).join("\n") || "(none)"}
 
 ### Allowed Paths
 ${requirement.allowedPaths.map((p) => `- ${p}`).join("\n")}
 
 ### Notes
-${requirement.notes || "(なし)"}
+${requirement.notes || "(none)"}
 
-## リポジトリ情報
+## Repository Snapshot
 Top-level:
 ${snapshot.topLevel.map((name) => `- ${name}`).join("\n")}
 
-Tracked files (先頭 ${snapshot.fileList.length} 件):
+Tracked files (first ${snapshot.fileList.length}):
 ${snapshot.fileList.map((file) => `- ${file}`).join("\n")}
 ${readmeBlock}
 ${architectureBlock}
@@ -315,24 +315,24 @@ ${allowedPathBlock}
 ## Relevant file excerpts
 ${excerptBlock}
 
-## 出力形式
-以下のJSON形式で出力してください。他のテキストは出力しないでください。
+## Output Format
+Return JSON only. Do not include any extra text.
 
 \`\`\`json
 {
-  "summary": "全体の差分要約（1-2文）",
+  "summary": "Overall gap summary in 1-2 sentences",
   "satisfied": [
-    "既に満たしている要件/Acceptance Criteria"
+    "Requirements or acceptance criteria already satisfied"
   ],
   "gaps": [
-    "未実装/不足/矛盾の可能性",
-    "受け入れ条件とのズレ"
+    "Potential missing, insufficient, or contradictory implementation",
+    "Mismatch against acceptance criteria"
   ],
   "evidence": [
-    "判断根拠となったファイルや記述（path: 理由）"
+    "Supporting evidence (path: reason)"
   ],
   "notes": [
-    "差分の根拠や注意点"
+    "Notes and caveats about the gap judgment"
   ]
 }
 \`\`\`
@@ -353,20 +353,20 @@ function isInspectionPayload(value: unknown): value is {
   return typeof record.summary === "string" || Array.isArray(record.gaps);
 }
 
-// 1回あたりのLLM呼び出しタイムアウト（秒）
+// LLM call timeout per attempt (seconds)
 const PER_ATTEMPT_TIMEOUT_SECONDS = 120;
-// 応答がない場合のリトライ上限（-1で無制限）
+// Retry limit on no response (-1 = unlimited)
 const INSPECTION_MAX_RETRIES = (() => {
   const parsed = Number.parseInt(process.env.PLANNER_INSPECT_MAX_RETRIES ?? "-1", 10);
   return Number.isFinite(parsed) ? parsed : -1;
 })();
-// クォータ超過時の待機時間（復旧を止めないため一定間隔で再試行する）
+// Wait time on quota exceeded before retry (fixed interval to avoid blocking recovery)
 const INSPECTION_QUOTA_RETRY_DELAY_MS = (() => {
   const parsed = Number.parseInt(process.env.PLANNER_INSPECT_QUOTA_RETRY_DELAY_MS ?? "30000", 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30000;
 })();
 
-// runOpenCode が内部でハングした場合に備えて Promise.race で強制打ち切りする
+// Use Promise.race to force abort if runOpenCode hangs internally
 function withHardTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -419,7 +419,7 @@ export async function inspectCodebase(
   const model = process.env.PLANNER_INSPECT_MODEL ?? process.env.PLANNER_MODEL;
   const totalTimeout = options.timeoutSeconds ?? 180;
   const hasDeadline = Number.isFinite(totalTimeout) && totalTimeout > 0;
-  // 1回あたりのタイムアウトを全体枠に収まるように調整する
+  // Adjust per-attempt timeout to fit within total budget
   const perAttemptTimeout = hasDeadline
     ? Math.min(PER_ATTEMPT_TIMEOUT_SECONDS, Math.floor(totalTimeout / 2))
     : PER_ATTEMPT_TIMEOUT_SECONDS;
@@ -448,8 +448,7 @@ export async function inspectCodebase(
     attempts = attempt + 1;
 
     try {
-      // opencode プロセスが SIGTERM/SIGKILL を無視してハングする場合に備え、
-      // runOpenCode の Promise 自体を強制打ち切りする
+      // Force-abort runOpenCode promise if opencode process ignores SIGTERM/SIGKILL and hangs
       const hardTimeoutMs = (attemptTimeout + 10) * 1000;
       const result = await withHardTimeout(
         runOpenCode({
@@ -457,9 +456,9 @@ export async function inspectCodebase(
           task: prompt,
           model,
           timeoutSeconds: attemptTimeout,
-          // runOpenCode内部のリトライは無効化し、ここで制御する
+          // Disable retries inside runOpenCode; control them here instead
           maxRetries: 0,
-          // Gemini 3系のfunction calling制約を避けるためツールを無効化する
+          // Disable tools to avoid Gemini 3 function-calling constraints
           env: getPlannerOpenCodeEnv(),
         }),
         hardTimeoutMs,
@@ -472,14 +471,14 @@ export async function inspectCodebase(
 
       lastError = result.stderr || `exit code ${result.exitCode}`;
       if (isQuotaExceededMessage(lastError)) {
-        console.warn("[Planner] クォータ上限のため差分点検を待機再試行します。");
+        console.warn("[Planner] Quota limit hit; waiting before retrying inspection.");
         await sleep(INSPECTION_QUOTA_RETRY_DELAY_MS);
         continue;
       }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
       if (isQuotaExceededMessage(lastError)) {
-        console.warn("[Planner] クォータ上限のため差分点検を待機再試行します。");
+        console.warn("[Planner] Quota limit hit; waiting before retrying inspection.");
         await sleep(INSPECTION_QUOTA_RETRY_DELAY_MS);
         continue;
       }
@@ -507,11 +506,12 @@ function parseInspectionResult(stdout: string): CodebaseInspection {
 
   if (gaps.length > 0 && evidence.length === 0) {
     gaps = [];
-    notes.push("根拠が不足しているため差分を確定できませんでした。");
+    notes.push("Insufficient evidence to confirm implementation gaps.");
   }
 
   return {
-    summary: typeof parsed.summary === "string" ? parsed.summary : "差分点検の要約がありません",
+    summary:
+      typeof parsed.summary === "string" ? parsed.summary : "No inspection summary was provided.",
     satisfied: Array.isArray(parsed.satisfied)
       ? parsed.satisfied.filter((item) => typeof item === "string")
       : [],
@@ -522,22 +522,22 @@ function parseInspectionResult(stdout: string): CodebaseInspection {
 }
 
 export function formatInspectionNotes(inspection: CodebaseInspection): string {
-  const lines: string[] = ["コードベース差分点検:", `概要: ${inspection.summary}`];
+  const lines: string[] = ["Codebase Inspection:", `Summary: ${inspection.summary}`];
 
   if (inspection.satisfied.length > 0) {
-    lines.push("既に満たしている点:", ...inspection.satisfied.map((item) => `- ${item}`));
+    lines.push("Already Satisfied:", ...inspection.satisfied.map((item) => `- ${item}`));
   }
 
   if (inspection.gaps.length > 0) {
-    lines.push("ギャップ:", ...inspection.gaps.map((gap) => `- ${gap}`));
+    lines.push("Gaps:", ...inspection.gaps.map((gap) => `- ${gap}`));
   }
 
   if (inspection.evidence.length > 0) {
-    lines.push("根拠:", ...inspection.evidence.map((item) => `- ${item}`));
+    lines.push("Evidence:", ...inspection.evidence.map((item) => `- ${item}`));
   }
 
   if (inspection.notes.length > 0) {
-    lines.push("補足:", ...inspection.notes.map((note) => `- ${note}`));
+    lines.push("Notes:", ...inspection.notes.map((note) => `- ${note}`));
   }
 
   return lines.join("\n");

@@ -9,13 +9,13 @@ Read requirement definitions and split them into executable tasks.
 2. **Verifiable**: success/failure must be checkable by tests or commands
 3. **Independence**: minimize dependencies between tasks
 4. **Bounded scope**: clearly define files/directories to change
-5. **Respect existing structure**: keep the current monorepo layout and tech stack
+5. **Respect existing structure**: keep the current repository layout and tech stack
 6. **Respect allowed paths**: do not create tasks that require changes outside `allowedPaths`
 7. **Role split**: implementation goes to `worker`, test authoring goes to `tester`
 
 ## Keep Existing Structure and Stack
 
-- Assume the existing directory layout (`apps/`, `packages/`)
+- Assume and respect the existing directory layout (do not hard-code a specific structure)
 - Respect technologies that are already in use in the repository
 - Do not introduce new tools into existing packages (e.g. Prisma)
 - Add new apps only when explicitly required

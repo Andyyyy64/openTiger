@@ -1,5 +1,6 @@
 import { db } from "@openTiger/db";
 import { getRepoMode } from "@openTiger/core";
+import { resolveGitHubAuthMode, resolveGitHubToken } from "@openTiger/vcs";
 import {
   parseRequirementFile,
   parseRequirementContent,
@@ -72,6 +73,23 @@ function isTaskParseFailure(message: string): boolean {
   );
 }
 
+function canUseGitHubIssueLinking(): boolean {
+  if (getRepoMode() !== "git") {
+    return false;
+  }
+  if (!process.env.GITHUB_OWNER || !process.env.GITHUB_REPO) {
+    return false;
+  }
+  try {
+    resolveGitHubToken({
+      authMode: resolveGitHubAuthMode(process.env.GITHUB_AUTH_MODE),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function applyPlannerTaskPolicies(params: {
   result: TaskGenerationResult;
   requirement: Requirement;
@@ -99,7 +117,7 @@ async function applyPlannerTaskPolicies(params: {
   return next;
 }
 
-// 要件ファイルからタスクを生成
+// Generate tasks from requirement file
 export async function planFromRequirement(
   requirementPath: string,
   config: PlannerConfig,
@@ -113,7 +131,7 @@ export async function planFromRequirement(
   console.log(`Dry run: ${config.dryRun}`);
   console.log("=".repeat(60));
 
-  // 要件ファイルを読み込み
+  // Load requirement file
   let requirement: Requirement;
   try {
     requirement = await parseRequirementFile(requirementPath);
@@ -122,7 +140,7 @@ export async function planFromRequirement(
     throw new Error(`Failed to read requirement file: ${message}`);
   }
 
-  // 要件を検証
+  // Validate requirement
   const validationErrors = validateRequirement(requirement);
   if (validationErrors.length > 0) {
     console.error("Validation errors:");
@@ -146,7 +164,7 @@ export async function planFromRequirement(
   requirement = attachExistingTasksToRequirement(requirement, existingTaskHints);
   const checkScriptAvailable = await hasRootCheckScript(config.workdir);
   if (!checkScriptAvailable) {
-    console.log("[Planner] checkスクリプトがないため検証コマンドを調整します。");
+    console.log("[Planner] No check script found; adjusting verification commands.");
   }
   const devCommand = await resolveDevVerificationCommand(config.workdir);
   const checkCommand = await resolveCheckVerificationCommand(config.workdir);
@@ -156,31 +174,31 @@ export async function planFromRequirement(
   let inspectionResult: CodebaseInspection | undefined;
 
   if (!repoUninitialized && !config.useLlm) {
-    console.error("[Planner] 差分点検が必須のため、LLMを無効化できません。");
+    console.error("[Planner] Inspection is required; LLM cannot be disabled.");
     throw new Error("LLM cannot be disabled when inspection is required");
   }
 
   if (repoUninitialized) {
-    // 空リポジトリでも要件に基づいてLLMにタスクを分割させる
+    // Use LLM to plan from scratch even for empty repos
     console.log("\n[Planner] Repository is not initialized. Using LLM to plan from scratch.");
-    // 差分点検は不要だが「すべてが未実装」と明示する
+    // Skip inspection but treat all as unimplemented
     const emptyInspection: CodebaseInspection = {
-      summary: "リポジトリが空のため、要件のすべてが未実装です。",
+      summary: "The repository is empty, so all requirements are currently unimplemented.",
       satisfied: [],
-      gaps: requirement.acceptanceCriteria.map((c) => `未実装: ${c}`),
+      gaps: requirement.acceptanceCriteria.map((c) => `Not implemented: ${c}`),
       evidence: [],
-      notes: ["リポジトリにはファイルが存在しないため、すべてを新規作成する必要があります。"],
+      notes: ["No files exist in the repository, so all required artifacts must be created."],
     };
     inspectionResult = emptyInspection;
     inspectionNotes = formatInspectionNotes(emptyInspection);
     requirement = attachInspectionToRequirement(requirement, inspectionNotes);
   } else {
     if (!config.inspectCodebase) {
-      console.log("[Planner] 差分点検は必須のため有効化します。");
+      console.log("[Planner] Enabling inspection (required).");
     }
     const inspectionTimeout = config.inspectionTimeoutSeconds;
     console.log(`\n[Planner] Inspecting codebase with LLM... (timeout: ${inspectionTimeout}s)`);
-    // LLM応答待ちで無応答に見えるのを避けるため、経過時間を定期的にログに出す
+    // Log elapsed time periodically to avoid appearing unresponsive during LLM wait
     const inspectionStart = Date.now();
     const inspectionHeartbeat = setInterval(() => {
       const elapsed = Math.round((Date.now() - inspectionStart) / 1000);
@@ -198,12 +216,12 @@ export async function planFromRequirement(
       console.log(`[Planner] Inspection finished in ${elapsed}s`);
     }
     if (!inspection) {
-      console.warn("[Planner] 差分点検に失敗したため、点検なしモードで続行します。");
+      console.warn("[Planner] Inspection failed; continuing in no-inspection mode.");
       const inspectionUnavailableNote = [
-        "コードベース差分点検:",
-        "概要: 差分点検が失敗したため未実施",
-        "補足:",
-        "- LLMクォータ/タイムアウト時でもPlannerを停止しないため、簡易計画へフォールバックします。",
+        "Codebase Inspection:",
+        "Summary: Inspection could not be completed.",
+        "Notes:",
+        "- To avoid halting Planner due to LLM quota/timeout, fallback planning was used.",
       ].join("\n");
       inspectionNotes = inspectionUnavailableNote;
       requirement = attachInspectionToRequirement(requirement, inspectionUnavailableNote);
@@ -214,13 +232,13 @@ export async function planFromRequirement(
     }
   }
 
-  // タスクを生成
+  // Generate tasks
   let result: TaskGenerationResult;
 
   const canUseLlmPlanning = config.useLlm && (repoUninitialized || Boolean(inspectionResult));
   if (config.useLlm && !canUseLlmPlanning) {
     console.warn(
-      "[Planner] 差分点検結果がないためLLM計画をスキップし、簡易計画へフォールバックします。",
+      "[Planner] No inspection result; skipping LLM planning and using simple fallback.",
     );
   }
 
@@ -277,7 +295,7 @@ export async function planFromRequirement(
     result = {
       ...result,
       tasks: [...result.tasks, docserTask],
-      warnings: [...result.warnings, "ドキュメントが未整備のためdocserタスクを追加しました。"],
+        warnings: [...result.warnings, "Added docser task for undocumented code."],
     };
   }
 
@@ -292,7 +310,7 @@ export async function planFromRequirement(
     inspectionNotes,
   });
 
-  // 結果を表示
+  // Log results
   console.log(`\n[Generated ${result.tasks.length} tasks]`);
   console.log(`Total estimated time: ${result.totalEstimatedMinutes} minutes`);
 
@@ -314,7 +332,7 @@ export async function planFromRequirement(
     );
   }
 
-  // Dry runの場合は保存しない
+  // Skip save on dry run
   if (config.dryRun) {
     console.log("\n[Dry run mode - tasks not saved]");
     return;
@@ -328,11 +346,7 @@ export async function planFromRequirement(
   });
 
   const dedupeWindowMs = resolvePlanDedupeWindowMs();
-  const holdTasksForIssueLinking =
-    getRepoMode() === "git" &&
-    Boolean(process.env.GITHUB_TOKEN) &&
-    Boolean(process.env.GITHUB_OWNER) &&
-    Boolean(process.env.GITHUB_REPO);
+  const holdTasksForIssueLinking = canUseGitHubIssueLinking();
   if (planSignature?.signature) {
     let skippedReason: "in_progress" | "recent" | null = null;
     let savedIdsInTx: string[] = [];
@@ -350,7 +364,7 @@ export async function planFromRequirement(
         return;
       }
 
-      // DBに保存
+      // Persist to DB
       console.log("\n[Saving tasks to database...]");
       const savedIds = await saveTasks(result.tasks, database, {
         initialStateResolver: (input) => {
@@ -362,7 +376,7 @@ export async function planFromRequirement(
       });
       await resolveDependencies(savedIds, result.tasks, database);
 
-      // Plannerの計画内容をUI側で参照できるように記録する
+      // Record plan for UI reference
       await recordPlannerPlanEvent({
         requirementPath,
         requirement,
@@ -377,16 +391,16 @@ export async function planFromRequirement(
     });
 
     if (skippedReason === "in_progress") {
-      console.log("\n[Planner] 同一署名のPlan保存が進行中のため、保存をスキップします。");
+      console.log("\n[Planner] Plan with same signature is being saved; skipping duplicate.");
       return;
     }
     if (skippedReason === "recent") {
-      console.log("\n[Planner] 同一署名のPlanが直近に作成済みのため、保存をスキップします。");
+      console.log("\n[Planner] Plan with same signature was saved recently; skipping duplicate.");
       return;
     }
     if (savedIdsInTx.length === 0) {
       if (result.tasks.length === 0) {
-        console.log("\n[Planner] 追加タスクは不要です（要件ギャップなし）。");
+        console.log("\n[Planner] No additional tasks needed (no requirement gaps).");
       } else {
         console.warn("\n[Planner] Plan was not saved due to an unknown dedupe condition.");
       }
@@ -411,7 +425,7 @@ export async function planFromRequirement(
     return;
   }
 
-  // DBに保存
+  // Persist to DB
   console.log("\n[Saving tasks to database...]");
   const savedIds = await saveTasks(result.tasks, db, {
     initialStateResolver: (input) => {
@@ -423,7 +437,7 @@ export async function planFromRequirement(
   });
   await resolveDependencies(savedIds, result.tasks);
 
-  // Plannerの計画内容をUI側で参照できるように記録する
+  // Record plan for UI reference
   await recordPlannerPlanEvent({
     requirementPath,
     requirement,
@@ -450,7 +464,7 @@ export async function planFromRequirement(
   console.log("=".repeat(60));
 }
 
-// 要件テキストから直接タスクを生成（API用）
+// Generate tasks directly from requirement text (API use)
 export async function planFromContent(
   content: string,
   config: Partial<PlannerConfig> = {},
@@ -476,24 +490,24 @@ export async function planFromContent(
   let inspectionResult: CodebaseInspection | undefined;
 
   if (!repoUninitialized && !fullConfig.useLlm) {
-    throw new Error("差分点検が必須のため、LLMを無効化できません。");
+    throw new Error("Inspection is required; LLM cannot be disabled.");
   }
 
   if (!repoUninitialized) {
     if (!fullConfig.inspectCodebase) {
-      console.log("[Planner] 差分点検は必須のため有効化します。");
+      console.log("[Planner] Enabling inspection (required).");
     }
     const inspection = await inspectCodebase(requirement, {
       workdir: fullConfig.workdir,
       timeoutSeconds: fullConfig.inspectionTimeoutSeconds,
     });
     if (!inspection) {
-      console.warn("[Planner] 差分点検に失敗したため、点検なしモードで続行します。");
+      console.warn("[Planner] Inspection failed; continuing in no-inspection mode.");
       const inspectionUnavailableNote = [
-        "コードベース差分点検:",
-        "概要: 差分点検が失敗したため未実施",
-        "補足:",
-        "- LLMクォータ/タイムアウト時でもPlannerを停止しないため、簡易計画へフォールバックします。",
+        "Codebase Inspection:",
+        "Summary: Inspection could not be completed.",
+        "Notes:",
+        "- To avoid halting Planner due to LLM quota/timeout, fallback planning was used.",
       ].join("\n");
       inspectionNotes = inspectionUnavailableNote;
       requirement = attachInspectionToRequirement(requirement, inspectionUnavailableNote);
@@ -520,7 +534,7 @@ export async function planFromContent(
   const canUseLlmPlanning = fullConfig.useLlm && (repoUninitialized || Boolean(inspectionResult));
   if (fullConfig.useLlm && !canUseLlmPlanning) {
     console.warn(
-      "[Planner] 差分点検結果がないためLLM計画をスキップし、簡易計画へフォールバックします。",
+      "[Planner] No inspection result; skipping LLM planning and using simple fallback.",
     );
   }
 
@@ -556,7 +570,7 @@ export async function planFromContent(
       result = {
         ...result,
         tasks: [...result.tasks, docserTask],
-        warnings: [...result.warnings, "ドキュメントが未整備のためdocserタスクを追加しました。"],
+        warnings: [...result.warnings, "Added docser task for undocumented code."],
       };
     }
     return applyPlannerTaskPolicies({
