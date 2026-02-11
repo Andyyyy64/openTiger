@@ -39,6 +39,8 @@ export const SettingsPage: React.FC = () => {
   const [repoOwnerInput, setRepoOwnerInput] = useState("");
   const [repoNameInput, setRepoNameInput] = useState("");
   const [repoMessage, setRepoMessage] = useState("");
+  const [saveMessage, setSaveMessage] = useState("");
+  const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
 
   useEffect(() => {
     if (data?.config) {
@@ -142,12 +144,49 @@ export const SettingsPage: React.FC = () => {
   }, [selectedExecutor]);
 
   const handleSave = () => {
+    setSaveMessage("");
+    setSaveWarnings([]);
     mutation.mutate(values);
   };
 
   const updateValue = (key: string, value: string) => {
     setValues((prev) => ({ ...prev, [key]: value }));
   };
+
+  useEffect(() => {
+    if (!mutation.isSuccess || !mutation.data) {
+      return;
+    }
+    const warnings = mutation.data.warnings ?? [];
+    setSaveWarnings(warnings);
+    if (warnings.length > 0) {
+      setSaveMessage("> CONFIG_SAVED_WITH_WARNINGS");
+      return;
+    }
+    setSaveMessage("> CONFIG_SAVED");
+  }, [mutation.data, mutation.isSuccess]);
+
+  useEffect(() => {
+    if (!mutation.isError) {
+      return;
+    }
+    const message = mutation.error instanceof Error ? mutation.error.message : "Failed to save";
+    setSaveWarnings([]);
+    setSaveMessage(`> CONFIG_ERR: ${message}`);
+  }, [mutation.error, mutation.isError]);
+
+  const fieldWarnings = useMemo<Partial<Record<string, string>>>(() => {
+    if (saveWarnings.length === 0) {
+      return {};
+    }
+    const warnings: Partial<Record<string, string>> = {};
+    for (const warning of saveWarnings) {
+      if (warning.toLowerCase().includes("replan requirement file")) {
+        warnings.REPLAN_REQUIREMENT_PATH = warning;
+      }
+    }
+    return warnings;
+  }, [saveWarnings]);
 
   const applySelectedRepo = () => {
     if (!selectedRepo) return;
@@ -212,6 +251,26 @@ export const SettingsPage: React.FC = () => {
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6 text-term-fg">
       <SettingsHeader isSaving={mutation.isPending} onSave={handleSave} />
+      {saveMessage && (
+        <div
+          className={`font-mono text-xs ${
+            mutation.isError
+              ? "text-red-500"
+              : saveWarnings.length > 0
+                ? "text-yellow-400"
+                : "text-green-400"
+          }`}
+        >
+          {saveMessage}
+        </div>
+      )}
+      {saveWarnings.length > 0 && (
+        <div className="font-mono text-xs text-yellow-400 space-y-1">
+          {saveWarnings.map((warning) => (
+            <div key={warning}>&gt; {warning}</div>
+          ))}
+        </div>
+      )}
       {/* システム操作パネル */}
       <SystemControlPanel cleanup={cleanupPanel} stopAll={stopAllPanel} />
 
@@ -339,7 +398,12 @@ export const SettingsPage: React.FC = () => {
       )}
       {error && <div className="text-center text-red-500">&gt; CONFIG LOAD ERROR</div>}
 
-      <SettingsConfigSections grouped={grouped} values={values} onChange={updateValue} />
+      <SettingsConfigSections
+        grouped={grouped}
+        values={values}
+        onChange={updateValue}
+        fieldWarnings={fieldWarnings}
+      />
     </div>
   );
 };

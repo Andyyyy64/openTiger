@@ -61,8 +61,21 @@ export const REQUIRED_SETTING_KEYS = new Set<string>([
   "GITHUB_TOKEN",
   "GITHUB_OWNER",
   "REPO_URL",
-  "REPLAN_REQUIREMENT_PATH",
 ]);
+
+export function isSettingRequired(
+  key: string,
+  values: Record<string, string> | undefined,
+): boolean {
+  if (REQUIRED_SETTING_KEYS.has(key)) {
+    return true;
+  }
+  const autoReplanEnabled = (values?.AUTO_REPLAN ?? "").trim().toLowerCase() === "true";
+  if (!autoReplanEnabled) {
+    return false;
+  }
+  return key === "REPLAN_REQUIREMENT_PATH" || key === "REPLAN_WORKDIR";
+}
 
 type FieldHelpLink = {
   label: string;
