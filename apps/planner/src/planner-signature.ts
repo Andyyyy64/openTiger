@@ -6,6 +6,17 @@ import { db } from "@openTiger/db";
 import { events } from "@openTiger/db/schema";
 import { eq, desc, and, sql, gte } from "drizzle-orm";
 
+const UNBORN_HEAD_SIGNATURE = "__UNBORN_HEAD__";
+
+function isUnbornHeadError(stderr: string): boolean {
+  const normalized = stderr.toLowerCase();
+  return (
+    normalized.includes("ambiguous argument 'head'") ||
+    normalized.includes("unknown revision or path not in the working tree") ||
+    normalized.includes("needed a single revision")
+  );
+}
+
 async function computeRequirementHash(requirementPath: string): Promise<string | undefined> {
   try {
     const content = await readFile(requirementPath, "utf-8");
@@ -39,13 +50,27 @@ async function resolveRepoHeadSha(workdir: string): Promise<string | undefined> 
 
     child.on("close", (code) => {
       if (code !== 0) {
+        if (isUnbornHeadError(stderr)) {
+          console.warn(
+            "[Planner] Repository has no commits yet (unborn HEAD). Using placeholder for plan signature.",
+          );
+          resolveResult(UNBORN_HEAD_SIGNATURE);
+          return;
+        }
         console.warn("[Planner] git rev-parse failed:", stderr.trim());
         resolveResult(undefined);
         return;
       }
 
       const sha = stdout.trim().split(/\s+/)[0];
-      resolveResult(sha || undefined);
+      if (!sha) {
+        console.warn(
+          "[Planner] git rev-parse returned empty HEAD; treating as unborn repository for signature.",
+        );
+        resolveResult(UNBORN_HEAD_SIGNATURE);
+        return;
+      }
+      resolveResult(sha);
     });
 
     child.on("error", (error) => {
