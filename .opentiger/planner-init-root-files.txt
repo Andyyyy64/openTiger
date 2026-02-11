@@ -1,0 +1,8 @@
+# Extra root file hints for detecting initialization tasks.
+# One file path per line.
+#
+# Examples:
+# Makefile
+# Cargo.toml
+# go.mod
+

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { db } from "@openTiger/db";
 import { tasks } from "@openTiger/db/schema";
 import { and, eq, inArray } from "drizzle-orm";
-import { DOCSER_ALLOWED_PATHS } from "./task-policies";
+import { getDocserAllowedPaths } from "./task-policies";
 import { pathIsDirectory, pathIsFile } from "./planner-utils";
 import type { Requirement } from "./parser";
 import type { PlannedTaskInput } from "./strategies/index";
@@ -71,7 +71,7 @@ export function buildDocserTaskForGap(params: {
       files: ["docs/README.md", "README.md", "docs/**"],
       notes,
     },
-    allowedPaths: DOCSER_ALLOWED_PATHS,
+    allowedPaths: getDocserAllowedPaths(),
     commands,
     priority: 5,
     riskLevel: "low",

@@ -1,10 +1,45 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import type { Requirement } from "./parser";
 import type { PlannedTaskInput, TaskGenerationResult } from "./strategies/index";
 
-// Root config files allowed for modification by initialization tasks
-export const INIT_ALLOWED_PATHS = [".gitignore", "README.md", "docs/**", "scripts/**"];
+function parseListEnv(name: string): string[] {
+  return (process.env[name] ?? "")
+    .split(/[,\n]/)
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
 
-const INIT_ROOT_FILES = [
+function resolvePolicyList(defaults: string[], fullOverrideEnv: string, extraEnv: string): string[] {
+  const override = parseListEnv(fullOverrideEnv);
+  const base = override.length > 0 ? override : defaults;
+  const extra = parseListEnv(extraEnv);
+  return Array.from(new Set([...base, ...extra]));
+}
+
+// Root config files allowed for modification by initialization tasks (env-overridable)
+const DEFAULT_INIT_ALLOWED_PATHS = [
+  ".gitignore",
+  "README.md",
+  "Makefile",
+  "docs/**",
+  "scripts/**",
+  // Common source roots required to bootstrap non-Node projects (kernel/embedded/OS).
+  "arch/**",
+  "boot/**",
+  "kernel/**",
+  "include/**",
+  "lib/**",
+  "src/**",
+  "tests/**",
+];
+export const INIT_ALLOWED_PATHS = resolvePolicyList(
+  DEFAULT_INIT_ALLOWED_PATHS,
+  "PLANNER_INIT_ALLOWED_PATHS",
+  "PLANNER_EXTRA_INIT_ALLOWED_PATHS",
+);
+
+const DEFAULT_INIT_ROOT_FILES = [
   "Makefile",
   "package.json",
   "pnpm-workspace.yaml",
@@ -22,23 +57,124 @@ const INIT_ROOT_FILES = [
   "go.mod",
   "pyproject.toml",
 ];
+const INIT_ROOT_FILES = resolvePolicyList(
+  DEFAULT_INIT_ROOT_FILES,
+  "PLANNER_INIT_ROOT_FILES",
+  "PLANNER_EXTRA_INIT_ROOT_FILES",
+);
 
-const LOCKFILE_PATHS = [
+const DEFAULT_LOCKFILE_PATHS = [
   "pnpm-lock.yaml",
   "package-lock.json",
   "yarn.lock",
   "bun.lock",
   "bun.lockb",
 ];
+const LOCKFILE_PATHS = resolvePolicyList(
+  DEFAULT_LOCKFILE_PATHS,
+  "PLANNER_LOCKFILE_PATHS",
+  "PLANNER_EXTRA_LOCKFILE_PATHS",
+);
 
-// docser focuses on documentation but may need minor root changes (e.g. package.json scripts, .env.example)
-export const DOCSER_ALLOWED_PATHS = [
+// docser focuses on documentation but may need minor root changes (env-overridable)
+const DEFAULT_DOCSER_ALLOWED_PATHS = [
   "docs/**",
   "ops/**",
   "README.md",
   "package.json",
   ".env.example",
 ];
+export const DOCSER_ALLOWED_PATHS = resolvePolicyList(
+  DEFAULT_DOCSER_ALLOWED_PATHS,
+  "PLANNER_DOCSER_ALLOWED_PATHS",
+  "PLANNER_EXTRA_DOCSER_ALLOWED_PATHS",
+);
+
+type RepoTaskPolicyExtras = {
+  initAllowedPaths: string[];
+  initRootFiles: string[];
+  lockfilePaths: string[];
+  docserAllowedPaths: string[];
+};
+
+let loadedPolicyWorkdir: string | null = null;
+let repoTaskPolicyExtras: RepoTaskPolicyExtras = {
+  initAllowedPaths: [],
+  initRootFiles: [],
+  lockfilePaths: [],
+  docserAllowedPaths: [],
+};
+
+async function loadPolicyListFromTextFile(path: string): Promise<string[]> {
+  try {
+    const content = await readFile(path, "utf-8");
+    return content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith("#"));
+  } catch {
+    return [];
+  }
+}
+
+function mergeUnique(base: string[], extras: string[]): string[] {
+  return Array.from(new Set([...base, ...extras]));
+}
+
+function getInitAllowedPaths(): string[] {
+  return mergeUnique(INIT_ALLOWED_PATHS, repoTaskPolicyExtras.initAllowedPaths);
+}
+
+function getInitRootFiles(): string[] {
+  return mergeUnique(INIT_ROOT_FILES, repoTaskPolicyExtras.initRootFiles);
+}
+
+function getLockfilePaths(): string[] {
+  return mergeUnique(LOCKFILE_PATHS, repoTaskPolicyExtras.lockfilePaths);
+}
+
+export function getDocserAllowedPaths(): string[] {
+  return mergeUnique(DOCSER_ALLOWED_PATHS, repoTaskPolicyExtras.docserAllowedPaths);
+}
+
+export async function loadTaskPolicyOverridesFromRepo(workdir: string): Promise<void> {
+  const normalizedWorkdir = workdir.trim();
+  if (!normalizedWorkdir) {
+    loadedPolicyWorkdir = null;
+    repoTaskPolicyExtras = {
+      initAllowedPaths: [],
+      initRootFiles: [],
+      lockfilePaths: [],
+      docserAllowedPaths: [],
+    };
+    return;
+  }
+  if (loadedPolicyWorkdir === normalizedWorkdir) {
+    return;
+  }
+
+  const policyRoot = join(normalizedWorkdir, ".opentiger");
+  const [initAllowedPaths, initRootFiles, lockfilePaths, docserAllowedPaths] = await Promise.all([
+    loadPolicyListFromTextFile(join(policyRoot, "planner-init-allowed-paths.txt")),
+    loadPolicyListFromTextFile(join(policyRoot, "planner-init-root-files.txt")),
+    loadPolicyListFromTextFile(join(policyRoot, "planner-lockfile-paths.txt")),
+    loadPolicyListFromTextFile(join(policyRoot, "planner-docser-allowed-paths.txt")),
+  ]);
+
+  repoTaskPolicyExtras = {
+    initAllowedPaths,
+    initRootFiles,
+    lockfilePaths,
+    docserAllowedPaths,
+  };
+  loadedPolicyWorkdir = normalizedWorkdir;
+
+  const extrasCount =
+    initAllowedPaths.length + initRootFiles.length + lockfilePaths.length + docserAllowedPaths.length;
+  if (extrasCount > 0) {
+    console.log(`[Planner] Loaded ${extrasCount} task policy override entries from .opentiger/*.txt`);
+  }
+}
 
 function mergeAllowedPaths(current: string[], extra: string[]): string[] {
   const seen = new Set(current);
@@ -68,7 +204,7 @@ function isInitializationTask(task: PlannedTaskInput): boolean {
   }
 
   const files = task.context?.files ?? [];
-  if (files.some((file) => INIT_ROOT_FILES.includes(file))) {
+  if (files.some((file) => getInitRootFiles().includes(file))) {
     return true;
   }
   return false;
@@ -100,14 +236,14 @@ export function normalizeGeneratedTasks(result: TaskGenerationResult): TaskGener
     if (isInitializationTask(task)) {
       normalized = {
         ...normalized,
-        allowedPaths: mergeAllowedPaths(task.allowedPaths, INIT_ALLOWED_PATHS),
+        allowedPaths: mergeAllowedPaths(task.allowedPaths, getInitAllowedPaths()),
       };
     }
 
     // Allow lockfile changes for all tasks since AI may add dependencies
     normalized = {
       ...normalized,
-      allowedPaths: mergeAllowedPaths(normalized.allowedPaths, LOCKFILE_PATHS),
+      allowedPaths: mergeAllowedPaths(normalized.allowedPaths, getLockfilePaths()),
     };
 
     return normalized;
@@ -262,7 +398,7 @@ function requiresLockfile(commands: string[]): boolean {
 }
 
 export function generateInitializationTasks(requirement: Requirement): TaskGenerationResult {
-  const allowedPaths = mergeAllowedPaths(requirement.allowedPaths, INIT_ALLOWED_PATHS);
+  const allowedPaths = mergeAllowedPaths(requirement.allowedPaths, getInitAllowedPaths());
   const bootstrapTargets =
     requirement.allowedPaths.length > 0 ? requirement.allowedPaths.slice(0, 8) : ["README.md"];
   const task: PlannedTaskInput = {
@@ -479,5 +615,5 @@ export function ensureInitializationTaskForUninitializedRepo(
 }
 
 export function needsLockfileAllowance(commands: string[], allowedPaths: string[]): boolean {
-  return requiresLockfile(commands) && !allowedPaths.some((path) => LOCKFILE_PATHS.includes(path));
+  return requiresLockfile(commands) && !allowedPaths.some((path) => getLockfilePaths().includes(path));
 }

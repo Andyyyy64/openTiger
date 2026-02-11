@@ -21,6 +21,7 @@ import {
   applyTesterCommandPolicy,
   applyDevCommandPolicy,
   generateInitializationTasks,
+  loadTaskPolicyOverridesFromRepo,
   sanitizeTaskDependencyIndexes,
   reduceRedundantDependencyIndexes,
   ensureInitializationTaskForUninitializedRepo,
@@ -149,6 +150,8 @@ export async function planFromRequirement(
     }
     throw new Error("Validation failed");
   }
+
+  await loadTaskPolicyOverridesFromRepo(config.workdir);
 
   console.log("\n[Parsed Requirement]");
   console.log(`Goal: ${requirement.goal}`);
@@ -476,6 +479,8 @@ export async function planFromContent(
   if (validationErrors.length > 0) {
     throw new Error(`Validation failed: ${validationErrors.join(", ")}`);
   }
+
+  await loadTaskPolicyOverridesFromRepo(fullConfig.workdir);
 
   const judgeFeedback = await loadJudgeFeedback();
   requirement = attachJudgeFeedbackToRequirement(requirement, judgeFeedback);

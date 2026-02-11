@@ -1,0 +1,9 @@
+# Extra allowed paths for initialization tasks.
+# One glob/path per line.
+# These entries are appended to planner defaults and env-based settings.
+#
+# Examples:
+# arch/riscv/**
+# kernel/**
+# include/**
+

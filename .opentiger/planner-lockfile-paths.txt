@@ -1,0 +1,8 @@
+# Extra lockfile paths allowed for dependency install tasks.
+# One file path per line.
+#
+# Examples:
+# uv.lock
+# poetry.lock
+# Cargo.lock
+
