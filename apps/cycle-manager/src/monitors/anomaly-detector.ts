@@ -31,6 +31,28 @@ const defaultAnomalyConfig: AnomalyConfig = {
 
 // 検知された異常のリスト
 let detectedAnomalies: AnomalyAlert[] = [];
+const anomalyLastReportedAt = new Map<string, number>();
+const ANOMALY_REPEAT_COOLDOWN_MS = (() => {
+  const raw = Number.parseInt(process.env.ANOMALY_REPEAT_COOLDOWN_MS ?? "300000", 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 5 * 60 * 1000;
+})();
+const MAX_ANOMALY_SIGNATURES = 200;
+
+function buildAnomalySignature(alert: AnomalyAlert): string {
+  const details = alert.details ? JSON.stringify(alert.details) : "";
+  return `${alert.type}:${alert.severity}:${details.slice(0, 200)}`;
+}
+
+function rememberAnomalySignature(signature: string, nowMs: number): void {
+  anomalyLastReportedAt.set(signature, nowMs);
+  if (anomalyLastReportedAt.size <= MAX_ANOMALY_SIGNATURES) {
+    return;
+  }
+  const oldest = anomalyLastReportedAt.keys().next().value;
+  if (oldest) {
+    anomalyLastReportedAt.delete(oldest);
+  }
+}
 
 // 異常リストを取得
 export function getDetectedAnomalies(): AnomalyAlert[] {
@@ -43,7 +65,14 @@ export function clearAnomalies(): void {
 }
 
 // 異常を記録
-async function reportAnomaly(alert: AnomalyAlert): Promise<void> {
+async function reportAnomaly(alert: AnomalyAlert): Promise<boolean> {
+  const signature = buildAnomalySignature(alert);
+  const nowMs = Date.now();
+  const lastReportedAt = anomalyLastReportedAt.get(signature) ?? 0;
+  if (nowMs - lastReportedAt < ANOMALY_REPEAT_COOLDOWN_MS) {
+    return false;
+  }
+  rememberAnomalySignature(signature, nowMs);
   detectedAnomalies.push(alert);
 
   await recordEvent({
@@ -59,6 +88,7 @@ async function reportAnomaly(alert: AnomalyAlert): Promise<void> {
 
   const prefix = alert.severity === "critical" ? "[CRITICAL]" : "[WARNING]";
   console.warn(`${prefix} ${alert.message}`);
+  return true;
 }
 
 // 失敗率チェック
@@ -103,8 +133,8 @@ export async function checkFailureRate(
       details: { failureRate, failedCount, totalCount },
       timestamp: new Date(),
     };
-    await reportAnomaly(alert);
-    return alert;
+    const reported = await reportAnomaly(alert);
+    return reported ? alert : null;
   }
 
   if (failureRate >= config.failureRateWarning) {
@@ -115,8 +145,8 @@ export async function checkFailureRate(
       details: { failureRate, failedCount, totalCount },
       timestamp: new Date(),
     };
-    await reportAnomaly(alert);
-    return alert;
+    const reported = await reportAnomaly(alert);
+    return reported ? alert : null;
   }
 
   return null;
@@ -159,8 +189,8 @@ export async function checkCostSpike(
       },
       timestamp: new Date(),
     };
-    await reportAnomaly(alert);
-    return alert;
+    const reported = await reportAnomaly(alert);
+    return reported ? alert : null;
   }
 
   return null;
@@ -197,8 +227,10 @@ export async function checkStuckTasks(
       },
       timestamp: new Date(),
     };
-    await reportAnomaly(alert);
-    alerts.push(alert);
+    const reported = await reportAnomaly(alert);
+    if (reported) {
+      alerts.push(alert);
+    }
   }
 
   return alerts;
@@ -234,8 +266,8 @@ export async function checkNoProgress(
       },
       timestamp: new Date(),
     };
-    await reportAnomaly(alert);
-    return alert;
+    const reported = await reportAnomaly(alert);
+    return reported ? alert : null;
   }
 
   return null;
@@ -274,8 +306,10 @@ export async function checkAgentTimeouts(
       },
       timestamp: new Date(),
     };
-    await reportAnomaly(alert);
-    alerts.push(alert);
+    const reported = await reportAnomaly(alert);
+    if (reported) {
+      alerts.push(alert);
+    }
   }
 
   return alerts;

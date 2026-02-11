@@ -38,6 +38,15 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
     };
   }
 
+  if (/err_pnpm_no_script|missing script/.test(message)) {
+    return {
+      category: "setup",
+      retryable: false,
+      reason: "verification_command_missing_script",
+      blockReason: "needs_rework",
+    };
+  }
+
   if (
     /package\.json|pnpm-workspace\.yaml|cannot find module|enoent|command not found|repository not found|authentication failed|permission denied|no commits between|no history in common/.test(
       message,

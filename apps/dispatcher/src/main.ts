@@ -35,6 +35,24 @@ interface DispatcherConfig {
   localWorktreeRoot?: string;
 }
 
+const DEFAULT_MAX_POLL_INTERVAL_MS = 30_000;
+const DEFAULT_NO_IDLE_LOG_INTERVAL_MS = 60_000;
+const NO_IDLE_LOG_INTERVAL_MS = (() => {
+  const raw = Number.parseInt(
+    process.env.DISPATCH_NO_IDLE_LOG_INTERVAL_MS ?? String(DEFAULT_NO_IDLE_LOG_INTERVAL_MS),
+    10,
+  );
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_NO_IDLE_LOG_INTERVAL_MS;
+})();
+const MAX_POLL_INTERVAL_MS = (() => {
+  const raw = Number.parseInt(
+    process.env.DISPATCH_MAX_POLL_INTERVAL_MS ?? String(DEFAULT_MAX_POLL_INTERVAL_MS),
+    10,
+  );
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_POLL_INTERVAL_MS;
+})();
+const noIdleLogState = new Map<string, { lastLoggedAt: number; suppressed: number }>();
+
 function parseMaxConcurrentWorkers(value: string | undefined): number {
   const parsed = Number.parseInt(value ?? "", 10);
   if (!Number.isFinite(parsed)) {
@@ -44,6 +62,30 @@ function parseMaxConcurrentWorkers(value: string | undefined): number {
     return Number.POSITIVE_INFINITY;
   }
   return parsed;
+}
+
+function computeBackoffDelayMs(baseDelayMs: number, idleLoopStreak: number): number {
+  if (idleLoopStreak <= 0) {
+    return baseDelayMs;
+  }
+  const exponent = Math.min(idleLoopStreak, 6);
+  const delay = baseDelayMs * 2 ** exponent;
+  return Math.min(delay, Math.max(baseDelayMs, MAX_POLL_INTERVAL_MS));
+}
+
+function logNoIdleAgent(requiredRole: string): void {
+  const now = Date.now();
+  const state = noIdleLogState.get(requiredRole) ?? { lastLoggedAt: 0, suppressed: 0 };
+  if (now - state.lastLoggedAt < NO_IDLE_LOG_INTERVAL_MS) {
+    state.suppressed += 1;
+    noIdleLogState.set(requiredRole, state);
+    return;
+  }
+
+  const suffix =
+    state.suppressed > 0 ? ` (${state.suppressed} similar events suppressed)` : "";
+  console.log(`[Dispatch] No idle ${requiredRole} agent available${suffix}`);
+  noIdleLogState.set(requiredRole, { lastLoggedAt: now, suppressed: 0 });
 }
 
 // デフォルト設定
@@ -227,8 +269,10 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
   console.log(`Base branch: ${config.baseBranch}`);
   console.log("=".repeat(60));
 
+  let idleLoopStreak = 0;
   while (isRunning) {
     try {
+      let dispatchedThisLoop = 0;
       // 期限切れリースをクリーンアップ
       const expiredCount = await cleanupExpiredLeases();
       if (expiredCount > 0) {
@@ -302,14 +346,15 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
             const selectedAgent = availableAgentsList[0];
 
             if (!selectedAgent) {
-              console.log(
-                `[Dispatch] No idle ${requiredRole} agent for task ${task.id}. Skipping.`,
-              );
+              logNoIdleAgent(requiredRole);
               continue;
             }
 
             // ディスパッチ
-            await dispatchTask(task, selectedAgent, requiredRole, config);
+            const dispatched = await dispatchTask(task, selectedAgent, requiredRole, config);
+            if (dispatched) {
+              dispatchedThisLoop += 1;
+            }
           }
         }
       }
@@ -335,12 +380,20 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
             `Queue: ${aggregatedStats.waiting} waiting, ${aggregatedStats.active} active`,
         );
       }
+
+      if (dispatchedThisLoop > 0) {
+        idleLoopStreak = 0;
+      } else {
+        idleLoopStreak += 1;
+      }
     } catch (error) {
       console.error("[Dispatch] Error in dispatch loop:", error);
+      idleLoopStreak += 1;
     }
 
     // 次のポーリングまで待機
-    await new Promise((resolve) => setTimeout(resolve, config.pollIntervalMs));
+    const delayMs = computeBackoffDelayMs(config.pollIntervalMs, idleLoopStreak);
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 }
 

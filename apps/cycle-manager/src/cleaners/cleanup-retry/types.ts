@@ -22,6 +22,15 @@ export type NormalizedContext = {
   files?: string[];
   specs?: string;
   notes?: string;
-  pr?: { number: number; url?: string; title?: string };
+  pr?: {
+    number: number;
+    url?: string;
+    title?: string;
+    sourceTaskId?: string;
+    sourceRunId?: string;
+    headRef?: string;
+    headSha?: string;
+    baseRef?: string;
+  };
   issue?: { number: number; url?: string; title?: string };
 };

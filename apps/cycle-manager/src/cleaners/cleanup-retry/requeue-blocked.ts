@@ -1,7 +1,7 @@
 import { db } from "@openTiger/db";
 import { tasks, runs } from "@openTiger/db/schema";
 import { computeQuotaBackoff } from "@openTiger/core";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { recordEvent } from "../../monitors/event-logger";
 import { hasPendingJudgeRun, restoreLatestJudgeRun } from "./judge-recovery";
 import { isPrReviewTask, normalizeBlockReason, normalizeContext } from "./task-context";
@@ -11,6 +11,8 @@ const DEFAULT_QUOTA_MAX_DELAY_MS = 30 * 60 * 1000;
 const DEFAULT_QUOTA_BACKOFF_FACTOR = 2;
 const DEFAULT_QUOTA_JITTER_RATIO = 0.2;
 const VERIFY_REWORK_MARKER_PREFIX = "[verify-rework-json]";
+const CONFLICT_AUTOFIX_PREFIX = "[AutoFix-Conflict] PR #";
+const AUTOFIX_PREFIX = "[AutoFix] PR #";
 
 type VerifyReworkMeta = {
   failedCommand?: string;
@@ -89,6 +91,72 @@ function resolveQuotaBackoffConfig(fallbackBaseDelayMs: number): {
     factor,
     jitterRatio,
   };
+}
+
+function escapeSqlLikePattern(input: string): string {
+  return input.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
+function extractPrNumberForTask(task: { title: string; goal: string; context: unknown }): number | null {
+  const context = normalizeContext(task.context);
+  if (typeof context.pr?.number === "number" && Number.isInteger(context.pr.number)) {
+    return context.pr.number;
+  }
+
+  const goalMatch = task.goal.match(/PR\s*#(\d+)/i);
+  if (goalMatch?.[1]) {
+    const parsed = Number.parseInt(goalMatch[1], 10);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  const titleMatch = task.title.match(/Review\s*#(\d+)/i);
+  if (titleMatch?.[1]) {
+    const parsed = Number.parseInt(titleMatch[1], 10);
+    if (Number.isInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function isConflictAutoFixTaskTitle(title: string): boolean {
+  return title.toLowerCase().includes("[autofix-conflict]");
+}
+
+async function hasActiveAutoFixTaskForPr(prNumber: number, currentTaskId: string): Promise<boolean> {
+  const statusFilter = inArray(tasks.status, ["queued", "running", "blocked"]);
+  const conflictPattern = `${escapeSqlLikePattern(`${CONFLICT_AUTOFIX_PREFIX}${prNumber}`)}%`;
+  const [activeConflict] = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        sql`${tasks.title} like ${conflictPattern} escape '\\'`,
+        statusFilter,
+        ne(tasks.id, currentTaskId),
+      ),
+    )
+    .limit(1);
+  if (activeConflict?.id) {
+    return true;
+  }
+
+  const autoFixPattern = `${escapeSqlLikePattern(`${AUTOFIX_PREFIX}${prNumber}`)}%`;
+  const [activeAutoFix] = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        sql`${tasks.title} like ${autoFixPattern} escape '\\'`,
+        statusFilter,
+        ne(tasks.id, currentTaskId),
+      ),
+    )
+    .limit(1);
+  return Boolean(activeAutoFix?.id);
 }
 
 // blockedタスクをクールダウン後に再キュー（リトライ回数制限付き）
@@ -179,6 +247,11 @@ export async function requeueBlockedTasksWithCooldown(
           context: task.context,
         })
       ) {
+        const prNumber = extractPrNumberForTask(task);
+        if (prNumber && (await hasActiveAutoFixTaskForPr(prNumber, task.id))) {
+          continue;
+        }
+
         const hasPendingRun = await hasPendingJudgeRun(task.id);
         let recoveredRunId: string | null = null;
         if (!hasPendingRun) {
@@ -214,6 +287,73 @@ export async function requeueBlockedTasksWithCooldown(
 
       // needs_rework は親タスクをfailed化し、分割した再作業タスクを自動生成する
       const context = normalizeContext(task.context);
+      if (isConflictAutoFixTaskTitle(task.title)) {
+        const sourceTaskId =
+          typeof context.pr?.sourceTaskId === "string" && context.pr.sourceTaskId.trim().length > 0
+            ? context.pr.sourceTaskId
+            : undefined;
+
+        let sourceTaskRouted = false;
+        if (sourceTaskId) {
+          const [sourceTask] = await db
+            .select({
+              id: tasks.id,
+              title: tasks.title,
+              goal: tasks.goal,
+              context: tasks.context,
+              retryCount: tasks.retryCount,
+            })
+            .from(tasks)
+            .where(eq(tasks.id, sourceTaskId))
+            .limit(1);
+
+          if (
+            sourceTask &&
+            isPrReviewTask({
+              title: sourceTask.title,
+              goal: sourceTask.goal,
+              context: sourceTask.context,
+            })
+          ) {
+            await db
+              .update(tasks)
+              .set({
+                status: "blocked",
+                blockReason: "awaiting_judge",
+                retryCount: (sourceTask.retryCount ?? 0) + 1,
+                updatedAt: new Date(),
+              })
+              .where(eq(tasks.id, sourceTask.id));
+            sourceTaskRouted = true;
+          }
+        }
+
+        await db
+          .update(tasks)
+          .set({
+            status: "cancelled",
+            blockReason: null,
+            retryCount: nextRetryCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
+
+        await recordEvent({
+          type: "task.recovery_escalated",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: "conflict_autofix_needs_rework_suppressed",
+            sourceTaskId,
+            sourceTaskRouted,
+            retryCount: nextRetryCount,
+          },
+        });
+        console.log(`[Cleanup] Suppressed conflict autofix rework chain for task ${task.id}`);
+        handled++;
+        continue;
+      }
+
       const verifyReworkMeta = extractVerifyReworkMeta(context.notes);
       const baseNotes = stripVerifyReworkMarkers(context.notes);
       const verifySummaryLines =

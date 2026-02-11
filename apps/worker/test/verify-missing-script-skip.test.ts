@@ -21,6 +21,7 @@ describe("shouldSkipExplicitCommandFailure", () => {
       output: missingScriptOutput,
       hasRemainingCommands: true,
       isDocOnlyChange: false,
+      isNoOpChange: false,
     });
 
     expect(shouldSkip).toBe(true);
@@ -33,6 +34,7 @@ describe("shouldSkipExplicitCommandFailure", () => {
       output: missingScriptOutput,
       hasRemainingCommands: false,
       isDocOnlyChange: true,
+      isNoOpChange: false,
     });
 
     expect(shouldSkip).toBe(true);
@@ -45,6 +47,7 @@ describe("shouldSkipExplicitCommandFailure", () => {
       output: missingScriptOutput,
       hasRemainingCommands: false,
       isDocOnlyChange: false,
+      isNoOpChange: false,
     });
 
     expect(shouldSkip).toBe(false);
@@ -58,8 +61,22 @@ describe("shouldSkipExplicitCommandFailure", () => {
       output: missingScriptOutput,
       hasRemainingCommands: true,
       isDocOnlyChange: true,
+      isNoOpChange: false,
     });
 
     expect(shouldSkip).toBe(false);
+  });
+
+  it("skips no-op explicit missing script even when last command", () => {
+    const shouldSkip = shouldSkipExplicitCommandFailure({
+      source: "explicit",
+      command: "npm run dev",
+      output: missingScriptOutput,
+      hasRemainingCommands: false,
+      isDocOnlyChange: false,
+      isNoOpChange: true,
+    });
+
+    expect(shouldSkip).toBe(true);
   });
 });

@@ -31,6 +31,18 @@ import {
 import { syncIssueBacklogViaPreflight } from "./backlog-preflight";
 
 const CYCLE_ENDING_CRITICAL_ANOMALIES = new Set(["stuck_task", "cost_spike"]);
+const CRITICAL_ANOMALY_RESTART_COOLDOWN_MS = (() => {
+  const raw = Number.parseInt(
+    process.env.CYCLE_CRITICAL_ANOMALY_RESTART_COOLDOWN_MS ?? "300000",
+    10,
+  );
+  return Number.isFinite(raw) && raw > 0 ? raw : 5 * 60 * 1000;
+})();
+const CYCLE_MIN_AGE_FOR_CRITICAL_RESTART_MS = (() => {
+  const raw = Number.parseInt(process.env.CYCLE_MIN_AGE_FOR_CRITICAL_RESTART_MS ?? "120000", 10);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 2 * 60 * 1000;
+})();
+const lastCriticalRestartByType = new Map<string, number>();
 
 function hasTaskBacklog(state: Awaited<ReturnType<typeof captureSystemState>>): boolean {
   return (
@@ -39,6 +51,30 @@ function hasTaskBacklog(state: Awaited<ReturnType<typeof captureSystemState>>): 
     state.tasks.blocked > 0 ||
     state.tasks.failed > 0
   );
+}
+
+function getCycleAgeMs(startedAt: Date | null): number {
+  if (!startedAt) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return Math.max(0, Date.now() - startedAt.getTime());
+}
+
+function selectRestartableCriticalAnomalies(
+  anomalies: Array<{ type: string; severity: "warning" | "critical" }>,
+): Array<{ type: string; severity: "warning" | "critical" }> {
+  const nowMs = Date.now();
+  return anomalies.filter((anomaly) => {
+    const lastRestartAt = lastCriticalRestartByType.get(anomaly.type) ?? 0;
+    return nowMs - lastRestartAt >= CRITICAL_ANOMALY_RESTART_COOLDOWN_MS;
+  });
+}
+
+function markCriticalRestarted(anomalies: Array<{ type: string }>): void {
+  const nowMs = Date.now();
+  for (const anomaly of anomalies) {
+    lastCriticalRestartByType.set(anomaly.type, nowMs);
+  }
 }
 
 // 監視ループ
@@ -91,10 +127,23 @@ export async function runMonitorLoop(config: CycleManagerConfig): Promise<void> 
         CYCLE_ENDING_CRITICAL_ANOMALIES.has(anomaly.type),
       );
       if (endingCriticalAnomalies.length > 0) {
-        console.log("[CycleManager] Critical anomalies detected, ending cycle");
-        await endCurrentCycle("critical_anomaly");
-        await performFullCleanup(true);
-        await startNewCycle();
+        const cycleAgeMs = getCycleAgeMs(state.startedAt);
+        const restartableAnomalies = selectRestartableCriticalAnomalies(endingCriticalAnomalies);
+        if (cycleAgeMs < CYCLE_MIN_AGE_FOR_CRITICAL_RESTART_MS) {
+          console.warn(
+            `[CycleManager] Critical anomaly restart deferred: cycle age ${cycleAgeMs}ms < min ${CYCLE_MIN_AGE_FOR_CRITICAL_RESTART_MS}ms`,
+          );
+        } else if (restartableAnomalies.length > 0) {
+          console.log("[CycleManager] Critical anomalies detected, ending cycle");
+          markCriticalRestarted(restartableAnomalies);
+          await endCurrentCycle("critical_anomaly");
+          await performFullCleanup(true);
+          await startNewCycle();
+        } else {
+          console.warn(
+            "[CycleManager] Critical anomalies detected, but restart suppressed by cooldown window",
+          );
+        }
       } else if (criticalAnomalies.length > 0) {
         console.warn(
           "[CycleManager] Critical anomaly detected, but cycle restart skipped (non-recoverable by restart)",

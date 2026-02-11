@@ -5,6 +5,7 @@ import { access, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   parseAllowedPathsFromIssueBody,
+  parseAllowedPathsFromIssueBodyWithFallback,
   parseDependencyIssueNumbersFromIssueBody,
   parseExplicitRoleFromIssue,
   type IssueTaskRole,
@@ -90,6 +91,13 @@ export type SystemPreflightSummary = {
 };
 
 async function resolveIssueTaskCommands(): Promise<string[]> {
+  const commandMode = (process.env.SYSTEM_PREFLIGHT_ISSUE_COMMAND_MODE ?? "none")
+    .trim()
+    .toLowerCase();
+  if (commandMode !== "repo_scripts") {
+    return [];
+  }
+
   const repoRoot = resolveRepoRoot();
   try {
     const raw = await readFile(join(repoRoot, "package.json"), "utf-8");
@@ -116,6 +124,46 @@ async function resolveIssueTaskCommands(): Promise<string[]> {
   return [];
 }
 
+function resolveRequirementPathCandidates(repoRoot: string, requirementPath: string): string[] {
+  const trimmed = requirementPath.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const absolutePath = resolve(trimmed);
+  const repoRelativePath = resolve(repoRoot, trimmed);
+  if (absolutePath === repoRelativePath) {
+    return [absolutePath];
+  }
+  return [absolutePath, repoRelativePath];
+}
+
+async function resolveAllowedPathFallbackFromRequirement(params: {
+  configRow: ConfigRow;
+  warnings: string[];
+}): Promise<string[]> {
+  const requirementPath = params.configRow.replanRequirementPath?.trim();
+  if (!requirementPath) {
+    return ["**"];
+  }
+
+  const repoRoot = resolveRepoRoot();
+  const candidates = resolveRequirementPathCandidates(repoRoot, requirementPath);
+  for (const candidate of candidates) {
+    try {
+      const content = await readFile(candidate, "utf-8");
+      return parseAllowedPathsFromIssueBody(content);
+    } catch {
+      continue;
+    }
+  }
+
+  params.warnings.push(
+    `Requirement file for allowedPaths fallback was not found: ${requirementPath}. Falling back to "**".`,
+  );
+  return ["**"];
+}
+
 function normalizeTaskRole(role: string | null | undefined): IssueTaskRole {
   if (role === "tester" || role === "docser") {
     return role;
@@ -138,9 +186,10 @@ async function createTaskFromIssue(
   issue: OpenIssueSnapshot,
   role: IssueTaskRole,
   commands: string[],
+  defaultAllowedPaths: string[],
   dependencyTaskIds: string[] = [],
 ): Promise<string | null> {
-  const allowedPaths = parseAllowedPathsFromIssueBody(issue.body);
+  const allowedPaths = parseAllowedPathsFromIssueBodyWithFallback(issue.body, defaultAllowedPaths);
   const riskLevel = inferRiskFromLabels(issue.labels);
   const priority = inferPriorityFromLabels(issue.labels);
   const notes = `Imported from GitHub Issue #${issue.number}`;
@@ -319,6 +368,10 @@ export async function buildPreflightSummary(options: {
   }
 
   const commands = options.autoCreateIssueTasks ? await resolveIssueTaskCommands() : [];
+  const defaultAllowedPaths = await resolveAllowedPathFallbackFromRequirement({
+    configRow: options.configRow,
+    warnings: summary.github.warnings,
+  });
   const generatedIssueTaskIds = new Map<number, string>();
 
   for (const issue of openIssues) {
@@ -384,7 +437,12 @@ export async function buildPreflightSummary(options: {
       continue;
     }
 
-    const createdTaskId = await createTaskFromIssue(issue, desiredRole, commands);
+    const createdTaskId = await createTaskFromIssue(
+      issue,
+      desiredRole,
+      commands,
+      defaultAllowedPaths,
+    );
     if (createdTaskId) {
       generatedIssueTaskIds.set(issue.number, createdTaskId);
       const current = issueTaskMap.get(issue.number) ?? [];

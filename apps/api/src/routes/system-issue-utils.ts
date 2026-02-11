@@ -27,8 +27,12 @@ export function normalizeAllowedPathToken(token: string): string[] {
 }
 
 export function parseAllowedPathsFromIssueBody(body: string): string[] {
+  return parseAllowedPathsFromIssueBodyWithFallback(body, ["**"]);
+}
+
+function collectAllowedPathTokens(body: string): string[] {
   if (!body) {
-    return ["**"];
+    return [];
   }
   const lines = body.split(/\r?\n/);
   const tokens: string[] = [];
@@ -64,6 +68,10 @@ export function parseAllowedPathsFromIssueBody(body: string): string[] {
     }
   }
 
+  return tokens;
+}
+
+function normalizeAllowedPathTokens(tokens: string[]): string[] {
   const normalized = new Set<string>();
   for (const token of tokens) {
     for (const value of normalizeAllowedPathToken(token)) {
@@ -71,10 +79,24 @@ export function parseAllowedPathsFromIssueBody(body: string): string[] {
     }
   }
 
-  if (normalized.size === 0) {
-    normalized.add("**");
-  }
   return Array.from(normalized);
+}
+
+export function parseAllowedPathsFromIssueBodyWithFallback(
+  body: string,
+  fallbackPaths: string[],
+): string[] {
+  const normalizedFromBody = normalizeAllowedPathTokens(collectAllowedPathTokens(body));
+  if (normalizedFromBody.length > 0) {
+    return normalizedFromBody;
+  }
+
+  const normalizedFallback = normalizeAllowedPathTokens(fallbackPaths);
+  if (normalizedFallback.length > 0) {
+    return normalizedFallback;
+  }
+
+  return ["**"];
 }
 
 export function parseIssueNumberRefs(text: string): number[] {

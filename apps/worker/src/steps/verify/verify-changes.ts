@@ -198,6 +198,7 @@ export function shouldSkipExplicitCommandFailure(params: {
   output: string;
   hasRemainingCommands: boolean;
   isDocOnlyChange: boolean;
+  isNoOpChange: boolean;
 }): boolean {
   if (params.source !== "explicit") {
     return false;
@@ -213,7 +214,7 @@ export function shouldSkipExplicitCommandFailure(params: {
   if (params.hasRemainingCommands) {
     return true;
   }
-  return params.isDocOnlyChange;
+  return params.isDocOnlyChange || params.isNoOpChange;
 }
 
 // 変更を検証
@@ -588,6 +589,7 @@ ${clippedDiff || "(diff unavailable)"}
           output,
           hasRemainingCommands,
           isDocOnlyChange,
+          isNoOpChange: changedFiles.length === 0 || relevantFiles.length === 0,
         })
       ) {
         console.warn(
