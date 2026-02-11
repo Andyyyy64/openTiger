@@ -370,8 +370,11 @@ export const logsApi = {
 export const configApi = {
   get: () => fetchApi<ConfigResponse>("/config"),
   update: (updates: Record<string, string>) =>
-    fetchApi<{ config: Record<string, string>; requiresRestart: boolean }>("/config", {
-      method: "PATCH",
-      body: JSON.stringify({ updates }),
-    }),
+    fetchApi<{ config: Record<string, string>; requiresRestart: boolean; warnings?: string[] }>(
+      "/config",
+      {
+        method: "PATCH",
+        body: JSON.stringify({ updates }),
+      },
+    ),
 };

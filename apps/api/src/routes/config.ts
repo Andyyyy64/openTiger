@@ -4,6 +4,8 @@ import { z } from "zod";
 import { db } from "@openTiger/db";
 import { config as configTable } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
+import { stat } from "node:fs/promises";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { CONFIG_KEYS, buildConfigRecord, rowToConfig } from "../system-config";
 import { ensureConfigRow } from "../config-store";
 
@@ -14,6 +16,58 @@ const ALLOWED_KEYS = new Set(CONFIG_KEYS);
 const updateSchema = z.object({
   updates: z.record(z.string()),
 });
+
+function parseBoolean(value: string | undefined, fallback: boolean): boolean {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return fallback;
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    const fileStat = await stat(path);
+    return fileStat.isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function resolveRequirementPathCandidate(
+  rawRequirementPath: string,
+  rawWorkdir: string,
+): Promise<{ found: boolean; resolvedPath: string }> {
+  const requirementPath = rawRequirementPath.trim();
+  const workdir = resolve(rawWorkdir.trim());
+
+  if (isAbsolute(requirementPath)) {
+    return {
+      found: await pathExists(requirementPath),
+      resolvedPath: requirementPath,
+    };
+  }
+
+  let currentDir = workdir;
+  while (true) {
+    const candidate = resolve(currentDir, requirementPath);
+    if (await pathExists(candidate)) {
+      return { found: true, resolvedPath: candidate };
+    }
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+    currentDir = parentDir;
+  }
+
+  return {
+    found: false,
+    resolvedPath: resolve(workdir, requirementPath),
+  };
+}
 
 configRoute.get("/", async (c) => {
   try {
@@ -40,6 +94,36 @@ configRoute.patch("/", zValidator("json", updateSchema), async (c) => {
 
   try {
     const configRow = await ensureConfigRow();
+    const currentConfig = rowToConfig(configRow);
+    const nextConfig = { ...currentConfig, ...updates };
+
+    const autoReplanEnabled = parseBoolean(nextConfig.AUTO_REPLAN, true);
+    if (autoReplanEnabled) {
+      if (!nextConfig.REPLAN_REQUIREMENT_PATH?.trim()) {
+        return c.json(
+          { error: "REPLAN_REQUIREMENT_PATH is required when AUTO_REPLAN is true" },
+          400,
+        );
+      }
+      if (!nextConfig.REPLAN_WORKDIR?.trim()) {
+        return c.json({ error: "REPLAN_WORKDIR is required when AUTO_REPLAN is true" }, 400);
+      }
+    }
+
+    const warnings: string[] = [];
+    if (autoReplanEnabled) {
+      const requirementPath = nextConfig.REPLAN_REQUIREMENT_PATH?.trim();
+      const replanWorkdir = nextConfig.REPLAN_WORKDIR?.trim();
+      if (requirementPath && replanWorkdir) {
+        const candidate = await resolveRequirementPathCandidate(requirementPath, replanWorkdir);
+        if (!candidate.found) {
+          warnings.push(
+            `Replan requirement file が見つかりません: ${requirementPath} (resolved candidate: ${candidate.resolvedPath})`,
+          );
+        }
+      }
+    }
+
     const updateData = buildConfigRecord(updates);
     const updated = await db
       .update(configTable)
@@ -50,6 +134,7 @@ configRoute.patch("/", zValidator("json", updateSchema), async (c) => {
     return c.json({
       config: rowToConfig(updated[0] ?? configRow),
       requiresRestart: false,
+      warnings,
     });
   } catch (error) {
     console.warn("[Config] Failed to update config:", error);

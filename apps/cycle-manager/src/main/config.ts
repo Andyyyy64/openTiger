@@ -1,4 +1,6 @@
 import type { CycleConfig } from "@openTiger/core";
+import { existsSync } from "node:fs";
+import { dirname, isAbsolute, resolve } from "node:path";
 
 // Cycle Manager設定
 export interface CycleManagerConfig {
@@ -22,6 +24,41 @@ export interface CycleManagerConfig {
   stuckRunTimeoutMs: number; // 停滞run判定までの時間
 }
 
+function resolveRequirementPath(
+  requirementPath: string | undefined,
+  workdir: string,
+): string | undefined {
+  if (!requirementPath) {
+    return undefined;
+  }
+  if (isAbsolute(requirementPath)) {
+    return requirementPath;
+  }
+
+  // 起動ディレクトリ配下に無い場合は上位ディレクトリも順に探索する
+  let currentDir = resolve(workdir);
+  while (true) {
+    const candidate = resolve(currentDir, requirementPath);
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+    currentDir = parentDir;
+  }
+
+  // 見つからない場合も決定的なパスを返し、後段で明示的にエラーを出す
+  return resolve(workdir, requirementPath);
+}
+
+const defaultReplanWorkdir = process.env.REPLAN_WORKDIR ?? process.cwd();
+const defaultReplanRequirementPath = resolveRequirementPath(
+  process.env.REPLAN_REQUIREMENT_PATH ?? process.env.REQUIREMENT_PATH,
+  defaultReplanWorkdir,
+);
+
 // デフォルト設定
 export const DEFAULT_CONFIG: CycleManagerConfig = {
   cycleConfig: {
@@ -40,9 +77,9 @@ export const DEFAULT_CONFIG: CycleManagerConfig = {
   autoStartCycle: process.env.AUTO_START_CYCLE !== "false",
   autoReplan: process.env.AUTO_REPLAN !== "false",
   replanIntervalMs: parseInt(process.env.REPLAN_INTERVAL_MS ?? "300000", 10),
-  replanRequirementPath: process.env.REPLAN_REQUIREMENT_PATH ?? process.env.REQUIREMENT_PATH,
+  replanRequirementPath: defaultReplanRequirementPath,
   replanCommand: process.env.REPLAN_COMMAND ?? "pnpm --filter @openTiger/planner run start:fresh",
-  replanWorkdir: process.env.REPLAN_WORKDIR ?? process.cwd(),
+  replanWorkdir: defaultReplanWorkdir,
   replanRepoUrl: process.env.REPLAN_REPO_URL ?? process.env.REPO_URL,
   replanBaseBranch: process.env.REPLAN_BASE_BRANCH ?? process.env.BASE_BRANCH ?? "main",
   systemApiBaseUrl:
