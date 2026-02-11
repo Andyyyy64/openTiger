@@ -1,38 +1,38 @@
 import { z } from "zod";
 
-// 実行ステータス
+// Run status
 export const RunStatus = z.enum([
-  "running", // 実行中
-  "success", // 成功
-  "failed", // 失敗
-  "cancelled", // キャンセル
+  "running", // running
+  "success", // success
+  "failed", // failed
+  "cancelled", // cancelled
 ]);
 export type RunStatus = z.infer<typeof RunStatus>;
 
-// 実行記録スキーマ
+// Run schema
 export const RunSchema = z.object({
   id: z.string().uuid(),
   taskId: z.string().uuid(),
-  agentId: z.string(), // 実行したエージェントの識別子
+  agentId: z.string(), // agent identifier
   status: RunStatus.default("running"),
   startedAt: z.date(),
   finishedAt: z.date().nullable(),
-  costTokens: z.number().int().nonnegative().nullable(), // 消費トークン数
-  logPath: z.string().nullable(), // ログファイルパス
-  errorMessage: z.string().nullable(), // エラーメッセージ
+  costTokens: z.number().int().nonnegative().nullable(), // tokens consumed
+  logPath: z.string().nullable(), // log file path
+  errorMessage: z.string().nullable(), // error message
   judgedAt: z.date().nullable().optional(),
   judgementVersion: z.number().int().nonnegative().default(0),
 });
 export type Run = z.infer<typeof RunSchema>;
 
-// 実行開始時の入力スキーマ
+// Start run input schema
 export const StartRunInput = z.object({
   taskId: z.string().uuid(),
   agentId: z.string(),
 });
 export type StartRunInput = z.infer<typeof StartRunInput>;
 
-// 実行完了時の入力スキーマ
+// Complete run input schema
 export const CompleteRunInput = z.object({
   status: z.enum(["success", "failed", "cancelled"]),
   costTokens: z.number().int().nonnegative().optional(),

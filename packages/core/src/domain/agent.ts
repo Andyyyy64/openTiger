@@ -1,42 +1,42 @@
 import { z } from "zod";
 
-// エージェントの役割
+// Agent role
 export const AgentRole = z.enum([
-  "planner", // タスク生成・分割
-  "worker", // 実装・PR作成
-  "judge", // 採用判定
-  "tester", // テスト作成・実行
-  "docser", // ドキュメント更新
+  "planner", // task generation/splitting
+  "worker", // implementation/PR creation
+  "judge", // adoption decision
+  "tester", // test creation/execution
+  "docser", // documentation
 ]);
 export type AgentRole = z.infer<typeof AgentRole>;
 
-// エージェントのステータス
+// Agent status
 export const AgentStatus = z.enum([
-  "idle", // 待機中
-  "busy", // 作業中
-  "offline", // オフライン
+  "idle", // idle
+  "busy", // busy
+  "offline", // offline
 ]);
 export type AgentStatus = z.infer<typeof AgentStatus>;
 
-// エージェント定義スキーマ
+// Agent schema
 export const AgentSchema = z.object({
   id: z.string(),
   role: AgentRole,
   status: AgentStatus.default("idle"),
-  currentTaskId: z.string().uuid().nullable(), // 現在実行中のタスク
-  lastHeartbeat: z.date().nullable(), // 最終ハートビート
+  currentTaskId: z.string().uuid().nullable(), // current task
+  lastHeartbeat: z.date().nullable(), // last heartbeat
   metadata: z
     .object({
-      model: z.string().optional(), // 使用モデル
-      provider: z.string().optional(), // プロバイダー
-      version: z.string().optional(), // エージェントバージョン
+      model: z.string().optional(), // model
+      provider: z.string().optional(), // provider
+      version: z.string().optional(), // agent version
     })
     .optional(),
   createdAt: z.date(),
 });
 export type Agent = z.infer<typeof AgentSchema>;
 
-// エージェント登録時の入力スキーマ
+// Register agent input schema
 export const RegisterAgentInput = z.object({
   id: z.string(),
   role: AgentRole,

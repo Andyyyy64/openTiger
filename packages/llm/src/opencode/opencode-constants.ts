@@ -25,7 +25,7 @@ export const QUOTA_EXCEEDED_ERRORS = [
   /quota exceeded/i,
   /exceeded your current quota/i,
   /generate_requests_per_model_per_day/i,
-  // provider側のリソース枯渇はクォータ超過として扱う
+  // Treat provider resource exhaustion as quota exceeded
   /resource has been exhausted/i,
   /resource_exhausted/i,
   /quotafailure/i,
@@ -33,10 +33,10 @@ export const QUOTA_EXCEEDED_ERRORS = [
   /generate_content_paid_tier_input_token_count/i,
 ];
 const ANSI_ESCAPE_SEQUENCE = `${String.fromCharCode(27)}\\[[0-9;]*m`;
-// 制御文字の埋め込みを避けてANSIエスケープを組み立てる
+// Build ANSI escape without embedding control chars
 export const ANSI_ESCAPE_REGEX = new RegExp(ANSI_ESCAPE_SEQUENCE, "g");
 const CONTROL_CHARS_CLASS = `${String.fromCharCode(0)}-${String.fromCharCode(31)}${String.fromCharCode(127)}`;
-// 制御文字の除去でプロンプト検出を安定させる
+// Stabilize prompt detection by stripping control chars
 export const CONTROL_CHARS_REGEX = new RegExp(`[${CONTROL_CHARS_CLASS}]+`, "g");
 
 const parseThreshold = (value: string | undefined, fallback: number): number => {

@@ -23,7 +23,7 @@ export function isResourceExhaustedError(message: string): boolean {
 export function isTitleGenerationLine(message: string): boolean {
   return (
     /agent=title|failed to generate title|service=session\.prompt/i.test(message) ||
-    // OpenCodeの再試行エラーにはtitle生成用のsystem promptが埋め込まれることがある
+    // OpenCode retry errors may embed title-generation system prompts
     /you are a title generator|generate a brief title|the following is the text to summarize/i.test(
       message,
     )

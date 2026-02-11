@@ -1,23 +1,23 @@
 import { getOctokit, getRepoInfo } from "./client";
 
-// PR検索オプション
+// Options for searching PRs
 export interface SearchPROptions {
   head?: string;
   base?: string;
   state?: "open" | "closed" | "all";
 }
 
-// PR作成オプション
+// Options for creating a PR
 export interface CreatePROptions {
   title: string;
   body: string;
-  head: string; // ソースブランチ
-  base?: string; // ターゲットブランチ（デフォルト: main）
+  head: string; // source branch
+  base?: string; // target branch (default: main)
   labels?: string[];
   draft?: boolean;
 }
 
-// PR情報
+// PR information
 export interface PRInfo {
   number: number;
   url: string;
@@ -60,7 +60,7 @@ function fallbackPRInfo(params: {
   };
 }
 
-// PRを検索
+// Search for PRs
 export async function findPRs(options: SearchPROptions): Promise<PRInfo[]> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
@@ -81,7 +81,7 @@ export async function findPRs(options: SearchPROptions): Promise<PRInfo[]> {
   }));
 }
 
-// PRを更新
+// Update a PR
 export async function updatePR(
   prNumber: number,
   options: Partial<CreatePROptions>,
@@ -103,7 +103,7 @@ export async function updatePR(
     if (!isRecoverableServerError(error)) {
       throw error;
     }
-    // GitHub一時障害時は既存PRを維持して処理継続する
+    // Keep existing PR and continue when GitHub has a temporary outage
     console.warn(
       `[VCS] pull update failed with recoverable server error for #${prNumber}; keeping existing PR.`,
       error,
@@ -116,7 +116,7 @@ export async function updatePR(
     });
   }
 
-  // ラベルを更新（既存のラベルに追加）
+  // Update labels (add to existing labels)
   if (options.labels && options.labels.length > 0) {
     try {
       await octokit.issues.addLabels({
@@ -129,7 +129,7 @@ export async function updatePR(
       if (!isRecoverableServerError(error)) {
         throw error;
       }
-      // ラベル付与失敗は致命扱いにしない
+      // Don't treat label assignment failure as fatal
       console.warn(
         `[VCS] addLabels failed with recoverable server error for PR #${prNumber}; continuing.`,
         error,
@@ -145,7 +145,7 @@ export async function updatePR(
   };
 }
 
-// PRを作成
+// Create a PR
 export async function createPR(options: CreatePROptions): Promise<PRInfo> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
@@ -165,7 +165,7 @@ export async function createPR(options: CreatePROptions): Promise<PRInfo> {
     if (!isRecoverableServerError(error)) {
       throw error;
     }
-    // 作成成功直後のレスポンス失敗を救済するため、同一head/baseの既存PRを再検索する
+    // Search for existing PR with same head/base to recover when response fails right after create
     console.warn(
       `[VCS] pull create failed with recoverable server error for head=${options.head}; searching existing PR.`,
       error,
@@ -182,7 +182,7 @@ export async function createPR(options: CreatePROptions): Promise<PRInfo> {
     throw error;
   }
 
-  // ラベルを追加
+  // Add labels
   if (options.labels && options.labels.length > 0) {
     try {
       await octokit.issues.addLabels({
@@ -195,7 +195,7 @@ export async function createPR(options: CreatePROptions): Promise<PRInfo> {
       if (!isRecoverableServerError(error)) {
         throw error;
       }
-      // ラベル付与失敗は致命扱いにしない
+      // Don't treat label assignment failure as fatal
       console.warn(
         `[VCS] addLabels failed with recoverable server error for PR #${response.data.number}; continuing.`,
         error,
@@ -211,7 +211,7 @@ export async function createPR(options: CreatePROptions): Promise<PRInfo> {
   };
 }
 
-// PRにコメントを追加
+// Add a comment to a PR
 export async function addPRComment(prNumber: number, body: string): Promise<void> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
@@ -224,7 +224,7 @@ export async function addPRComment(prNumber: number, body: string): Promise<void
   });
 }
 
-// PRをマージ
+// Merge a PR
 function extractErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -260,7 +260,7 @@ export async function mergePR(
   }
 }
 
-// PRを閉じる
+// Close a PR
 export async function closePR(prNumber: number): Promise<void> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
@@ -273,19 +273,19 @@ export async function closePR(prNumber: number): Promise<void> {
   });
 }
 
-// PRのCIステータスを取得
+// Get PR CI status
 export async function getPRCIStatus(prNumber: number): Promise<"success" | "failure" | "pending"> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
 
-  // PRの情報を取得
+  // Fetch PR info
   const pr = await octokit.pulls.get({
     owner,
     repo,
     pull_number: prNumber,
   });
 
-  // コミットのステータスを取得
+  // Fetch commit status
   const status = await octokit.repos.getCombinedStatusForRef({
     owner,
     repo,

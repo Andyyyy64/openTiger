@@ -1,4 +1,4 @@
-export const CLAUDE_CODE_DEFAULT_MODEL = "claude-sonnet-4-5";
+export const CLAUDE_CODE_DEFAULT_MODEL = "claude-opus-4-6";
 export const CLAUDE_CODE_DEFAULT_MAX_RETRIES = 3;
 export const CLAUDE_CODE_DEFAULT_RETRY_DELAY_MS = 5000;
 export const CLAUDE_CODE_DEFAULT_PERMISSION_MODE = "bypassPermissions";

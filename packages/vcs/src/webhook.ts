@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-// Webhook署名の検証
+// Verify webhook signature
 export function verifyGitHubWebhookSignature(
   payload: string | Buffer,
   signature: string | undefined,
@@ -21,7 +21,7 @@ export function verifyGitHubWebhookSignature(
     return false;
   }
 
-  // HMAC-SHA256で署名を計算
+  // Compute signature with HMAC-SHA256
   const hmac = createHmac("sha256", secret);
   hmac.update(typeof payload === "string" ? payload : payload.toString("utf8"));
   const expectedSignature = hmac.digest("hex");
@@ -48,7 +48,7 @@ export type GitHubEventType =
   | "delete"
   | "release";
 
-// Webhookペイロードの基本構造
+// Base structure of webhook payload
 export interface WebhookPayload {
   action?: string;
   sender?: {
@@ -64,7 +64,7 @@ export interface WebhookPayload {
   };
 }
 
-// Pull Requestイベントのペイロード
+// Payload for Pull Request events
 export interface PullRequestPayload extends WebhookPayload {
   action:
     | "opened"
@@ -95,7 +95,7 @@ export interface PullRequestPayload extends WebhookPayload {
   };
 }
 
-// Issueイベントのペイロード
+// Payload for Issue events
 export interface IssuePayload extends WebhookPayload {
   action: "opened" | "closed" | "reopened" | "edited" | "labeled" | "unlabeled";
   issue: {
@@ -110,7 +110,7 @@ export interface IssuePayload extends WebhookPayload {
   };
 }
 
-// Pushイベントのペイロード
+// Payload for Push events
 export interface PushPayload extends WebhookPayload {
   ref: string;
   before: string;
@@ -132,7 +132,7 @@ export interface PushPayload extends WebhookPayload {
   } | null;
 }
 
-// Check Run/Suiteイベントのペイロード
+// Payload for Check Run/Suite events
 export interface CheckPayload extends WebhookPayload {
   action: "created" | "completed" | "rerequested";
   check_run?: {

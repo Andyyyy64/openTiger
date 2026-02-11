@@ -1,6 +1,6 @@
 import { getOctokit } from "./client";
 
-// Rate Limit情報
+// Rate limit information
 export interface RateLimitInfo {
   limit: number;
   remaining: number;
@@ -8,7 +8,7 @@ export interface RateLimitInfo {
   used: number;
 }
 
-// Rate Limit状態
+// Rate limit status
 export interface RateLimitStatus {
   core: RateLimitInfo;
   search: RateLimitInfo;
@@ -17,7 +17,7 @@ export interface RateLimitStatus {
   waitTimeMs: number;
 }
 
-// 現在のRate Limit状態を取得
+// Get current rate limit status
 export async function getRateLimitStatus(): Promise<RateLimitStatus> {
   const octokit = getOctokit();
 
@@ -35,20 +35,20 @@ export async function getRateLimitStatus(): Promise<RateLimitStatus> {
 
   const core = parseResource(resources.core);
   const search = parseResource(resources.search);
-  // graphqlはundefinedの可能性があるためデフォルト値を設定
+  // graphql may be undefined, so set a default
   const graphql = resources.graphql
     ? parseResource(resources.graphql)
     : { limit: 0, remaining: 0, reset: new Date(), used: 0 };
 
-  // 制限に達しているかチェック
+  // Check if limit is reached
   const isLimited = core.remaining === 0 || search.remaining === 0;
 
-  // 待機時間を計算
+  // Calculate wait time
   let waitTimeMs = 0;
   if (isLimited) {
     const resetTimes = [core.reset, search.reset].map((d) => d.getTime());
     const nextReset = Math.min(...resetTimes);
-    waitTimeMs = Math.max(0, nextReset - now + 1000); // 1秒のバッファ
+    waitTimeMs = Math.max(0, nextReset - now + 1000); // 1 second buffer
   }
 
   return {
@@ -60,7 +60,7 @@ export async function getRateLimitStatus(): Promise<RateLimitStatus> {
   };
 }
 
-// Rate Limitに達した場合に待機
+// Wait when rate limit is reached
 export async function waitForRateLimit(): Promise<void> {
   const status = await getRateLimitStatus();
 
@@ -70,7 +70,7 @@ export async function waitForRateLimit(): Promise<void> {
   }
 }
 
-// Rate Limitを考慮してAPIを呼び出す
+// Call API with rate limit handling
 export async function withRateLimitHandling<T>(
   fn: () => Promise<T>,
   options: {
@@ -85,7 +85,7 @@ export async function withRateLimitHandling<T>(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      // Rate Limit状態を確認
+      // Check rate limit status
       const status = await getRateLimitStatus();
       if (status.isLimited) {
         console.log(
@@ -94,12 +94,12 @@ export async function withRateLimitHandling<T>(
         await new Promise((resolve) => setTimeout(resolve, status.waitTimeMs));
       }
 
-      // 実行
+      // Execute
       return await fn();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
-      // Rate Limitエラーかチェック
+      // Check if rate limit error
       const isRateLimitError =
         lastError.message.includes("rate limit") ||
         lastError.message.includes("403") ||
@@ -121,7 +121,7 @@ export async function withRateLimitHandling<T>(
   throw lastError ?? new Error("Max retries exceeded");
 }
 
-// Rate Limit情報をログ出力
+// Log rate limit status
 export async function logRateLimitStatus(): Promise<void> {
   const status = await getRateLimitStatus();
 

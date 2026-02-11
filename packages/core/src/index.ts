@@ -1,4 +1,4 @@
-// @openTiger/core パッケージのエントリポイント
+// @openTiger/core package entry
 export * from "./domain/index";
 export * from "./repo-mode";
 export * from "./policy-overrides";

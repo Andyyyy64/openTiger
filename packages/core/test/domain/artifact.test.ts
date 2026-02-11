@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { ArtifactSchema, ArtifactType, CreateArtifactInput } from "../../src/domain/artifact";
 
 describe("ArtifactType", () => {
-  it("すべての有効なタイプを受け入れる", () => {
+  it("accepts all valid types", () => {
     const types = ["pr", "commit", "ci_result", "branch"];
     for (const type of types) {
       expect(ArtifactType.safeParse(type).success).toBe(true);
     }
   });
 
-  it("無効なタイプを拒否する", () => {
+  it("rejects invalid types", () => {
     expect(ArtifactType.safeParse("file").success).toBe(false);
     expect(ArtifactType.safeParse("log").success).toBe(false);
   });
@@ -26,7 +26,7 @@ describe("ArtifactSchema", () => {
     createdAt: new Date(),
   };
 
-  it("有効なPR成果物を検証できる", () => {
+  it("validates valid PR artifact", () => {
     const result = ArtifactSchema.safeParse(validArtifact);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -35,7 +35,7 @@ describe("ArtifactSchema", () => {
     }
   });
 
-  it("コミット成果物を検証できる", () => {
+  it("validates commit artifact", () => {
     const commitArtifact = {
       id: "550e8400-e29b-41d4-a716-446655440000",
       runId: "550e8400-e29b-41d4-a716-446655440001",
@@ -50,7 +50,7 @@ describe("ArtifactSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("CI結果成果物を検証できる", () => {
+  it("validates CI result artifact", () => {
     const ciArtifact = {
       id: "550e8400-e29b-41d4-a716-446655440000",
       runId: "550e8400-e29b-41d4-a716-446655440001",
@@ -73,7 +73,7 @@ describe("ArtifactSchema", () => {
     }
   });
 
-  it("ブランチ成果物を検証できる", () => {
+  it("validates branch artifact", () => {
     const branchArtifact = {
       id: "550e8400-e29b-41d4-a716-446655440000",
       runId: "550e8400-e29b-41d4-a716-446655440001",
@@ -88,7 +88,7 @@ describe("ArtifactSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("無効なURLを拒否する", () => {
+  it("rejects invalid URL", () => {
     const invalidArtifact = {
       ...validArtifact,
       url: "not-a-valid-url",
@@ -98,7 +98,7 @@ describe("ArtifactSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("refとurlはnull許容", () => {
+  it("allows null ref and url", () => {
     const minimalArtifact = {
       id: "550e8400-e29b-41d4-a716-446655440000",
       runId: "550e8400-e29b-41d4-a716-446655440001",
@@ -115,7 +115,7 @@ describe("ArtifactSchema", () => {
 });
 
 describe("CreateArtifactInput", () => {
-  it("有効な作成入力を検証できる", () => {
+  it("validates valid create input", () => {
     const input = {
       runId: "550e8400-e29b-41d4-a716-446655440001",
       type: "pr" as const,
@@ -128,7 +128,7 @@ describe("CreateArtifactInput", () => {
     expect(result.success).toBe(true);
   });
 
-  it("id と createdAt は含めない", () => {
+  it("omits id and createdAt", () => {
     const input = {
       runId: "550e8400-e29b-41d4-a716-446655440001",
       type: "commit" as const,

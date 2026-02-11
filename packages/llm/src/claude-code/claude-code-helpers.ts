@@ -19,7 +19,7 @@ export function normalizeClaudeModel(model: string | undefined): string | undefi
   if (trimmed.startsWith("anthropic/")) {
     return trimmed.slice("anthropic/".length);
   }
-  // Claude executorにGoogle/OpenAI等のモデルIDが渡された場合は既定モデルにフォールバックする
+  // Fallback to default model when non-Claude model IDs (e.g. Google/OpenAI) are passed to Claude executor
   const lower = trimmed.toLowerCase();
   const clearlyNonClaudePrefixes = ["google/", "openai/", "xai/", "deepseek/", "groq/", "ollama/"];
   if (clearlyNonClaudePrefixes.some((prefix) => lower.startsWith(prefix))) {

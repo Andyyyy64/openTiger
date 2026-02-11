@@ -1,41 +1,41 @@
 import { z } from "zod";
 
-// ポリシー: エージェントの行動制約を定義
+// Policy: defines agent action constraints
 export const PolicySchema = z.object({
-  // 変更を許可するパス（glob）
+  // Paths allowed for modification (glob)
   allowedPaths: z.array(z.string()).default(["**/*"]),
 
-  // 変更を禁止するパス（glob）
+  // Paths denied for modification (glob)
   deniedPaths: z.array(z.string()).default([]),
 
-  // 変更行数の上限
+  // Max lines changed
   maxLinesChanged: z.number().int().positive().default(500),
 
-  // 変更ファイル数の上限
+  // Max files changed
   maxFilesChanged: z.number().int().positive().default(20),
 
-  // 禁止コマンド（正規表現）
+  // Denied commands (regex)
   deniedCommands: z.array(z.string()).default(["rm -rf /", "sudo", "chmod 777"]),
 
-  // 自動マージの条件
+  // Auto-merge conditions
   autoMerge: z
     .object({
       enabled: z.boolean().default(false),
-      // 自動マージを許可するリスクレベル
+      // Risk levels allowed for auto-merge
       maxRiskLevel: z.enum(["low", "medium", "high"]).default("low"),
-      // 必須のCIチェック名
+      // Required CI check names
       requiredChecks: z.array(z.string()).default([]),
     })
     .default({}),
 
-  // ローカルベースリポジトリ復旧の厳しさ
+  // Base repo recovery strictness
   baseRepoRecovery: z
     .object({
       level: z.enum(["low", "medium", "high"]).default("medium"),
     })
     .default({}),
 
-  // トークン制限
+  // Token limits
   tokenLimits: z
     .object({
       perTask: z.number().int().positive().default(1000000),
@@ -45,5 +45,5 @@ export const PolicySchema = z.object({
 });
 export type Policy = z.infer<typeof PolicySchema>;
 
-// デフォルトポリシー
+// Default policy
 export const DEFAULT_POLICY: Policy = PolicySchema.parse({});

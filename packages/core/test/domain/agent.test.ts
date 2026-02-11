@@ -2,28 +2,28 @@ import { describe, it, expect } from "vitest";
 import { AgentSchema, AgentRole, AgentStatus, RegisterAgentInput } from "../../src/domain/agent";
 
 describe("AgentRole", () => {
-  it("すべての有効な役割を受け入れる", () => {
+  it("accepts all valid roles", () => {
     const roles = ["planner", "worker", "judge", "tester", "docser"];
     for (const role of roles) {
       expect(AgentRole.safeParse(role).success).toBe(true);
     }
   });
 
-  it("無効な役割を拒否する", () => {
+  it("rejects invalid roles", () => {
     expect(AgentRole.safeParse("dispatcher").success).toBe(false);
     expect(AgentRole.safeParse("admin").success).toBe(false);
   });
 });
 
 describe("AgentStatus", () => {
-  it("すべての有効なステータスを受け入れる", () => {
+  it("accepts all valid statuses", () => {
     const statuses = ["idle", "busy", "offline"];
     for (const status of statuses) {
       expect(AgentStatus.safeParse(status).success).toBe(true);
     }
   });
 
-  it("無効なステータスを拒否する", () => {
+  it("rejects invalid statuses", () => {
     expect(AgentStatus.safeParse("active").success).toBe(false);
     expect(AgentStatus.safeParse("running").success).toBe(false);
   });
@@ -43,7 +43,7 @@ describe("AgentSchema", () => {
     createdAt: new Date(),
   };
 
-  it("有効なエージェントを検証できる", () => {
+  it("validates valid agent", () => {
     const result = AgentSchema.safeParse(validAgent);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -52,7 +52,7 @@ describe("AgentSchema", () => {
     }
   });
 
-  it("作業中のエージェントを検証できる", () => {
+  it("validates busy agent", () => {
     const busyAgent = {
       ...validAgent,
       status: "busy" as const,
@@ -67,7 +67,7 @@ describe("AgentSchema", () => {
     }
   });
 
-  it("メタデータなしでも有効", () => {
+  it("valid without metadata", () => {
     const agentWithoutMetadata = {
       id: "planner-1",
       role: "planner" as const,
@@ -81,7 +81,7 @@ describe("AgentSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("デフォルトステータスが適用される", () => {
+  it("applies default status", () => {
     const agentWithoutStatus = {
       id: "judge-1",
       role: "judge" as const,
@@ -97,7 +97,7 @@ describe("AgentSchema", () => {
     }
   });
 
-  it("currentTaskIdには有効なUUIDが必要", () => {
+  it("requires valid UUID for currentTaskId", () => {
     const invalidAgent = {
       ...validAgent,
       currentTaskId: "invalid-uuid",
@@ -109,7 +109,7 @@ describe("AgentSchema", () => {
 });
 
 describe("RegisterAgentInput", () => {
-  it("必須フィールドのみで登録できる", () => {
+  it("registers with required fields only", () => {
     const input = {
       id: "worker-new",
       role: "worker" as const,
@@ -118,7 +118,7 @@ describe("RegisterAgentInput", () => {
     expect(result.success).toBe(true);
   });
 
-  it("メタデータ付きで登録できる", () => {
+  it("registers with metadata", () => {
     const input = {
       id: "worker-new",
       role: "worker" as const,
@@ -134,7 +134,7 @@ describe("RegisterAgentInput", () => {
     }
   });
 
-  it("roleが必須", () => {
+  it("requires role", () => {
     const input = { id: "worker-new" };
     const result = RegisterAgentInput.safeParse(input);
     expect(result.success).toBe(false);

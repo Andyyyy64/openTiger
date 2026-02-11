@@ -111,7 +111,7 @@ export async function runOpenCode(options: OpenCodeOptions): Promise<OpenCodeRes
           "[OpenCode] Title-generation quota error persisted; continuing error handling without quota handoff.",
         );
       } else {
-        // resource_exhausted の場合は文言を切り替える
+        // Switch message for resource_exhausted
         const resourceExhausted = isResourceExhaustedError(result.stderr);
         const quotaLabel = resourceExhausted ? "Resource has been exhausted" : "Quota exceeded";
         const quotaHint = resourceExhausted

@@ -8,7 +8,7 @@ export function applyRepoModePolicyOverrides(
   const repoMode = getRepoMode(env);
 
   if (repoMode === "local") {
-    // local modeはローカル開発の試行錯誤を妨げないように下限を保証する
+    // Ensure minimum limits so local mode does not hinder iteration during development
     return {
       ...policy,
       maxLinesChanged: Math.max(policy.maxLinesChanged, 5000),

@@ -8,7 +8,7 @@ import {
 } from "../../src/claude-code/parse";
 
 describe("FileChange schema", () => {
-  it("有効なファイル変更を検証できる", () => {
+  it("validates valid file change", () => {
     const change = {
       path: "src/index.ts",
       action: "modify" as const,
@@ -20,7 +20,7 @@ describe("FileChange schema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("すべてのアクションタイプを受け入れる", () => {
+  it("accepts all action types", () => {
     const actions = ["create", "modify", "delete"] as const;
     for (const action of actions) {
       const change = {
@@ -33,7 +33,7 @@ describe("FileChange schema", () => {
     }
   });
 
-  it("負の行数を拒否する", () => {
+  it("rejects negative line counts", () => {
     const change = {
       path: "test.ts",
       action: "modify" as const,
@@ -45,7 +45,7 @@ describe("FileChange schema", () => {
 });
 
 describe("extractTokenUsage", () => {
-  it("JSON形式のトークン情報を抽出できる", () => {
+  it("extracts token info from JSON format", () => {
     const output = `
       Processing...
       {"input_tokens": 1234, "output_tokens": 5678}
@@ -59,7 +59,7 @@ describe("extractTokenUsage", () => {
     expect(usage?.totalTokens).toBe(6912);
   });
 
-  it("テキスト形式のトークン情報を抽出できる", () => {
+  it("extracts token info from text format", () => {
     const output = `
       Task completed successfully.
       Tokens: 1,234 input, 5,678 output
@@ -71,7 +71,7 @@ describe("extractTokenUsage", () => {
     expect(usage?.outputTokens).toBe(5678);
   });
 
-  it("カンマ区切りの数値を正しく処理する", () => {
+  it("handles comma-separated numbers correctly", () => {
     const output = "Tokens: 100,000 input, 50,000 output";
 
     const usage = extractTokenUsage(output);
@@ -80,7 +80,7 @@ describe("extractTokenUsage", () => {
     expect(usage?.outputTokens).toBe(50000);
   });
 
-  it("Total tokens形式を抽出できる", () => {
+  it("extracts Total tokens format", () => {
     const output = "Total tokens used: 10,000";
 
     const usage = extractTokenUsage(output);
@@ -90,7 +90,7 @@ describe("extractTokenUsage", () => {
     expect(usage?.outputTokens).toBe(0);
   });
 
-  it("トークン情報がない場合はundefinedを返す", () => {
+  it("returns undefined when no token info", () => {
     const output = "Task completed without token info.";
 
     const usage = extractTokenUsage(output);
@@ -99,7 +99,7 @@ describe("extractTokenUsage", () => {
 });
 
 describe("parseClaudeCodeOutput", () => {
-  it("ファイル作成を検出できる", () => {
+  it("detects file creation", () => {
     const output = `
       Created src/new-file.ts
       Created tests/new-file.test.ts
@@ -115,7 +115,7 @@ describe("parseClaudeCodeOutput", () => {
     });
   });
 
-  it("ファイル変更を検出できる", () => {
+  it("detects file modification", () => {
     const output = "Modified src/index.ts";
 
     const result = parseClaudeCodeOutput(output);
@@ -123,7 +123,7 @@ describe("parseClaudeCodeOutput", () => {
     expect(result.fileChanges[0]?.action).toBe("modify");
   });
 
-  it("ファイル削除を検出できる", () => {
+  it("detects file deletion", () => {
     const output = "Deleted src/old-file.ts";
 
     const result = parseClaudeCodeOutput(output);
@@ -131,7 +131,7 @@ describe("parseClaudeCodeOutput", () => {
     expect(result.fileChanges[0]?.action).toBe("delete");
   });
 
-  it("実行コマンドを検出できる", () => {
+  it("detects executed commands", () => {
     const output = `
       $ pnpm install
       $ pnpm test
@@ -145,7 +145,7 @@ describe("parseClaudeCodeOutput", () => {
     expect(result.commandsRun).toContain("pnpm build");
   });
 
-  it("サマリーを抽出できる", () => {
+  it("extracts summary", () => {
     const output = `
       Made changes...
       Summary: Added authentication middleware
@@ -155,14 +155,14 @@ describe("parseClaudeCodeOutput", () => {
     expect(result.summary).toBe("Added authentication middleware");
   });
 
-  it("サマリーがない場合はデフォルト値を使用する", () => {
+  it("uses default when no summary", () => {
     const output = "Created file.ts";
 
     const result = parseClaudeCodeOutput(output);
     expect(result.summary).toBe("Changes applied");
   });
 
-  it("トークン使用量を含める", () => {
+  it("includes token usage", () => {
     const output = `
       Modified src/index.ts
       {"input_tokens": 1000, "output_tokens": 500}
@@ -173,14 +173,14 @@ describe("parseClaudeCodeOutput", () => {
     expect(result.tokenUsage?.totalTokens).toBe(1500);
   });
 
-  it("errorsは空の配列で返される", () => {
+  it("returns errors as empty array", () => {
     const output = "Some output";
 
     const result = parseClaudeCodeOutput(output);
     expect(result.errors).toEqual([]);
   });
 
-  it("混合出力を正しく処理する", () => {
+  it("handles mixed output correctly", () => {
     const output = `
       Starting task...
       $ pnpm install
@@ -200,48 +200,46 @@ describe("parseClaudeCodeOutput", () => {
 });
 
 describe("extractErrorReason", () => {
-  it("ENOENT エラーを認識する", () => {
+  it("recognizes ENOENT error", () => {
     const stderr = "Error: ENOENT: no such file or directory";
     expect(extractErrorReason(stderr)).toBe("File or directory not found");
   });
 
-  it("EACCES エラーを認識する", () => {
+  it("recognizes EACCES error", () => {
     const stderr = "Error: EACCES: permission denied";
     expect(extractErrorReason(stderr)).toBe("Permission denied");
   });
 
-  it("ETIMEDOUT エラーを認識する", () => {
+  it("recognizes ETIMEDOUT error", () => {
     const stderr = "Error: ETIMEDOUT: connection timed out";
     expect(extractErrorReason(stderr)).toBe("Operation timed out");
   });
 
-  it("rate limit エラーを認識する", () => {
+  it("recognizes rate limit error", () => {
     const stderr = "API rate limit exceeded, please try again later";
     expect(extractErrorReason(stderr)).toBe("API rate limit exceeded");
   });
 
-  it("不明なエラーは最後の行を返す", () => {
+  it("returns last line for unknown errors", () => {
     const stderr = `Some context
 More info
 Actual error message`;
     expect(extractErrorReason(stderr)).toBe("Actual error message");
   });
 
-  it("空のstderrの場合は空文字列を返す", () => {
-    // 空のstderrの場合、trim後も空になり、最後の行も空
+  it("returns empty string for empty stderr", () => {
     const result = extractErrorReason("");
     expect(result).toBe("");
   });
 
-  it("空白のみのstderrの場合はnullを返す", () => {
-    // trim後に空になり、split結果の最後がundefinedになる可能性
+  it("returns empty for whitespace-only stderr", () => {
     const result = extractErrorReason("   \n  \n  ");
     expect(result).toBe("");
   });
 });
 
 describe("parseClaudeCodeStreamJson", () => {
-  it("stream-json形式からassistant/result/usageを抽出できる", () => {
+  it("extracts assistant/result/usage from stream-json format", () => {
     const output = `
 {"type":"system","subtype":"init"}
 {"type":"assistant","message":{"content":[{"type":"text","text":"First line"},{"type":"text","text":"Second line"}]}}
@@ -264,7 +262,7 @@ describe("parseClaudeCodeStreamJson", () => {
     expect(parsed.rawEvents).toHaveLength(3);
   });
 
-  it("パース不能な行を無視しつつerrorを拾える", () => {
+  it("picks up errors while ignoring unparseable lines", () => {
     const output = `
 not-json-line
 {"type":"assistant","error":"authentication_failed","message":{"content":[{"type":"text","text":"Auth failed"}]}}
@@ -280,7 +278,7 @@ not-json-line
     expect(parsed.rawEvents).toHaveLength(2);
   });
 
-  it("イベントがない場合は空で返す", () => {
+  it("returns empty when no events", () => {
     const parsed = parseClaudeCodeStreamJson("");
     expect(parsed.assistantText).toBe("");
     expect(parsed.resultText).toBe("");
@@ -291,7 +289,7 @@ not-json-line
     expect(parsed.rawEvents).toEqual([]);
   });
 
-  it("permission_denialsを抽出できる", () => {
+  it("extracts permission_denials", () => {
     const output = `
 {"type":"result","is_error":false,"result":"approval required","permission_denials":[{"tool_name":"Bash"}]}
 `;

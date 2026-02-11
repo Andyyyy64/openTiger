@@ -12,12 +12,12 @@ import {
 describe("TaskSchema", () => {
   const validTask = {
     id: "550e8400-e29b-41d4-a716-446655440000",
-    title: "ユーザー認証機能を実装",
-    goal: "pnpm test --filter=@openTiger/auth が全て通過",
+    title: "Implement user authentication",
+    goal: "pnpm test --filter=@openTiger/auth passes",
     context: {
       files: ["src/auth/login.ts", "src/auth/session.ts"],
-      specs: "OAuth2.0を使用した認証",
-      notes: "既存のDBスキーマを使用",
+      specs: "OAuth2.0 authentication",
+      notes: "Use existing DB schema",
     },
     allowedPaths: ["src/auth/**", "tests/auth/**"],
     commands: ["pnpm test --filter=@openTiger/auth", "pnpm typecheck"],
@@ -31,17 +31,17 @@ describe("TaskSchema", () => {
     updatedAt: new Date(),
   };
 
-  it("有効なタスクを検証できる", () => {
+  it("validates valid task", () => {
     const result = TaskSchema.safeParse(validTask);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.title).toBe("ユーザー認証機能を実装");
+      expect(result.data.title).toBe("Implement user authentication");
       expect(result.data.priority).toBe(10);
       expect(result.data.riskLevel).toBe("medium");
     }
   });
 
-  it("必須フィールドが欠けている場合は失敗する", () => {
+  it("fails when required fields missing", () => {
     const invalidTask = { ...validTask };
     // @ts-expect-error intentionally testing invalid input
     delete invalidTask.title;
@@ -50,23 +50,23 @@ describe("TaskSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("無効なUUIDを拒否する", () => {
+  it("rejects invalid UUID", () => {
     const invalidTask = { ...validTask, id: "invalid-uuid" };
     const result = TaskSchema.safeParse(invalidTask);
     expect(result.success).toBe(false);
   });
 
-  it("空のタイトルを拒否する", () => {
+  it("rejects empty title", () => {
     const invalidTask = { ...validTask, title: "" };
     const result = TaskSchema.safeParse(invalidTask);
     expect(result.success).toBe(false);
   });
 
-  it("デフォルト値が正しく適用される", () => {
+  it("applies defaults correctly", () => {
     const minimalTask = {
       id: "550e8400-e29b-41d4-a716-446655440000",
-      title: "テストタスク",
-      goal: "テストが通過する",
+      title: "Test task",
+      goal: "Tests pass",
       allowedPaths: ["src/**"],
       commands: ["pnpm test"],
       createdAt: new Date(),
@@ -87,69 +87,69 @@ describe("TaskSchema", () => {
 });
 
 describe("RiskLevel", () => {
-  it("有効なリスクレベルを受け入れる", () => {
+  it("accepts valid risk levels", () => {
     expect(RiskLevel.safeParse("low").success).toBe(true);
     expect(RiskLevel.safeParse("medium").success).toBe(true);
     expect(RiskLevel.safeParse("high").success).toBe(true);
   });
 
-  it("無効なリスクレベルを拒否する", () => {
+  it("rejects invalid risk levels", () => {
     expect(RiskLevel.safeParse("critical").success).toBe(false);
     expect(RiskLevel.safeParse("").success).toBe(false);
   });
 });
 
 describe("TaskRole", () => {
-  it("すべての有効なロールを受け入れる", () => {
+  it("accepts all valid roles", () => {
     const roles = ["worker", "tester", "docser"];
     for (const role of roles) {
       expect(TaskRole.safeParse(role).success).toBe(true);
     }
   });
 
-  it("無効なロールを拒否する", () => {
+  it("rejects invalid roles", () => {
     expect(TaskRole.safeParse("planner").success).toBe(false);
     expect(TaskRole.safeParse("judge").success).toBe(false);
   });
 });
 
 describe("TaskStatus", () => {
-  it("すべての有効なステータスを受け入れる", () => {
+  it("accepts all valid statuses", () => {
     const statuses = ["queued", "running", "done", "failed", "blocked", "cancelled"];
     for (const status of statuses) {
       expect(TaskStatus.safeParse(status).success).toBe(true);
     }
   });
 
-  it("無効なステータスを拒否する", () => {
+  it("rejects invalid statuses", () => {
     expect(TaskStatus.safeParse("pending").success).toBe(false);
     expect(TaskStatus.safeParse("completed").success).toBe(false);
   });
 });
 
 describe("TaskContext", () => {
-  it("完全なコンテキストを検証できる", () => {
+  it("validates full context", () => {
     const context = {
       files: ["src/index.ts", "src/utils.ts"],
-      specs: "RESTful APIの実装",
-      notes: "認証が必要",
+      specs: "RESTful API implementation",
+      notes: "Authentication required",
     };
     const result = TaskContext.safeParse(context);
     expect(result.success).toBe(true);
   });
 
-  it("部分的なコンテキストも有効", () => {
+  it("accepts partial context", () => {
     expect(TaskContext.safeParse({}).success).toBe(true);
     expect(TaskContext.safeParse({ files: ["a.ts"] }).success).toBe(true);
-    expect(TaskContext.safeParse({ specs: "仕様" }).success).toBe(true);
+    expect(TaskContext.safeParse({ specs: "specs" }).success).toBe(true);
   });
 });
 
 describe("CreateTaskInput", () => {
-  it("必須フィールドのみで作成できる", () => {
+  it("creates with required fields only", () => {
     const input = {
-      title: "新しいタスク",
-      goal: "テストが通過",
+      title: "New task",
+      goal: "Tests pass",
       allowedPaths: ["src/**"],
       commands: ["pnpm test"],
     };
@@ -157,11 +157,11 @@ describe("CreateTaskInput", () => {
     expect(result.success).toBe(true);
   });
 
-  it("id, status, createdAt, updatedAt は含めない", () => {
+  it("omits id, status, createdAt, updatedAt", () => {
     const input = {
       id: "550e8400-e29b-41d4-a716-446655440000",
-      title: "新しいタスク",
-      goal: "テストが通過",
+      title: "New task",
+      goal: "Tests pass",
       allowedPaths: ["src/**"],
       commands: ["pnpm test"],
       status: "done",
@@ -169,11 +169,11 @@ describe("CreateTaskInput", () => {
       updatedAt: new Date(),
     };
 
-    // CreateTaskInput はこれらのフィールドを除外している
+    // CreateTaskInput excludes these fields
     const result = CreateTaskInput.safeParse(input);
     expect(result.success).toBe(true);
     if (result.success) {
-      // strip されていないことを確認（Zodのデフォルト動作）
+      // Zod does not strip by default
       expect("id" in result.data).toBe(false);
       expect("status" in result.data).toBe(false);
     }
@@ -181,19 +181,19 @@ describe("CreateTaskInput", () => {
 });
 
 describe("UpdateTaskInput", () => {
-  it("部分的な更新を許可する", () => {
-    const update = { title: "更新されたタイトル" };
+  it("allows partial update", () => {
+    const update = { title: "Updated title" };
     const result = UpdateTaskInput.safeParse(update);
     expect(result.success).toBe(true);
   });
 
-  it("ステータスの更新を許可する", () => {
+  it("allows status update", () => {
     const update = { status: "done" as const };
     const result = UpdateTaskInput.safeParse(update);
     expect(result.success).toBe(true);
   });
 
-  it("空のオブジェクトも有効", () => {
+  it("accepts empty object", () => {
     const result = UpdateTaskInput.safeParse({});
     expect(result.success).toBe(true);
   });

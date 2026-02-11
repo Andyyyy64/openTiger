@@ -72,7 +72,7 @@ export async function executeOpenCodeOnce(
   let timedOut = false;
   let idleTimedOut = false;
   let quotaExceeded = false;
-  // resource_exhausted の場合は文言を切り替える
+  // Switch message for resource_exhausted
   let resourceExhausted = false;
   let permissionPromptBlocked = false;
   let printedErrorSummary = false;

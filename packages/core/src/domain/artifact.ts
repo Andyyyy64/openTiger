@@ -1,28 +1,28 @@
 import { z } from "zod";
 
-// 成果物の種類
+// Artifact type
 export const ArtifactType = z.enum([
   "pr", // Pull Request
-  "commit", // コミット
-  "ci_result", // CI実行結果
-  "branch", // ブランチ
-  "base_repo_diff", // ローカルベースリポジトリの差分
+  "commit", // commit
+  "ci_result", // CI result
+  "branch", // branch
+  "base_repo_diff", // local base repo diff
 ]);
 export type ArtifactType = z.infer<typeof ArtifactType>;
 
-// 成果物スキーマ
+// Artifact schema
 export const ArtifactSchema = z.object({
   id: z.string().uuid(),
   runId: z.string().uuid(),
   type: ArtifactType,
-  ref: z.string().nullable(), // PR番号、コミットSHA、ブランチ名など
+  ref: z.string().nullable(), // PR number, commit SHA, branch name, etc.
   url: z.string().url().nullable(),
-  metadata: z.record(z.unknown()).nullable(), // 追加情報
+  metadata: z.record(z.unknown()).nullable(), // extra info
   createdAt: z.date(),
 });
 export type Artifact = z.infer<typeof ArtifactSchema>;
 
-// 成果物作成時の入力スキーマ
+// Create artifact input schema
 export const CreateArtifactInput = ArtifactSchema.omit({
   id: true,
   createdAt: true,

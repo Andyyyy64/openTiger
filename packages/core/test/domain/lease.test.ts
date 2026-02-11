@@ -11,11 +11,11 @@ describe("LeaseSchema", () => {
     id: "550e8400-e29b-41d4-a716-446655440000",
     taskId: "550e8400-e29b-41d4-a716-446655440001",
     agentId: "worker-1",
-    expiresAt: new Date(Date.now() + 3600000), // 1時間後
+    expiresAt: new Date(Date.now() + 3600000), // 1 hour later
     createdAt: new Date(),
   };
 
-  it("有効なリースを検証できる", () => {
+  it("validates valid lease", () => {
     const result = LeaseSchema.safeParse(validLease);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -23,22 +23,22 @@ describe("LeaseSchema", () => {
     }
   });
 
-  it("無効なUUIDを拒否する", () => {
+  it("rejects invalid UUID", () => {
     const invalidLease = { ...validLease, taskId: "not-uuid" };
     const result = LeaseSchema.safeParse(invalidLease);
     expect(result.success).toBe(false);
   });
 
-  it("expiresAtはDate型が必須", () => {
+  it("requires expiresAt as Date", () => {
     const invalidLease = { ...validLease, expiresAt: "2025-01-20T00:00:00Z" };
-    // Zodは文字列をDateに変換しないのでこれは失敗する
+    // Zod does not coerce string to Date, so this fails
     const result = LeaseSchema.safeParse(invalidLease);
     expect(result.success).toBe(false);
   });
 });
 
 describe("AcquireLeaseInput", () => {
-  it("有効な取得入力を検証できる", () => {
+  it("validates valid acquire input", () => {
     const input = {
       taskId: "550e8400-e29b-41d4-a716-446655440000",
       agentId: "worker-1",
@@ -51,7 +51,7 @@ describe("AcquireLeaseInput", () => {
     }
   });
 
-  it("デフォルトの期間が適用される", () => {
+  it("applies default duration", () => {
     const input = {
       taskId: "550e8400-e29b-41d4-a716-446655440000",
       agentId: "worker-1",
@@ -63,7 +63,7 @@ describe("AcquireLeaseInput", () => {
     }
   });
 
-  it("0以下の期間を拒否する", () => {
+  it("rejects duration <= 0", () => {
     const input = {
       taskId: "550e8400-e29b-41d4-a716-446655440000",
       agentId: "worker-1",
@@ -73,7 +73,7 @@ describe("AcquireLeaseInput", () => {
     expect(result.success).toBe(false);
   });
 
-  it("負の期間を拒否する", () => {
+  it("rejects negative duration", () => {
     const input = {
       taskId: "550e8400-e29b-41d4-a716-446655440000",
       agentId: "worker-1",
@@ -93,7 +93,7 @@ describe("isLeaseValid", () => {
     vi.useRealTimers();
   });
 
-  it("有効期限内のリースはtrueを返す", () => {
+  it("returns true for lease within validity", () => {
     const now = new Date("2025-01-20T12:00:00Z");
     vi.setSystemTime(now);
 
@@ -101,14 +101,14 @@ describe("isLeaseValid", () => {
       id: "550e8400-e29b-41d4-a716-446655440000",
       taskId: "550e8400-e29b-41d4-a716-446655440001",
       agentId: "worker-1",
-      expiresAt: new Date("2025-01-20T13:00:00Z"), // 1時間後
+      expiresAt: new Date("2025-01-20T13:00:00Z"), // 1 hour later
       createdAt: new Date("2025-01-20T11:00:00Z"),
     };
 
     expect(isLeaseValid(lease)).toBe(true);
   });
 
-  it("有効期限切れのリースはfalseを返す", () => {
+  it("returns false for expired lease", () => {
     const now = new Date("2025-01-20T14:00:00Z");
     vi.setSystemTime(now);
 
@@ -116,14 +116,14 @@ describe("isLeaseValid", () => {
       id: "550e8400-e29b-41d4-a716-446655440000",
       taskId: "550e8400-e29b-41d4-a716-446655440001",
       agentId: "worker-1",
-      expiresAt: new Date("2025-01-20T13:00:00Z"), // 1時間前
+      expiresAt: new Date("2025-01-20T13:00:00Z"), // 1 hour ago
       createdAt: new Date("2025-01-20T11:00:00Z"),
     };
 
     expect(isLeaseValid(lease)).toBe(false);
   });
 
-  it("ちょうど有効期限の場合はfalseを返す", () => {
+  it("returns false exactly at expiry", () => {
     const now = new Date("2025-01-20T13:00:00Z");
     vi.setSystemTime(now);
 
@@ -131,7 +131,7 @@ describe("isLeaseValid", () => {
       id: "550e8400-e29b-41d4-a716-446655440000",
       taskId: "550e8400-e29b-41d4-a716-446655440001",
       agentId: "worker-1",
-      expiresAt: new Date("2025-01-20T13:00:00Z"), // 同じ時刻
+      expiresAt: new Date("2025-01-20T13:00:00Z"), // same time
       createdAt: new Date("2025-01-20T11:00:00Z"),
     };
 
@@ -148,7 +148,7 @@ describe("getLeaseRemainingMs", () => {
     vi.useRealTimers();
   });
 
-  it("残り時間をミリ秒で返す", () => {
+  it("returns remaining time in ms", () => {
     const now = new Date("2025-01-20T12:00:00Z");
     vi.setSystemTime(now);
 
@@ -156,14 +156,14 @@ describe("getLeaseRemainingMs", () => {
       id: "550e8400-e29b-41d4-a716-446655440000",
       taskId: "550e8400-e29b-41d4-a716-446655440001",
       agentId: "worker-1",
-      expiresAt: new Date("2025-01-20T12:30:00Z"), // 30分後
+      expiresAt: new Date("2025-01-20T12:30:00Z"), // 30 min later
       createdAt: new Date("2025-01-20T11:00:00Z"),
     };
 
-    expect(getLeaseRemainingMs(lease)).toBe(30 * 60 * 1000); // 30分
+    expect(getLeaseRemainingMs(lease)).toBe(30 * 60 * 1000); // 30 min
   });
 
-  it("有効期限切れの場合は0を返す", () => {
+  it("returns 0 when expired", () => {
     const now = new Date("2025-01-20T14:00:00Z");
     vi.setSystemTime(now);
 
@@ -178,7 +178,7 @@ describe("getLeaseRemainingMs", () => {
     expect(getLeaseRemainingMs(lease)).toBe(0);
   });
 
-  it("負の値にはならない", () => {
+  it("never returns negative", () => {
     const now = new Date("2025-01-20T15:00:00Z");
     vi.setSystemTime(now);
 
@@ -186,7 +186,7 @@ describe("getLeaseRemainingMs", () => {
       id: "550e8400-e29b-41d4-a716-446655440000",
       taskId: "550e8400-e29b-41d4-a716-446655440001",
       agentId: "worker-1",
-      expiresAt: new Date("2025-01-20T12:00:00Z"), // 3時間前
+      expiresAt: new Date("2025-01-20T12:00:00Z"), // 3 hours ago
       createdAt: new Date("2025-01-20T11:00:00Z"),
     };
 

@@ -1,58 +1,58 @@
 import { pgTable, uuid, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 
-// タスクテーブル: 作業単位を管理
+// Tasks table: work unit management
 export const tasks = pgTable("tasks", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: text("title").notNull(),
-  goal: text("goal").notNull(), // 完了条件
-  context: jsonb("context"), // 関連情報（files, specs, notes）
-  allowedPaths: text("allowed_paths").array().notNull(), // 変更許可パス
-  commands: text("commands").array().notNull(), // 検証コマンド
+  goal: text("goal").notNull(), // Completion condition
+  context: jsonb("context"), // Related info (files, specs, notes)
+  allowedPaths: text("allowed_paths").array().notNull(), // Allowed change paths
+  commands: text("commands").array().notNull(), // Verification commands
   priority: integer("priority").default(0).notNull(),
   riskLevel: text("risk_level").default("low").notNull(), // low/medium/high
   role: text("role").default("worker").notNull(), // worker/tester
   status: text("status").default("queued").notNull(), // queued/running/done/failed/blocked/cancelled
-  blockReason: text("block_reason"), // blocked理由（awaiting_judge/needs_rework）
-  targetArea: text("target_area"), // 担当領域（コンフリクト制御用）
-  touches: text("touches").array().default([]).notNull(), // 変更対象のファイル/ディレクトリ
-  dependencies: uuid("dependencies").array().default([]).notNull(), // 先行タスクID
+  blockReason: text("block_reason"), // Block reason (awaiting_judge/needs_rework)
+  targetArea: text("target_area"), // Assigned area (conflict control)
+  touches: text("touches").array().default([]).notNull(), // Target files/dirs
+  dependencies: uuid("dependencies").array().default([]).notNull(), // Preceding task IDs
   timeboxMinutes: integer("timebox_minutes").default(60).notNull(),
-  retryCount: integer("retry_count").default(0).notNull(), // リトライ回数
+  retryCount: integer("retry_count").default(0).notNull(), // Retry count
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// 実行記録テーブル: エージェントの実行履歴
+// Runs table: agent execution history
 export const runs = pgTable("runs", {
   id: uuid("id").primaryKey().defaultRandom(),
   taskId: uuid("task_id")
     .references(() => tasks.id)
     .notNull(),
-  agentId: text("agent_id").notNull(), // 実行エージェント識別子
+  agentId: text("agent_id").notNull(), // Executing agent id
   status: text("status").default("running").notNull(), // running/success/failed/cancelled
   startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
-  costTokens: integer("cost_tokens"), // 消費トークン数
-  logPath: text("log_path"), // ログファイルパス
+  costTokens: integer("cost_tokens"), // Token usage
+  logPath: text("log_path"), // Log file path
   errorMessage: text("error_message"),
   judgedAt: timestamp("judged_at", { withTimezone: true }),
   judgementVersion: integer("judgement_version").default(0).notNull(),
 });
 
-// 成果物テーブル: PR、コミット、CI結果など
+// Artifacts table: PR, commit, CI result, etc.
 export const artifacts = pgTable("artifacts", {
   id: uuid("id").primaryKey().defaultRandom(),
   runId: uuid("run_id")
     .references(() => runs.id)
     .notNull(),
   type: text("type").notNull(), // pr/commit/ci_result/branch
-  ref: text("ref"), // PR番号、コミットSHA等
+  ref: text("ref"), // PR number, commit SHA, etc.
   url: text("url"),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// リーステーブル: タスクの一時的な占有権（ロックの代替）
+// Leases table: temporary task ownership (lock alternative)
 export const leases = pgTable("leases", {
   id: uuid("id").primaryKey().defaultRandom(),
   taskId: uuid("task_id")
@@ -64,7 +64,7 @@ export const leases = pgTable("leases", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// イベントログテーブル: 監査用
+// Events table: audit log
 export const events = pgTable("events", {
   id: uuid("id").primaryKey().defaultRandom(),
   type: text("type").notNull(), // task.created, run.started, pr.merged, etc.
@@ -75,7 +75,7 @@ export const events = pgTable("events", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// エージェントテーブル: 登録されたエージェント
+// Agents table: registered agents
 export const agents = pgTable("agents", {
   id: text("id").primaryKey(),
   role: text("role").notNull(), // planner/worker/judge
@@ -86,25 +86,25 @@ export const agents = pgTable("agents", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// サイクルテーブル: 運用サイクルの管理（クリーン再スタート用）
+// Cycles table: run cycle management (for clean restart)
 export const cycles = pgTable("cycles", {
   id: uuid("id").primaryKey().defaultRandom(),
-  number: integer("number").notNull(), // サイクル番号（1, 2, 3...）
+  number: integer("number").notNull(), // Cycle number (1, 2, 3...)
   status: text("status").default("running").notNull(), // running/completed/aborted
   startedAt: timestamp("started_at", { withTimezone: true }).defaultNow().notNull(),
   endedAt: timestamp("ended_at", { withTimezone: true }),
-  // サイクル終了条件
+  // Cycle end condition
   triggerType: text("trigger_type"), // time/task_count/failure_rate/manual
-  // サイクル開始時の状態スナップショット
+  // State snapshot at cycle start
   stateSnapshot: jsonb("state_snapshot"),
-  // サイクル統計
+  // Cycle stats
   stats: jsonb("stats"), // { tasksCompleted, tasksFailed, totalTokens, etc. }
-  // サイクル終了理由
+  // Cycle end reason
   endReason: text("end_reason"),
   metadata: jsonb("metadata"),
 });
 
-// 設定テーブル: システム設定をDBに保存する
+// Config table: persist system config in DB
 export const config = pgTable("config", {
   id: uuid("id").primaryKey().defaultRandom(),
   maxConcurrentWorkers: text("max_concurrent_workers").default("-1").notNull(),
@@ -114,6 +114,7 @@ export const config = pgTable("config", {
   dispatcherEnabled: text("dispatcher_enabled").default("true").notNull(),
   judgeEnabled: text("judge_enabled").default("true").notNull(),
   cycleManagerEnabled: text("cycle_manager_enabled").default("true").notNull(),
+  executionEnvironment: text("execution_environment").default("host").notNull(),
   workerCount: text("worker_count").default("1").notNull(),
   testerCount: text("tester_count").default("1").notNull(),
   docserCount: text("docser_count").default("1").notNull(),
@@ -124,7 +125,7 @@ export const config = pgTable("config", {
   localRepoPath: text("local_repo_path").default("").notNull(),
   localWorktreeRoot: text("local_worktree_root").default("").notNull(),
   baseBranch: text("base_branch").default("main").notNull(),
-  llmExecutor: text("llm_executor").default("opencode").notNull(),
+  llmExecutor: text("llm_executor").default("claude_code").notNull(),
   opencodeModel: text("opencode_model").default("google/gemini-3-flash-preview").notNull(),
   opencodeSmallModel: text("opencode_small_model").default("google/gemini-2.5-flash").notNull(),
   opencodeWaitOnQuota: text("opencode_wait_on_quota").default("true").notNull(),
@@ -133,7 +134,7 @@ export const config = pgTable("config", {
   claudeCodePermissionMode: text("claude_code_permission_mode")
     .default("bypassPermissions")
     .notNull(),
-  claudeCodeModel: text("claude_code_model").default("claude-sonnet-4-5").notNull(),
+  claudeCodeModel: text("claude_code_model").default("claude-opus-4-6").notNull(),
   claudeCodeMaxTurns: text("claude_code_max_turns").default("0").notNull(),
   claudeCodeAllowedTools: text("claude_code_allowed_tools").default("").notNull(),
   claudeCodeDisallowedTools: text("claude_code_disallowed_tools").default("").notNull(),
@@ -153,6 +154,7 @@ export const config = pgTable("config", {
     .notNull(),
   replanWorkdir: text("replan_workdir").default("").notNull(),
   replanRepoUrl: text("replan_repo_url").default("").notNull(),
+  githubAuthMode: text("github_auth_mode").default("gh").notNull(),
   githubToken: text("github_token").default("").notNull(),
   githubOwner: text("github_owner").default("").notNull(),
   githubRepo: text("github_repo").default("").notNull(),
@@ -166,7 +168,7 @@ export const config = pgTable("config", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// 型エクスポート
+// Type exports
 export type TaskRecord = typeof tasks.$inferSelect;
 export type NewTaskRecord = typeof tasks.$inferInsert;
 

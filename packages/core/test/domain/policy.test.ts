@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { PolicySchema, DEFAULT_POLICY } from "../../src/domain/policy";
 
 describe("PolicySchema", () => {
-  it("完全なポリシーを検証できる", () => {
+  it("validates full policy", () => {
     const policy = {
       allowedPaths: ["src/**", "tests/**"],
       deniedPaths: ["node_modules/**", ".env"],
@@ -29,7 +29,7 @@ describe("PolicySchema", () => {
     }
   });
 
-  it("デフォルト値が正しく適用される", () => {
+  it("applies defaults correctly", () => {
     const result = PolicySchema.safeParse({});
     expect(result.success).toBe(true);
     if (result.success) {
@@ -44,7 +44,7 @@ describe("PolicySchema", () => {
     }
   });
 
-  it("部分的なポリシーにデフォルトがマージされる", () => {
+  it("merges defaults into partial policy", () => {
     const partialPolicy = {
       allowedPaths: ["src/api/**"],
       maxLinesChanged: 200,
@@ -55,13 +55,13 @@ describe("PolicySchema", () => {
     if (result.success) {
       expect(result.data.allowedPaths).toEqual(["src/api/**"]);
       expect(result.data.maxLinesChanged).toBe(200);
-      // デフォルトが適用される
+      // Defaults applied
       expect(result.data.maxFilesChanged).toBe(20);
       expect(result.data.autoMerge.enabled).toBe(false);
     }
   });
 
-  it("autoMergeのmaxRiskLevelはlow/medium/highを受け入れる", () => {
+  it("autoMerge maxRiskLevel accepts low/medium/high", () => {
     const validLow = {
       autoMerge: { enabled: true, maxRiskLevel: "low" as const },
     };
@@ -81,7 +81,7 @@ describe("PolicySchema", () => {
     expect(PolicySchema.safeParse(invalid).success).toBe(false);
   });
 
-  it("負の数を拒否する", () => {
+  it("rejects negative numbers", () => {
     const invalidPolicy = {
       maxLinesChanged: -100,
     };
@@ -90,7 +90,7 @@ describe("PolicySchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("ゼロを拒否する", () => {
+  it("rejects zero", () => {
     const invalidPolicy = {
       maxFilesChanged: 0,
     };
@@ -101,26 +101,26 @@ describe("PolicySchema", () => {
 });
 
 describe("DEFAULT_POLICY", () => {
-  it("デフォルトポリシーが正しく定義されている", () => {
+  it("defines default policy correctly", () => {
     expect(DEFAULT_POLICY.allowedPaths).toEqual(["**/*"]);
     expect(DEFAULT_POLICY.deniedPaths).toEqual([]);
     expect(DEFAULT_POLICY.maxLinesChanged).toBe(500);
     expect(DEFAULT_POLICY.maxFilesChanged).toBe(20);
   });
 
-  it("デフォルトの禁止コマンドが設定されている", () => {
+  it("sets default denied commands", () => {
     expect(DEFAULT_POLICY.deniedCommands).toContain("rm -rf /");
     expect(DEFAULT_POLICY.deniedCommands).toContain("sudo");
     expect(DEFAULT_POLICY.deniedCommands).toContain("chmod 777");
   });
 
-  it("デフォルトでは自動マージが無効", () => {
+  it("disables auto-merge by default", () => {
     expect(DEFAULT_POLICY.autoMerge.enabled).toBe(false);
     expect(DEFAULT_POLICY.autoMerge.maxRiskLevel).toBe("low");
     expect(DEFAULT_POLICY.autoMerge.requiredChecks).toEqual([]);
   });
 
-  it("デフォルトのトークン制限が設定されている", () => {
+  it("sets default token limits", () => {
     expect(DEFAULT_POLICY.tokenLimits.perTask).toBe(1000000);
     expect(DEFAULT_POLICY.tokenLimits.perDay).toBe(50000000);
   });

@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { RunSchema, RunStatus, StartRunInput, CompleteRunInput } from "../../src/domain/run";
 
 describe("RunStatus", () => {
-  it("すべての有効なステータスを受け入れる", () => {
+  it("accepts all valid statuses", () => {
     const statuses = ["running", "success", "failed", "cancelled"];
     for (const status of statuses) {
       expect(RunStatus.safeParse(status).success).toBe(true);
     }
   });
 
-  it("無効なステータスを拒否する", () => {
+  it("rejects invalid statuses", () => {
     expect(RunStatus.safeParse("pending").success).toBe(false);
     expect(RunStatus.safeParse("done").success).toBe(false);
   });
@@ -28,7 +28,7 @@ describe("RunSchema", () => {
     errorMessage: null,
   };
 
-  it("有効な実行記録を検証できる", () => {
+  it("validates valid run record", () => {
     const result = RunSchema.safeParse(validRun);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -37,7 +37,7 @@ describe("RunSchema", () => {
     }
   });
 
-  it("完了した実行記録を検証できる", () => {
+  it("validates completed run record", () => {
     const completedRun = {
       ...validRun,
       status: "success" as const,
@@ -54,28 +54,28 @@ describe("RunSchema", () => {
     }
   });
 
-  it("失敗した実行記録にエラーメッセージを含められる", () => {
+  it("includes error message in failed run record", () => {
     const failedRun = {
       ...validRun,
       status: "failed" as const,
       finishedAt: new Date(),
-      errorMessage: "タイムアウト: 60分を超過",
+      errorMessage: "Timeout: exceeded 60 minutes",
     };
 
     const result = RunSchema.safeParse(failedRun);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.errorMessage).toBe("タイムアウト: 60分を超過");
+      expect(result.data.errorMessage).toBe("Timeout: exceeded 60 minutes");
     }
   });
 
-  it("負のトークン数を拒否する", () => {
+  it("rejects negative token count", () => {
     const invalidRun = { ...validRun, costTokens: -100 };
     const result = RunSchema.safeParse(invalidRun);
     expect(result.success).toBe(false);
   });
 
-  it("無効なUUIDを拒否する", () => {
+  it("rejects invalid UUID", () => {
     const invalidRun = { ...validRun, taskId: "not-a-uuid" };
     const result = RunSchema.safeParse(invalidRun);
     expect(result.success).toBe(false);
@@ -83,7 +83,7 @@ describe("RunSchema", () => {
 });
 
 describe("StartRunInput", () => {
-  it("有効な開始入力を検証できる", () => {
+  it("validates valid start input", () => {
     const input = {
       taskId: "550e8400-e29b-41d4-a716-446655440000",
       agentId: "worker-1",
@@ -92,13 +92,13 @@ describe("StartRunInput", () => {
     expect(result.success).toBe(true);
   });
 
-  it("taskIdが必須", () => {
+  it("requires taskId", () => {
     const input = { agentId: "worker-1" };
     const result = StartRunInput.safeParse(input);
     expect(result.success).toBe(false);
   });
 
-  it("agentIdが必須", () => {
+  it("requires agentId", () => {
     const input = { taskId: "550e8400-e29b-41d4-a716-446655440000" };
     const result = StartRunInput.safeParse(input);
     expect(result.success).toBe(false);
@@ -106,7 +106,7 @@ describe("StartRunInput", () => {
 });
 
 describe("CompleteRunInput", () => {
-  it("成功完了を検証できる", () => {
+  it("validates success completion", () => {
     const input = {
       status: "success" as const,
       costTokens: 10000,
@@ -115,25 +115,25 @@ describe("CompleteRunInput", () => {
     expect(result.success).toBe(true);
   });
 
-  it("失敗完了にエラーメッセージを含められる", () => {
+  it("includes error message in failed completion", () => {
     const input = {
       status: "failed" as const,
-      errorMessage: "コンパイルエラー",
+      errorMessage: "Compilation error",
     };
     const result = CompleteRunInput.safeParse(input);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.errorMessage).toBe("コンパイルエラー");
+      expect(result.data.errorMessage).toBe("Compilation error");
     }
   });
 
-  it("キャンセル完了を検証できる", () => {
+  it("validates cancelled completion", () => {
     const input = { status: "cancelled" as const };
     const result = CompleteRunInput.safeParse(input);
     expect(result.success).toBe(true);
   });
 
-  it("runningステータスは完了入力として無効", () => {
+  it("rejects running status as completion input", () => {
     const input = { status: "running" };
     const result = CompleteRunInput.safeParse(input);
     expect(result.success).toBe(false);

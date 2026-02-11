@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-// 変更されたファイル情報 (Claude Codeと共通の型定義が必要な場合は packages/core 等に移動すべきだが、
-// 現時点では重複を避けるためにエイリアスや名前変更を検討)
+// Changed file information (consider moving to packages/core if shared with Claude Code; using alias for now to avoid duplication)
 export const OpenCodeFileChange = z.object({
   path: z.string(),
   action: z.enum(["create", "modify", "delete"]),
@@ -10,7 +9,7 @@ export const OpenCodeFileChange = z.object({
 });
 export type OpenCodeFileChange = z.infer<typeof OpenCodeFileChange>;
 
-// トークン使用量情報
+// Token usage information
 export interface OpenCodeTokenUsage {
   inputTokens: number;
   outputTokens: number;
@@ -19,7 +18,7 @@ export interface OpenCodeTokenUsage {
   cacheWriteTokens?: number;
 }
 
-// パース結果
+// Parse result
 export interface OpenCodeParsedOutput {
   summary: string;
   fileChanges: OpenCodeFileChange[];
@@ -28,7 +27,7 @@ export interface OpenCodeParsedOutput {
   tokenUsage?: OpenCodeTokenUsage;
 }
 
-// トークン使用量を抽出
+// Extract token usage
 export function extractOpenCodeTokenUsage(output: string): OpenCodeTokenUsage | undefined {
   const jsonMatch = output.match(/"input_tokens"\s*:\s*(\d+).*?"output_tokens"\s*:\s*(\d+)/s);
   if (jsonMatch) {
@@ -55,7 +54,7 @@ export function extractOpenCodeTokenUsage(output: string): OpenCodeTokenUsage | 
   return undefined;
 }
 
-// OpenCodeの出力をパース
+// Parse OpenCode output
 export function parseOpenCodeOutput(output: string): OpenCodeParsedOutput {
   const tokenUsage = extractOpenCodeTokenUsage(output);
 

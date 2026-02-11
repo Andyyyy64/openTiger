@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-// Claude Codeの出力パース用
+// Parse Claude Code output
 
-// 変更されたファイル情報
+// Changed file information
 export const FileChange = z.object({
   path: z.string(),
   action: z.enum(["create", "modify", "delete"]),
@@ -11,7 +11,7 @@ export const FileChange = z.object({
 });
 export type FileChange = z.infer<typeof FileChange>;
 
-// トークン使用量情報
+// Token usage information
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
@@ -20,7 +20,7 @@ export interface TokenUsage {
   cacheWriteTokens?: number;
 }
 
-// パース結果
+// Parse result
 export interface ParsedOutput {
   summary: string;
   fileChanges: FileChange[];
@@ -43,13 +43,13 @@ export interface ClaudeCodeStreamParseResult {
   rawEvents: ClaudeCodeStreamEvent[];
 }
 
-// トークン使用量を抽出
+// Extract token usage
 export function extractTokenUsage(output: string): TokenUsage | undefined {
-  // Claude Code CLIの出力からトークン使用量を抽出
-  // 形式例: "Tokens: 1,234 input, 5,678 output (total: 6,912)"
-  // または JSON 形式: {"input_tokens": 1234, "output_tokens": 5678}
+  // Extract token usage from Claude Code CLI output
+  // Example format: "Tokens: 1,234 input, 5,678 output (total: 6,912)"
+  // Or JSON format: {"input_tokens": 1234, "output_tokens": 5678}
 
-  // JSON形式を試す
+  // Try JSON format
   const jsonMatch = output.match(/"input_tokens"\s*:\s*(\d+).*?"output_tokens"\s*:\s*(\d+)/s);
   if (jsonMatch) {
     const input = parseInt(jsonMatch[1] ?? "0", 10);
@@ -61,7 +61,7 @@ export function extractTokenUsage(output: string): TokenUsage | undefined {
     };
   }
 
-  // テキスト形式を試す
+  // Try text format
   const textMatch = output.match(/Tokens?:\s*([\d,]+)\s*input,?\s*([\d,]+)\s*output/i);
   if (textMatch) {
     const input = parseInt((textMatch[1] ?? "0").replace(/,/g, ""), 10);
@@ -73,7 +73,7 @@ export function extractTokenUsage(output: string): TokenUsage | undefined {
     };
   }
 
-  // 別の形式: "Total tokens used: 6912"
+  // Another format: "Total tokens used: 6912"
   const totalMatch = output.match(/Total\s+tokens?\s*(?:used)?:\s*([\d,]+)/i);
   if (totalMatch) {
     const total = parseInt((totalMatch[1] ?? "0").replace(/,/g, ""), 10);
@@ -87,11 +87,11 @@ export function extractTokenUsage(output: string): TokenUsage | undefined {
   return undefined;
 }
 
-// Claude Codeの出力をパース
+// Parse Claude Code output
 export function parseClaudeCodeOutput(output: string): ParsedOutput {
   const tokenUsage = extractTokenUsage(output);
 
-  // ファイル変更を抽出（Claude Code CLI の出力形式に依存）
+  // Extract file changes (depends on Claude Code CLI output format)
   const fileChanges: FileChange[] = [];
   const fileChangePattern = /(?:Created|Modified|Deleted)\s+([^\n]+)/g;
   let match;
@@ -112,7 +112,7 @@ export function parseClaudeCodeOutput(output: string): ParsedOutput {
     }
   }
 
-  // 実行されたコマンドを抽出
+  // Extract executed commands
   const commandsRun: string[] = [];
   const commandPattern = /\$\s+([^\n]+)/g;
   while ((match = commandPattern.exec(output)) !== null) {
@@ -122,7 +122,7 @@ export function parseClaudeCodeOutput(output: string): ParsedOutput {
     }
   }
 
-  // サマリーを抽出（最後の段落または "Summary:" 以降）
+  // Extract summary (last paragraph or after "Summary:")
   let summary = "Changes applied";
   const summaryMatch = output.match(/Summary:?\s*\n?([^\n]+)/i);
   if (summaryMatch?.[1]) {
@@ -276,9 +276,9 @@ export function parseClaudeCodeStreamJson(output: string): ClaudeCodeStreamParse
   };
 }
 
-// エラー出力から失敗理由を抽出
+// Extract failure reason from error output
 export function extractErrorReason(stderr: string): string | null {
-  // よくあるエラーパターンをチェック
+  // Check common error patterns
   if (stderr.includes("ENOENT")) {
     return "File or directory not found";
   }
@@ -292,7 +292,7 @@ export function extractErrorReason(stderr: string): string | null {
     return "API rate limit exceeded";
   }
 
-  // 最後の行を返す
+  // Return last line
   const lines = stderr.trim().split("\n");
   return lines.at(-1) ?? null;
 }

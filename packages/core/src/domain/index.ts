@@ -1,4 +1,4 @@
-// ドメインモデルのエクスポート
+// Domain model exports
 export * from "./task";
 export * from "./run";
 export * from "./artifact";

@@ -12,21 +12,21 @@ import {
 } from "../../src/domain/cycle";
 
 describe("CycleStatusSchema", () => {
-  it("すべての有効なステータスを受け入れる", () => {
+  it("accepts all valid statuses", () => {
     const statuses = ["running", "completed", "aborted"];
     for (const status of statuses) {
       expect(CycleStatusSchema.safeParse(status).success).toBe(true);
     }
   });
 
-  it("無効なステータスを拒否する", () => {
+  it("rejects invalid statuses", () => {
     expect(CycleStatusSchema.safeParse("pending").success).toBe(false);
     expect(CycleStatusSchema.safeParse("paused").success).toBe(false);
   });
 });
 
 describe("CycleTriggerTypeSchema", () => {
-  it("すべてのトリガータイプを受け入れる", () => {
+  it("accepts all trigger types", () => {
     const types = ["time", "task_count", "failure_rate", "manual"];
     for (const type of types) {
       expect(CycleTriggerTypeSchema.safeParse(type).success).toBe(true);
@@ -35,7 +35,7 @@ describe("CycleTriggerTypeSchema", () => {
 });
 
 describe("CycleStatsSchema", () => {
-  it("完全な統計を検証できる", () => {
+  it("validates full stats", () => {
     const stats = {
       tasksCompleted: 50,
       tasksFailed: 5,
@@ -57,7 +57,7 @@ describe("CycleStatsSchema", () => {
     }
   });
 
-  it("デフォルト値が適用される", () => {
+  it("applies defaults", () => {
     const result = CycleStatsSchema.safeParse({});
     expect(result.success).toBe(true);
     if (result.success) {
@@ -71,7 +71,7 @@ describe("CycleStatsSchema", () => {
 });
 
 describe("StateSnapshotSchema", () => {
-  it("有効なスナップショットを検証できる", () => {
+  it("validates valid snapshot", () => {
     const snapshot = {
       pendingTaskCount: 100,
       runningTaskCount: 5,
@@ -84,7 +84,7 @@ describe("StateSnapshotSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("文字列の日付を変換できる", () => {
+  it("coerces string date", () => {
     const snapshot = {
       pendingTaskCount: 100,
       runningTaskCount: 5,
@@ -102,9 +102,9 @@ describe("StateSnapshotSchema", () => {
 });
 
 describe("CycleConfigSchema", () => {
-  it("時間ベースの設定を検証できる", () => {
+  it("validates time-based config", () => {
     const config = {
-      maxDurationMs: 4 * 60 * 60 * 1000, // 4時間
+      maxDurationMs: 4 * 60 * 60 * 1000, // 4 hours
     };
 
     const result = CycleConfigSchema.safeParse(config);
@@ -114,7 +114,7 @@ describe("CycleConfigSchema", () => {
     }
   });
 
-  it("タスク数ベースの設定を検証できる", () => {
+  it("validates task-count based config", () => {
     const config = {
       maxTasksPerCycle: 100,
     };
@@ -123,7 +123,7 @@ describe("CycleConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("失敗率ベースの設定を検証できる", () => {
+  it("validates failure-rate based config", () => {
     const config = {
       maxFailureRate: 0.2, // 20%
       minTasksForFailureCheck: 20,
@@ -136,7 +136,7 @@ describe("CycleConfigSchema", () => {
     }
   });
 
-  it("失敗率は0-1の範囲に制限される", () => {
+  it("limits failure rate to 0-1", () => {
     const invalidOver = { maxFailureRate: 1.5 };
     const invalidUnder = { maxFailureRate: -0.1 };
 
@@ -144,7 +144,7 @@ describe("CycleConfigSchema", () => {
     expect(CycleConfigSchema.safeParse(invalidUnder).success).toBe(false);
   });
 
-  it("デフォルト値が適用される", () => {
+  it("applies defaults", () => {
     const result = CycleConfigSchema.safeParse({});
     expect(result.success).toBe(true);
     if (result.success) {
@@ -165,7 +165,7 @@ describe("CycleSchema", () => {
     startedAt: new Date(),
   };
 
-  it("実行中のサイクルを検証できる", () => {
+  it("validates running cycle", () => {
     const result = CycleSchema.safeParse(validCycle);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -174,7 +174,7 @@ describe("CycleSchema", () => {
     }
   });
 
-  it("完了したサイクルを検証できる", () => {
+  it("validates completed cycle", () => {
     const completedCycle = {
       ...validCycle,
       status: "completed" as const,
@@ -194,7 +194,7 @@ describe("CycleSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("サイクル番号は正の整数が必須", () => {
+  it("requires positive cycle number", () => {
     const invalidCycle = { ...validCycle, number: 0 };
     const result = CycleSchema.safeParse(invalidCycle);
     expect(result.success).toBe(false);
@@ -202,7 +202,7 @@ describe("CycleSchema", () => {
 });
 
 describe("NewCycleSchema", () => {
-  it("新しいサイクルを作成できる", () => {
+  it("creates new cycle", () => {
     const newCycle = {
       number: 1,
     };
@@ -211,7 +211,7 @@ describe("NewCycleSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("状態スナップショット付きで作成できる", () => {
+  it("creates with state snapshot", () => {
     const newCycle = {
       number: 2,
       stateSnapshot: {
@@ -229,7 +229,7 @@ describe("NewCycleSchema", () => {
 });
 
 describe("CycleEndEventSchema", () => {
-  it("サイクル終了イベントを検証できる", () => {
+  it("validates cycle end event", () => {
     const event = {
       cycleId: "550e8400-e29b-41d4-a716-446655440000",
       triggerType: "failure_rate" as const,
@@ -247,7 +247,7 @@ describe("CycleEndEventSchema", () => {
 });
 
 describe("AnomalyAlertSchema", () => {
-  it("高失敗率アラートを検証できる", () => {
+  it("validates high failure rate alert", () => {
     const alert = {
       type: "high_failure_rate" as const,
       severity: "warning" as const,
@@ -260,7 +260,7 @@ describe("AnomalyAlertSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("コストスパイクアラートを検証できる", () => {
+  it("validates cost spike alert", () => {
     const alert = {
       type: "cost_spike" as const,
       severity: "critical" as const,
@@ -272,7 +272,7 @@ describe("AnomalyAlertSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("すべてのアラートタイプを受け入れる", () => {
+  it("accepts all alert types", () => {
     const types = [
       "high_failure_rate",
       "cost_spike",
@@ -293,7 +293,7 @@ describe("AnomalyAlertSchema", () => {
     }
   });
 
-  it("無効な重大度を拒否する", () => {
+  it("rejects invalid severity", () => {
     const alert = {
       type: "cost_spike" as const,
       severity: "info", // invalid

@@ -14,7 +14,7 @@ export interface IssueInfo {
   state: string;
 }
 
-// Plannerが生成したタスクをIssue化するためのAPIをまとめる
+// APIs for converting planner-generated tasks into issues
 export async function createIssue(options: CreateIssueOptions): Promise<IssueInfo> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
@@ -36,7 +36,7 @@ export async function createIssue(options: CreateIssueOptions): Promise<IssueInf
   };
 }
 
-// Issueに関連情報を追記する
+// Append related information to an issue
 export async function addIssueComment(issueNumber: number, body: string): Promise<void> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
