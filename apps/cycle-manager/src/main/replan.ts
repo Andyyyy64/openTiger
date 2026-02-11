@@ -23,9 +23,19 @@ type ReplanDecision = {
 };
 
 const SHELL_CONTROL_PATTERN = /&&|\|\||[|;&<>`]/;
+const UNBORN_HEAD_SIGNATURE = "__UNBORN_HEAD__";
 let replanInProgress = false;
 let lastReplanAt: number | null = null;
 let warnedMissingRequirementPath = false;
+
+function isUnbornHeadError(stderr: string): boolean {
+  const normalized = stderr.toLowerCase();
+  return (
+    normalized.includes("ambiguous argument 'head'") ||
+    normalized.includes("unknown revision or path not in the working tree") ||
+    normalized.includes("needed a single revision")
+  );
+}
 
 function resolveGitHubAuthMode(rawValue: string | undefined): "gh" | "token" {
   return rawValue?.trim().toLowerCase() === "token" ? "token" : "gh";
@@ -130,7 +140,14 @@ async function fetchRepoHeadSha(repoUrl: string, baseBranch: string): Promise<st
       }
 
       const sha = stdout.trim().split(/\s+/)[0];
-      resolveResult(sha || undefined);
+      if (!sha) {
+        console.warn(
+          "[CycleManager] Remote branch has no commits yet. Using placeholder for replan signature.",
+        );
+        resolveResult(UNBORN_HEAD_SIGNATURE);
+        return;
+      }
+      resolveResult(sha);
     });
 
     child.on("error", (error) => {
@@ -163,12 +180,26 @@ async function fetchLocalHeadSha(workdir: string): Promise<string | undefined> {
 
     child.on("close", (code) => {
       if (code !== 0) {
+        if (isUnbornHeadError(stderr)) {
+          console.warn(
+            "[CycleManager] Local repository has no commits yet. Using placeholder for replan signature.",
+          );
+          resolveResult(UNBORN_HEAD_SIGNATURE);
+          return;
+        }
         console.warn("[CycleManager] git rev-parse failed:", stderr.trim());
         resolveResult(undefined);
         return;
       }
       const sha = stdout.trim().split(/\s+/)[0];
-      resolveResult(sha || undefined);
+      if (!sha) {
+        console.warn(
+          "[CycleManager] git rev-parse returned empty HEAD; using placeholder for replan signature.",
+        );
+        resolveResult(UNBORN_HEAD_SIGNATURE);
+        return;
+      }
+      resolveResult(sha);
     });
 
     child.on("error", (error) => {
