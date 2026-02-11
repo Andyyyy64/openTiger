@@ -13,7 +13,14 @@ Required:
 
 - `REPO_URL`
 - `BASE_BRANCH`
-- `GITHUB_TOKEN`
+- `GITHUB_AUTH_MODE` (`gh` or `token`, default: `gh`)
+- `GITHUB_OWNER`
+- `GITHUB_REPO`
+
+Notes:
+
+- If `GITHUB_AUTH_MODE=gh`, authenticate with GitHub CLI (`gh auth login`).
+- If `GITHUB_AUTH_MODE=token`, set `GITHUB_TOKEN`.
 
 ### `local`
 
@@ -38,6 +45,11 @@ Important flags:
 - `JUDGE_REQUEUE_ON_NON_APPROVE`
 
 ## 3. Launch Mode (`LAUNCH_MODE`)
+
+`system_config` key `EXECUTION_ENVIRONMENT` maps to launch mode:
+
+- `host` -> `LAUNCH_MODE=process`
+- `sandbox` -> `LAUNCH_MODE=docker`
 
 ### `process` (recommended)
 

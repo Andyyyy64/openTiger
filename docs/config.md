@@ -31,7 +31,8 @@ Configure these first:
 - `BASE_BRANCH`
 - `LOCAL_REPO_PATH`
 - `LOCAL_WORKTREE_ROOT`
-- `GITHUB_TOKEN`
+- `GITHUB_AUTH_MODE` (`gh` or `token`, default: `gh`)
+- `GITHUB_TOKEN` (required only when `GITHUB_AUTH_MODE=token`)
 - `GITHUB_OWNER`
 - `GITHUB_REPO`
 
@@ -57,6 +58,7 @@ Configure these first:
 
 ### 3.4 Agent Scaling and Switches
 
+- `EXECUTION_ENVIRONMENT` (`host` or `sandbox`)
 - `DISPATCHER_ENABLED`
 - `JUDGE_ENABLED`
 - `CYCLE_MANAGER_ENABLED`
@@ -68,6 +70,8 @@ Configure these first:
 
 Notes:
 
+- `EXECUTION_ENVIRONMENT=host` uses host process launch (`LAUNCH_MODE=process`).
+- `EXECUTION_ENVIRONMENT=sandbox` uses docker launch (`LAUNCH_MODE=docker`).
 - Planner is operationally capped to one process in system start logic.
 - Worker/tester/docser/judge can be scaled by count.
 
@@ -186,7 +190,8 @@ Examples:
 
 ## 8. Minimal Production Baseline
 
-- set valid GitHub token/owner/repo
+- set `GITHUB_AUTH_MODE` and valid `GITHUB_OWNER`/`GITHUB_REPO`
+- if `GITHUB_AUTH_MODE=token`, set valid `GITHUB_TOKEN`
 - set at least one working LLM API key and model
 - keep `PLANNER_COUNT=1`
 - set `WORKER_COUNT>=1`, `JUDGE_COUNT>=1`

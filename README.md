@@ -15,6 +15,7 @@ openTiger continuously runs requirement-to-task generation, implementation, revi
 - Review with Judge and apply auto-merge decisions
 - Self-recover on failure (retry, rework, re-evaluate)
 - Monitor tasks, runs, and agents from one dashboard
+- Switch execution runtime between host and sandbox from dashboard `system`
 
 ## What Makes It Different
 
@@ -41,6 +42,11 @@ pnpm install
 cp .env.example .env
 ```
 
+GitHub authentication defaults to `gh` mode.
+
+- Recommended: install GitHub CLI
+- Optional: set `GITHUB_AUTH_MODE=token` and provide `GITHUB_TOKEN`
+
 ### 2. Start
 
 Fastest path:
@@ -57,8 +63,9 @@ pnpm run up
 ### 4. First Run Flow
 
 1. Configure GitHub, model, and API keys in Dashboard `system_config`
-2. Load `templates/requirement.md` (or your own `requirement.md`) and start
-3. Monitor progress in `tasks`, `runs`, and `judgements`
+2. Choose execution environment in Dashboard `system` (`host` for native process, `sandbox` for Docker)
+3. Load `docs/requirement.md` (or your own requirement path) and start
+4. Monitor progress in `tasks`, `runs`, and `judgements`
 
 ## Best For Teams That
 
