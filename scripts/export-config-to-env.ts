@@ -19,6 +19,7 @@ const CONFIG_FIELDS: ConfigField[] = [
   { key: "DISPATCHER_ENABLED", column: "dispatcherEnabled", defaultValue: "true" },
   { key: "JUDGE_ENABLED", column: "judgeEnabled", defaultValue: "true" },
   { key: "CYCLE_MANAGER_ENABLED", column: "cycleManagerEnabled", defaultValue: "true" },
+  { key: "EXECUTION_ENVIRONMENT", column: "executionEnvironment", defaultValue: "host" },
   { key: "WORKER_COUNT", column: "workerCount", defaultValue: "1" },
   { key: "TESTER_COUNT", column: "testerCount", defaultValue: "1" },
   { key: "DOCSER_COUNT", column: "docserCount", defaultValue: "1" },
@@ -29,7 +30,7 @@ const CONFIG_FIELDS: ConfigField[] = [
   { key: "LOCAL_REPO_PATH", column: "localRepoPath", defaultValue: "" },
   { key: "LOCAL_WORKTREE_ROOT", column: "localWorktreeRoot", defaultValue: "" },
   { key: "BASE_BRANCH", column: "baseBranch", defaultValue: "main" },
-  { key: "LLM_EXECUTOR", column: "llmExecutor", defaultValue: "opencode" },
+  { key: "LLM_EXECUTOR", column: "llmExecutor", defaultValue: "claude_code" },
   { key: "OPENCODE_MODEL", column: "opencodeModel", defaultValue: "google/gemini-3-flash-preview" },
   {
     key: "OPENCODE_SMALL_MODEL",
@@ -51,7 +52,7 @@ const CONFIG_FIELDS: ConfigField[] = [
   {
     key: "CLAUDE_CODE_MODEL",
     column: "claudeCodeModel",
-    defaultValue: "claude-sonnet-4-5",
+    defaultValue: "claude-opus-4-6",
   },
   { key: "CLAUDE_CODE_MAX_TURNS", column: "claudeCodeMaxTurns", defaultValue: "0" },
   { key: "CLAUDE_CODE_ALLOWED_TOOLS", column: "claudeCodeAllowedTools", defaultValue: "" },
@@ -76,7 +77,7 @@ const CONFIG_FIELDS: ConfigField[] = [
   {
     key: "REPLAN_REQUIREMENT_PATH",
     column: "replanRequirementPath",
-    defaultValue: "requirement.md",
+    defaultValue: "docs/requirement.md",
   },
   { key: "REPLAN_INTERVAL_MS", column: "replanIntervalMs", defaultValue: "60000" },
   {
@@ -86,6 +87,7 @@ const CONFIG_FIELDS: ConfigField[] = [
   },
   { key: "REPLAN_WORKDIR", column: "replanWorkdir", defaultValue: "" },
   { key: "REPLAN_REPO_URL", column: "replanRepoUrl", defaultValue: "" },
+  { key: "GITHUB_AUTH_MODE", column: "githubAuthMode", defaultValue: "gh" },
   { key: "GITHUB_TOKEN", column: "githubToken", defaultValue: "" },
   { key: "GITHUB_OWNER", column: "githubOwner", defaultValue: "" },
   { key: "GITHUB_REPO", column: "githubRepo", defaultValue: "" },
@@ -190,9 +192,12 @@ const LEGACY_REPLAN_COMMANDS = new Set([
 const DEFAULT_REPLAN_COMMAND = "pnpm --filter @openTiger/planner run start:fresh";
 
 async function ensureConfigColumns(): Promise<void> {
-  // system_config が壊れていても動作するように不足カラムを補修する
+  // Repair missing columns so it works even when system_config is broken
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_wait_on_quota" text DEFAULT 'true' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "execution_environment" text DEFAULT 'host' NOT NULL`,
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_quota_retry_delay_ms" text DEFAULT '30000' NOT NULL`,
@@ -204,13 +209,13 @@ async function ensureConfigColumns(): Promise<void> {
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_small_model" text DEFAULT 'google/gemini-2.5-flash' NOT NULL`,
   );
   await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "llm_executor" text DEFAULT 'opencode' NOT NULL`,
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "llm_executor" text DEFAULT 'claude_code' NOT NULL`,
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_permission_mode" text DEFAULT 'bypassPermissions' NOT NULL`,
   );
   await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_model" text DEFAULT 'claude-sonnet-4-5' NOT NULL`,
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_model" text DEFAULT 'claude-opus-4-6' NOT NULL`,
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_max_turns" text DEFAULT '0' NOT NULL`,
@@ -229,6 +234,9 @@ async function ensureConfigColumns(): Promise<void> {
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_count" text DEFAULT '1' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "github_auth_mode" text DEFAULT 'gh' NOT NULL`,
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "tester_model" text DEFAULT 'google/gemini-3-flash-preview' NOT NULL`,
@@ -283,7 +291,7 @@ function createLegacyNormalizationPatch(
 async function ensureConfigRow(): Promise<typeof configTable.$inferSelect> {
   await ensureConfigColumns();
   return await db.transaction(async (tx) => {
-    // 同時起動時に二重作成を避ける
+    // Avoid duplicate creation on concurrent startup
     await tx.execute(sql`SELECT pg_advisory_xact_lock(703614, 1)`);
 
     const existing = await tx.select().from(configTable).limit(1);

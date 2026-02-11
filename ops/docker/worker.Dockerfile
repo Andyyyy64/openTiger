@@ -16,8 +16,8 @@ RUN apk add --no-cache \
     curl \
     bash
 
-# OpenCode CLIをインストール
-RUN npm install -g opencode-ai
+# OpenCode / Claude Code CLIをインストール
+RUN npm install -g opencode-ai @anthropic-ai/claude-code
 
 # GitHub CLIをインストール
 RUN apk add --no-cache github-cli
