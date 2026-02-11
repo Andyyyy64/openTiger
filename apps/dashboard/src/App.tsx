@@ -18,7 +18,8 @@ function App() {
     <BrowserRouter>
       <Layout>
         <Routes>
-          <Route path="/" element={<OverviewPage />} />
+          <Route path="/" element={<Navigate to="/start" replace />} />
+          <Route path="/overview" element={<OverviewPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/tasks/:id" element={<TaskDetailsPage />} />
           <Route path="/runs" element={<RunsPage />} />
@@ -32,7 +33,7 @@ function App() {
           <Route path="/requirement" element={<StartPage />} />
           <Route path="/system" element={<SettingsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/start" replace />} />
         </Routes>
       </Layout>
     </BrowserRouter>

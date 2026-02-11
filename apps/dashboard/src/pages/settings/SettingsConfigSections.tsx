@@ -64,9 +64,7 @@ export const SettingsConfigSections: React.FC<SettingsConfigSectionsProps> = ({
                   />
                   <div className="text-[10px] text-zinc-600 truncate">{field.description}</div>
                   {fieldWarning && (
-                    <div className="text-[10px] text-yellow-400 break-all">
-                      &gt; {fieldWarning}
-                    </div>
+                    <div className="text-[10px] text-yellow-400 break-all">&gt; {fieldWarning}</div>
                   )}
                   {helpLink && (
                     <a

@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { configApi, logsApi, systemApi, type SystemProcess } from "../lib/api";
+import { NeofetchPanel } from "../components/NeofetchPanel";
 
 const MAX_PLANNERS = 1;
+const DEFAULT_REQUIREMENT_PATH = "docs/requirement.md";
 
 const STATUS_LABELS: Record<SystemProcess["status"], string> = {
   idle: "IDLE",
@@ -25,6 +27,8 @@ type StartResult = {
   errors: string[];
   warnings: string[];
 };
+
+type ExecutionEnvironment = "host" | "sandbox";
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (!value) return fallback;
@@ -53,9 +57,21 @@ function parseCount(
 const formatTimestamp = (value?: string) =>
   value ? new Date(value).toLocaleTimeString() : "--:--:--";
 
+function isClaudeExecutor(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
+  );
+}
+
+function normalizeExecutionEnvironment(value: string | undefined): ExecutionEnvironment {
+  return value?.trim().toLowerCase() === "sandbox" ? "sandbox" : "host";
+}
+
 export const StartPage: React.FC = () => {
   const queryClient = useQueryClient();
-  const [requirementPath, setRequirementPath] = useState("requirement.md");
+  const [requirementPath, setRequirementPath] = useState(DEFAULT_REQUIREMENT_PATH);
   const [content, setContent] = useState("");
   const [loadMessage, setLoadMessage] = useState("");
   const [clearLogMessage, setClearLogMessage] = useState("");
@@ -81,6 +97,26 @@ export const StartPage: React.FC = () => {
     queryFn: () => systemApi.processes(),
     refetchInterval: 5000,
   });
+  const neofetchQuery = useQuery({
+    queryKey: ["system", "host-neofetch"],
+    queryFn: () => systemApi.neofetch(),
+    retry: 0,
+    refetchInterval: false,
+  });
+  const currentExecutor = config?.config.LLM_EXECUTOR;
+  const shouldCheckClaudeAuth = isClaudeExecutor(currentExecutor);
+  const neofetchOutput =
+    neofetchQuery.data?.available && neofetchQuery.data.output
+      ? neofetchQuery.data.output
+      : undefined;
+  const claudeAuthEnvironment = normalizeExecutionEnvironment(config?.config.EXECUTION_ENVIRONMENT);
+  const claudeAuthQuery = useQuery({
+    queryKey: ["system", "claude-auth", currentExecutor ?? "", claudeAuthEnvironment],
+    queryFn: () => systemApi.claudeAuthStatus(claudeAuthEnvironment),
+    enabled: shouldCheckClaudeAuth,
+    retry: 0,
+    refetchInterval: 120000,
+  });
 
   const planner = useMemo(
     () => processes?.find((process) => process.name === "planner"),
@@ -89,7 +125,7 @@ export const StartPage: React.FC = () => {
 
   useEffect(() => {
     if (!config?.config) return;
-    if (config.config.REPLAN_REQUIREMENT_PATH && requirementPath === "requirement.md") {
+    if (config.config.REPLAN_REQUIREMENT_PATH && requirementPath === DEFAULT_REQUIREMENT_PATH) {
       setRequirementPath(config.config.REPLAN_REQUIREMENT_PATH);
     }
     if (!repoOwner && config.config.GITHUB_OWNER) {
@@ -127,6 +163,8 @@ export const StartPage: React.FC = () => {
       const settings = config?.config;
       if (!settings) throw new Error("Config not loaded");
       const repoMode = (settings.REPO_MODE ?? "git").toLowerCase();
+      const executionEnvironment = normalizeExecutionEnvironment(settings.EXECUTION_ENVIRONMENT);
+      const sandboxExecution = executionEnvironment === "sandbox";
       const hasRepoUrl = Boolean(settings.REPO_URL?.trim());
       if (repoMode === "git" && !hasRepoUrl && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
         throw new Error("GitHub repo is not configured");
@@ -147,6 +185,17 @@ export const StartPage: React.FC = () => {
       ].filter((value): value is string => typeof value === "string");
 
       const hasRequirementContent = content.trim().length > 0;
+      if (hasRequirementContent) {
+        const syncResult = await systemApi.syncRequirement({
+          path: requirementPath,
+          content,
+        });
+        if (syncResult.committed) {
+          warnings.push("Requirement snapshot committed to docs/requirement.md");
+        } else if (syncResult.commitReason === "no_changes") {
+          warnings.push("Requirement snapshot is already up to date");
+        }
+      }
       const preflight = await systemApi.preflight({
         content,
         autoCreateIssueTasks: true,
@@ -173,6 +222,11 @@ export const StartPage: React.FC = () => {
       }
       if (hasRequirementContent && !recommendations.startPlanner) {
         warnings.push("Open issue/PR backlog detected; planner launch skipped for this run");
+      }
+      if (sandboxExecution) {
+        warnings.push(
+          "Sandbox mode is enabled. worker/tester/docser host processes are skipped; tasks run in docker.",
+        );
       }
 
       const started: string[] = [];
@@ -221,9 +275,15 @@ export const StartPage: React.FC = () => {
         await startProcess("cycle-manager");
       }
 
-      const workerStartCount = Math.min(workerCount.count, recommendations.workerCount);
-      const testerStartCount = Math.min(testerCount.count, recommendations.testerCount);
-      const docserStartCount = Math.min(docserCount.count, recommendations.docserCount);
+      const workerStartCount = sandboxExecution
+        ? 0
+        : Math.min(workerCount.count, recommendations.workerCount);
+      const testerStartCount = sandboxExecution
+        ? 0
+        : Math.min(testerCount.count, recommendations.testerCount);
+      const docserStartCount = sandboxExecution
+        ? 0
+        : Math.min(docserCount.count, recommendations.docserCount);
 
       for (let i = 1; i <= workerStartCount; i += 1) await startProcess(`worker-${i}`);
       for (let i = 1; i <= testerStartCount; i += 1) await startProcess(`tester-${i}`);
@@ -234,6 +294,7 @@ export const StartPage: React.FC = () => {
     onSuccess: (result) => {
       setStartResult(result);
       queryClient.invalidateQueries({ queryKey: ["system", "processes"] });
+      queryClient.invalidateQueries({ queryKey: ["config"] });
     },
     onError: (error) => {
       setStartResult({
@@ -264,10 +325,22 @@ export const StartPage: React.FC = () => {
     },
   });
 
+  const executionEnvironmentMutation = useMutation({
+    mutationFn: (executionEnvironment: ExecutionEnvironment) =>
+      configApi.update({ EXECUTION_ENVIRONMENT: executionEnvironment }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config"] });
+    },
+  });
+
   const configValues = config?.config ?? {};
+  const executionEnvironment = normalizeExecutionEnvironment(configValues.EXECUTION_ENVIRONMENT);
+  const launchModeLabel = executionEnvironment === "sandbox" ? "docker" : "process";
   const repoMode = (configValues.REPO_MODE ?? "git").toLowerCase();
   const isGitMode = repoMode === "git";
-  const hasGithubToken = Boolean(configValues.GITHUB_TOKEN?.trim());
+  const githubAuthMode = (configValues.GITHUB_AUTH_MODE ?? "gh").trim().toLowerCase();
+  const requiresGithubToken = githubAuthMode === "token";
+  const hasGithubAuth = requiresGithubToken ? Boolean(configValues.GITHUB_TOKEN?.trim()) : true;
   const repoUrl = configValues.REPO_URL?.trim();
   const isRepoMissing =
     isGitMode && !repoUrl && (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO);
@@ -323,6 +396,60 @@ export const StartPage: React.FC = () => {
           // Initialize planner from requirements.md and spawn subprocesses.
         </p>
       </div>
+      {shouldCheckClaudeAuth && claudeAuthQuery.data && !claudeAuthQuery.data.authenticated && (
+        <div className="border border-yellow-600 bg-yellow-900/10 p-3 text-xs font-mono text-yellow-500">
+          &gt; WARN: Claude Code is not ready.{" "}
+          {claudeAuthQuery.data.message ??
+            "Run `claude` and complete `/login` before starting execution."}
+        </div>
+      )}
+      {shouldCheckClaudeAuth && claudeAuthQuery.isError && (
+        <div className="border border-yellow-600 bg-yellow-900/10 p-3 text-xs font-mono text-yellow-500">
+          &gt; WARN: Failed to check Claude Code authentication status.
+        </div>
+      )}
+      <section className="border border-term-border p-0">
+        <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
+          <h2 className="text-sm font-bold uppercase tracking-wider">Execution_Environment</h2>
+        </div>
+        <div className="p-4 space-y-3 font-mono text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-[220px_auto] gap-3 items-center">
+            <select
+              value={executionEnvironment}
+              onChange={(event) =>
+                executionEnvironmentMutation.mutate(
+                  normalizeExecutionEnvironment(event.target.value),
+                )
+              }
+              disabled={executionEnvironmentMutation.isPending}
+              className="w-full bg-black border border-term-border text-sm text-term-fg px-2 py-1 font-mono focus:border-term-tiger focus:outline-none disabled:opacity-50"
+            >
+              <option value="host">host</option>
+              <option value="sandbox">sandbox</option>
+            </select>
+            <div className="text-xs text-zinc-500">
+              {`// launch mode: ${launchModeLabel} (${executionEnvironment === "sandbox" ? "docker container" : "host process"})`}
+            </div>
+          </div>
+          <div className="text-[10px] text-zinc-500">
+            {"// Applies when processes are (re)started from this page."}
+          </div>
+          {executionEnvironmentMutation.isPending && (
+            <div className="text-[10px] text-zinc-500">&gt; ENV_UPDATING...</div>
+          )}
+          {executionEnvironmentMutation.isSuccess && !executionEnvironmentMutation.isPending && (
+            <div className="text-[10px] text-green-400">&gt; ENV_UPDATED</div>
+          )}
+          {executionEnvironmentMutation.isError && (
+            <div className="text-[10px] text-red-500">
+              &gt; ENV_UPDATE_ERR:{" "}
+              {executionEnvironmentMutation.error instanceof Error
+                ? executionEnvironmentMutation.error.message
+                : "Failed to update execution environment"}
+            </div>
+          )}
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* System Status Panel */}
@@ -423,14 +550,16 @@ export const StartPage: React.FC = () => {
                   />
                   <button
                     onClick={() => createRepoMutation.mutate()}
-                    disabled={!hasGithubToken || createRepoMutation.isPending}
+                    disabled={!hasGithubAuth || createRepoMutation.isPending}
                     className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
                   >
                     [ CREATE ]
                   </button>
                 </div>
-                {!hasGithubToken && (
-                  <div className="text-yellow-500">GitHub token is missing in System config</div>
+                {!hasGithubAuth && (
+                  <div className="text-yellow-500">
+                    `GITHUB_AUTH_MODE=token` requires `GITHUB_TOKEN` in System config
+                  </div>
                 )}
                 {repoMessage && (
                   <div className="text-[10px] text-zinc-500 font-mono">{repoMessage}</div>
@@ -517,7 +646,7 @@ export const StartPage: React.FC = () => {
           </div>
         </section>
       </div>
-
+      {neofetchOutput && <NeofetchPanel output={neofetchOutput} />}
       {/* Legacy Planner Logs */}
       <section className="border border-term-border p-0">
         <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">

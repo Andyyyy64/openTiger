@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { agentsApi, configApi, tasksApi } from "../lib/api";
 import { Link } from "react-router-dom";
 
-const CLAUDE_CODE_DEFAULT_MODEL = "claude-sonnet-4-5";
+const CLAUDE_CODE_DEFAULT_MODEL = "claude-opus-4-6";
 
 function isClaudeExecutor(value: string | undefined): boolean {
   if (!value) return false;
@@ -94,7 +94,7 @@ export const AgentsPage: React.FC = () => {
 
       {blockedByDepsWithIdleWorkers && (
         <div className="mb-8 border border-yellow-600 p-4 text-sm text-yellow-500 font-bold bg-yellow-900/10">
-          [WARNING] 依存関係が未完了のため、待機中タスクがディスパッチできません。
+          [WARNING] Dependencies incomplete; queued tasks cannot be dispatched.
           <br />
           &gt; QUEUED: {queuedTasks.length} | BLOCKED: {queuedBlockedByDeps.length} | IDLE_WORKERS:{" "}
           {idleWorkers.length}

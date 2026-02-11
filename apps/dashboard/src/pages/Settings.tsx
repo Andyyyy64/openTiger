@@ -24,7 +24,7 @@ const API_KEY_KEYS = new Set([
 ]);
 
 function normalizeExecutor(value?: string): ExecutorMode {
-  return value === "claude_code" ? "claude_code" : "opencode";
+  return value === "opencode" ? "opencode" : "claude_code";
 }
 
 export const SettingsPage: React.FC = () => {
@@ -49,12 +49,14 @@ export const SettingsPage: React.FC = () => {
   }, [data]);
 
   const selectedExecutor = normalizeExecutor(values.LLM_EXECUTOR);
-  const hasGithubToken = Boolean(values.GITHUB_TOKEN?.trim());
+  const githubAuthMode = (values.GITHUB_AUTH_MODE ?? "gh").trim().toLowerCase();
+  const requiresGithubToken = githubAuthMode === "token";
+  const hasGithubAuth = requiresGithubToken ? Boolean(values.GITHUB_TOKEN?.trim()) : true;
   const githubOwner = values.GITHUB_OWNER?.trim();
   const githubReposQuery = useQuery({
     queryKey: ["system", "github-repos", githubOwner ?? ""],
     queryFn: () => systemApi.listGithubRepos({ owner: githubOwner || undefined }),
-    enabled: hasGithubToken,
+    enabled: hasGithubAuth,
   });
   const githubRepos = useMemo(() => githubReposQuery.data ?? [], [githubReposQuery.data]);
 
@@ -115,11 +117,14 @@ export const SettingsPage: React.FC = () => {
   );
 
   const grouped = useMemo<[string, SettingField[]][]>(() => {
-    // 実行エンジン依存の項目だけを切り替え、共通設定は常に表示する。
+    // Swap only executor-dependent items; always show common settings
     return GROUPED_SETTINGS.map(([group, fields]) => {
       const filteredFields = fields.filter((field) => {
         if (field.key === "LLM_EXECUTOR") {
           return false;
+        }
+        if (field.key === "GITHUB_TOKEN") {
+          return githubAuthMode === "token";
         }
         if (field.key.startsWith("OPENCODE_")) {
           return selectedExecutor === "opencode";
@@ -127,7 +132,7 @@ export const SettingsPage: React.FC = () => {
         if (EXECUTOR_MODEL_KEYS.has(field.key)) {
           return selectedExecutor === "opencode";
         }
-        // Claude Code でも Anthropic API キー設定を必ず表示する。
+        // Always show Anthropic API key config even for Claude Code
         if (field.key === "ANTHROPIC_API_KEY") {
           return true;
         }
@@ -141,7 +146,7 @@ export const SettingsPage: React.FC = () => {
       });
       return [group, filteredFields] as [string, SettingField[]];
     }).filter(([, fields]) => fields.length > 0);
-  }, [selectedExecutor]);
+  }, [githubAuthMode, selectedExecutor]);
 
   const handleSave = () => {
     setSaveMessage("");
@@ -190,7 +195,7 @@ export const SettingsPage: React.FC = () => {
 
   const applySelectedRepo = () => {
     if (!selectedRepo) return;
-    // リポジトリ選択時に GitHub と Repo 関連キーをまとめて同期する。
+    // Sync GitHub and Repo keys when repository is selected
     setValues((prev) => ({
       ...prev,
       GITHUB_OWNER: selectedRepo.owner,
@@ -271,7 +276,7 @@ export const SettingsPage: React.FC = () => {
           ))}
         </div>
       )}
-      {/* システム操作パネル */}
+      {/* System operations panel */}
       <SystemControlPanel cleanup={cleanupPanel} stopAll={stopAllPanel} />
 
       <section className="border border-term-border p-0">
@@ -305,9 +310,15 @@ export const SettingsPage: React.FC = () => {
           <h2 className="text-sm font-bold uppercase tracking-wider">GitHub_Repository</h2>
         </div>
         <div className="p-4 space-y-4 font-mono text-sm">
-          {!hasGithubToken && (
+          {githubAuthMode === "gh" && (
+            <div className="text-zinc-500 text-xs">
+              &gt; Using `gh` auth mode. Ensure GitHub CLI is installed and `gh auth login` is
+              completed.
+            </div>
+          )}
+          {!hasGithubAuth && (
             <div className="text-yellow-500 text-xs">
-              &gt; GitHub token is missing. Save `GITHUB_TOKEN` first.
+              &gt; `GITHUB_AUTH_MODE=token` requires `GITHUB_TOKEN`.
             </div>
           )}
 
@@ -315,7 +326,7 @@ export const SettingsPage: React.FC = () => {
             <select
               value={selectedRepoFullName}
               onChange={(event) => setSelectedRepoFullName(event.target.value)}
-              disabled={!hasGithubToken || githubReposQuery.isLoading || githubRepos.length === 0}
+              disabled={!hasGithubAuth || githubReposQuery.isLoading || githubRepos.length === 0}
               className="w-full bg-black border border-term-border text-sm text-term-fg px-2 py-1 font-mono focus:border-term-tiger focus:outline-none disabled:opacity-50"
             >
               <option value="" disabled>
@@ -329,7 +340,7 @@ export const SettingsPage: React.FC = () => {
             </select>
             <button
               onClick={() => githubReposQuery.refetch()}
-              disabled={!hasGithubToken || githubReposQuery.isFetching}
+              disabled={!hasGithubAuth || githubReposQuery.isFetching}
               className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
             >
               {githubReposQuery.isFetching ? "[ REFRESHING ]" : "[ REFRESH ]"}
@@ -381,7 +392,7 @@ export const SettingsPage: React.FC = () => {
               />
               <button
                 onClick={() => createRepoMutation.mutate()}
-                disabled={!hasGithubToken || createRepoMutation.isPending}
+                disabled={!hasGithubAuth || createRepoMutation.isPending}
                 className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
               >
                 {createRepoMutation.isPending ? "[ CREATING ]" : "[ CREATE_NEW ]"}

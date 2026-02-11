@@ -2,7 +2,7 @@ import type { Task, Run, Agent, Artifact } from "@openTiger/core";
 
 /**
  * Dashboard API Client
- * @openTiger/api へのリクエストをラップする
+ * Wraps requests to @openTiger/api
  */
 
 const API_BASE_URL = "/api";
@@ -201,6 +201,13 @@ export interface RequirementResponse {
   content: string;
 }
 
+export interface RequirementSyncResponse {
+  requirementPath: string;
+  canonicalPath: string;
+  committed: boolean;
+  commitReason?: string;
+}
+
 export interface GitHubRepoInfo {
   owner: string;
   name: string;
@@ -217,6 +224,21 @@ export interface GitHubRepoListItem {
   defaultBranch: string;
   private: boolean;
   archived: boolean;
+}
+
+export interface ClaudeAuthStatus {
+  available: boolean;
+  authenticated: boolean;
+  executionEnvironment?: "host" | "sandbox";
+  checkedAt: string;
+  message?: string;
+}
+
+export interface HostNeofetchInfo {
+  available: boolean;
+  checkedAt: string;
+  output?: string;
+  message?: string;
 }
 
 export interface TaskRetryInfo {
@@ -240,13 +262,13 @@ export interface TaskRetryInfo {
 
 export type TaskView = Task & { retry?: TaskRetryInfo | null };
 
-// タスク関連
+// Task-related
 export const tasksApi = {
   list: () => fetchApi<{ tasks: TaskView[] }>("/tasks").then((res) => res.tasks),
   get: (id: string) => fetchApi<{ task: TaskView }>(`/tasks/${id}`).then((res) => res.task),
 };
 
-// 実行履歴関連
+// Run history
 export const runsApi = {
   list: (taskId?: string) =>
     fetchApi<{ runs: Run[] }>(`/runs${taskId ? `?taskId=${taskId}` : ""}`).then((res) => res.runs),
@@ -255,7 +277,7 @@ export const runsApi = {
   stats: () => fetchApi<{ dailyTokens: number; tokenLimit: number }>("/runs/stats"),
 };
 
-// システム状態
+// System state
 export const systemApi = {
   health: () => fetchApi<{ status: string; timestamp: string }>("/health"),
   processes: () =>
@@ -273,6 +295,11 @@ export const systemApi = {
     fetchApi<RequirementResponse>(
       `/system/requirements${path ? `?path=${encodeURIComponent(path)}` : ""}`,
     ),
+  syncRequirement: (payload: { path?: string; content: string }) =>
+    fetchApi<RequirementSyncResponse>("/system/requirements", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   cleanup: () => fetchApi<{ cleaned: boolean }>("/system/cleanup", { method: "POST" }),
   stopAllProcesses: () =>
     fetchApi<{ stopped: string[]; skipped: string[]; message: string }>(
@@ -304,15 +331,22 @@ export const systemApi = {
       method: "POST",
       body: JSON.stringify(payload ?? {}),
     }),
+  claudeAuthStatus: (environment?: "host" | "sandbox") =>
+    fetchApi<ClaudeAuthStatus>(
+      `/system/claude/auth${
+        environment ? `?environment=${encodeURIComponent(environment)}` : ""
+      }`,
+    ),
+  neofetch: () => fetchApi<HostNeofetchInfo>("/system/host/neofetch"),
 };
 
-// エージェント関連
+// Agent-related
 export const agentsApi = {
   list: () => fetchApi<{ agents: Agent[] }>("/agents").then((res) => res.agents),
   get: (id: string) => fetchApi<{ agent: Agent }>(`/agents/${id}`).then((res) => res.agent),
 };
 
-// Planner関連
+// Planner-related
 export const plansApi = {
   list: (limit?: number) =>
     fetchApi<{ plans: PlanSnapshot[] }>(`/plans${limit ? `?limit=${limit}` : ""}`).then(
@@ -320,7 +354,7 @@ export const plansApi = {
     ),
 };
 
-// Judge関連
+// Judge-related
 export const judgementsApi = {
   list: (params?: { taskId?: string; runId?: string; verdict?: string; limit?: number }) => {
     const query = new URLSearchParams();
@@ -341,7 +375,7 @@ export const judgementsApi = {
   },
 };
 
-// ログ関連
+// Log-related
 export const logsApi = {
   agent: (agentId: string, lines?: number) => {
     const query = new URLSearchParams();
@@ -366,7 +400,7 @@ export const logsApi = {
   clear: () => fetchApi<ClearLogsResponse>("/logs/clear", { method: "POST" }),
 };
 
-// 設定関連
+// Config-related
 export const configApi = {
   get: () => fetchApi<ConfigResponse>("/config"),
   update: (updates: Record<string, string>) =>

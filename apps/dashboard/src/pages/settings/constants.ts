@@ -1,6 +1,8 @@
-// 設定フォームの定義と表示順を集約する
+// Settings form definitions and display order
 export const REPO_MODE_OPTIONS = ["git", "local"] as const;
+export const GITHUB_AUTH_MODE_OPTIONS = ["gh", "token"] as const;
 export const LLM_EXECUTOR_OPTIONS = ["opencode", "claude_code"] as const;
+export const EXECUTION_ENVIRONMENT_OPTIONS = ["host", "sandbox"] as const;
 export const CLAUDE_PERMISSION_MODE_OPTIONS = [
   "default",
   "acceptEdits",
@@ -10,6 +12,7 @@ export const CLAUDE_PERMISSION_MODE_OPTIONS = [
   "plan",
 ] as const;
 export const CLAUDE_CODE_MODEL_OPTIONS = [
+  "claude-opus-4-6",
   "claude-sonnet-4-5",
   "claude-sonnet-4-5-20250929",
   "claude-sonnet-4-20250514",
@@ -17,27 +20,28 @@ export const CLAUDE_CODE_MODEL_OPTIONS = [
   "claude-opus-4-5-20251101",
   "claude-opus-4-20250514",
 ] as const;
-// OpenCodeの対応モデル一覧
+// OpenCode supported models
 // Reference: https://opencode.ai/docs/providers
 export const MODEL_OPTIONS = [
-  // Google Gemini 3系
+  // Google Gemini 3
   "google/gemini-3-pro-preview",
   "google/gemini-3-flash-preview",
-  // Google Gemini 2系
+  // Google Gemini 2
   "google/gemini-2.5-pro",
   "google/gemini-2.5-flash",
   "google/gemini-2.5-flash-lite",
   "google/gemini-2.0-flash",
   "google/gemini-2.0-flash-lite",
-  // Claude Sonnet 4/4.5系
+  // Claude Sonnet 4/4.5
   "anthropic/claude-sonnet-4-20250514",
   "anthropic/claude-sonnet-4-5",
   "anthropic/claude-sonnet-4-5-20250929",
-  // Claude Opus 4/4.5系
+  // Claude Opus 4/4.5
+  "anthropic/claude-opus-4-6",
   "anthropic/claude-opus-4-20250514",
   "anthropic/claude-opus-4-5",
   "anthropic/claude-opus-4-5-20251101",
-  // OpenAI Codex系
+  // OpenAI Codex
   "openai/codex-mini-latest",
   "openai/gpt-5-codex",
   "openai/gpt-5.1-codex",
@@ -56,17 +60,17 @@ export type SettingField = {
   options?: readonly string[];
 };
 
-// 空だと主要フローが動かない設定を必須扱いにする。
-export const REQUIRED_SETTING_KEYS = new Set<string>([
-  "GITHUB_TOKEN",
-  "GITHUB_OWNER",
-  "REPO_URL",
-]);
+// Treat as required if empty would break main flow
+export const REQUIRED_SETTING_KEYS = new Set<string>(["GITHUB_OWNER", "REPO_URL"]);
 
 export function isSettingRequired(
   key: string,
   values: Record<string, string> | undefined,
 ): boolean {
+  if (key === "GITHUB_TOKEN") {
+    const authMode = (values?.GITHUB_AUTH_MODE ?? "gh").trim().toLowerCase();
+    return authMode === "token";
+  }
   if (REQUIRED_SETTING_KEYS.has(key)) {
     return true;
   }
@@ -74,7 +78,7 @@ export function isSettingRequired(
   if (!autoReplanEnabled) {
     return false;
   }
-  return key === "REPLAN_REQUIREMENT_PATH" || key === "REPLAN_WORKDIR";
+  return key === "REPLAN_REQUIREMENT_PATH";
 }
 
 type FieldHelpLink = {
@@ -82,8 +86,12 @@ type FieldHelpLink = {
   url: string;
 };
 
-// 補助ドキュメントへ誘導したい設定だけリンクを持たせる。
+// Add links only for settings that should link to supporting docs
 export const FIELD_HELP_LINKS: Partial<Record<string, FieldHelpLink>> = {
+  GITHUB_AUTH_MODE: {
+    label: "Install GitHub CLI",
+    url: "https://cli.github.com/",
+  },
   GITHUB_TOKEN: {
     label: "Create GitHub Personal Access Token",
     url: "https://github.com/settings/personal-access-tokens",
@@ -139,6 +147,14 @@ export const SETTINGS: SettingField[] = [
     description: "Include cycle manager",
     group: "Runtime",
     type: "boolean",
+  },
+  {
+    key: "EXECUTION_ENVIRONMENT",
+    label: "Execution_Environment",
+    description: "host=process runtime, sandbox=docker runtime",
+    group: "Runtime",
+    type: "select",
+    options: EXECUTION_ENVIRONMENT_OPTIONS,
   },
   {
     key: "WORKER_COUNT",
@@ -385,7 +401,7 @@ export const SETTINGS: SettingField[] = [
   {
     key: "REPLAN_WORKDIR",
     label: "Replan_Workdir",
-    description: "Workdir for replan cmd",
+    description: "Workdir for replan cmd (optional; defaults to repo root)",
     group: "Planner",
     type: "text",
   },
@@ -396,11 +412,19 @@ export const SETTINGS: SettingField[] = [
     group: "Planner",
     type: "text",
   },
-  // GitHub関連
+  // GitHub-related
+  {
+    key: "GITHUB_AUTH_MODE",
+    label: "GitHub_Auth_Mode",
+    description: "Auth mode for GitHub access (gh or token)",
+    group: "GitHub",
+    type: "select",
+    options: GITHUB_AUTH_MODE_OPTIONS,
+  },
   {
     key: "GITHUB_TOKEN",
     label: "GitHub_Token",
-    description: "API token for GitHub",
+    description: "API token for GitHub (required in token mode)",
     group: "GitHub",
     type: "text",
   },
@@ -418,7 +442,7 @@ export const SETTINGS: SettingField[] = [
     group: "GitHub",
     type: "text",
   },
-  // APIキー
+  // API keys
   {
     key: "ANTHROPIC_API_KEY",
     label: "Anthropic_Key",
@@ -494,9 +518,14 @@ export const FIELD_DISPLAY_ORDER_BY_GROUP: Record<string, readonly string[]> = {
     "DEEPSEEK_API_KEY",
     "XAI_API_KEY",
   ],
-  GitHub: ["GITHUB_TOKEN", "GITHUB_OWNER", "GITHUB_REPO"],
+  GitHub: ["GITHUB_AUTH_MODE", "GITHUB_TOKEN", "GITHUB_OWNER", "GITHUB_REPO"],
   Repo: ["REPO_MODE", "REPO_URL", "BASE_BRANCH", "LOCAL_REPO_PATH", "LOCAL_WORKTREE_ROOT"],
-  Runtime: ["DISPATCHER_ENABLED", "JUDGE_ENABLED", "CYCLE_MANAGER_ENABLED"],
+  Runtime: [
+    "EXECUTION_ENVIRONMENT",
+    "DISPATCHER_ENABLED",
+    "JUDGE_ENABLED",
+    "CYCLE_MANAGER_ENABLED",
+  ],
   Workers: ["WORKER_COUNT", "TESTER_COUNT", "DOCSER_COUNT", "JUDGE_COUNT", "PLANNER_COUNT"],
   Planner: [
     "AUTO_REPLAN",
