@@ -3,6 +3,7 @@ import { dirname, join, relative, resolve } from "node:path";
 import { getPlannerOpenCodeEnv } from "./opencode-config";
 import { generateAndParseWithRetry } from "./llm-json-retry";
 import type { Requirement } from "./parser";
+import { isRepoUninitialized } from "./planner-utils";
 import type { PlannedTaskInput, TaskGenerationResult } from "./strategies";
 
 type VerificationContractRule = {
@@ -482,6 +483,24 @@ export async function augmentVerificationCommandsForTasks(
     return options.result;
   }
 
+  const verifyOnUninitializedRepo =
+    (process.env.PLANNER_VERIFY_ON_UNINITIALIZED_REPO ?? "false").toLowerCase() === "true";
+  let repoUninitialized = false;
+  try {
+    repoUninitialized = await isRepoUninitialized(options.workdir);
+  } catch {
+    repoUninitialized = false;
+  }
+  if (repoUninitialized && !verifyOnUninitializedRepo) {
+    return {
+      ...options.result,
+      warnings: dedupeCommands([
+        ...options.result.warnings,
+        "Skipped verification command augmentation because repository is uninitialized.",
+      ]),
+    };
+  }
+
   const maxCommands = parsePositiveInt(
     process.env.PLANNER_VERIFY_MAX_COMMANDS,
     DEFAULT_MAX_COMMANDS,
@@ -493,9 +512,17 @@ export async function augmentVerificationCommandsForTasks(
 
   const tasks: PlannedTaskInput[] = [];
   for (const task of options.result.tasks) {
-    const originalCommands = sanitizeCommands(task.commands ?? [], maxCommands);
+    const explicitCommands = dedupeCommands(toStringArray(task.commands));
+    const originalCommands = sanitizeCommands(explicitCommands, maxCommands);
     let merged = [...originalCommands];
-    const shouldResolve = augmentNonEmpty || merged.length === 0;
+    const hasExplicitCommands = explicitCommands.length > 0;
+    const shouldResolve = augmentNonEmpty || !hasExplicitCommands;
+
+    // Keep author-provided commands as-is when present, even if strict runnable
+    // filtering removes them. This avoids expensive redundant LLM verification planning.
+    if (!augmentNonEmpty && hasExplicitCommands && merged.length === 0) {
+      merged = explicitCommands.slice(0, maxCommands);
+    }
 
     if (shouldResolve && (mode === "contract" || mode === "hybrid" || mode === "fallback")) {
       if (contract) {
