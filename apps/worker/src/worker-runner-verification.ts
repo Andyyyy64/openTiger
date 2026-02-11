@@ -46,6 +46,18 @@ type VerificationPhaseResult =
       result: WorkerResult;
     };
 
+function shouldEnableNoChangeVerificationFallback(): boolean {
+  const mode = (process.env.WORKER_NO_CHANGE_CONFIRM_MODE ?? "verify").trim().toLowerCase();
+  if (!mode) {
+    return true;
+  }
+  return !["off", "false", "strict", "disabled", "none"].includes(mode);
+}
+
+function hasMeaningfulVerificationPass(verifyResult: VerifyResult): boolean {
+  return verifyResult.commandResults.some((result) => result.outcome === "passed");
+}
+
 export async function runVerificationPhase(
   options: RunVerificationPhaseOptions,
 ): Promise<VerificationPhaseResult> {
@@ -126,6 +138,42 @@ export async function runVerificationPhase(
       if (verifyResult.success) {
         break;
       }
+    }
+  }
+
+  // 差分ゼロでも検証コマンド実行で成立するケースを no-op 成功として扱う
+  if (
+    !verifyResult.success &&
+    isNoChangeFailure(verifyResult.error) &&
+    shouldEnableNoChangeVerificationFallback() &&
+    (taskData.commands?.length ?? 0) > 0
+  ) {
+    console.warn(
+      "[Worker] No diff detected after recovery attempts; running no-change verification fallback.",
+    );
+    const fallbackVerifyResult = await verifyChanges({
+      repoPath,
+      commands: taskData.commands,
+      allowedPaths: verificationAllowedPaths,
+      policy: effectivePolicy,
+      baseBranch,
+      headBranch: branchName,
+      allowLockfileOutsidePaths: true,
+      allowEnvExampleOutsidePaths: repoMode === "local",
+      allowNoChanges: true,
+    });
+
+    if (fallbackVerifyResult.success && hasMeaningfulVerificationPass(fallbackVerifyResult)) {
+      console.log(
+        "[Worker] No-change fallback verified successfully. Accepting no-op completion for this task.",
+      );
+      verifyResult = fallbackVerifyResult;
+    } else if (!fallbackVerifyResult.success) {
+      verifyResult = fallbackVerifyResult;
+    } else {
+      console.warn(
+        "[Worker] No-change fallback skipped acceptance because no verification command produced a passing result.",
+      );
     }
   }
 
