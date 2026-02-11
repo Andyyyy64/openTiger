@@ -46,6 +46,8 @@ export const AgentsPage: React.FC = () => {
 
   const llmExecutor = config?.config.LLM_EXECUTOR;
   const useClaudeLabels = isClaudeExecutor(llmExecutor);
+  const configuredClaudeModel =
+    normalizeClaudeModel(config?.config.CLAUDE_CODE_MODEL) ?? CLAUDE_CODE_DEFAULT_MODEL;
 
   // Detect state where dispatch is not possible due to incomplete dependencies
   const queuedTasks = tasks?.filter((t) => t.status === "queued") ?? [];
@@ -154,7 +156,7 @@ export const AgentsPage: React.FC = () => {
                     </span>
                     <span className="text-zinc-600 block">
                       {useClaudeLabels
-                        ? (normalizeClaudeModel(agent.metadata?.model) ?? CLAUDE_CODE_DEFAULT_MODEL)
+                        ? (normalizeClaudeModel(agent.metadata?.model) ?? configuredClaudeModel)
                         : (agent.metadata?.model ?? "--")}
                     </span>
                   </div>
