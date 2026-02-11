@@ -1,0 +1,1 @@
+ALTER TABLE "config" ADD COLUMN "execution_environment" text DEFAULT 'host' NOT NULL;

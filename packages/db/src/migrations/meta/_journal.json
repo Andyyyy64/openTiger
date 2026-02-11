@@ -113,6 +113,27 @@
       "when": 1770710568496,
       "tag": "0015_cloudy_victor_mancha",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1770822701786,
+      "tag": "0016_clean_thunderbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1770824621516,
+      "tag": "0017_motionless_la_nuit",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1770826381256,
+      "tag": "0018_tranquil_starbolt",
+      "breakpoints": true
     }
   ]
 }

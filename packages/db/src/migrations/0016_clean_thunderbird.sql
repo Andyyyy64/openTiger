@@ -1,0 +1,1 @@
+ALTER TABLE "config" ADD COLUMN "github_auth_mode" text DEFAULT 'gh' NOT NULL;
