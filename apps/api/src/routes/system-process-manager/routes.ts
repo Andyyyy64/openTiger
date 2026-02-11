@@ -138,7 +138,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
     const shouldRejectDuplicateStart = definition.kind === "planner";
     if (shouldRejectDuplicateStart) {
       // Planner tends to save multiple plans from the same requirement when started multiple times, so exclude duplicate start requests
-      if (existing?.status === "running") {
+      if (existing?.status === "running" && existing.process) {
         return c.json(
           {
             error: "Planner already running",
@@ -157,7 +157,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
         );
       }
       processStartLocks.add(runtimeKey);
-    } else if (existing?.status === "running") {
+    } else if (existing?.status === "running" && existing.process) {
       return c.json({
         process: buildProcessInfo(definition, existing),
         alreadyRunning: true,

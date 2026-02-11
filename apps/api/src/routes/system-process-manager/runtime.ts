@@ -313,8 +313,20 @@ export async function startManagedProcess(
 
   const startPromise = (async () => {
     const existing = managedProcesses.get(definition.name);
-    if (existing?.status === "running") {
+    if (existing?.status === "running" && existing.process) {
       return buildProcessInfo(definition, existing);
+    }
+    if (existing?.status === "running" && !existing.process) {
+      // Managed state can remain "running" when process was discovered externally.
+      // Treat it as stale and allow explicit restart.
+      managedProcesses.set(definition.name, {
+        ...existing,
+        status: "stopped",
+        finishedAt: new Date().toISOString(),
+        restartScheduled: false,
+        restartTimer: undefined,
+        message: "Recovered stale runtime state before restart",
+      });
     }
     if (existing?.restartTimer) {
       clearTimeout(existing.restartTimer);
@@ -426,13 +438,29 @@ export function stopManagedProcess(definition: ProcessDefinition): ProcessInfo {
   if (runtime.restartTimer) {
     clearTimeout(runtime.restartTimer);
   }
-  if (runtime.status !== "running" || !runtime.process) {
+  if (runtime.status !== "running") {
     const nextRuntime: ProcessRuntime = {
       ...runtime,
       stopRequested: true,
       restartScheduled: false,
       restartTimer: undefined,
       message: "停止要求済み",
+    };
+    managedProcesses.set(definition.name, nextRuntime);
+    return buildProcessInfo(definition, nextRuntime);
+  }
+
+  if (!runtime.process) {
+    // External/discovered runtime without process handle cannot be signaled.
+    // Mark as stopped so a new start can recreate the process.
+    const nextRuntime: ProcessRuntime = {
+      ...runtime,
+      status: "stopped",
+      finishedAt: new Date().toISOString(),
+      stopRequested: true,
+      restartScheduled: false,
+      restartTimer: undefined,
+      message: "停止済み（管理対象プロセス未接続）",
     };
     managedProcesses.set(definition.name, nextRuntime);
     return buildProcessInfo(definition, nextRuntime);
