@@ -2,7 +2,7 @@ import { db } from "@openTiger/db";
 import { tasks, leases, runs, artifacts } from "@openTiger/db/schema";
 import { eq, and, inArray, gt, count, isNull, desc } from "drizzle-orm";
 
-// タスク選択結果
+// Task selection result
 export interface AvailableTask {
   id: string;
   title: string;
@@ -42,11 +42,11 @@ function getRetryDelayMs(): number {
   return parsed;
 }
 
-// 利用可能なタスクを優先度順で取得
+// Get available tasks by priority
 export async function getAvailableTasks(): Promise<AvailableTask[]> {
-  // PR/Judge待ちが残っている間は新規タスクを配布しない。
-  // これにより「PR消化 -> Issue/Planner」の順序を担保する。
-  // ただしデフォルトでは完全停止せず、通常タスクの進行を優先する。
+  // Do not dispatch new tasks while PR/Judge backlog remains.
+  // Ensures order: PR first, then Issue/Planner.
+  // Default: do not hard stop; prefer normal task progress.
   const [awaitingJudgeTasks] = await db
     .select({ count: count() })
     .from(tasks)
@@ -94,7 +94,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     lastObservedJudgeBacklogBlocked = false;
   }
 
-  // queuedステータスのタスクを取得
+  // Fetch queued tasks
   const queuedTasks = await db.select().from(tasks).where(eq(tasks.status, "queued"));
 
   if (queuedTasks.length === 0) {
@@ -110,7 +110,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     )
     .map((task) => task.id);
   if (misqueuedPrReviewTaskIds.length > 0) {
-    // PR review はJudge専用。queuedに紛れたものはawaiting_judgeへ戻す。
+    // PR review is Judge-only; return misqueued to awaiting_judge
     await db
       .update(tasks)
       .set({
@@ -166,7 +166,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     }
 
     for (const run of latestFailureByTaskId.values()) {
-      // エージェント再起動時の自動回復キャンセルは即時再配布を許可する
+      // Allow immediate redispatch for agent-restart recovery cancels
       const message = (run.errorMessage ?? "").toLowerCase();
 
       const isAgentRestartRecoveryCancel =
@@ -183,11 +183,11 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     }
   }
 
-  // リース済みタスクIDを取得
+  // Get leased task IDs
   const leasedTasks = await db.select({ taskId: leases.taskId }).from(leases);
   const leasedIds = new Set(leasedTasks.map((l) => l.taskId));
 
-  // 実行中のタスクから targetArea を取得
+  // Get targetArea from running tasks
   const runningTasks = await db
     .select({ targetArea: tasks.targetArea })
     .from(tasks)
@@ -196,31 +196,31 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     runningTasks.map((t) => t.targetArea).filter((a): a is string => !!a),
   );
 
-  // 完了済みタスクIDを取得
+  // Get done task IDs
   const doneTasks = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.status, "done"));
   const doneIds = new Set(doneTasks.map((t) => t.id));
 
-  // フィルタリング: リースなし、依存関係解決済み、targetArea の衝突なし
+  // Filter: no lease, deps resolved, no targetArea conflict
   const available = dispatchableQueuedTasks.filter((task) => {
-    // 直近失敗の再配布はクールダウンする
+    // Cooldown recent failures before redispatch
     if (cooldownBlockedIds.has(task.id)) {
       console.log(`[Priority] Task ${task.id} blocked by cooldown`);
       return false;
     }
 
-    // リース済みは除外
+    // Exclude leased
     if (leasedIds.has(task.id)) {
       console.log(`[Priority] Task ${task.id} blocked by lease`);
       return false;
     }
 
-    // targetArea が衝突している場合は除外
+    // Exclude targetArea conflicts
     if (task.targetArea && activeTargetAreas.has(task.targetArea)) {
       console.log(`[Priority] Task ${task.id} blocked by targetArea conflict`);
       return false;
     }
 
-    // 依存関係のチェック
+    // Dependency check
     const deps = task.dependencies ?? [];
     const unresolvedDeps = deps.filter((depId) => !doneIds.has(depId));
     if (unresolvedDeps.length > 0) {
@@ -235,7 +235,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
 
   console.log(`[Priority] ${available.length} tasks passed filters`);
 
-  // 優先度スコアを計算してソート
+  // Calculate priority score and sort
   const scored = available.map((task) => ({
     task,
     score: calculatePriorityScore(task),
@@ -260,7 +260,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
   }));
 }
 
-// 優先度スコアを計算
+// Calculate priority score
 function calculatePriorityScore(task: {
   priority: number | null;
   riskLevel: string | null;
@@ -269,10 +269,10 @@ function calculatePriorityScore(task: {
 }): number {
   let score = 0;
 
-  // 基本優先度（0-100）
+  // Base priority (0-100)
   score += (task.priority ?? 0) * 10;
 
-  // リスクレベルによる調整（低リスクを優先）
+  // Risk adjustment (prefer low risk)
   const riskMultiplier: Record<string, number> = {
     low: 1.5,
     medium: 1.0,
@@ -280,11 +280,11 @@ function calculatePriorityScore(task: {
   };
   score *= riskMultiplier[task.riskLevel ?? "low"] ?? 1.0;
 
-  // 待機時間による調整（古いタスクを優先）
+  // Waiting time adjustment (prefer older tasks)
   const waitingHours = (Date.now() - task.createdAt.getTime()) / (1000 * 60 * 60);
-  score += Math.min(waitingHours * 2, 20); // 最大20ポイント
+  score += Math.min(waitingHours * 2, 20); // Max 20 points
 
-  // 短いタスクを若干優先
+  // Slightly prefer shorter tasks
   const timebox = task.timeboxMinutes ?? 60;
   if (timebox <= 30) {
     score += 5;
@@ -293,7 +293,7 @@ function calculatePriorityScore(task: {
   return score;
 }
 
-// 依存関係グラフを構築
+// Build dependency graph
 export async function buildDependencyGraph(): Promise<Map<string, Set<string>>> {
   const allTasks = await db.select().from(tasks);
   const graph = new Map<string, Set<string>>();
@@ -306,7 +306,7 @@ export async function buildDependencyGraph(): Promise<Map<string, Set<string>>> 
   return graph;
 }
 
-// 循環依存を検出
+// Detect cycle dependencies
 export function detectCycles(graph: Map<string, Set<string>>): string[][] {
   const cycles: string[][] = [];
   const visited = new Set<string>();
@@ -325,7 +325,7 @@ export function detectCycles(graph: Map<string, Set<string>>): string[][] {
           return true;
         }
       } else if (recursionStack.has(dep)) {
-        // 循環検出
+        // Cycle detected
         const cycleStart = path.indexOf(dep);
         cycles.push(path.slice(cycleStart));
         return true;

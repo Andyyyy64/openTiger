@@ -8,10 +8,10 @@ import type {
 
 const ALLOW_LLM_FAIL_AUTOMERGE = process.env.JUDGE_ALLOW_LLM_FAIL_AUTOMERGE !== "false";
 
-// 判定結果
+// Verdict type
 export type JudgeVerdict = "approve" | "request_changes";
 
-// レビュー結果
+// Review result
 export interface JudgeResult {
   verdict: JudgeVerdict;
   reasons: string[];
@@ -21,14 +21,14 @@ export interface JudgeResult {
   confidence: number;
 }
 
-// 評価結果の集約
+// Aggregated evaluation result
 export interface EvaluationSummary {
   ci: CIEvaluationResult;
   policy: PolicyEvaluationResult;
   llm: LLMEvaluationResult;
 }
 
-// 判定を行う
+// Make judgement
 export function makeJudgement(
   summary: EvaluationSummary,
   policy: Policy,
@@ -37,7 +37,7 @@ export function makeJudgement(
   const reasons: string[] = [];
   const suggestions: string[] = [];
 
-  // CI評価
+  // CI evaluation
   if (!summary.ci.pass) {
     return {
       verdict: "request_changes",
@@ -49,7 +49,7 @@ export function makeJudgement(
     };
   }
 
-  // ポリシー評価
+  // Policy evaluation
   if (!summary.policy.pass) {
     reasons.push(...summary.policy.reasons);
     suggestions.push(...summary.policy.suggestions);
@@ -63,7 +63,7 @@ export function makeJudgement(
     };
   }
 
-  // LLM評価
+  // LLM evaluation
   suggestions.push(...summary.llm.suggestions);
   const canAutoMerge = policy.autoMerge.enabled;
   const allowLlmBypass = ALLOW_LLM_FAIL_AUTOMERGE && canAutoMerge;
@@ -71,7 +71,7 @@ export function makeJudgement(
   if (!summary.llm.pass) {
     reasons.push(...summary.llm.reasons);
     if (allowLlmBypass) {
-      suggestions.push("LLM指摘は参考情報として扱い、低リスクのため自動マージを優先します。");
+      suggestions.push("Treat LLM findings as informational; low risk favors auto-merge.");
       return {
         verdict: "approve",
         reasons: [],
@@ -81,7 +81,7 @@ export function makeJudgement(
         confidence: summary.llm.confidence,
       };
     }
-    // LLMの確信度が低い場合も request_changes に統一する
+    // Use request_changes when LLM confidence is low too
     if (summary.llm.confidence < 0.7) {
       return {
         verdict: "request_changes",
@@ -112,7 +112,7 @@ export function makeJudgement(
   };
 }
 
-// レビューコメントを生成
+// Generate review comment
 export function generateReviewComment(result: JudgeResult, summary: EvaluationSummary): string {
   const verdictEmoji = {
     approve: "✅",
@@ -126,7 +126,7 @@ export function generateReviewComment(result: JudgeResult, summary: EvaluationSu
 
   let comment = `## ${verdictEmoji[result.verdict]} Judge Verdict: ${verdictLabel[result.verdict]}\n\n`;
 
-  // CI状態
+  // CI status
   comment += `### CI Status: ${summary.ci.pass ? "✅ Passed" : "❌ Failed"}\n`;
   if (summary.ci.details.length > 0) {
     for (const check of summary.ci.details.slice(0, 5)) {
@@ -139,7 +139,7 @@ export function generateReviewComment(result: JudgeResult, summary: EvaluationSu
   }
   comment += "\n";
 
-  // ポリシー評価
+  // Policy evaluation
   comment += `### Policy Check: ${summary.policy.pass ? "✅ Passed" : "❌ Violations Found"}\n`;
   if (summary.policy.violations.length > 0) {
     for (const v of summary.policy.violations) {
@@ -149,7 +149,7 @@ export function generateReviewComment(result: JudgeResult, summary: EvaluationSu
   }
   comment += "\n";
 
-  // LLMレビュー
+  // LLM review
   if (summary.llm.confidence > 0) {
     comment += `### Code Review: ${summary.llm.pass ? "✅ No Issues" : "⚠️ Issues Found"}\n`;
     comment += `Confidence: ${Math.round(summary.llm.confidence * 100)}%\n\n`;
@@ -167,7 +167,7 @@ export function generateReviewComment(result: JudgeResult, summary: EvaluationSu
     comment += "\n";
   }
 
-  // 理由
+  // Reasons
   if (result.reasons.length > 0) {
     comment += "### Reasons\n";
     for (const reason of result.reasons) {
@@ -176,7 +176,7 @@ export function generateReviewComment(result: JudgeResult, summary: EvaluationSu
     comment += "\n";
   }
 
-  // 提案
+  // Suggestions
   if (result.suggestions.length > 0) {
     comment += "### Suggestions\n";
     for (const suggestion of result.suggestions) {
@@ -185,7 +185,7 @@ export function generateReviewComment(result: JudgeResult, summary: EvaluationSu
     comment += "\n";
   }
 
-  // 自動マージ情報
+  // Auto-merge info
   if (result.verdict === "approve") {
     if (result.autoMerge) {
       comment += "---\n";
@@ -196,14 +196,14 @@ export function generateReviewComment(result: JudgeResult, summary: EvaluationSu
     }
   }
 
-  // フッター
+  // Footer
   comment += "\n---\n";
   comment += "_Reviewed by openTiger Judge_\n";
 
   return comment;
 }
 
-// PRにレビューコメントを投稿
+// Post review comment to PR
 export async function postReviewComment(
   prNumber: number,
   result: JudgeResult,
@@ -213,7 +213,7 @@ export async function postReviewComment(
   await addPRComment(prNumber, comment);
 }
 
-// PRを承認
+// Approve PR
 export async function approvePR(prNumber: number): Promise<void> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
@@ -226,7 +226,7 @@ export async function approvePR(prNumber: number): Promise<void> {
   });
 }
 
-// PRに変更をリクエスト
+// Request changes on PR
 export async function requestChanges(prNumber: number, reasons: string[]): Promise<void> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
@@ -240,7 +240,7 @@ export async function requestChanges(prNumber: number, reasons: string[]): Promi
   });
 }
 
-// PRを自動マージ
+// Auto-merge PR
 export async function autoMergePR(
   prNumber: number,
   mergeMethod: "merge" | "squash" | "rebase" = "squash",
@@ -275,7 +275,7 @@ async function isMergedPR(prNumber: number): Promise<boolean> {
   }
 }
 
-// 完全なレビューフローを実行
+// Run full review flow
 export async function reviewAndAct(
   prNumber: number,
   result: JudgeResult,
@@ -296,11 +296,11 @@ export async function reviewAndAct(
   const isSelfAuthored = await isSelfAuthoredPR(prNumber);
 
   try {
-    // コメントを投稿
+    // Post comment
     await postReviewComment(prNumber, result, summary);
     commented = true;
 
-    // 判定に基づいてアクション
+    // Act based on verdict
     switch (result.verdict) {
       case "approve":
         if (isSelfAuthored) {
@@ -384,7 +384,7 @@ async function isSelfAuthoredPR(prNumber: number): Promise<boolean> {
     const octokit = getOctokit();
     const { owner, repo } = getRepoInfo();
 
-    // PR作成者と認証ユーザーを比較して自己PRか判定する
+    // Compare PR author with auth user to detect self-PR
     const [pr, user] = await Promise.all([
       octokit.pulls.get({ owner, repo, pull_number: prNumber }),
       octokit.users.getAuthenticated(),

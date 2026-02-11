@@ -97,10 +97,10 @@ export async function recoverDirtyBaseRepo(options: {
     return { success: true };
   }
 
-  // stash した内容をLLMで判定して復帰の可否を決める
+  // Use LLM to decide whether stashed content should be restored
   const llmResult = await evaluateLLMDiff(
     fullDiff,
-    "ローカルベースリポジトリの未コミット変更です。システム専用リポジトリに残すべきか判断してください。",
+    "These are uncommitted changes from the local base repository. Decide whether they should be restored into the system-only repository.",
     {
       instructionsPath: options.instructionsPath,
       timeoutSeconds: 300,
@@ -256,7 +256,7 @@ export async function mergeLocalBranch(target: {
     };
   }
 
-  // まずはfast-forwardで安全に取り込み、失敗時はマージコミットを許可する
+  // Try fast-forward first; allow merge commit if it fails
   const ffResult = await mergeBranch(target.baseRepoPath, target.branchName, { ffOnly: true });
   if (!ffResult.success) {
     const mergeResult = await mergeBranch(target.baseRepoPath, target.branchName, {

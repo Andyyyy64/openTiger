@@ -11,7 +11,7 @@ export async function startHeartbeat(agentId: string): Promise<NodeJS.Timeout> {
         .update(agents)
         .set({
           lastHeartbeat: new Date(),
-          // offline 判定後でも heartbeat 到達時に自動復帰できるようにする
+          // Allow auto-recovery when heartbeat arrives even after offline
           status: sql`CASE WHEN ${agents.status} = 'offline' THEN 'idle' ELSE ${agents.status} END`,
         })
         .where(eq(agents.id, agentId));

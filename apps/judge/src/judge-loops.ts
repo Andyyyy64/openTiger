@@ -22,8 +22,10 @@ import {
 } from "./judge-evaluate";
 import {
   createAutoFixTaskForPr,
+  closeConflictPrAndCreateMainlineTask,
   createConflictAutoFixTaskForPr,
   hasMergeConflictSignals,
+  isConflictAutoFixAttemptLimitReason,
 } from "./judge-autofix";
 import {
   getTaskRetryCount,
@@ -38,6 +40,10 @@ function hasActiveAutoFix(reason: string): boolean {
     reason.startsWith("existing_active_autofix:") ||
     reason.startsWith("existing_active_conflict_autofix:")
   );
+}
+
+function hasActiveMainlineRecreate(reason: string): boolean {
+  return reason.startsWith("existing_active_mainline_recreate:");
 }
 
 export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
@@ -68,7 +74,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
         );
       }
 
-      // レビュー待ちのPRを取得
+      // Get PRs awaiting review
       const pendingPRs = await getPendingPRs();
 
       if (pendingPRs.length > 0) {
@@ -112,7 +118,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
               if (config.dryRun) {
                 console.log("  [Dry run - no action taken]");
               } else {
-                // レビューとアクションを実行
+                // Execute review and actions
                 actionResult = await reviewAndAct(pr.prNumber, effectiveResult, summary);
                 console.log(
                   `  Actions: commented=${actionResult.commented}, approved=${actionResult.approved}, merged=${actionResult.merged}`,
@@ -293,7 +299,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                       }
                     }
                   } else {
-                    // CI/Policy系の非approveは初回からAutoFixへ誘導する
+                    // CI/Policy non-approve: route to AutoFix from first failure
                     const failureReason = buildJudgeFailureMessage(effectiveResult);
                     const autoFix = await createAutoFixTaskForPr({
                       prNumber: pr.prNumber,
@@ -419,6 +425,57 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                             `  Task ${pr.taskId} remains blocked as needs_rework (active conflict autofix in progress: ${conflictAutoFix.reason})`,
                           );
                           handledByConflictAutoFix = true;
+                        } else if (isConflictAutoFixAttemptLimitReason(conflictAutoFix.reason)) {
+                          const recreateResult = await closeConflictPrAndCreateMainlineTask({
+                            prNumber: pr.prNumber,
+                            prUrl: pr.prUrl,
+                            sourceTaskId: pr.taskId,
+                            sourceRunId: pr.runId,
+                            sourceTaskTitle: pr.taskTitle,
+                            sourceTaskGoal: pr.taskGoal,
+                            allowedPaths: pr.allowedPaths,
+                            commands: pr.commands,
+                            summary,
+                            agentId: config.agentId,
+                            conflictAutoFixReason: conflictAutoFix.reason,
+                            mergeDeferredReason: actionResult.mergeDeferredReason,
+                          });
+
+                          if (
+                            recreateResult.created ||
+                            hasActiveMainlineRecreate(recreateResult.reason)
+                          ) {
+                            await db
+                              .update(tasks)
+                              .set({
+                                status: "failed",
+                                blockReason: null,
+                                updatedAt: new Date(),
+                              })
+                              .where(eq(tasks.id, pr.taskId));
+                            const recreateState = recreateResult.created
+                              ? `queued:${recreateResult.taskId}`
+                              : recreateResult.reason;
+                            const closeState = recreateResult.closed ? "closed" : "close_failed";
+                            console.warn(
+                              `  Task ${pr.taskId} conflict-autofix limit reached; source task failed, PR ${pr.prNumber} close=${closeState}, recreate=${recreateState}`,
+                            );
+                            handledByConflictAutoFix = true;
+                          } else {
+                            const fallbackReason =
+                              "Judge approved but conflict autofix attempt limit fallback failed " +
+                              `(${recreateResult.reason})`;
+                            await scheduleTaskForJudgeRetry({
+                              taskId: pr.taskId,
+                              runId: pr.runId,
+                              agentId: config.agentId,
+                              reason: fallbackReason,
+                              restoreRunImmediately: false,
+                            });
+                            console.warn(
+                              `  Task ${pr.taskId} scheduled for judge retry (limit fallback failed: ${recreateResult.reason})`,
+                            );
+                          }
                         } else {
                           const fallbackReason = `Judge approved but merge conflict auto-fix was not queued (${conflictAutoFix.reason})`;
                           await scheduleTaskForJudgeRetry({
@@ -433,7 +490,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                           );
                         }
                       }
-                      // レビュー記録は継続して残す
+                      // Keep review record for continuity
                     }
 
                     if (!handledByConflictAutoFix) {
@@ -505,7 +562,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
       await safeSetJudgeAgentState(config.agentId, "idle");
     }
 
-    // 次のポーリングまで待機
+    // Wait until next poll
     await new Promise((resolve) => setTimeout(resolve, config.pollIntervalMs));
   }
 }

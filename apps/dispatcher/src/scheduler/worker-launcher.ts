@@ -1,13 +1,13 @@
 import { spawn, ChildProcess } from "node:child_process";
-import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { db } from "@openTiger/db";
 import { agents } from "@openTiger/db/schema";
-import { eq } from "drizzle-orm";
 
-// Worker起動モード
+// Worker launch mode
 export type LaunchMode = "process" | "docker";
 
-// Worker起動設定
+// Worker launch config
 export interface WorkerLaunchConfig {
   mode: LaunchMode;
   taskId: string;
@@ -16,14 +16,14 @@ export interface WorkerLaunchConfig {
   repoUrl: string;
   baseBranch: string;
   workspacePath: string;
-  // Docker用設定
+  // Docker settings
   dockerImage?: string;
   dockerNetwork?: string;
-  // 環境変数
+  // Environment variables
   env?: Record<string, string>;
 }
 
-// Worker起動結果
+// Worker launch result
 export interface LaunchResult {
   success: boolean;
   pid?: number;
@@ -37,8 +37,108 @@ const activeWorkers = new Map<
   { process?: ChildProcess; containerId?: string; agentId: string }
 >();
 const DEFAULT_OPENCODE_CONFIG_PATH = resolve(import.meta.dirname, "../../../../opencode.json");
+const DEFAULT_DOCKER_IMAGE = "openTiger/worker:latest";
+const DEFAULT_DOCKER_NETWORK = "bridge";
 
-// Workerをプロセスとして起動
+type DockerMount = {
+  hostPath: string;
+  containerPath: string;
+  readonly?: boolean;
+};
+
+function resolveDockerImage(config: WorkerLaunchConfig): string {
+  return config.dockerImage ?? process.env.SANDBOX_DOCKER_IMAGE ?? DEFAULT_DOCKER_IMAGE;
+}
+
+function resolveDockerNetwork(config: WorkerLaunchConfig): string {
+  return config.dockerNetwork ?? process.env.SANDBOX_DOCKER_NETWORK ?? DEFAULT_DOCKER_NETWORK;
+}
+
+function isLocalhostHost(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1";
+}
+
+function rewriteLocalUrlForDocker(rawValue: string | undefined): string {
+  if (!rawValue) {
+    return "";
+  }
+  try {
+    const parsed = new URL(rawValue);
+    if (!isLocalhostHost(parsed.hostname)) {
+      return rawValue;
+    }
+    parsed.hostname = "host.docker.internal";
+    return parsed.toString();
+  } catch {
+    return rawValue;
+  }
+}
+
+function resolveClaudeAuthMounts(): DockerMount[] {
+  const hostHome = process.env.HOME?.trim();
+  const claudeHomeOverride = process.env.CLAUDE_AUTH_DIR?.trim();
+  const claudeConfigOverride = process.env.CLAUDE_CONFIG_DIR?.trim();
+  const candidates: Array<DockerMount | null> = [
+    claudeHomeOverride
+      ? {
+          hostPath: resolve(claudeHomeOverride),
+          containerPath: "/home/worker/.claude",
+          readonly: true,
+        }
+      : null,
+    claudeConfigOverride
+      ? {
+          hostPath: resolve(claudeConfigOverride),
+          containerPath: "/home/worker/.config/claude",
+          readonly: true,
+        }
+      : null,
+    hostHome
+      ? {
+          hostPath: join(hostHome, ".claude"),
+          containerPath: "/home/worker/.claude",
+          readonly: true,
+        }
+      : null,
+    hostHome
+      ? {
+          hostPath: join(hostHome, ".config", "claude"),
+          containerPath: "/home/worker/.config/claude",
+          readonly: true,
+        }
+      : null,
+  ];
+
+  const mounts: DockerMount[] = [];
+  const seenContainerPaths = new Set<string>();
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    if (seenContainerPaths.has(candidate.containerPath)) {
+      continue;
+    }
+    if (!existsSync(candidate.hostPath)) {
+      continue;
+    }
+    mounts.push(candidate);
+    seenContainerPaths.add(candidate.containerPath);
+  }
+  return mounts;
+}
+
+function isClaudeExecutor(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
+  );
+}
+
+// Launch Worker as process
 async function _launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResult> {
   const env = {
     ...process.env,
@@ -82,7 +182,7 @@ async function _launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResul
       return { success: false, error: "Failed to get process PID" };
     }
 
-    // プロセス出力をログ
+    // Log process output
     workerProcess.stdout?.on("data", (data: Buffer) => {
       console.log(`[Worker ${config.agentId}] ${data.toString().trim()}`);
     });
@@ -91,16 +191,18 @@ async function _launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResul
       console.error(`[Worker ${config.agentId}] ${data.toString().trim()}`);
     });
 
-    // 終了時の処理
+    // On-exit handling
     workerProcess.on("exit", (code, signal) => {
       console.log(`[Worker ${config.agentId}] exited with code ${code}, signal ${signal}`);
       activeWorkers.delete(config.taskId);
 
       // Update agent status
-      updateAgentStatus(config.agentId, "idle").catch(console.error);
+      updateAgentStatus(config.agentId, "idle", null, config.agentRole ?? "worker").catch(
+        console.error,
+      );
     });
 
-    // アクティブWorkerとして記録
+    // Record as active Worker
     activeWorkers.set(config.taskId, {
       process: workerProcess,
       agentId: config.agentId,
@@ -117,8 +219,8 @@ async function _launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResul
 
 // Launch Worker as Docker container
 async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult> {
-  const image = config.dockerImage ?? "opentiger-worker:latest";
-  const network = config.dockerNetwork ?? "opentiger_default";
+  const image = resolveDockerImage(config);
+  const network = resolveDockerNetwork(config);
 
   const envArgs: string[] = [];
   const allEnv = {
@@ -129,11 +231,13 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
     BASE_BRANCH: config.baseBranch,
     WORKSPACE_PATH: "/workspace",
     REPO_MODE: process.env.REPO_MODE ?? "",
+    GITHUB_AUTH_MODE: process.env.GITHUB_AUTH_MODE ?? "",
     LOCAL_REPO_PATH: process.env.LOCAL_REPO_PATH ?? "",
     LOCAL_WORKTREE_ROOT: process.env.LOCAL_WORKTREE_ROOT ?? "",
     DATABASE_URL: process.env.DATABASE_URL ?? "",
     REDIS_URL: process.env.REDIS_URL ?? "",
     GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? "",
     OPENCODE_MODEL: process.env.OPENCODE_MODEL ?? "",
     LLM_EXECUTOR: process.env.LLM_EXECUTOR ?? "",
     CLAUDE_CODE_PERMISSION_MODE: process.env.CLAUDE_CODE_PERMISSION_MODE ?? "",
@@ -145,11 +249,26 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
     GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? "",
     ...config.env,
   };
+  allEnv.DATABASE_URL = rewriteLocalUrlForDocker(allEnv.DATABASE_URL);
+  allEnv.REDIS_URL = rewriteLocalUrlForDocker(allEnv.REDIS_URL);
 
   for (const [key, value] of Object.entries(allEnv)) {
     if (value) {
       envArgs.push("-e", `${key}=${value}`);
     }
+  }
+
+  const mountArgs: string[] = ["--add-host", "host.docker.internal:host-gateway"];
+  const claudeAuthMounts = resolveClaudeAuthMounts();
+  for (const mount of claudeAuthMounts) {
+    const readonlySuffix = mount.readonly ? ":ro" : "";
+    mountArgs.push("--volume", `${mount.hostPath}:${mount.containerPath}${readonlySuffix}`);
+  }
+  if (isClaudeExecutor(allEnv.LLM_EXECUTOR) && claudeAuthMounts.length === 0 && !allEnv.ANTHROPIC_API_KEY) {
+    console.warn(
+      "[Dispatcher] Claude executor is enabled for sandbox, but no host Claude auth directory was found. " +
+        "Run `claude /login` on host or set CLAUDE_AUTH_DIR / CLAUDE_CONFIG_DIR.",
+    );
   }
 
   const args = [
@@ -159,6 +278,7 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
     `opentiger-worker-${config.agentId}`,
     "--network",
     network,
+    ...mountArgs,
     ...envArgs,
     image,
   ];
@@ -185,7 +305,9 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
 
     dockerProcess.on("exit", (code) => {
       activeWorkers.delete(config.taskId);
-      updateAgentStatus(config.agentId, "idle").catch(console.error);
+      updateAgentStatus(config.agentId, "idle", null, config.agentRole ?? "worker").catch(
+        console.error,
+      );
 
       if (code === 0) {
         console.log(`[Worker ${config.agentId}] completed successfully`);
@@ -209,22 +331,22 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
   });
 }
 
-// Workerを起動
+// Start Worker
 export async function launchWorker(config: WorkerLaunchConfig): Promise<LaunchResult> {
-  // エージェントをbusy状態に更新
-  await updateAgentStatus(config.agentId, "busy", config.taskId);
+  // Update agent to busy
+  await updateAgentStatus(config.agentId, "busy", config.taskId, config.agentRole ?? "worker");
 
   if (config.mode === "docker") {
     return launchAsDocker(config);
   }
 
-  // 常駐Worker（キュー待機モード）を使用する場合、新規プロセス起動はスキップ
+  // Skip new process launch when using resident Worker (queue mode)
   // Assume Worker is already running
   console.log(`[Launcher] Task ${config.taskId} assigned to worker ${config.agentId} via queue.`);
   return { success: true, pid: 0 };
 }
 
-// Workerを停止
+// Stop Worker
 export async function stopWorker(taskId: string): Promise<boolean> {
   const worker = activeWorkers.get(taskId);
   if (!worker) {
@@ -250,12 +372,12 @@ export async function stopWorker(taskId: string): Promise<boolean> {
   return true;
 }
 
-// アクティブWorker数を取得
+// Get active Worker count
 export function getActiveWorkerCount(): number {
   return activeWorkers.size;
 }
 
-// 全アクティブWorkerを取得
+// Get all active Workers
 export function getActiveWorkers(): Map<
   string,
   { process?: ChildProcess; containerId?: string; agentId: string }
@@ -268,18 +390,29 @@ async function updateAgentStatus(
   agentId: string,
   status: "idle" | "busy" | "offline",
   currentTaskId: string | null = null,
+  role: string = "worker",
 ): Promise<void> {
   await db
-    .update(agents)
-    .set({
+    .insert(agents)
+    .values({
+      id: agentId,
+      role,
       status,
       currentTaskId,
       lastHeartbeat: new Date(),
     })
-    .where(eq(agents.id, agentId));
+    .onConflictDoUpdate({
+      target: agents.id,
+      set: {
+        role,
+        status,
+        currentTaskId,
+        lastHeartbeat: new Date(),
+      },
+    });
 }
 
-// 全Workerを停止（シャットダウン用）
+// Stop all Workers (for shutdown)
 export async function stopAllWorkers(): Promise<void> {
   const tasks = Array.from(activeWorkers.keys());
   await Promise.all(tasks.map((taskId) => stopWorker(taskId)));

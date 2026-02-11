@@ -1,7 +1,7 @@
 import { db } from "@openTiger/db";
 import { tasks, events, runs } from "@openTiger/db/schema";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
-import { getOctokit, getRepoInfo } from "@openTiger/vcs";
+import { closePR, getOctokit, getRepoInfo } from "@openTiger/vcs";
 import {
   JUDGE_AUTO_FIX_ON_FAIL,
   JUDGE_AUTO_FIX_MAX_ATTEMPTS,
@@ -37,9 +37,15 @@ export function isMergeConflictReasonText(text: string | undefined): boolean {
     lower.includes("conflict") ||
     lower.includes("pr_merge_conflict_detected") ||
     lower.includes("mergeable_state") ||
-    lower.includes("dirty") ||
-    lower.includes("update_branch_failed")
+    lower.includes("dirty")
   );
+}
+
+export function isConflictAutoFixAttemptLimitReason(reason: string | undefined): boolean {
+  if (!reason) {
+    return false;
+  }
+  return reason.startsWith("conflict_autofix_attempt_limit_reached:");
 }
 
 export function hasMergeConflictSignals(params: {
@@ -130,7 +136,7 @@ async function resolveLatestAutoFixFailure(titlePattern: string): Promise<string
   return message && message.length > 0 ? message : null;
 }
 
-// 前回の失敗理由とレビュー指摘をnotesに集約する
+// Aggregate previous failure reasons and review feedback into notes
 function buildAutoFixNotes(params: {
   summary: EvaluationSummary;
   previousFailureReason?: string;
@@ -414,4 +420,165 @@ export async function createConflictAutoFixTaskForPr(params: {
   });
 
   return { created: true, taskId: taskRow.id, reason: "created" };
+}
+
+function buildRecreateTaskNotes(params: {
+  conflictAutoFixReason: string;
+  mergeDeferredReason?: string;
+  summary: EvaluationSummary;
+  sourceTaskTitle: string;
+  sourceTaskGoal: string;
+}): string {
+  const llmReasonLines =
+    params.summary.llm.reasons.length > 0
+      ? params.summary.llm.reasons.map((reason) => `- ${reason}`).join("\n")
+      : "- (none)";
+  return [
+    `conflict_autofix_result: ${params.conflictAutoFixReason}`,
+    `merge_reason: ${params.mergeDeferredReason ?? "unknown"}`,
+    `source_task_title: ${params.sourceTaskTitle}`,
+    `source_task_goal: ${params.sourceTaskGoal}`,
+    "Judge/LLM reasons:",
+    llmReasonLines,
+    "Recreate from latest base branch and open a replacement non-draft PR that references the closed PR.",
+    "Do not run long-running dev/watch/start commands.",
+  ].join("\n");
+}
+
+async function tryClosePRForRecreate(
+  prNumber: number,
+): Promise<{ closed: boolean; closeError?: string }> {
+  try {
+    await closePR(prNumber);
+    return { closed: true };
+  } catch (error) {
+    const closeError = error instanceof Error ? error.message : String(error);
+    return { closed: false, closeError };
+  }
+}
+
+export async function closeConflictPrAndCreateMainlineTask(params: {
+  prNumber: number;
+  prUrl: string;
+  sourceTaskId: string;
+  sourceRunId: string;
+  sourceTaskTitle: string;
+  sourceTaskGoal: string;
+  allowedPaths: string[];
+  commands: string[];
+  summary: EvaluationSummary;
+  agentId: string;
+  conflictAutoFixReason: string;
+  mergeDeferredReason?: string;
+}): Promise<{ created: boolean; taskId?: string; closed: boolean; reason: string }> {
+  const titlePrefix = `[Recreate-From-Main] PR #${params.prNumber}`;
+  const titlePattern = `${escapeSqlLikePattern(titlePrefix)}%`;
+
+  const [activeTask] = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        sql`${tasks.title} like ${titlePattern} escape '\\'`,
+        inArray(tasks.status, ["queued", "running", "blocked"]),
+        ne(tasks.id, params.sourceTaskId),
+      ),
+    )
+    .limit(1);
+
+  if (activeTask?.id) {
+    const closeResult = await tryClosePRForRecreate(params.prNumber);
+    return {
+      created: false,
+      closed: closeResult.closed,
+      reason: closeResult.closed
+        ? `existing_active_mainline_recreate:${activeTask.id}`
+        : `existing_active_mainline_recreate:${activeTask.id}|close_pr_failed:${closeResult.closeError ?? "unknown"}`,
+    };
+  }
+
+  const [attemptRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(tasks)
+    .where(sql`${tasks.title} like ${titlePattern} escape '\\'`);
+  const nextAttempt = Number(attemptRow?.count ?? 0) + 1;
+  const issueFiles = Array.from(
+    new Set(
+      params.summary.llm.codeIssues
+        .map((issue) => issue.file?.trim())
+        .filter((file): file is string => Boolean(file)),
+    ),
+  );
+
+  const [taskRow] = await db
+    .insert(tasks)
+    .values({
+      title: `${titlePrefix} (attempt ${nextAttempt})`,
+      goal:
+        `Recreate the intended changes for closed conflicted PR #${params.prNumber} from latest base branch ` +
+        "and open a replacement PR.",
+      context: {
+        files: issueFiles,
+        specs:
+          "Start from the latest base branch. Do not reuse the old PR branch history. " +
+          "Re-implement equivalent behavior, then open a new non-draft PR.",
+        notes: buildRecreateTaskNotes({
+          conflictAutoFixReason: params.conflictAutoFixReason,
+          mergeDeferredReason: params.mergeDeferredReason,
+          summary: params.summary,
+          sourceTaskTitle: params.sourceTaskTitle,
+          sourceTaskGoal: params.sourceTaskGoal,
+        }),
+        supersededPr: {
+          number: params.prNumber,
+          url: params.prUrl,
+          sourceTaskId: params.sourceTaskId,
+          sourceRunId: params.sourceRunId,
+          sourceTaskTitle: params.sourceTaskTitle,
+          sourceTaskGoal: params.sourceTaskGoal,
+        },
+      },
+      allowedPaths: params.allowedPaths.length > 0 ? params.allowedPaths : ["**"],
+      commands: params.commands,
+      dependencies: [],
+      priority: 85,
+      riskLevel: "medium",
+      role: "worker",
+      status: "queued",
+      timeboxMinutes: 60,
+    })
+    .returning({ id: tasks.id });
+
+  if (!taskRow?.id) {
+    return { created: false, closed: false, reason: "mainline_recreate_task_insert_failed" };
+  }
+
+  const closeResult = await tryClosePRForRecreate(params.prNumber);
+
+  await db.insert(events).values({
+    type: "judge.mainline_recreate_task_created",
+    entityType: "task",
+    entityId: taskRow.id,
+    agentId: params.agentId,
+    payload: {
+      prNumber: params.prNumber,
+      sourceTaskId: params.sourceTaskId,
+      sourceRunId: params.sourceRunId,
+      sourceTaskTitle: params.sourceTaskTitle,
+      sourceTaskGoal: params.sourceTaskGoal,
+      conflictAutoFixReason: params.conflictAutoFixReason,
+      mergeDeferredReason: params.mergeDeferredReason,
+      closePrSuccess: closeResult.closed,
+      closePrError: closeResult.closeError ?? null,
+    },
+  });
+
+  return {
+    created: true,
+    taskId: taskRow.id,
+    closed: closeResult.closed,
+    reason: closeResult.closed
+      ? "created"
+      : `created_close_pr_failed:${closeResult.closeError ?? "unknown"}`,
+  };
 }

@@ -1,11 +1,24 @@
 import { db } from "@openTiger/db";
-import { agents, leases, tasks } from "@openTiger/db/schema";
-import { eq, lt, and, inArray } from "drizzle-orm";
+import { agents, leases, runs, tasks } from "@openTiger/db/schema";
+import { eq, lt, and, inArray, desc } from "drizzle-orm";
 
-// ハートビート設定
-const HEARTBEAT_TIMEOUT_SECONDS = 60; // Offline if no response for 60 seconds or more
+// Heartbeat config
+const HEARTBEAT_TIMEOUT_SECONDS = (() => {
+  const parsed = Number.parseInt(process.env.DISPATCH_AGENT_HEARTBEAT_TIMEOUT_SECONDS ?? "120", 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 120;
+  }
+  return parsed;
+})(); // Offline if no response for timeout seconds or more
+const RUNNING_RUN_GRACE_MS = (() => {
+  const parsed = Number.parseInt(process.env.DISPATCH_AGENT_RUNNING_RUN_GRACE_MS ?? "600000", 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 600000;
+  }
+  return parsed;
+})(); // Keep recently-active agents online to avoid false dead-agent reclamation
 
-// エージェントの健全性状態
+// Agent health state
 export interface AgentHealth {
   id: string;
   role: string;
@@ -15,7 +28,7 @@ export interface AgentHealth {
   currentTaskId: string | null;
 }
 
-// エージェントの健全性をチェック
+// Check agent health
 export async function checkAgentHealth(agentId: string): Promise<AgentHealth | null> {
   const result = await db.select().from(agents).where(eq(agents.id, agentId));
 
@@ -50,7 +63,7 @@ export async function checkAgentHealth(agentId: string): Promise<AgentHealth | n
   };
 }
 
-// 全エージェントの健全性をチェック
+// Check health of all agents
 export async function checkAllAgentsHealth(): Promise<AgentHealth[]> {
   const allAgents = await db.select().from(agents);
   const healthResults: AgentHealth[] = [];
@@ -88,12 +101,13 @@ export async function getAvailableAgents(role?: string): Promise<string[]> {
     .map((agent) => agent.id);
 }
 
-// オフラインエージェントのリースを回収
+// Reclaim leases from offline agents
 export async function reclaimDeadAgentLeases(): Promise<number> {
   const now = new Date();
   const threshold = new Date(now.getTime() - HEARTBEAT_TIMEOUT_SECONDS * 1000);
+  const runningRunGraceThresholdMs = Date.now() - RUNNING_RUN_GRACE_MS;
 
-  // オフラインエージェントを検出
+  // Detect offline agents
   const offlineAgents = await db.select().from(agents).where(lt(agents.lastHeartbeat, threshold));
 
   if (offlineAgents.length === 0) {
@@ -103,7 +117,19 @@ export async function reclaimDeadAgentLeases(): Promise<number> {
   let reclaimedCount = 0;
 
   for (const agent of offlineAgents) {
-    // エージェントのリースを取得
+    const [activeRun] = await db
+      .select({ id: runs.id, startedAt: runs.startedAt })
+      .from(runs)
+      .where(and(eq(runs.agentId, agent.id), eq(runs.status, "running")))
+      .orderBy(desc(runs.startedAt))
+      .limit(1);
+
+    // Long-running task during transient heartbeat jitter: do not reclaim leases yet.
+    if (activeRun?.startedAt && activeRun.startedAt.getTime() >= runningRunGraceThresholdMs) {
+      continue;
+    }
+
+    // Get agent lease
     const agentLeases = await db.select().from(leases).where(eq(leases.agentId, agent.id));
 
     for (const lease of agentLeases) {
@@ -117,19 +143,19 @@ export async function reclaimDeadAgentLeases(): Promise<number> {
         })
         .where(and(eq(tasks.id, lease.taskId), eq(tasks.status, "running")));
 
-      // リースを削除
+      // Remove lease
       await db.delete(leases).where(eq(leases.id, lease.id));
       reclaimedCount++;
     }
 
-    // エージェントをオフラインに更新
+    // Update agent to offline
     await db.update(agents).set({ status: "offline" }).where(eq(agents.id, agent.id));
   }
 
   return reclaimedCount;
 }
 
-// ハートビートを記録
+// Record heartbeat
 export async function recordHeartbeat(agentId: string): Promise<boolean> {
   const result = await db
     .update(agents)
@@ -143,7 +169,7 @@ export async function recordHeartbeat(agentId: string): Promise<boolean> {
   return result.length > 0;
 }
 
-// エージェントを登録
+// Register agent
 export async function registerAgent(agentId: string, role: string = "worker"): Promise<string> {
   const result = await db
     .insert(agents)
@@ -169,7 +195,7 @@ export async function registerAgent(agentId: string, role: string = "worker"): P
   return result[0]!.id;
 }
 
-// 統計情報を取得
+// Get stats
 export async function getAgentStats() {
   const allAgents = await db.select().from(agents);
   const now = new Date();
@@ -199,7 +225,7 @@ export async function getAgentStats() {
   };
 }
 
-// 現在busy状態のエージェント数を取得（同時実行上限の算出に利用）
+// Get count of busy agents (for concurrency limit)
 export async function getBusyAgentCount(): Promise<number> {
   const executableRoles = ["worker", "tester", "docser"];
   const result = await db

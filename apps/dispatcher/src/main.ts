@@ -22,7 +22,7 @@ import {
   type LaunchMode,
 } from "./scheduler/index";
 
-// ディスパッチャー設定
+// Dispatcher config
 interface DispatcherConfig {
   pollIntervalMs: number;
   maxConcurrentWorkers: number;
@@ -87,7 +87,7 @@ function logNoIdleAgent(requiredRole: string): void {
   noIdleLogState.set(requiredRole, { lastLoggedAt: now, suppressed: 0 });
 }
 
-// デフォルト設定
+// Default config
 const DEFAULT_CONFIG: DispatcherConfig = {
   pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS ?? "5000", 10),
   maxConcurrentWorkers: parseMaxConcurrentWorkers(process.env.MAX_CONCURRENT_WORKERS),
@@ -118,7 +118,7 @@ function resolveWorkspacePath(config: DispatcherConfig): string {
     if (isSubPath(baseDir, resolved)) {
       return resolved;
     }
-    // プロセス起動時は外部ディレクトリを避ける
+    // Avoid external directories when starting process
     console.warn("[Dispatcher] WORKSPACE_PATH is outside repo. Using local workspace instead.");
     return fallbackPath;
   }
@@ -139,7 +139,7 @@ function resolveLocalWorktreeRoot(config: DispatcherConfig): string | undefined 
     if (isSubPath(baseDir, resolved)) {
       return resolved;
     }
-    // プロセス起動時は外部ディレクトリを避ける
+    // Avoid external directories when starting process
     console.warn(
       "[Dispatcher] LOCAL_WORKTREE_ROOT is outside repo. Using local worktrees instead.",
     );
@@ -149,10 +149,14 @@ function resolveLocalWorktreeRoot(config: DispatcherConfig): string | undefined 
   return envPath ? resolve(envPath) : "/tmp/openTiger-worktree";
 }
 
-// ディスパッチャーの状態
+function buildDockerAgentId(role: string, taskId: string): string {
+  return `${role}-docker-${taskId}`;
+}
+
+// Dispatcher state
 let isRunning = false;
 let quotaThrottleActive = false;
-// エージェント専用キューを再利用するためのキャッシュ
+// Cache for agent-specific queue reuse
 const taskQueues = new Map<string, ReturnType<typeof createTaskQueue>>();
 
 function getTaskQueueForAgent(agentId: string): ReturnType<typeof createTaskQueue> {
@@ -171,14 +175,14 @@ async function hasQuotaWaitBacklog(): Promise<boolean> {
   return (result?.count ?? 0) > 0;
 }
 
-// タスクをディスパッチ
+// Dispatch task
 async function dispatchTask(
   task: Awaited<ReturnType<typeof getAvailableTasks>>[0],
   agentId: string,
   agentRole: string,
   config: DispatcherConfig,
 ): Promise<boolean> {
-  // 同一タスクの重複実行を避ける: 実行中Runが残っている場合は再配布しない
+  // Avoid duplicate execution: do not re-dispatch if run is still in progress
   const runningRuns = await db
     .select({ id: runs.id })
     .from(runs)
@@ -189,7 +193,7 @@ async function dispatchTask(
     return false;
   }
 
-  // リースを取得
+  // Acquire lease
   const leaseResult = await acquireLease(task.id, agentId);
 
   if (!leaseResult.success) {
@@ -197,7 +201,7 @@ async function dispatchTask(
     return false;
   }
 
-  // タスクをrunning状態に更新
+  // Update task to running
   const taskUpdate = await db
     .update(tasks)
     .set({ status: "running", updatedAt: new Date() })
@@ -209,16 +213,21 @@ async function dispatchTask(
     return false;
   }
 
-  // BullMQキューにジョブを追加
-  const agentQueue = getTaskQueueForAgent(agentId);
-  await enqueueTask(agentQueue, {
-    taskId: task.id,
-    agentId,
-    priority: task.priority,
-  });
-  console.log(`[Dispatch] Task ${task.id} enqueued for agent ${agentId}`);
+  if (config.launchMode === "process") {
+    // Dispatch to queue for resident agents
+    const agentQueue = getTaskQueueForAgent(agentId);
+    await enqueueTask(agentQueue, {
+      taskId: task.id,
+      agentId,
+      priority: task.priority,
+    });
+    console.log(`[Dispatch] Task ${task.id} enqueued for agent ${agentId}`);
+  } else {
+    // Docker mode launches per-task; do not enqueue
+    console.log(`[Dispatch] Task ${task.id} will run via docker launcher (agent=${agentId})`);
+  }
 
-  // Workerを起動
+  // Start Worker
   const launchResult = await launchWorker({
     mode: config.launchMode,
     taskId: task.id,
@@ -236,7 +245,7 @@ async function dispatchTask(
 
   if (!launchResult.success) {
     console.error(`[Dispatch] Failed to launch worker: ${launchResult.error}`);
-    // リースを解放してタスクをqueuedに戻す
+    // Release lease and requeue task
     await releaseLease(task.id);
     await db
       .update(tasks)
@@ -251,7 +260,7 @@ async function dispatchTask(
   return true;
 }
 
-// ディスパッチループ
+// Dispatch loop
 async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
   console.log("=".repeat(60));
   console.log("openTiger Dispatcher started");
@@ -272,7 +281,7 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
   while (isRunning) {
     try {
       let dispatchedThisLoop = 0;
-      // 期限切れリースをクリーンアップ
+      // Clean up expired leases
       const expiredCount = await cleanupExpiredLeases();
       if (expiredCount > 0) {
         console.log(`[Cleanup] Released ${expiredCount} expired leases`);
@@ -283,19 +292,19 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
         console.log(`[Cleanup] Released ${danglingCount} dangling leases`);
       }
 
-      // オフラインエージェントのリースを回収
+      // Reclaim leases from offline agents
       const reclaimedCount = await reclaimDeadAgentLeases();
       if (reclaimedCount > 0) {
         console.log(`[Cleanup] Reclaimed ${reclaimedCount} leases from dead agents`);
       }
 
-      // running だが実行中Runが無いタスクを復旧
+      // Recover tasks that are running but have no active run
       const recoveredCount = await recoverOrphanedRunningTasks();
       if (recoveredCount > 0) {
         console.log(`[Cleanup] Recovered ${recoveredCount} orphaned running tasks`);
       }
 
-      // busyエージェント数を基準に同時実行上限を適用（queue/process両対応）
+      // Apply concurrency limit based on busy agent count (queue and process)
       const busyAgentCount = await getBusyAgentCount();
       const quotaWaitBacklog = await hasQuotaWaitBacklog();
       const effectiveMaxConcurrentWorkers = quotaWaitBacklog
@@ -316,7 +325,7 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
         : Number.MAX_SAFE_INTEGER;
 
       if (availableSlots > 0) {
-        // 利用可能なタスクを取得
+        // Get available tasks
         const availableTasks = await getAvailableTasks();
 
         if (availableTasks.length > 0) {
@@ -324,14 +333,14 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
             `[Dispatch] Found ${availableTasks.length} available tasks, ${availableSlots} slots available`,
           );
 
-          // 利用可能なスロット分だけディスパッチ
+          // Dispatch up to available slots
           const tasksToDispatch = availableTasks.slice(0, availableSlots);
 
-          // 現在のサイクルでディスパッチ予定の targetArea を追跡
+          // Track targetArea to be dispatched in current cycle
           const pendingTargetAreas = new Set<string>();
 
           for (const task of tasksToDispatch) {
-            // targetArea の重複チェック（同じサイクル内での衝突回避）
+            // Check targetArea overlap (avoid collision within same cycle)
             if (task.targetArea && pendingTargetAreas.has(task.targetArea)) {
               continue;
             }
@@ -339,17 +348,18 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
               pendingTargetAreas.add(task.targetArea);
             }
 
-            // 利用可能な常駐エージェントを取得
             const requiredRole = task.role ?? "worker";
-            const availableAgentsList = await getAvailableAgents(requiredRole);
-            const selectedAgent = availableAgentsList[0];
+            const selectedAgent =
+              config.launchMode === "docker"
+                ? buildDockerAgentId(requiredRole, task.id)
+                : (await getAvailableAgents(requiredRole))[0];
 
             if (!selectedAgent) {
               logNoIdleAgent(requiredRole);
               continue;
             }
 
-            // ディスパッチ
+            // Dispatch
             const dispatched = await dispatchTask(task, selectedAgent, requiredRole, config);
             if (dispatched) {
               dispatchedThisLoop += 1;
@@ -358,7 +368,7 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
         }
       }
 
-      // 統計情報を定期的に出力
+      // Output stats periodically
       if (Math.random() < 0.1) {
         const stats = await getAgentStats();
         const queueStats = taskQueues.size
@@ -390,22 +400,22 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
       idleLoopStreak += 1;
     }
 
-    // 次のポーリングまで待機
+    // Wait for next poll
     const delayMs = computeBackoffDelayMs(config.pollIntervalMs, idleLoopStreak);
     await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
 }
 
-// シグナルハンドラー
+// Signal handlers
 function setupSignalHandlers(): void {
   const shutdown = async (signal: string) => {
     console.log(`\n[Shutdown] Received ${signal}, stopping dispatcher...`);
     isRunning = false;
 
-    // 全Workerを停止
+    // Stop all Workers
     await stopAllWorkers();
 
-    // キューを閉じる
+    // Close queue
     if (taskQueues.size > 0) {
       await Promise.all(Array.from(taskQueues.values()).map((queue) => queue.close()));
     }
@@ -418,14 +428,14 @@ function setupSignalHandlers(): void {
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
-// メイン処理
+// Main entry
 async function main(): Promise<void> {
   setupProcessLogging(process.env.OPENTIGER_LOG_NAME ?? "dispatcher", { label: "Dispatcher" });
   const config = { ...DEFAULT_CONFIG };
   config.workspacePath = resolveWorkspacePath(config);
   config.localWorktreeRoot = resolveLocalWorktreeRoot(config);
 
-  // 設定の検証
+  // Validate config
   if (config.repoMode === "git" && !config.repoUrl) {
     console.error("Error: REPO_URL environment variable is required for git mode");
     process.exit(1);
@@ -435,10 +445,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // シグナルハンドラーを設定
+  // Set up signal handler
   setupSignalHandlers();
 
-  // ディスパッチャーを開始
+  // Start dispatcher
   isRunning = true;
   await runDispatchLoop(config);
 }

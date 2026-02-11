@@ -36,7 +36,7 @@ export const DEFAULT_CONFIG: JudgeConfig = {
 export const JUDGE_AUTO_FIX_ON_FAIL = process.env.JUDGE_AUTO_FIX_ON_FAIL !== "false";
 
 function resolveJudgeAutoFixMaxAttempts(): number {
-  const parsed = Number.parseInt(process.env.JUDGE_AUTO_FIX_MAX_ATTEMPTS ?? "-1", 10);
+  const parsed = Number.parseInt(process.env.JUDGE_AUTO_FIX_MAX_ATTEMPTS ?? "3", 10);
   if (!Number.isFinite(parsed)) {
     return -1;
   }

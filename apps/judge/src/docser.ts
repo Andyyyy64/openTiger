@@ -93,7 +93,7 @@ async function detectDocGap(workdir?: string): Promise<DocGapInfo> {
 }
 
 async function hasDocserTaskEvent(taskId: string): Promise<boolean> {
-  // 同一タスクからの重複生成を防ぐ
+  // Avoid duplicate creation from same task
   const existing = await db
     .select({ id: events.id })
     .from(events)
@@ -192,7 +192,7 @@ async function createDocserTask(params: {
   const nonDocFiles = params.diffFiles.filter((file) => !isDocPath(file));
   const docGap = await detectDocGap(params.repoPathForScripts ?? params.source.workdir);
 
-  // 差分がドキュメントのみの場合でも、ドキュメント不足があれば補完対象として起動する
+  // Start docser even when diff is docs-only if documentation is insufficient
   if (nonDocFiles.length === 0 && !docGap.hasGap) {
     return { created: false, reason: "docs_only_change" };
   }
@@ -219,8 +219,8 @@ async function createDocserTask(params: {
   const [docserTask] = await db
     .insert(tasks)
     .values({
-      title: `ドキュメント更新: ${baseTask.title}`,
-      goal: "ドキュメントが実装と一致し、検証コマンドが成功する",
+      title: `Documentation update: ${baseTask.title}`,
+      goal: "Documentation matches implementation and verification commands pass",
       context: {
         notes,
       },

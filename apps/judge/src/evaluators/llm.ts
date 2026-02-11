@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-// LLM評価結果
+// LLM evaluation result
 export interface LLMEvaluationResult {
   pass: boolean;
   confidence: number; // 0-1
@@ -13,7 +13,7 @@ export interface LLMEvaluationResult {
   codeIssues: CodeIssue[];
 }
 
-// コードの問題点
+// Code issue
 export interface CodeIssue {
   severity: "error" | "warning" | "info";
   category: "bug" | "security" | "performance" | "style" | "maintainability";
@@ -84,7 +84,7 @@ function filterIssuesByDiffScope(
   return { kept, dropped };
 }
 
-// PRのdiffを取得
+// Get PR diff
 async function getPRDiff(prNumber: number): Promise<string> {
   const octokit = getOctokit();
   const { owner, repo } = getRepoInfo();
@@ -101,15 +101,15 @@ async function getPRDiff(prNumber: number): Promise<string> {
   return response.data as unknown as string;
 }
 
-// レビュープロンプトを構築
+// Build review prompt
 function buildReviewPrompt(diff: string, taskGoal: string): string {
   return `
-あなたはシニアソフトウェアエンジニアです。
-以下のPRのdiffをレビューし、問題点を指摘してください。
-このレビューは与えられたDiffだけを根拠に行い、ファイルの作成・編集・削除を絶対に行わないでください。
-外部コマンド実行やツール呼び出しは不要です。JSONのみ返してください。
+You are a senior software engineer.
+Review the PR diff below and identify issues.
+Base your review only on the provided diff, and do not create, edit, or delete files.
+Do not run external commands or call tools. Return JSON only.
 
-## タスクの目標
+## Task Goal
 ${taskGoal}
 
 ## Diff
@@ -117,16 +117,16 @@ ${taskGoal}
 ${diff.slice(0, 10000)}${diff.length > 10000 ? "\n... (truncated)" : ""}
 \`\`\`
 
-## レビュー観点
+## Review Dimensions
 
-1. **バグ**: 明らかなバグや論理エラー
-2. **セキュリティ**: セキュリティ上の問題
-3. **パフォーマンス**: パフォーマンス上の問題
-4. **保守性**: コードの読みやすさ、保守性
+1. **Bugs**: clear defects or logic errors
+2. **Security**: security risks
+3. **Performance**: performance problems
+4. **Maintainability**: readability and long-term maintainability
 
-## 出力形式
+## Output Format
 
-以下のJSON形式で出力してください。他のテキストは出力しないでください。
+Return JSON in the following format. Do not include any extra text.
 
 \`\`\`json
 {
@@ -136,21 +136,21 @@ ${diff.slice(0, 10000)}${diff.length > 10000 ? "\n... (truncated)" : ""}
     {
       "severity": "warning",
       "category": "style",
-      "message": "問題の説明",
+      "message": "Issue description",
       "file": "path/to/file.ts",
       "line": 42,
-      "suggestion": "改善案"
+      "suggestion": "Suggested fix"
     }
   ],
-  "summary": "全体的な評価コメント"
+  "summary": "Overall review summary"
 }
 \`\`\`
 
-## 判定基準
+## Decision Rules
 
-- **pass: true**: 重大な問題がない場合
-- **pass: false**: バグやセキュリティ問題がある場合
-- **confidence**: 判定の確信度（0-1）
+- **pass: true**: no critical issues found
+- **pass: false**: bugs or security issues found
+- **confidence**: confidence score between 0 and 1
 `.trim();
 }
 
@@ -174,7 +174,7 @@ async function runIsolatedJudgeReview(params: {
   }
 }
 
-// LLMレスポンスからJSONを抽出
+// Extract JSON from LLM response
 function extractJsonFromResponse(response: string): unknown {
   const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
   const content = codeBlockMatch?.[1];
@@ -210,7 +210,7 @@ function summarizeLlmExecutionFailure(stderr: string): string {
   return "LLM execution failed: runtime_error";
 }
 
-// LLMでPRをレビュー
+// Review PR with LLM
 export async function evaluateLLM(
   prNumber: number,
   options: {
@@ -220,7 +220,7 @@ export async function evaluateLLM(
   },
 ): Promise<LLMEvaluationResult> {
   try {
-    // PRのdiffを取得
+    // Get PR diff
     const diff = await getPRDiff(prNumber);
     const changedFiles = extractChangedFilesFromDiff(diff);
 
@@ -234,14 +234,14 @@ export async function evaluateLLM(
       };
     }
 
-    // レビュープロンプトを構築
+    // Build review prompt
     const prompt = buildReviewPrompt(diff, options.taskGoal);
     const judgeModel = process.env.JUDGE_MODEL ?? "google/gemini-3-pro-preview";
 
-    // OpenCodeを実行
+    // Run OpenCode
     const result = await runIsolatedJudgeReview({
       task: prompt,
-      model: judgeModel, // Judgeは高精度モデルでレビュー品質を優先する
+      model: judgeModel, // Judge prefers high-quality model for review
       instructionsPath: options.instructionsPath,
       timeoutSeconds: options.timeoutSeconds ?? 300,
     });
@@ -258,7 +258,7 @@ export async function evaluateLLM(
       };
     }
 
-    // レスポンスをパース
+    // Parse response
     const parsed = extractJsonFromResponse(result.stdout) as {
       pass: boolean;
       confidence: number;
@@ -273,7 +273,7 @@ export async function evaluateLLM(
       summary?: string;
     };
 
-    // 問題点を変換
+    // Map issues
     const rawIssues: CodeIssue[] = (parsed.issues ?? []).map((issue) => ({
       severity: (issue.severity as "error" | "warning" | "info") ?? "warning",
       category: (issue.category as CodeIssue["category"]) ?? "maintainability",
@@ -287,7 +287,7 @@ export async function evaluateLLM(
       changedFiles,
     );
 
-    // 理由と提案を生成
+    // Generate reasons and suggestions
     const reasons: string[] = [];
     const suggestions: string[] = [];
 
@@ -298,7 +298,7 @@ export async function evaluateLLM(
       reasons.push(parsed.summary ?? "Code review found issues");
     }
 
-    // 重要な問題を理由に追加
+    // Add significant issues to reasons
     const criticalIssues = codeIssues.filter((i) => i.severity === "error");
     for (const issue of criticalIssues) {
       reasons.push(`${issue.category}: ${issue.message}`);
@@ -442,7 +442,7 @@ export async function evaluateLLMDiff(
   }
 }
 
-// LLMなしでシンプルに評価（フォールバック用）
+// Simple evaluation without LLM (fallback)
 export function evaluateSimple(): LLMEvaluationResult {
   return {
     pass: true,

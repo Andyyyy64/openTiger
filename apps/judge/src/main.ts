@@ -51,13 +51,13 @@ async function loadPolicyConfig(): Promise<Policy> {
   }
 }
 
-// 単一PRをレビュー（CLIモード）
+// Review single PR (CLI mode)
 async function reviewSinglePR(prNumber: number, config: JudgeConfig): Promise<void> {
   console.log("=".repeat(60));
   console.log(`openTiger Judge - Reviewing PR #${prNumber}`);
   console.log("=".repeat(60));
 
-  // CI評価
+  // CI evaluation
   console.log("\n[1/3] Checking CI status...");
   const ciResult = await evaluateCI(prNumber);
   console.log(`CI Status: ${ciResult.status}`);
@@ -65,7 +65,7 @@ async function reviewSinglePR(prNumber: number, config: JudgeConfig): Promise<vo
     console.log(`  - ${check.name}: ${check.status}`);
   }
 
-  // ポリシー評価
+  // Policy evaluation
   console.log("\n[2/3] Checking policy compliance...");
   const diffStats = await getPRDiffStats(prNumber);
   const policyResult = await evaluatePolicy(prNumber, config.policy, []);
@@ -74,11 +74,11 @@ async function reviewSinglePR(prNumber: number, config: JudgeConfig): Promise<vo
     console.log(`  - ${v.severity}: ${v.message}`);
   }
 
-  // 計算されたリスクレベル
+  // Computed risk level
   const computedRisk = evaluateRiskLevel(diffStats, config.policy);
   console.log(`Computed Risk: ${computedRisk}`);
 
-  // LLM評価
+  // LLM evaluation
   let llmResult;
   if (config.useLlm) {
     console.log("\n[3/3] Running LLM code review...");
@@ -103,7 +103,7 @@ async function reviewSinglePR(prNumber: number, config: JudgeConfig): Promise<vo
     llm: llmResult,
   };
 
-  // 判定（計算されたリスクを採用）
+  // Verdict (use computed risk)
   const result = makeJudgement(summary, config.policy, computedRisk);
 
   console.log("\n" + "=".repeat(60));
@@ -132,7 +132,7 @@ async function reviewSinglePR(prNumber: number, config: JudgeConfig): Promise<vo
   }
 }
 
-// ヘルプを表示
+// Show help
 function showHelp(): void {
   console.log(`
 openTiger Judge - Automated PR review and merge
@@ -151,7 +151,8 @@ Environment Variables:
   POLL_INTERVAL_MS=30000   Polling interval
   USE_LLM=false            Disable LLM review
   DRY_RUN=true             Enable dry run mode
-  GITHUB_TOKEN=xxx         GitHub API token
+  GITHUB_AUTH_MODE=gh|token GitHub auth mode (default: gh)
+  GITHUB_TOKEN=xxx         GitHub API token (required when mode=token)
   JUDGE_MODEL=xxx          Judge LLM model
   JUDGE_MODE=git|local|auto Judge execution mode
   JUDGE_LOCAL_BASE_REPO_RECOVERY=llm|stash|none Recovery strategy for local base repo
@@ -164,11 +165,11 @@ Example:
 `);
 }
 
-// メイン処理
+// Main entry
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
-  // ヘルプ
+  // Help
   if (args.includes("--help") || args.includes("-h")) {
     showHelp();
     process.exit(0);
@@ -176,7 +177,7 @@ async function main(): Promise<void> {
 
   const agentId = process.env.AGENT_ID ?? "judge-1";
 
-  // 設定を構築
+  // Build config
   const config = {
     ...DEFAULT_CONFIG,
     agentId,
@@ -195,7 +196,7 @@ async function main(): Promise<void> {
     config.useLlm = false;
   }
 
-  // エージェント登録
+  // Register agent
   setupProcessLogging(agentId, { label: "Judge" });
   const judgeModel = process.env.JUDGE_MODEL ?? "google/gemini-3-pro-preview";
   await db.delete(agents).where(eq(agents.id, agentId));
@@ -208,7 +209,7 @@ async function main(): Promise<void> {
       status: "idle",
       lastHeartbeat: new Date(),
       metadata: {
-        model: judgeModel, // Judgeは高精度モデルでレビュー品質を優先する
+        model: judgeModel, // Judge prefers high-quality model for reviews
         provider: "gemini",
       },
     })
@@ -220,7 +221,7 @@ async function main(): Promise<void> {
       },
     });
 
-  // ハートビート開始
+  // Start heartbeat
   startHeartbeat(agentId);
 
   // Single review if PR number is specified
@@ -231,7 +232,7 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  // ポーリングモード
+  // Polling mode
   const repoMode = getRepoMode();
   const judgeMode = process.env.JUDGE_MODE;
   const effectiveMode =
