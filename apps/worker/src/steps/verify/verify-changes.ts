@@ -14,7 +14,11 @@ import {
   getWorkingTreeDiff,
 } from "@openTiger/vcs";
 import { runOpenCode } from "@openTiger/llm";
-import { matchDeniedCommand, normalizeVerificationCommand } from "./command-normalizer";
+import {
+  expandVerificationCommand,
+  matchDeniedCommand,
+  normalizeVerificationCommand,
+} from "./command-normalizer";
 import { runCommand } from "./command-runner";
 import { buildOpenCodeEnv } from "../../env";
 import {
@@ -485,10 +489,25 @@ ${clippedDiff || "(diff unavailable)"}
   if (autoCommands.length > 0) {
     console.log(`[Verify] Auto verification commands added: ${autoCommands.join(", ")}`);
   }
-  const verificationCommands: VerificationCommand[] = [
+  const baseVerificationCommands: VerificationCommand[] = [
     ...commands.map((command) => ({ command, source: "explicit" as const })),
     ...autoCommands.map((command) => ({ command, source: "auto" as const })),
   ];
+  const verificationCommands: VerificationCommand[] = [];
+  for (const verificationCommand of baseVerificationCommands) {
+    const expandedCommands = expandVerificationCommand(verificationCommand.command);
+    if (expandedCommands.length > 1) {
+      console.log(
+        `[Verify] Expanded chained command: ${verificationCommand.command} -> ${expandedCommands.join(" | ")}`,
+      );
+    }
+    for (const expanded of expandedCommands) {
+      verificationCommands.push({
+        ...verificationCommand,
+        command: expanded,
+      });
+    }
+  }
 
   if (verificationCommands.length === 0) {
     const lightCheckResult = await runLightCheck();
