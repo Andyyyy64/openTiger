@@ -3,17 +3,24 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 
-// 環境変数からDB接続URLを取得
+// Get DB connection URL from env
 const connectionString =
   process.env.DATABASE_URL ?? "postgresql://opentiger:opentiger@localhost:5432/opentiger";
 
-// PostgreSQLクライアント
-// max: 接続プールサイズ（各プロセスでこの数まで接続を使用）
-// api/worker/dispatcher/judge/planner/cycle-manager など複数プロセスが同時接続するため
-// プロセスあたりの接続数を抑えて max_connections 枯渇を防ぐ
-const client = postgres(connectionString, { max: 3 });
+// PostgreSQL client
+// max: pool size (each process uses up to this many connections)
+// Multiple processes (api/worker/dispatcher/judge/planner/cycle-manager) connect concurrently
+// Limit connections per process to avoid max_connections exhaustion
+// Suppress NOTICE (frequent during startup self-heal queries) in normal operation
+const shouldLogPostgresNotice = process.env.LOG_POSTGRES_NOTICE === "true";
+const client = postgres(connectionString, {
+  max: 3,
+  onnotice: shouldLogPostgresNotice
+    ? (notice) => console.warn("[Postgres NOTICE]", notice)
+    : () => {},
+});
 
-// Drizzle ORMインスタンス
+// Drizzle ORM instance
 export const db = drizzle(client, { schema });
 export { sql };
 
@@ -21,5 +28,5 @@ export async function closeDb(): Promise<void> {
   await client.end({ timeout: 5 });
 }
 
-// 型エクスポート
+// Type exports
 export type Database = typeof db;
