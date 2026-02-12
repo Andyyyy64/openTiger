@@ -270,8 +270,10 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
   await cleanupOpenCodeTempDirs(repoPath);
 
   // Get changed files
-  let changedFiles = (await getChangedFiles(repoPath)).map((file) => normalizePathForMatch(file));
-  changedFiles = Array.from(new Set(changedFiles.filter((file) => file.length > 0)));
+  let changedFiles = (await getChangedFiles(repoPath)).map((file: string) =>
+    normalizePathForMatch(file),
+  );
+  changedFiles = Array.from(new Set(changedFiles.filter((file: string) => file.length > 0)));
   let stats: { additions: number; deletions: number } = { additions: 0, deletions: 0 };
   let usesCommittedDiff = false;
   let committedDiffRef: { base: string; head: string } | null = null;
@@ -282,8 +284,8 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
     const committedFiles = await getChangedFilesBetweenRefs(repoPath, baseBranch, headBranch);
     if (committedFiles.length > 0) {
       changedFiles = committedFiles
-        .map((file) => normalizePathForMatch(file))
-        .filter((file) => file.length > 0);
+        .map((file: string) => normalizePathForMatch(file))
+        .filter((file: string) => file.length > 0);
       const diffStats = await getDiffStatsBetweenRefs(repoPath, baseBranch, headBranch);
       stats = {
         additions: diffStats.additions,
@@ -298,8 +300,8 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
         const rootFiles = await getChangedFilesFromRoot(repoPath);
         if (rootFiles.length > 0) {
           changedFiles = rootFiles
-            .map((file) => normalizePathForMatch(file))
-            .filter((file) => file.length > 0);
+            .map((file: string) => normalizePathForMatch(file))
+            .filter((file: string) => file.length > 0);
           const rootStats = await getDiffStatsFromRoot(repoPath);
           stats = {
             additions: rootStats.additions,
@@ -432,7 +434,7 @@ Do not call tools. Use only the information provided here.
 Return JSON only.
 
 ## Changed Files
-${changedFiles.map((file) => `- ${file}`).join("\n")}
+${changedFiles.map((file: string) => `- ${file}`).join("\n")}
 
 ## Diff Stats
 - additions: ${stats.additions}
