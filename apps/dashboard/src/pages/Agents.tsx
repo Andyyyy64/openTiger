@@ -51,10 +51,15 @@ export const AgentsPage: React.FC = () => {
 
   // Detect state where dispatch is not possible due to incomplete dependencies
   const queuedTasks = tasks?.filter((t) => t.status === "queued") ?? [];
-  const doneTaskIds = new Set((tasks ?? []).filter((t) => t.status === "done").map((t) => t.id));
+  const resolvedDependencyStatuses = new Set(["done", "cancelled", "failed"]);
+  const resolvedDependencyTaskIds = new Set(
+    (tasks ?? [])
+      .filter((t) => resolvedDependencyStatuses.has(t.status))
+      .map((t) => t.id),
+  );
   const queuedBlockedByDeps = queuedTasks.filter((task) => {
     const deps = task.dependencies ?? [];
-    return deps.some((depId) => !doneTaskIds.has(depId));
+    return deps.some((depId) => !resolvedDependencyTaskIds.has(depId));
   });
   const idleWorkers = agents?.filter((a) => a.role === "worker" && a.status === "idle") ?? [];
   const blockedByDepsWithIdleWorkers =

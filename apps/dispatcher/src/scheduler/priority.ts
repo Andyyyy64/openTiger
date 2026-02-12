@@ -196,9 +196,11 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     runningTasks.map((t) => t.targetArea).filter((a): a is string => !!a),
   );
 
-  // Get done task IDs
-  const doneTasks = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.status, "done"));
-  const doneIds = new Set(doneTasks.map((t) => t.id));
+  const resolvedDependencyTasks = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(inArray(tasks.status, ["done", "cancelled", "failed"]));
+  const resolvedDependencyIds = new Set(resolvedDependencyTasks.map((t) => t.id));
 
   // Filter: no lease, deps resolved, no targetArea conflict
   const available = dispatchableQueuedTasks.filter((task) => {
@@ -222,7 +224,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
 
     // Dependency check
     const deps = task.dependencies ?? [];
-    const unresolvedDeps = deps.filter((depId) => !doneIds.has(depId));
+    const unresolvedDeps = deps.filter((depId) => !resolvedDependencyIds.has(depId));
     if (unresolvedDeps.length > 0) {
       console.log(
         `[Priority] Task ${task.id} blocked by unresolved deps: ${unresolvedDeps.join(", ")}`,
