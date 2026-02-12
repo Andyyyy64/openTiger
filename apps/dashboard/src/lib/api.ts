@@ -136,6 +136,7 @@ export interface AllLogsResponse {
 export interface ClearLogsResponse {
   cleared: boolean;
   removed: number;
+  truncated: number;
   failed: number;
   logDir: string;
 }

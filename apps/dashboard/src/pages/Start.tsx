@@ -182,8 +182,16 @@ export const StartPage: React.FC = () => {
   const clearLogsMutation = useMutation({
     mutationFn: () => logsApi.clear(),
     onSuccess: (data) => {
-      const suffix = data.failed > 0 ? ` (FAILED ${data.failed})` : "";
-      setClearLogMessage(`> LOGS_CLEARED: ${data.removed}${suffix}`);
+      const clearedCount = data.removed + data.truncated;
+      const details: string[] = [];
+      if (data.truncated > 0) {
+        details.push(`OPEN ${data.truncated}`);
+      }
+      if (data.failed > 0) {
+        details.push(`FAILED ${data.failed}`);
+      }
+      const suffix = details.length > 0 ? ` (${details.join(" | ")})` : "";
+      setClearLogMessage(`> LOGS_CLEARED: ${clearedCount}${suffix}`);
     },
     onError: (error) => {
       setClearLogMessage(error instanceof Error ? `> CLEAR_ERR: ${error.message}` : "> CLEAR_FAIL");
@@ -218,24 +226,13 @@ export const StartPage: React.FC = () => {
 
       const hasRequirementContent = content.trim().length > 0;
       if (hasRequirementContent) {
-        try {
-          const syncResult = await systemApi.syncRequirement({
-            content,
-          });
-          if (syncResult.committed) {
-            warnings.push("Requirement snapshot committed to docs/requirement.md");
-          } else if (syncResult.commitReason === "no_changes") {
-            warnings.push("Requirement snapshot is already up to date");
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Requirement snapshot sync failed";
-          if (message.includes("Requirement target repository is unresolved")) {
-            warnings.push(
-              "Requirement snapshot target is unresolved. Planner will use a transient requirement file for this run.",
-            );
-          } else {
-            throw error;
-          }
+        const syncResult = await systemApi.syncRequirement({
+          content,
+        });
+        if (syncResult.committed) {
+          warnings.push("Requirement snapshot committed to docs/requirement.md");
+        } else if (syncResult.commitReason === "no_changes") {
+          warnings.push("Requirement snapshot is already up to date");
         }
       }
       const preflight = await systemApi.preflight({
