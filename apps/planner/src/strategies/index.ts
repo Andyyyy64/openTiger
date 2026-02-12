@@ -3,6 +3,9 @@
 export {
   generateTasksFromRequirement,
   generateSimpleTasks,
+  type PolicyRecoveryHintApplication,
+  type PolicyRecoveryHintMatchReason,
+  type PolicyRecoveryHintUsage,
   type PlannedTaskInput,
   type TaskGenerationResult,
 } from "./from-requirement";

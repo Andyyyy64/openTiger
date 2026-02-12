@@ -5,6 +5,38 @@ import type { Requirement } from "./parser";
 import type { TaskGenerationResult } from "./strategies/index";
 import { clipText, normalizeStringList, extractIssueMessages } from "./planner-utils";
 
+export type PolicyRecoveryPathHint = {
+  path: string;
+  role: string | null;
+  count: number;
+  sourceText: string;
+};
+
+function normalizePathHint(path: string): string {
+  const trimmed = path
+    .replace(/\\/g, "/")
+    .replace(/^\.\/+/, "")
+    .trim();
+  if (!trimmed || trimmed.startsWith("/")) {
+    return "";
+  }
+  if (trimmed.includes("..") || /[*?[\]{}]/.test(trimmed)) {
+    return "";
+  }
+  return trimmed;
+}
+
+function extractPathHintsFromPayload(payload: Record<string, unknown>): string[] {
+  const fromAllowedPaths = normalizeStringList(payload.allowedPaths, 20);
+  const fromAddedAllowedPaths = normalizeStringList(payload.addedAllowedPaths, 20);
+  const merged = Array.from(new Set([...fromAllowedPaths, ...fromAddedAllowedPaths]));
+  return merged.map((entry) => normalizePathHint(entry)).filter((entry) => entry.length > 0);
+}
+
+function buildHintSourceText(task: { title: string; goal: string; commands: string[] }): string {
+  return [task.title, task.goal, ...task.commands].join(" ").toLowerCase();
+}
+
 function formatJudgeFeedbackEntry(payload: Record<string, unknown>): string | undefined {
   const rawPrNumber = payload.prNumber;
   const prNumber =
@@ -198,4 +230,103 @@ export function attachInspectionToTasks(
   });
 
   return { ...result, tasks };
+}
+
+export async function loadPolicyRecoveryPathHints(
+  limit: number = 60,
+): Promise<PolicyRecoveryPathHint[]> {
+  try {
+    const rows = await db
+      .select({
+        entityId: events.entityId,
+        payload: events.payload,
+      })
+      .from(events)
+      .where(eq(events.type, "task.policy_recovery_applied"))
+      .orderBy(desc(events.createdAt))
+      .limit(limit);
+
+    if (rows.length === 0) {
+      return [];
+    }
+
+    const taskIds = Array.from(new Set(rows.map((row) => row.entityId)));
+    const taskRows = await db
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        goal: tasks.goal,
+        role: tasks.role,
+        commands: tasks.commands,
+      })
+      .from(tasks)
+      .where(inArray(tasks.id, taskIds));
+
+    const taskMap = new Map(taskRows.map((row) => [row.id, row]));
+    const aggregated = new Map<
+      string,
+      {
+        path: string;
+        role: string | null;
+        count: number;
+        sourceText: string;
+      }
+    >();
+
+    for (const row of rows) {
+      const payload = row.payload;
+      if (typeof payload !== "object" || payload === null) {
+        continue;
+      }
+      const task = taskMap.get(row.entityId);
+      if (!task) {
+        continue;
+      }
+      const paths = extractPathHintsFromPayload(payload as Record<string, unknown>);
+      if (paths.length === 0) {
+        continue;
+      }
+      const sourceText = buildHintSourceText(task);
+      for (const path of paths) {
+        const key = `${task.role ?? ""}::${path}`;
+        const prev = aggregated.get(key);
+        if (!prev) {
+          aggregated.set(key, {
+            path,
+            role: task.role ?? null,
+            count: 1,
+            sourceText,
+          });
+        } else {
+          prev.count += 1;
+          // Keep the most recent source text to preserve latest context.
+          prev.sourceText = sourceText;
+        }
+      }
+    }
+
+    return Array.from(aggregated.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 50);
+  } catch (error) {
+    console.warn("[Planner] Failed to load policy recovery hints:", error);
+    return [];
+  }
+}
+
+export function attachPolicyRecoveryHintsToRequirement(
+  requirement: Requirement,
+  hints: PolicyRecoveryPathHint[],
+): Requirement {
+  if (hints.length === 0) {
+    return requirement;
+  }
+
+  const lines = hints.slice(0, 20).map((hint) => {
+    const roleLabel = hint.role ?? "any";
+    return `- ${hint.path} (role=${roleLabel}, seen=${hint.count})`;
+  });
+  const block = `Policy Recovery Hints (recent auto-allowed paths):\n${lines.join("\n")}`;
+  const notes = requirement.notes ? `${requirement.notes}\n\n${block}` : block;
+  return { ...requirement, notes };
 }

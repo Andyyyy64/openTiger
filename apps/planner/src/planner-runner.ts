@@ -17,6 +17,7 @@ import type { CodebaseInspection } from "./inspection";
 import {
   normalizeGeneratedTasks,
   applyTaskRolePolicy,
+  applyPolicyRecoveryPathHints,
   applyVerificationCommandPolicy,
   applyTesterCommandPolicy,
   applyDevCommandPolicy,
@@ -39,8 +40,11 @@ import {
   attachInspectionToTasks,
   attachJudgeFeedbackToRequirement,
   attachJudgeFeedbackToTasks,
+  attachPolicyRecoveryHintsToRequirement,
   loadExistingTaskHints,
   loadJudgeFeedback,
+  loadPolicyRecoveryPathHints,
+  type PolicyRecoveryPathHint,
 } from "./planner-notes";
 import { clipText, getErrorMessage, isRepoUninitialized } from "./planner-utils";
 import { augmentVerificationCommandsForTasks } from "./planner-verification";
@@ -100,6 +104,7 @@ async function applyPlannerTaskPolicies(params: {
   devCommand?: string;
   judgeFeedback?: string;
   inspectionNotes?: string;
+  policyRecoveryHints?: PolicyRecoveryPathHint[];
 }): Promise<TaskGenerationResult> {
   let next = sanitizeTaskDependencyIndexes(params.result);
   next = reduceRedundantDependencyIndexes(next);
@@ -113,6 +118,7 @@ async function applyPlannerTaskPolicies(params: {
   next = applyVerificationCommandPolicy(next, params.checkScriptAvailable);
   next = applyTesterCommandPolicy(next, params.e2eCommand);
   next = applyDevCommandPolicy(next, params.devCommand);
+  next = applyPolicyRecoveryPathHints(next, params.policyRecoveryHints ?? []);
   next = attachJudgeFeedbackToTasks(next, params.judgeFeedback);
   next = attachInspectionToTasks(next, params.inspectionNotes);
   return next;
@@ -165,6 +171,13 @@ export async function planFromRequirement(
   }
   const existingTaskHints = await loadExistingTaskHints();
   requirement = attachExistingTasksToRequirement(requirement, existingTaskHints);
+  const policyRecoveryHints = await loadPolicyRecoveryPathHints();
+  if (policyRecoveryHints.length > 0) {
+    console.log(
+      `\n[Planner] Loaded ${policyRecoveryHints.length} policy recovery hint(s) for proactive allowedPaths.`,
+    );
+  }
+  requirement = attachPolicyRecoveryHintsToRequirement(requirement, policyRecoveryHints);
   const checkScriptAvailable = await hasRootCheckScript(config.workdir);
   if (!checkScriptAvailable) {
     console.log("[Planner] No check script found; adjusting verification commands.");
@@ -311,6 +324,7 @@ export async function planFromRequirement(
     devCommand,
     judgeFeedback,
     inspectionNotes,
+    policyRecoveryHints,
   });
 
   // Log results
@@ -486,6 +500,8 @@ export async function planFromContent(
   requirement = attachJudgeFeedbackToRequirement(requirement, judgeFeedback);
   const existingTaskHints = await loadExistingTaskHints();
   requirement = attachExistingTasksToRequirement(requirement, existingTaskHints);
+  const policyRecoveryHints = await loadPolicyRecoveryPathHints();
+  requirement = attachPolicyRecoveryHintsToRequirement(requirement, policyRecoveryHints);
   const checkScriptAvailable = await hasRootCheckScript(fullConfig.workdir);
   const devCommand = await resolveDevVerificationCommand(fullConfig.workdir);
   const checkCommand = await resolveCheckVerificationCommand(fullConfig.workdir);
@@ -533,6 +549,7 @@ export async function planFromContent(
       devCommand,
       judgeFeedback,
       inspectionNotes,
+      policyRecoveryHints,
     });
   }
 
@@ -587,6 +604,7 @@ export async function planFromContent(
       devCommand,
       judgeFeedback,
       inspectionNotes,
+      policyRecoveryHints,
     });
   }
 
@@ -602,5 +620,6 @@ export async function planFromContent(
     devCommand,
     judgeFeedback,
     inspectionNotes,
+    policyRecoveryHints,
   });
 }

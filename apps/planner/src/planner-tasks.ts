@@ -118,6 +118,20 @@ export async function recordPlannerPlanEvent(params: {
       };
     })
     .filter((task): task is NonNullable<typeof task> => typeof task !== "undefined");
+  const policyRecoveryHintApplications =
+    result.policyRecoveryHintApplications?.map((application) => ({
+      taskIndex: application.taskIndex,
+      taskTitle: application.taskTitle,
+      taskRole: application.taskRole,
+      addedAllowedPaths: application.addedAllowedPaths,
+      matchedHints: application.matchedHints.map((hint) => ({
+        path: hint.path,
+        hintRole: hint.hintRole,
+        hintCount: hint.hintCount,
+        reason: hint.reason,
+        hintSourceText: hint.hintSourceText,
+      })),
+    })) ?? [];
 
   try {
     await database.insert(events).values({
@@ -141,6 +155,7 @@ export async function recordPlannerPlanEvent(params: {
           totalEstimatedMinutes: result.totalEstimatedMinutes,
           warnings: result.warnings,
         },
+        policyRecoveryHintApplications,
         taskIds: taskSummaries.map((task) => task.id),
         tasks: taskSummaries,
       },

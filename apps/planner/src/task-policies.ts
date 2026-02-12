@@ -1,7 +1,20 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  getDefaultPolicyRecoveryConfig,
+  loadPolicyRecoveryConfig,
+  resolveCommandDrivenAllowedPaths as resolveCommandDrivenAllowedPathsFromPolicyConfig,
+  type PolicyRecoveryConfig,
+} from "@openTiger/core";
 import type { Requirement } from "./parser";
-import type { PlannedTaskInput, TaskGenerationResult } from "./strategies/index";
+import type { PolicyRecoveryPathHint } from "./planner-notes";
+import type {
+  PlannedTaskInput,
+  PolicyRecoveryHintApplication,
+  PolicyRecoveryHintMatchReason,
+  PolicyRecoveryHintUsage,
+  TaskGenerationResult,
+} from "./strategies/index";
 
 function parseListEnv(name: string): string[] {
   return (process.env[name] ?? "")
@@ -108,6 +121,7 @@ let repoTaskPolicyExtras: RepoTaskPolicyExtras = {
   lockfilePaths: [],
   docserAllowedPaths: [],
 };
+let policyRecoveryConfig: PolicyRecoveryConfig = getDefaultPolicyRecoveryConfig();
 
 async function loadPolicyListFromTextFile(path: string): Promise<string[]> {
   try {
@@ -151,6 +165,7 @@ export async function loadTaskPolicyOverridesFromRepo(workdir: string): Promise<
       lockfilePaths: [],
       docserAllowedPaths: [],
     };
+    policyRecoveryConfig = getDefaultPolicyRecoveryConfig();
     return;
   }
   if (loadedPolicyWorkdir === normalizedWorkdir) {
@@ -171,6 +186,7 @@ export async function loadTaskPolicyOverridesFromRepo(workdir: string): Promise<
     lockfilePaths,
     docserAllowedPaths,
   };
+  policyRecoveryConfig = await loadPolicyRecoveryConfig(normalizedWorkdir);
   loadedPolicyWorkdir = normalizedWorkdir;
 
   const extrasCount =
@@ -224,13 +240,237 @@ function normalizeVerificationCommands(commands: string[]): string[] {
   const seen = new Set<string>();
   for (const command of commands) {
     const trimmed = command.trim();
-    if (!trimmed || seen.has(trimmed)) {
+    if (!trimmed || seen.has(trimmed) || hasUnsupportedShellOperator(trimmed)) {
       continue;
     }
     seen.add(trimmed);
     normalized.push(trimmed);
   }
   return normalized;
+}
+
+function hasUnsupportedShellOperator(command: string): boolean {
+  let quote: "'" | '"' | null = null;
+  let escaped = false;
+
+  for (let i = 0; i < command.length; i += 1) {
+    const char = command[i];
+    const prev = i > 0 ? command[i - 1] : "";
+    const next = i + 1 < command.length ? command[i + 1] : "";
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      if (quote !== "'") {
+        escaped = true;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+
+    if (char === "|") {
+      return true;
+    }
+    if (char === ";" || char === "<" || char === ">" || char === "`") {
+      return true;
+    }
+    if (char === "&" && prev !== "&" && next !== "&") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function resolveCommandDrivenAllowedPaths(task: PlannedTaskInput): string[] {
+  return resolveCommandDrivenAllowedPathsFromPolicyConfig(task, policyRecoveryConfig);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasToken(text: string, token: string): boolean {
+  return new RegExp(`\\b${escapeRegExp(token)}\\b`, "i").test(text);
+}
+
+function normalizeHintPath(path: string): string {
+  const normalized = path
+    .replace(/\\/g, "/")
+    .replace(/^\.\/+/, "")
+    .trim();
+  if (!normalized || normalized.startsWith("/")) {
+    return "";
+  }
+  if (normalized.includes("..") || /[*?[\]{}]/.test(normalized)) {
+    return "";
+  }
+  return normalized;
+}
+
+const WEAK_POLICY_HINT_TOKENS = new Set(["build", "compile", "link", "setup", "bootstrap"]);
+
+type HintMatchResult =
+  | {
+      applies: true;
+      path: string;
+      reason: PolicyRecoveryHintMatchReason;
+    }
+  | {
+      applies: false;
+    };
+
+function resolvePolicyRecoveryHintMatch(
+  task: PlannedTaskInput,
+  hint: PolicyRecoveryPathHint,
+): HintMatchResult {
+  if (task.role === "docser") {
+    return { applies: false };
+  }
+  if (hint.role && task.role && hint.role !== task.role) {
+    return { applies: false };
+  }
+
+  const normalizedHintPath = normalizeHintPath(hint.path);
+  if (!normalizedHintPath) {
+    return { applies: false };
+  }
+
+  const taskContextFiles = new Set(
+    (task.context?.files ?? [])
+      .map((file) => normalizeHintPath(file))
+      .filter((file) => file.length > 0),
+  );
+  if (taskContextFiles.has(normalizedHintPath)) {
+    return { applies: true, path: normalizedHintPath, reason: "context_file_match" };
+  }
+
+  const taskText = [
+    task.title,
+    task.goal,
+    ...(task.commands ?? []),
+    task.context?.specs,
+    task.context?.notes,
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .join(" ")
+    .toLowerCase();
+  const hintSourceText = hint.sourceText.toLowerCase();
+
+  const sharedSignals = policyRecoveryConfig.infraSignalTokens.filter(
+    (token) => hasToken(hintSourceText, token) && hasToken(taskText, token),
+  );
+  if (sharedSignals.length === 0) {
+    return { applies: false };
+  }
+  const hasStrongSignal = sharedSignals.some((token) => !WEAK_POLICY_HINT_TOKENS.has(token));
+  if (hasStrongSignal) {
+    return { applies: true, path: normalizedHintPath, reason: "signal_match_strong" };
+  }
+  if (hint.count >= 2) {
+    return { applies: true, path: normalizedHintPath, reason: "signal_match_repeated_weak" };
+  }
+  return { applies: false };
+}
+
+function clipHintSourceText(text: string): string {
+  const normalized = text.trim();
+  const maxLength = 220;
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLength)}...`;
+}
+
+export function applyPolicyRecoveryPathHints(
+  result: TaskGenerationResult,
+  hints: PolicyRecoveryPathHint[],
+): TaskGenerationResult {
+  if (hints.length === 0) {
+    return result;
+  }
+
+  let patchedTasks = 0;
+  const hintedPaths = new Set<string>();
+  const applications: PolicyRecoveryHintApplication[] = [];
+  const tasks = result.tasks.map((task, taskIndex) => {
+    const extraPaths = new Set<string>();
+    const matchedHintsByPath = new Map<string, PolicyRecoveryHintUsage[]>();
+    for (const hint of hints) {
+      const match = resolvePolicyRecoveryHintMatch(task, hint);
+      if (!match.applies) {
+        continue;
+      }
+      extraPaths.add(match.path);
+      hintedPaths.add(match.path);
+      const matchedHints = matchedHintsByPath.get(match.path) ?? [];
+      matchedHints.push({
+        path: match.path,
+        hintRole: hint.role ?? null,
+        hintCount: hint.count,
+        hintSourceText: clipHintSourceText(hint.sourceText),
+        reason: match.reason,
+      });
+      matchedHintsByPath.set(match.path, matchedHints);
+    }
+    if (extraPaths.size === 0) {
+      return task;
+    }
+
+    const nextAllowedPaths = mergeAllowedPaths(task.allowedPaths, Array.from(extraPaths));
+    const previousAllowedPathSet = new Set(task.allowedPaths);
+    const addedAllowedPaths = nextAllowedPaths.filter((path) => !previousAllowedPathSet.has(path));
+    if (addedAllowedPaths.length === 0) {
+      return task;
+    }
+
+    const matchedHints = addedAllowedPaths.flatMap((path) => matchedHintsByPath.get(path) ?? []);
+    applications.push({
+      taskIndex,
+      taskTitle: task.title,
+      taskRole: task.role ?? null,
+      addedAllowedPaths,
+      matchedHints,
+    });
+    patchedTasks += 1;
+    return {
+      ...task,
+      allowedPaths: nextAllowedPaths,
+    };
+  });
+
+  if (patchedTasks === 0) {
+    return result;
+  }
+
+  const warning = `Applied policy recovery hints to ${patchedTasks} task(s): ${Array.from(
+    hintedPaths,
+  )
+    .slice(0, 8)
+    .join(", ")}${hintedPaths.size > 8 ? ", ..." : ""}`;
+  return {
+    ...result,
+    tasks,
+    warnings: [...result.warnings, warning],
+    policyRecoveryHintApplications: [
+      ...(result.policyRecoveryHintApplications ?? []),
+      ...applications,
+    ],
+  };
 }
 
 export function normalizeGeneratedTasks(result: TaskGenerationResult): TaskGenerationResult {
@@ -254,6 +494,14 @@ export function normalizeGeneratedTasks(result: TaskGenerationResult): TaskGener
       ...normalized,
       allowedPaths: mergeAllowedPaths(normalized.allowedPaths, getLockfilePaths()),
     };
+
+    const commandDrivenAllowedPaths = resolveCommandDrivenAllowedPaths(normalized);
+    if (commandDrivenAllowedPaths.length > 0) {
+      normalized = {
+        ...normalized,
+        allowedPaths: mergeAllowedPaths(normalized.allowedPaths, commandDrivenAllowedPaths),
+      };
+    }
 
     return normalized;
   });

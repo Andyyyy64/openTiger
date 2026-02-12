@@ -9,10 +9,32 @@ export interface PlannedTaskInput extends CreateTaskInput {
   dependsOnIndexes?: number[]; // Preserve LLM dep indexes for later resolution
 }
 
+export type PolicyRecoveryHintMatchReason =
+  | "context_file_match"
+  | "signal_match_strong"
+  | "signal_match_repeated_weak";
+
+export interface PolicyRecoveryHintUsage {
+  path: string;
+  hintRole: string | null;
+  hintCount: number;
+  hintSourceText: string;
+  reason: PolicyRecoveryHintMatchReason;
+}
+
+export interface PolicyRecoveryHintApplication {
+  taskIndex: number;
+  taskTitle: string;
+  taskRole: string | null;
+  addedAllowedPaths: string[];
+  matchedHints: PolicyRecoveryHintUsage[];
+}
+
 export interface TaskGenerationResult {
   tasks: PlannedTaskInput[];
   warnings: string[];
   totalEstimatedMinutes: number;
+  policyRecoveryHintApplications?: PolicyRecoveryHintApplication[];
 }
 
 // Build prompt for LLM
