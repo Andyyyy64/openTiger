@@ -1,6 +1,14 @@
 import { db } from "@openTiger/db";
 import { tasks, runs } from "@openTiger/db/schema";
-import { computeQuotaBackoff } from "@openTiger/core";
+import {
+  computeQuotaBackoff,
+  extractOutsideAllowedViolationPaths,
+  loadPolicyRecoveryConfig,
+  mergeUniquePaths,
+  resolveCommandDrivenAllowedPaths,
+  resolvePolicyViolationAutoAllowPaths,
+  type PolicyRecoveryConfig,
+} from "@openTiger/core";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { recordEvent } from "../../monitors/event-logger";
 import { hasPendingJudgeRun, restoreLatestJudgeRun } from "./judge-recovery";
@@ -13,6 +21,7 @@ const DEFAULT_QUOTA_JITTER_RATIO = 0.2;
 const VERIFY_REWORK_MARKER_PREFIX = "[verify-rework-json]";
 const CONFLICT_AUTOFIX_PREFIX = "[AutoFix-Conflict] PR #";
 const AUTOFIX_PREFIX = "[AutoFix] PR #";
+const AUTO_REWORK_PARENT_MARKER_PREFIX = "[auto-rework] parentTask=";
 
 type VerifyReworkMeta = {
   failedCommand?: string;
@@ -130,6 +139,23 @@ function isConflictAutoFixTaskTitle(title: string): boolean {
   return title.toLowerCase().includes("[autofix-conflict]");
 }
 
+function resolvePolicyRecoveryRepoPath(): string {
+  return process.env.LOCAL_REPO_PATH?.trim() || process.env.REPLAN_WORKDIR?.trim() || process.cwd();
+}
+
+function withCommandDrivenAllowanceIfNeeded(
+  task: {
+    commands: string[] | null;
+    role: string | null;
+    allowedPaths: string[] | null;
+  },
+  config: PolicyRecoveryConfig,
+): string[] {
+  const current = task.allowedPaths ?? [];
+  const extraPaths = resolveCommandDrivenAllowedPaths(task, config);
+  return mergeUniquePaths(current, extraPaths);
+}
+
 async function hasActiveAutoFixTaskForPr(
   prNumber: number,
   currentTaskId: string,
@@ -194,6 +220,7 @@ export async function requeueBlockedTasksWithCooldown(
     return 0;
   }
 
+  const policyRecoveryConfig = await loadPolicyRecoveryConfig(resolvePolicyRecoveryRepoPath());
   const quotaBlockedIds = blockedTasks
     .filter((task) => normalizeBlockReason(task.blockReason) === "quota_wait")
     .map((task) => task.id);
@@ -361,6 +388,103 @@ export async function requeueBlockedTasksWithCooldown(
         continue;
       }
 
+      const [latestRun] = await db
+        .select({
+          errorMessage: runs.errorMessage,
+        })
+        .from(runs)
+        .where(and(eq(runs.taskId, task.id), inArray(runs.status, ["failed", "cancelled"])))
+        .orderBy(desc(runs.startedAt))
+        .limit(1);
+
+      const outsideAllowedPaths = extractOutsideAllowedViolationPaths(latestRun?.errorMessage);
+      if (outsideAllowedPaths.length > 0) {
+        const autoAllowPaths = resolvePolicyViolationAutoAllowPaths(
+          {
+            title: task.title,
+            goal: task.goal,
+            context,
+            commands: task.commands ?? [],
+            role: task.role,
+          },
+          outsideAllowedPaths,
+          policyRecoveryConfig,
+        );
+        const commandDrivenPaths = resolveCommandDrivenAllowedPaths(
+          {
+            commands: task.commands ?? [],
+            role: task.role,
+          },
+          policyRecoveryConfig,
+        );
+        const adjustedAllowedPaths = mergeUniquePaths(task.allowedPaths ?? [], [
+          ...autoAllowPaths,
+          ...commandDrivenPaths,
+        ]);
+        const addedAllowedPaths = adjustedAllowedPaths.filter(
+          (path) => !(task.allowedPaths ?? []).includes(path),
+        );
+
+        if (addedAllowedPaths.length > 0) {
+          await db
+            .update(tasks)
+            .set({
+              status: "queued",
+              blockReason: null,
+              allowedPaths: adjustedAllowedPaths,
+              retryCount: nextRetryCount,
+              updatedAt: new Date(),
+            })
+            .where(eq(tasks.id, task.id));
+
+          await recordEvent({
+            type: "task.requeued",
+            entityType: "task",
+            entityId: task.id,
+            payload: {
+              reason: "policy_allowed_paths_adjusted_from_blocked",
+              retryCount: nextRetryCount,
+              previousAllowedPaths: task.allowedPaths ?? [],
+              nextAllowedPaths: adjustedAllowedPaths,
+              addedAllowedPaths,
+              policyViolationPaths: outsideAllowedPaths,
+            },
+          });
+          console.log(
+            `[Cleanup] Requeued blocked task with adjusted allowed paths: ${task.id} (+${addedAllowedPaths.join(", ")})`,
+          );
+          handled++;
+          continue;
+        }
+
+        await db
+          .update(tasks)
+          .set({
+            status: "blocked",
+            blockReason: "needs_rework",
+            retryCount: nextRetryCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
+
+        await recordEvent({
+          type: "task.recovery_escalated",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: "policy_violation_rework_suppressed_no_safe_path",
+            retryCount: nextRetryCount,
+            policyViolationPaths: outsideAllowedPaths,
+            errorMessage: latestRun?.errorMessage ?? null,
+          },
+        });
+        console.warn(
+          `[Cleanup] Suppressed rework split for policy violation without safe path recovery: ${task.id}`,
+        );
+        handled++;
+        continue;
+      }
+
       const verifyReworkMeta = extractVerifyReworkMeta(context.notes);
       const baseNotes = stripVerifyReworkMarkers(context.notes);
       const verifySummaryLines =
@@ -375,7 +499,7 @@ export async function requeueBlockedTasksWithCooldown(
       const notes = [
         baseNotes,
         verifySummaryLines.join("\n"),
-        `[auto-rework] parentTask=${task.id}`,
+        `${AUTO_REWORK_PARENT_MARKER_PREFIX}${task.id}`,
       ]
         .filter((part) => Boolean(part && part.length > 0))
         .join("\n");
@@ -391,6 +515,14 @@ export async function requeueBlockedTasksWithCooldown(
         task.title.startsWith("[Rework]") || task.title.startsWith("[Rework-Verify]");
       const titlePrefix = verifyReworkMeta ? "[Rework-Verify]" : "[Rework]";
       const reworkTitle = isReworkTitle ? task.title : `${titlePrefix} ${task.title}`;
+      const reworkAllowedPaths = withCommandDrivenAllowanceIfNeeded(
+        {
+          commands: task.commands ?? [],
+          role: task.role,
+          allowedPaths: task.allowedPaths ?? [],
+        },
+        policyRecoveryConfig,
+      );
 
       const [reworkTask] = await db
         .insert(tasks)
@@ -402,7 +534,7 @@ export async function requeueBlockedTasksWithCooldown(
             specs: mergedSpecs.length > 0 ? mergedSpecs : context.specs,
             notes,
           },
-          allowedPaths: task.allowedPaths ?? [],
+          allowedPaths: reworkAllowedPaths,
           commands: task.commands ?? [],
           priority: (task.priority ?? 0) + 5,
           riskLevel: task.riskLevel ?? "medium",
@@ -417,7 +549,8 @@ export async function requeueBlockedTasksWithCooldown(
       await db
         .update(tasks)
         .set({
-          status: "failed",
+          // Rework task has been created; keep parent terminal to avoid retry amplification.
+          status: "cancelled",
           blockReason: null,
           retryCount: nextRetryCount,
           updatedAt: new Date(),

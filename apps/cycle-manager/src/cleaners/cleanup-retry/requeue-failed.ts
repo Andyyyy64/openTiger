@@ -1,5 +1,12 @@
 import { db } from "@openTiger/db";
 import { tasks, runs } from "@openTiger/db/schema";
+import {
+  extractOutsideAllowedViolationPaths,
+  loadPolicyRecoveryConfig,
+  mergeUniquePaths,
+  resolveCommandDrivenAllowedPaths,
+  resolvePolicyViolationAutoAllowPaths,
+} from "@openTiger/core";
 import { eq, inArray, and, desc } from "drizzle-orm";
 import { recordEvent } from "../../monitors/event-logger";
 import { classifyFailure, hasRepeatedFailureSignature } from "./failure-classifier";
@@ -23,7 +30,7 @@ function extractFailedVerificationCommand(errorMessage: string | null | undefine
   return command && command.length > 0 ? command : null;
 }
 
-function sanitizeCommandsForMissingScript(
+function sanitizeCommandsForVerificationFormatIssue(
   commands: string[],
   errorMessage: string | null | undefined,
 ): string[] {
@@ -41,6 +48,10 @@ function sanitizeCommandsForMissingScript(
     return [];
   }
   return filtered;
+}
+
+function resolvePolicyRecoveryRepoPath(): string {
+  return process.env.LOCAL_REPO_PATH?.trim() || process.env.REPLAN_WORKDIR?.trim() || process.cwd();
 }
 
 // Requeue failed tasks (immediate, all)
@@ -76,6 +87,8 @@ export async function requeueFailedTasksWithCooldown(
       goal: tasks.goal,
       context: tasks.context,
       commands: tasks.commands,
+      allowedPaths: tasks.allowedPaths,
+      role: tasks.role,
       updatedAt: tasks.updatedAt,
       retryCount: tasks.retryCount,
     })
@@ -95,6 +108,7 @@ export async function requeueFailedTasksWithCooldown(
     return 0;
   }
 
+  const policyRecoveryConfig = await loadPolicyRecoveryConfig(resolvePolicyRecoveryRepoPath());
   let requeued = 0;
 
   for (const task of eligibleTasks) {
@@ -157,11 +171,22 @@ export async function requeueFailedTasksWithCooldown(
       latestRun?.errorMessage ?? null,
     );
 
-    if (failure.reason === "verification_command_missing_script") {
-      const adjustedCommands = sanitizeCommandsForMissingScript(
+    if (
+      failure.reason === "verification_command_missing_script" ||
+      failure.reason === "verification_command_unsupported_format"
+    ) {
+      const adjustedCommands = sanitizeCommandsForVerificationFormatIssue(
         task.commands ?? [],
         latestRun?.errorMessage ?? null,
       );
+      const reasonLabel =
+        failure.reason === "verification_command_missing_script"
+          ? "missing verification script"
+          : "unsupported verification command format";
+      const eventReason =
+        failure.reason === "verification_command_missing_script"
+          ? "verification_command_missing_script_adjusted"
+          : "verification_command_unsupported_format_adjusted";
       await db
         .update(tasks)
         .set({
@@ -177,17 +202,66 @@ export async function requeueFailedTasksWithCooldown(
         entityType: "task",
         entityId: task.id,
         payload: {
-          reason: "verification_command_missing_script_adjusted",
+          reason: eventReason,
           retryCount: nextRetryCount,
           previousCommands: task.commands ?? [],
           nextCommands: adjustedCommands,
         },
       });
       console.log(
-        `[Cleanup] Requeued failed task with adjusted commands: ${task.id} (missing verification script)`,
+        `[Cleanup] Requeued failed task with adjusted commands: ${task.id} (${reasonLabel})`,
       );
       requeued++;
       continue;
+    }
+
+    if (failure.reason === "policy_violation") {
+      const outsideAllowedPaths = extractOutsideAllowedViolationPaths(latestRun?.errorMessage);
+      const autoAllowPaths = resolvePolicyViolationAutoAllowPaths(
+        task,
+        outsideAllowedPaths,
+        policyRecoveryConfig,
+      );
+      const commandDrivenPaths = resolveCommandDrivenAllowedPaths(task, policyRecoveryConfig);
+      const adjustedAllowedPaths = mergeUniquePaths(task.allowedPaths ?? [], [
+        ...autoAllowPaths,
+        ...commandDrivenPaths,
+      ]);
+      const addedAllowedPaths = adjustedAllowedPaths.filter(
+        (path) => !(task.allowedPaths ?? []).includes(path),
+      );
+      if (addedAllowedPaths.length === 0) {
+        // Continue to normal retry flow when no safe policy recovery candidate exists.
+      } else {
+        await db
+          .update(tasks)
+          .set({
+            status: "queued",
+            blockReason: null,
+            allowedPaths: adjustedAllowedPaths,
+            retryCount: nextRetryCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
+        await recordEvent({
+          type: "task.requeued",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: "policy_allowed_paths_adjusted",
+            retryCount: nextRetryCount,
+            previousAllowedPaths: task.allowedPaths ?? [],
+            nextAllowedPaths: adjustedAllowedPaths,
+            addedAllowedPaths,
+            policyViolationPaths: outsideAllowedPaths,
+          },
+        });
+        console.log(
+          `[Cleanup] Requeued failed task with adjusted allowed paths: ${task.id} (+${addedAllowedPaths.join(", ")})`,
+        );
+        requeued++;
+        continue;
+      }
     }
 
     if (!globalRetryAllowed || !failure.retryable || !categoryRetryAllowed || repeatedFailure) {
