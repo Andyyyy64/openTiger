@@ -135,12 +135,9 @@ function buildScriptCommand(manager: "pnpm" | "yarn" | "npm", script: "check" | 
   return `npm run ${script}`;
 }
 
-async function resolveDocserCommands(
-  workdir: string | undefined,
-  fallback: string[],
-): Promise<string[]> {
+async function resolveDocserCommands(workdir: string | undefined): Promise<string[]> {
   if (!workdir) {
-    return fallback;
+    return [];
   }
 
   const { hasCheck } = await readRootScripts(workdir);
@@ -151,7 +148,7 @@ async function resolveDocserCommands(
     commands.push(buildScriptCommand(manager, "check"));
   }
 
-  return commands.length > 0 ? commands : fallback;
+  return commands;
 }
 
 function hasUnsupportedShellOperator(command: string): boolean {
@@ -255,7 +252,12 @@ async function createDocserTask(params: {
   }
 
   const fallbackCommands = sanitizeDocserCommands(baseTask.commands ?? []);
-  const commands = await resolveDocserCommands(params.repoPathForScripts, fallbackCommands);
+  if (fallbackCommands.length > 0) {
+    console.log(
+      `[Judge] Skipping inherited verification commands for docser task: ${fallbackCommands.join(", ")}`,
+    );
+  }
+  const commands = await resolveDocserCommands(params.repoPathForScripts);
 
   const notes = [
     `sourceTaskId: ${params.source.taskId}`,
