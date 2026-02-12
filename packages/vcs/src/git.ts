@@ -223,6 +223,14 @@ export async function createBranch(
     return fromRefResult;
   }
   if (baseRef.startsWith("origin/") || baseRef.startsWith("refs/")) {
+    const fetchBaseResult = await execGit(["fetch", "origin"], cwd);
+    if (!fetchBaseResult.success) {
+      return fromRefResult;
+    }
+    const retryFromRefResult = await execGit(["checkout", "-B", branchName, baseRef], cwd);
+    if (retryFromRefResult.success) {
+      return retryFromRefResult;
+    }
     return fromRefResult;
   }
 
@@ -285,9 +293,144 @@ export async function abortRebase(cwd: string): Promise<GitResult> {
   return execGit(["rebase", "--abort"], cwd);
 }
 
+function extractIgnoredPathsFromAddError(stderr: string): string[] {
+  const lines = stderr
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  const markerIndex = lines.findIndex((line) =>
+    line.toLowerCase().includes("ignored by one of your .gitignore files"),
+  );
+  if (markerIndex < 0) {
+    return [];
+  }
+  const ignoredPaths: string[] = [];
+  for (let index = markerIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (!line) {
+      continue;
+    }
+    const lower = line.toLowerCase();
+    if (lower.startsWith("hint:") || lower.startsWith("fatal:")) {
+      break;
+    }
+    ignoredPaths.push(line);
+  }
+  return Array.from(new Set(ignoredPaths));
+}
+
+function extractMissingPathspecsFromAddError(stderr: string): string[] {
+  const missingPaths: string[] = [];
+  for (const line of stderr.split(/\r?\n/)) {
+    const match = line.match(/pathspec ['"](.+?)['"] did not match any files/i);
+    if (match?.[1]) {
+      missingPaths.push(match[1].trim());
+    }
+  }
+  return Array.from(new Set(missingPaths.filter((path) => path.length > 0)));
+}
+
+async function resolveTrackedMissingPaths(cwd: string, paths: string[]): Promise<string[]> {
+  const trackedPaths: string[] = [];
+  for (const path of paths) {
+    const trackedResult = await execGit(["ls-files", "--error-unmatch", "--", path], cwd);
+    if (trackedResult.success) {
+      trackedPaths.push(path);
+    }
+  }
+  return trackedPaths;
+}
+
 // Stage changes
 export async function stageChanges(cwd: string, paths: string[] = ["."]): Promise<GitResult> {
-  return execGit(["add", ...paths], cwd);
+  const normalizedPaths = Array.from(
+    new Set(paths.map((path) => path.trim()).filter((path) => path.length > 0)),
+  );
+  const stagePaths = normalizedPaths.length > 0 ? normalizedPaths : ["."];
+
+  const initialResult = await execGit(["add", "--", ...stagePaths], cwd);
+  if (initialResult.success) {
+    return initialResult;
+  }
+
+  const ignoredPaths = extractIgnoredPathsFromAddError(initialResult.stderr);
+  const missingPaths = extractMissingPathspecsFromAddError(initialResult.stderr);
+  if (ignoredPaths.length === 0 && missingPaths.length === 0) {
+    return initialResult;
+  }
+
+  if (stagePaths.includes(".") && ignoredPaths.length > 0) {
+    return initialResult;
+  }
+
+  const ignoredSet = new Set(ignoredPaths);
+  const missingSet = new Set(missingPaths);
+  const safePaths = stagePaths.filter((path) => !ignoredSet.has(path) && !missingSet.has(path));
+  const trackedMissingPaths =
+    missingPaths.length > 0 ? await resolveTrackedMissingPaths(cwd, missingPaths) : [];
+  const retryPaths = Array.from(new Set([...safePaths, ...trackedMissingPaths]));
+  const skippedMissingPaths = missingPaths.filter((path) => !trackedMissingPaths.includes(path));
+
+  if (retryPaths.length === 0) {
+    const messages: string[] = [];
+    if (ignoredPaths.length > 0) {
+      messages.push(`[git] Skipped ignored paths during staging: ${ignoredPaths.join(", ")}`);
+    }
+    if (skippedMissingPaths.length > 0) {
+      messages.push(
+        `[git] Skipped missing untracked paths during staging: ${skippedMissingPaths.join(", ")}`,
+      );
+    }
+    messages.push(initialResult.stderr);
+    return {
+      success: true,
+      stdout: initialResult.stdout,
+      stderr: messages
+        .filter((line) => line.length > 0)
+        .join("\n")
+        .trim(),
+      exitCode: 0,
+    };
+  }
+
+  const safeResult = await execGit(["add", "-A", "--", ...retryPaths], cwd);
+  if (!safeResult.success) {
+    return {
+      success: false,
+      stdout: [initialResult.stdout, safeResult.stdout]
+        .filter((line) => line.length > 0)
+        .join("\n")
+        .trim(),
+      stderr: [initialResult.stderr, safeResult.stderr]
+        .filter((line) => line.length > 0)
+        .join("\n")
+        .trim(),
+      exitCode: safeResult.exitCode,
+    };
+  }
+
+  const warnings: string[] = [];
+  if (ignoredPaths.length > 0) {
+    warnings.push(`[git] Skipped ignored paths during staging: ${ignoredPaths.join(", ")}`);
+  }
+  if (skippedMissingPaths.length > 0) {
+    warnings.push(
+      `[git] Skipped missing untracked paths during staging: ${skippedMissingPaths.join(", ")}`,
+    );
+  }
+
+  return {
+    success: true,
+    stdout: [initialResult.stdout, safeResult.stdout]
+      .filter((line) => line.length > 0)
+      .join("\n")
+      .trim(),
+    stderr: [...warnings, initialResult.stderr, safeResult.stderr]
+      .filter((line) => line.length > 0)
+      .join("\n")
+      .trim(),
+    exitCode: 0,
+  };
 }
 
 // Commit

@@ -41,9 +41,33 @@ function getErrorStatus(error: unknown): number | undefined {
   return undefined;
 }
 
+function getErrorMessage(error: unknown): string {
+  if (typeof error === "object" && error && "message" in error) {
+    return String((error as { message?: unknown }).message ?? "");
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error ?? "");
+}
+
 function isRecoverableServerError(error: unknown): boolean {
   const status = getErrorStatus(error);
-  return typeof status === "number" && status >= 500;
+  if (typeof status === "number" && status >= 500) {
+    return true;
+  }
+  if (status === 429) {
+    return true;
+  }
+  if (status === 403) {
+    const message = getErrorMessage(error).toLowerCase();
+    return message.includes("rate limit") || message.includes("secondary rate limit");
+  }
+  return false;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function fallbackPRInfo(params: {
@@ -165,21 +189,37 @@ export async function createPR(options: CreatePROptions): Promise<PRInfo> {
     if (!isRecoverableServerError(error)) {
       throw error;
     }
-    // Search for existing PR with same head/base to recover when response fails right after create
-    console.warn(
-      `[VCS] pull create failed with recoverable server error for head=${options.head}; searching existing PR.`,
-      error,
-    );
-    const existing = await findPRs({
-      head: options.head,
-      base: options.base ?? "main",
-      state: "open",
-    });
-    const matched = existing[0];
-    if (matched) {
-      return matched;
+    await sleep(1500);
+    try {
+      response = await octokit.pulls.create({
+        owner,
+        repo,
+        title: options.title,
+        body: options.body,
+        head: options.head,
+        base: options.base ?? "main",
+        draft: options.draft ?? false,
+      });
+    } catch (retryError) {
+      if (!isRecoverableServerError(retryError)) {
+        throw retryError;
+      }
+      // Search for existing PR with same head/base to recover when response fails right after create
+      console.warn(
+        `[VCS] pull create failed with recoverable server error for head=${options.head}; searching existing PR.`,
+        retryError,
+      );
+      const existing = await findPRs({
+        head: options.head,
+        base: options.base ?? "main",
+        state: "open",
+      });
+      const matched = existing[0];
+      if (matched) {
+        return matched;
+      }
+      throw retryError;
     }
-    throw error;
   }
 
   // Add labels
