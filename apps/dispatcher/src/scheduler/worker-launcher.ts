@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { db } from "@openTiger/db";
 import { agents } from "@openTiger/db/schema";
@@ -39,6 +39,8 @@ const activeWorkers = new Map<
 const DEFAULT_OPENCODE_CONFIG_PATH = resolve(import.meta.dirname, "../../../../opencode.json");
 const DEFAULT_DOCKER_IMAGE = "openTiger/worker:latest";
 const DEFAULT_DOCKER_NETWORK = "bridge";
+const DEFAULT_HOST_LOG_DIR = resolve(import.meta.dirname, "../../../../raw-logs");
+const DOCKER_WORKER_LOG_DIR = "/tmp/openTiger-logs";
 
 type DockerMount = {
   hostPath: string;
@@ -221,6 +223,16 @@ async function _launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResul
 async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult> {
   const image = resolveDockerImage(config);
   const network = resolveDockerNetwork(config);
+  const hostLogDir = resolve(
+    process.env.OPENTIGER_LOG_DIR?.trim() ||
+      process.env.OPENTIGER_RAW_LOG_DIR?.trim() ||
+      DEFAULT_HOST_LOG_DIR,
+  );
+  try {
+    mkdirSync(hostLogDir, { recursive: true });
+  } catch (error) {
+    console.warn(`[Dispatcher] Failed to prepare log directory: ${hostLogDir}`, error);
+  }
 
   const envArgs: string[] = [];
   const allEnv = {
@@ -247,6 +259,7 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
     CLAUDE_CODE_DISALLOWED_TOOLS: process.env.CLAUDE_CODE_DISALLOWED_TOOLS ?? "",
     CLAUDE_CODE_APPEND_SYSTEM_PROMPT: process.env.CLAUDE_CODE_APPEND_SYSTEM_PROMPT ?? "",
     GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? "",
+    OPENTIGER_LOG_DIR: DOCKER_WORKER_LOG_DIR,
     ...config.env,
   };
   allEnv.DATABASE_URL = rewriteLocalUrlForDocker(allEnv.DATABASE_URL);
@@ -258,7 +271,12 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
     }
   }
 
-  const mountArgs: string[] = ["--add-host", "host.docker.internal:host-gateway"];
+  const mountArgs: string[] = [
+    "--add-host",
+    "host.docker.internal:host-gateway",
+    "--volume",
+    `${hostLogDir}:${DOCKER_WORKER_LOG_DIR}`,
+  ];
   const claudeAuthMounts = resolveClaudeAuthMounts();
   for (const mount of claudeAuthMounts) {
     const readonlySuffix = mount.readonly ? ":ro" : "";
