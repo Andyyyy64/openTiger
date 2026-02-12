@@ -38,11 +38,28 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
     };
   }
 
-  if (/err_pnpm_no_script|missing script/.test(message)) {
+  if (
+    /err_pnpm_no_script|missing script|could not read package\.json|enoent.*package\.json/.test(
+      message,
+    )
+  ) {
     return {
       category: "setup",
       retryable: false,
       reason: "verification_command_missing_script",
+      blockReason: "needs_rework",
+    };
+  }
+
+  if (
+    /unsupported command format|shell operators are not allowed|verification failed at .*shell operators/.test(
+      message,
+    )
+  ) {
+    return {
+      category: "setup",
+      retryable: false,
+      reason: "verification_command_unsupported_format",
       blockReason: "needs_rework",
     };
   }

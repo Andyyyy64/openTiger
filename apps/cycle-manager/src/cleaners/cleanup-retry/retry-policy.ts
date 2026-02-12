@@ -1,6 +1,6 @@
 import type { FailureCategory } from "./types";
 
-// Max retry count (-1 = unlimited; on exceed, switch to rework instead of stopping recovery)
+// Max retry count (-1 = rely on category limits)
 const MAX_RETRY_COUNT = (() => {
   const parsed = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1", 10);
   return Number.isFinite(parsed) ? parsed : -1;
@@ -29,8 +29,8 @@ export function isRetryAllowed(retryCount: number): boolean {
 export function resolveCategoryRetryLimit(category: FailureCategory): number {
   const categoryLimit = CATEGORY_RETRY_LIMIT[category];
   if (isUnlimitedRetry()) {
-    // Even in unlimited mode, keep non-retry categories for rework decision
-    return categoryLimit <= 0 ? 0 : -1;
+    // Keep category guardrails even when global limit is disabled.
+    return categoryLimit;
   }
   return Math.min(categoryLimit, MAX_RETRY_COUNT);
 }
