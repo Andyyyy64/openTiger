@@ -143,18 +143,75 @@ async function resolveDocserCommands(
     return fallback;
   }
 
-  const { hasCheck, hasDev } = await readRootScripts(workdir);
+  const { hasCheck } = await readRootScripts(workdir);
   const manager = await resolvePackageManager(workdir);
   const commands: string[] = [];
 
   if (hasCheck) {
     commands.push(buildScriptCommand(manager, "check"));
   }
-  if (hasDev) {
-    commands.push(buildScriptCommand(manager, "dev"));
-  }
 
   return commands.length > 0 ? commands : fallback;
+}
+
+function hasUnsupportedShellOperator(command: string): boolean {
+  let quote: "'" | '"' | null = null;
+  let escaped = false;
+
+  for (let i = 0; i < command.length; i += 1) {
+    const char = command[i];
+    const prev = i > 0 ? command[i - 1] : "";
+    const next = i + 1 < command.length ? command[i + 1] : "";
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === "\\") {
+      if (quote !== "'") {
+        escaped = true;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+
+    if (char === "|" || char === ";" || char === "<" || char === ">" || char === "`") {
+      return true;
+    }
+    if (char === "&" && prev !== "&" && next !== "&") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function sanitizeDocserCommands(commands: string[]): string[] {
+  const unique = new Set<string>();
+  const sanitized: string[] = [];
+
+  for (const command of commands) {
+    const trimmed = command.trim();
+    if (!trimmed || unique.has(trimmed) || hasUnsupportedShellOperator(trimmed)) {
+      continue;
+    }
+    unique.add(trimmed);
+    sanitized.push(trimmed);
+  }
+
+  return sanitized;
 }
 
 function summarizeFiles(files: string[], limit = 20): string {
@@ -190,15 +247,14 @@ async function createDocserTask(params: {
   }
 
   const nonDocFiles = params.diffFiles.filter((file) => !isDocPath(file));
-  const docGap = await detectDocGap(params.repoPathForScripts ?? params.source.workdir);
+  const docGap = await detectDocGap(params.repoPathForScripts);
 
   // Start docser even when diff is docs-only if documentation is insufficient
   if (nonDocFiles.length === 0 && !docGap.hasGap) {
     return { created: false, reason: "docs_only_change" };
   }
 
-  const fallbackCommands =
-    baseTask.commands && baseTask.commands.length > 0 ? baseTask.commands : ["npm run check"];
+  const fallbackCommands = sanitizeDocserCommands(baseTask.commands ?? []);
   const commands = await resolveDocserCommands(params.repoPathForScripts, fallbackCommands);
 
   const notes = [
@@ -270,7 +326,6 @@ export async function createDocserTaskForPR(params: DocserSourcePR): Promise<Doc
   return createDocserTask({
     source: params,
     diffFiles,
-    repoPathForScripts: params.workdir,
   });
 }
 
@@ -286,6 +341,6 @@ export async function createDocserTaskForLocal(
   return createDocserTask({
     source: params,
     diffFiles,
-    repoPathForScripts: params.baseRepoPath ?? params.workdir,
+    repoPathForScripts: params.baseRepoPath,
   });
 }
