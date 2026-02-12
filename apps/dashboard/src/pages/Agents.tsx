@@ -48,14 +48,13 @@ export const AgentsPage: React.FC = () => {
   const useClaudeLabels = isClaudeExecutor(llmExecutor);
   const configuredClaudeModel =
     normalizeClaudeModel(config?.config.CLAUDE_CODE_MODEL) ?? CLAUDE_CODE_DEFAULT_MODEL;
+  const onlineAgents = (agents ?? []).filter((agent) => agent.status !== "offline");
 
   // Detect state where dispatch is not possible due to incomplete dependencies
   const queuedTasks = tasks?.filter((t) => t.status === "queued") ?? [];
   const resolvedDependencyStatuses = new Set(["done", "cancelled", "failed"]);
   const resolvedDependencyTaskIds = new Set(
-    (tasks ?? [])
-      .filter((t) => resolvedDependencyStatuses.has(t.status))
-      .map((t) => t.id),
+    (tasks ?? []).filter((t) => resolvedDependencyStatuses.has(t.status)).map((t) => t.id),
   );
   const queuedBlockedByDeps = queuedTasks.filter((task) => {
     const deps = task.dependencies ?? [];
@@ -70,9 +69,16 @@ export const AgentsPage: React.FC = () => {
   const sortedAgents = React.useMemo(() => {
     if (!agents) return [];
     return [...agents].sort((a, b) => {
-      // 1. Busy agents first
-      if (a.status === "busy" && b.status !== "busy") return -1;
-      if (a.status !== "busy" && b.status === "busy") return 1;
+      const statusRank: Record<string, number> = {
+        busy: 0,
+        idle: 1,
+        offline: 2,
+      };
+      const rankA = statusRank[a.status] ?? 99;
+      const rankB = statusRank[b.status] ?? 99;
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
 
       // 2. Sort by role
       if (a.role !== b.role) return a.role.localeCompare(b.role);
@@ -96,7 +102,7 @@ export const AgentsPage: React.FC = () => {
         <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
           &gt; Connected_Nodes (Agents)
         </h1>
-        <span className="text-xs text-zinc-500">{agents?.length ?? 0} NODES ONLINE</span>
+        <span className="text-xs text-zinc-500">{onlineAgents.length} NODES ONLINE</span>
       </div>
 
       {blockedByDepsWithIdleWorkers && (
@@ -149,9 +155,19 @@ export const AgentsPage: React.FC = () => {
 
                   <div className="col-span-2">
                     <span
-                      className={`text-xs uppercase px-1 ${agent.status === "busy" ? "bg-term-tiger text-black font-bold animate-pulse" : "text-zinc-500"}`}
+                      className={`text-xs uppercase px-1 ${
+                        agent.status === "busy"
+                          ? "bg-term-tiger text-black font-bold animate-pulse"
+                          : agent.status === "offline"
+                            ? "text-red-500"
+                            : "text-zinc-500"
+                      }`}
                     >
-                      {agent.status === "busy" ? "PROCESSING" : "IDLE"}
+                      {agent.status === "busy"
+                        ? "PROCESSING"
+                        : agent.status === "offline"
+                          ? "OFFLINE"
+                          : "IDLE"}
                     </span>
                   </div>
 

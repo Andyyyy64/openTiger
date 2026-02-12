@@ -39,7 +39,10 @@ export const RunsPage: React.FC = () => {
     }
     return map;
   }, [tasks]);
-  const groupedRuns = React.useMemo(() => groupRunsByTask(runs ?? []), [runs]);
+  const groupedRuns = React.useMemo(
+    () => groupRunsByTaskGroup(runs ?? [], taskById),
+    [runs, taskById],
+  );
 
   return (
     <div className="p-6 text-term-fg">
@@ -58,12 +61,23 @@ export const RunsPage: React.FC = () => {
           <div className="text-center text-zinc-500 py-12 font-mono">&gt; No records found</div>
         ) : (
           groupedRuns.map((group) => {
-            // Task info
-            const task = taskById.get(group.taskId);
             const latestRun = group.runs[0];
-            const retryStatus = formatTaskRetryStatus(task?.retry, now);
-            const hasQuotaRetryInfo = Boolean(
-              task?.retry?.autoRetry && task.retry.reason === "quota_wait",
+            const primaryTaskId = latestRun.taskId;
+            const displayTask =
+              taskById.get(primaryTaskId) ??
+              group.taskIds.map((id) => taskById.get(id)).find(Boolean);
+            const tasksInGroup = group.taskIds
+              .map((id) => taskById.get(id))
+              .filter((t): t is TaskView => Boolean(t));
+            const retryTask =
+              tasksInGroup.find((t) => t.retry?.autoRetry && t.retry.reason === "quota_wait") ??
+              tasksInGroup.find(
+                (t) => t.retry && isWaitingRetryStatus(formatTaskRetryStatus(t.retry, now)),
+              ) ??
+              displayTask;
+            const retryStatus = formatTaskRetryStatus(retryTask?.retry, now);
+            const hasQuotaRetryInfo = tasksInGroup.some(
+              (t) => t.retry?.autoRetry && t.retry.reason === "quota_wait",
             );
             const latestRunQuotaFailure = Boolean(
               latestRun &&
@@ -72,9 +86,15 @@ export const RunsPage: React.FC = () => {
             );
             const isQuotaWaiting = hasQuotaRetryInfo || latestRunQuotaFailure;
             const effectiveRetryStatus = isQuotaWaiting
-              ? formatQuotaWaitRetryStatus(task?.retry, now)
+              ? formatQuotaWaitRetryStatus(
+                  tasksInGroup.find((t) => t.retry?.reason === "quota_wait")?.retry ??
+                    displayTask?.retry,
+                  now,
+                )
               : retryStatus;
             const isRetryWaiting = isWaitingRetryStatus(effectiveRetryStatus);
+            const isJudgeWaiting =
+              /^judge \d+s$/.test(effectiveRetryStatus) || effectiveRetryStatus === "judge due";
             const retryLabel =
               effectiveRetryStatus !== "pending" &&
               effectiveRetryStatus !== "due" &&
@@ -98,23 +118,31 @@ export const RunsPage: React.FC = () => {
 
             return (
               <section
-                key={group.taskId}
+                key={group.groupKey}
                 className={`border p-0 ${isQuotaWaiting ? "border-yellow-500/70 shadow-[0_0_0_1px_rgba(250,204,21,0.2)]" : isRetryWaiting ? "border-term-tiger/60 animate-pulse" : "border-term-border"}`}
               >
                 {/* Task Header */}
                 <div className="bg-term-border/10 px-4 py-3 border-b border-term-border flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-1 max-w-[70%]">
-                    <div className="flex items-center gap-2 text-xs font-mono">
+                    <div className="flex items-center gap-2 text-xs font-mono flex-wrap">
                       <span className="text-zinc-500">task:</span>
-                      <Link
-                        to={`/tasks/${group.taskId}`}
-                        className="text-term-tiger hover:underline font-bold"
-                      >
-                        {group.taskId.slice(0, 8)}
-                      </Link>
+                      {group.taskIds.map((tid) => (
+                        <Link
+                          key={tid}
+                          to={`/tasks/${tid}`}
+                          className="text-term-tiger hover:underline font-bold"
+                        >
+                          {tid.slice(0, 8)}
+                        </Link>
+                      ))}
+                      {group.taskIds.length > 1 && (
+                        <span className="text-zinc-600">(same work)</span>
+                      )}
                     </div>
-                    {task?.title && (
-                      <div className="text-sm font-bold text-term-fg truncate">{task.title}</div>
+                    {displayTask?.title && (
+                      <div className="text-sm font-bold text-term-fg truncate">
+                        {displayTask.title}
+                      </div>
                     )}
                   </div>
 
@@ -140,6 +168,20 @@ export const RunsPage: React.FC = () => {
                     </span>
                   </div>
                 )}
+                {isRetryWaiting && !isQuotaWaiting && (
+                  <div className="px-4 py-2 border-b border-term-tiger/40 bg-term-tiger/5 text-xs font-mono flex items-center justify-between gap-4 animate-pulse">
+                    <span className="text-term-tiger font-bold uppercase tracking-wider">
+                      {isJudgeWaiting ? "[JUDGE_WAIT]" : "[RETRY_WAIT]"}
+                    </span>
+                    <span className="text-term-tiger/90">
+                      {effectiveRetryStatus === "due" ||
+                      effectiveRetryStatus === "rework due" ||
+                      effectiveRetryStatus === "judge due"
+                        ? "retrying now"
+                        : `next retry: ${effectiveRetryStatus}`}
+                    </span>
+                  </div>
+                )}
 
                 {/* Runs Table */}
                 <div className="overflow-x-auto">
@@ -160,6 +202,14 @@ export const RunsPage: React.FC = () => {
                           const isLatestRun = run.id === latestRun.id;
                           const showQuotaWaitStatus =
                             isLatestRun && isQuotaWaiting && run.status === "failed";
+                          const showJudgeWaitStatus =
+                            isLatestRun && isJudgeWaiting && !isQuotaWaiting;
+                          const showRetryWaitStatus =
+                            isLatestRun &&
+                            isRetryWaiting &&
+                            !isQuotaWaiting &&
+                            !isJudgeWaiting &&
+                            run.status === "failed";
                           return (
                             <tr
                               key={run.id}
@@ -174,6 +224,14 @@ export const RunsPage: React.FC = () => {
                                 {showQuotaWaitStatus ? (
                                   <span className="uppercase text-yellow-400 animate-pulse font-bold">
                                     [quota_wait]
+                                  </span>
+                                ) : showJudgeWaitStatus ? (
+                                  <span className="uppercase text-term-tiger animate-pulse font-bold">
+                                    [judge_wait]
+                                  </span>
+                                ) : showRetryWaitStatus ? (
+                                  <span className="uppercase text-term-tiger animate-pulse font-bold">
+                                    [retry_wait]
                                   </span>
                                 ) : (
                                   <span className={`uppercase ${getRunStatusColor(run.status)}`}>
@@ -219,27 +277,80 @@ function isQuotaErrorMessage(errorMessage: string | null | undefined): boolean {
   );
 }
 
-function groupRunsByTask(runs: Run[]): Array<{ taskId: string; runs: Run[] }> {
-  const groups = new Map<string, Run[]>();
+const REWORK_PARENT_PREFIX = "[auto-rework] parentTask=";
+const DOCSER_SOURCE_PREFIX = "sourceTaskId: ";
 
-  for (const run of runs) {
-    const list = groups.get(run.taskId);
-    if (list) {
-      list.push(run);
-    } else {
-      groups.set(run.taskId, [run]);
-    }
+function getTaskGroupKey(
+  task: TaskView,
+  taskById: Map<string, TaskView>,
+  seen = new Set<string>(),
+): string {
+  const ctx = task.context as Record<string, unknown> | undefined;
+  if (!ctx) return task.id;
+
+  const pr = ctx.pr as { sourceTaskId?: string } | undefined;
+  if (pr?.sourceTaskId) return pr.sourceTaskId;
+
+  const supersededPr = ctx.supersededPr as { sourceTaskId?: string } | undefined;
+  if (supersededPr?.sourceTaskId) return supersededPr.sourceTaskId;
+
+  const notes = (ctx.notes as string | undefined) ?? "";
+  const parentMatch = notes.match(
+    new RegExp(
+      `${REWORK_PARENT_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([0-9a-f-]{36})`,
+      "i",
+    ),
+  );
+  if (parentMatch) {
+    const parentId = parentMatch[1];
+    if (seen.has(parentId)) return task.id;
+    seen.add(parentId);
+    const parent = taskById.get(parentId);
+    return parent ? getTaskGroupKey(parent, taskById, seen) : parentId;
   }
 
-  const sortedGroups = Array.from(groups.entries()).map(([taskId, grouped]) => {
-    grouped.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-    return { taskId, runs: grouped };
-  });
+  const docserMatch = notes.match(
+    new RegExp(`${DOCSER_SOURCE_PREFIX.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([0-9a-f-]{36})`),
+  );
+  if (docserMatch) return docserMatch[1];
 
-  sortedGroups.sort(
+  return task.id;
+}
+
+// Group runs by logical task (rework/autofix/docser chain share same group)
+function groupRunsByTaskGroup(
+  runs: Run[],
+  taskById: Map<string, TaskView>,
+): Array<{ groupKey: string; taskIds: string[]; runs: Run[] }> {
+  const groupKeyByTaskId = new Map<string, string>();
+  for (const [taskId, task] of taskById) {
+    groupKeyByTaskId.set(taskId, getTaskGroupKey(task, taskById));
+  }
+
+  const groups = new Map<string, { taskIds: Set<string>; runs: Run[] }>();
+  for (const run of runs) {
+    const groupKey = groupKeyByTaskId.get(run.taskId) ?? run.taskId;
+    let g = groups.get(groupKey);
+    if (!g) {
+      g = { taskIds: new Set(), runs: [] };
+      groups.set(groupKey, g);
+    }
+    g.taskIds.add(run.taskId);
+    g.runs.push(run);
+  }
+
+  const result = Array.from(groups.entries()).map(([groupKey, { taskIds, runs: grouped }]) => ({
+    groupKey,
+    taskIds: Array.from(taskIds),
+    runs: grouped,
+  }));
+
+  for (const g of result) {
+    g.runs.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  }
+  result.sort(
     (a, b) =>
       new Date(b.runs[0]?.startedAt ?? 0).getTime() - new Date(a.runs[0]?.startedAt ?? 0).getTime(),
   );
-
-  return sortedGroups;
+  return result;
 }

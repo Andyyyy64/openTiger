@@ -107,12 +107,17 @@ export function formatQuotaWaitRetryStatus(
   return seconds > 0 ? `quota ${seconds}s` : "quota due";
 }
 
+// true when task is waiting for retry (countdown or due)
 export function isWaitingRetryStatus(status: string): boolean {
   return (
     status === "pending" ||
     status === "quota pending" ||
     status === "quota due" ||
+    status === "rework due" ||
+    status === "judge due" ||
     /^\d+s$/.test(status) ||
-    /^quota \d+s$/.test(status)
+    /^quota \d+s$/.test(status) ||
+    /^rework \d+s$/.test(status) ||
+    /^judge \d+s$/.test(status)
   );
 }

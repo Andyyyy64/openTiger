@@ -7,6 +7,7 @@ import { formatTaskRetryStatus, getTaskRiskColor, getTaskStatusColor } from "../
 
 export const TasksPage: React.FC = () => {
   const [now, setNow] = React.useState(Date.now());
+  const reworkParentPattern = /\[auto-rework\] parentTask=([0-9a-f-]{36})/i;
 
   React.useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -21,6 +22,19 @@ export const TasksPage: React.FC = () => {
     queryKey: ["tasks"],
     queryFn: () => tasksApi.list(),
   });
+
+  const replacedByReworkParentIds = React.useMemo(() => {
+    const parentIds = new Set<string>();
+    for (const task of tasks ?? []) {
+      const notes = task.context?.notes ?? "";
+      const matched = notes.match(reworkParentPattern);
+      const parentId = matched?.[1];
+      if (parentId) {
+        parentIds.add(parentId);
+      }
+    }
+    return parentIds;
+  }, [tasks]);
 
   return (
     <div className="p-6 text-term-fg">
@@ -79,6 +93,9 @@ export const TasksPage: React.FC = () => {
                       <span className={`text-xs uppercase px-1 ${getTaskStatusColor(task.status)}`}>
                         {task.status}
                       </span>
+                      {task.status === "cancelled" && replacedByReworkParentIds.has(task.id) && (
+                        <div className="mt-1 text-[10px] text-zinc-400">replaced by rework</div>
+                      )}
                     </td>
                     <td className="px-4 py-2 align-top text-zinc-400">{task.priority}</td>
                     <td className="px-4 py-2 align-top">

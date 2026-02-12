@@ -13,6 +13,7 @@ export const TaskDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [now, setNow] = React.useState(Date.now());
+  const reworkParentPattern = /\[auto-rework\] parentTask=([0-9a-f-]{36})/i;
 
   React.useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -30,6 +31,27 @@ export const TaskDetailsPage: React.FC = () => {
     queryFn: () => runsApi.list(id!),
     enabled: !!id,
   });
+  const { data: allTasks } = useQuery({
+    queryKey: ["tasks"],
+    queryFn: () => tasksApi.list(),
+    enabled: !!id,
+  });
+
+  const replacedByReworkParentIds = React.useMemo(() => {
+    const parentIds = new Set<string>();
+    for (const candidate of allTasks ?? []) {
+      const notes = candidate.context?.notes ?? "";
+      const matched = notes.match(reworkParentPattern);
+      const parentId = matched?.[1];
+      if (parentId) {
+        parentIds.add(parentId);
+      }
+    }
+    return parentIds;
+  }, [allTasks]);
+
+  const isReworkReplaced =
+    task?.status === "cancelled" && task?.id ? replacedByReworkParentIds.has(task.id) : false;
 
   if (isTaskLoading)
     return (
@@ -59,6 +81,11 @@ export const TaskDetailsPage: React.FC = () => {
             <span className={`text-xs font-bold ${getTaskStatusColor(task.status)}`}>
               [{task.status.toUpperCase()}]
             </span>
+            {isReworkReplaced && (
+              <span className="text-[10px] uppercase tracking-wide text-zinc-400">
+                replaced by rework
+              </span>
+            )}
             <span className="text-zinc-500 text-xs">ID: {task.id}</span>
           </div>
           <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
