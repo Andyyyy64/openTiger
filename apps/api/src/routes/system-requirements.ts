@@ -294,6 +294,46 @@ async function commitRequirementSnapshotIfChanged(
     };
   }
 
+  const remoteOrigin = await runGit(repoRoot, ["remote", "get-url", "origin"]);
+  const hasRemoteOrigin = remoteOrigin.success && remoteOrigin.stdout.length > 0;
+
+  const remoteHead = hasRemoteOrigin
+    ? await runGit(repoRoot, ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"])
+    : null;
+  const branchFromRemoteHead = remoteHead?.success
+    ? remoteHead.stdout.replace(/^origin\//u, "").trim()
+    : "";
+  const targetBranch = branchFromRemoteHead || process.env.BASE_BRANCH?.trim() || "main";
+
+  let canCheckoutFromRemoteBranch = hasRemoteOrigin;
+  if (hasRemoteOrigin) {
+    const fetchResult = await runGit(repoRoot, ["fetch", "origin", targetBranch]);
+    const fetchErrorText = `${fetchResult.stdout}\n${fetchResult.stderr}`.toLowerCase();
+    const missingRemoteBranch =
+      fetchErrorText.includes("couldn't find remote ref") ||
+      fetchErrorText.includes("remote ref does not exist");
+    if (missingRemoteBranch) {
+      canCheckoutFromRemoteBranch = false;
+    }
+    if (!fetchResult.success && !missingRemoteBranch) {
+      return {
+        committed: false,
+        error: fetchResult.stderr || "Failed to fetch latest requirement branch from origin",
+      };
+    }
+  }
+  const checkoutArgs =
+    hasRemoteOrigin && canCheckoutFromRemoteBranch
+      ? ["checkout", "-B", targetBranch, `origin/${targetBranch}`]
+      : ["checkout", "-B", targetBranch];
+  const checkoutResult = await runGit(repoRoot, checkoutArgs);
+  if (!checkoutResult.success) {
+    return {
+      committed: false,
+      error: checkoutResult.stderr || "Failed to checkout requirement snapshot branch",
+    };
+  }
+
   const addResult = await runGit(repoRoot, ["add", "--", relativePath]);
   if (!addResult.success) {
     return {
@@ -303,39 +343,56 @@ async function commitRequirementSnapshotIfChanged(
   }
 
   const diffResult = await runGit(repoRoot, ["diff", "--cached", "--quiet", "--", relativePath]);
+  let committed = false;
+  let reason: string | undefined;
+
   if (diffResult.success) {
-    return { committed: false, reason: "no_changes" };
-  }
-  if (diffResult.exitCode !== 1) {
-    return {
-      committed: false,
-      error: diffResult.stderr || "Failed to check staged requirement diff",
-    };
-  }
-
-  const commitResult = await runGit(repoRoot, [
-    "-c",
-    "user.name=openTiger",
-    "-c",
-    "user.email=system@opentiger.ai",
-    "commit",
-    "-m",
-    REQUIREMENT_SNAPSHOT_COMMIT_MESSAGE,
-    "--",
-    relativePath,
-  ]);
-  if (!commitResult.success) {
-    const combined = `${commitResult.stdout}\n${commitResult.stderr}`.toLowerCase();
-    if (combined.includes("nothing to commit")) {
-      return { committed: false, reason: "no_changes" };
+    reason = "no_changes";
+  } else {
+    if (diffResult.exitCode !== 1) {
+      return {
+        committed: false,
+        error: diffResult.stderr || "Failed to check staged requirement diff",
+      };
     }
-    return {
-      committed: false,
-      error: commitResult.stderr || "Failed to commit requirement snapshot",
-    };
+
+    const commitResult = await runGit(repoRoot, [
+      "-c",
+      "user.name=openTiger",
+      "-c",
+      "user.email=system@opentiger.ai",
+      "commit",
+      "-m",
+      REQUIREMENT_SNAPSHOT_COMMIT_MESSAGE,
+      "--",
+      relativePath,
+    ]);
+    if (!commitResult.success) {
+      const combined = `${commitResult.stdout}\n${commitResult.stderr}`.toLowerCase();
+      if (combined.includes("nothing to commit")) {
+        reason = "no_changes";
+      } else {
+        return {
+          committed: false,
+          error: commitResult.stderr || "Failed to commit requirement snapshot",
+        };
+      }
+    }
+    committed = true;
   }
 
-  return { committed: true };
+  if (hasRemoteOrigin) {
+    const pushResult = await runGit(repoRoot, ["push", "origin", `HEAD:${targetBranch}`]);
+    if (!pushResult.success) {
+      return {
+        committed,
+        reason,
+        error: pushResult.stderr || "Failed to push requirement snapshot to origin",
+      };
+    }
+  }
+
+  return { committed, reason };
 }
 
 export async function syncRequirementSnapshot(params: {
