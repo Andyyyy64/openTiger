@@ -197,11 +197,28 @@ function isMissingScriptFailure(output: string): boolean {
   );
 }
 
+function isMissingPackageManifestFailure(output: string): boolean {
+  const normalized = output.toLowerCase();
+  return (
+    normalized.includes("could not read package.json") ||
+    (normalized.includes("enoent") && normalized.includes("package.json"))
+  );
+}
+
+function isUnsupportedCommandFormatFailure(output: string): boolean {
+  const normalized = output.toLowerCase();
+  return (
+    normalized.includes("unsupported command format") ||
+    (normalized.includes("shell operators") && normalized.includes("not allowed"))
+  );
+}
+
 export function shouldSkipExplicitCommandFailure(params: {
   source: VerificationCommandSource;
   command: string;
   output: string;
   hasRemainingCommands: boolean;
+  hasPriorEffectiveCommand: boolean;
   isDocOnlyChange: boolean;
   isNoOpChange: boolean;
 }): boolean {
@@ -213,10 +230,17 @@ export function shouldSkipExplicitCommandFailure(params: {
   if (!skipEnabled) {
     return false;
   }
-  if (!isMissingScriptFailure(params.output)) {
+  const missingScriptLikeFailure =
+    isMissingScriptFailure(params.output) || isMissingPackageManifestFailure(params.output);
+  const unsupportedFormatFailure = isUnsupportedCommandFormatFailure(params.output);
+  const isSkippableOutput = missingScriptLikeFailure || unsupportedFormatFailure;
+  if (!isSkippableOutput) {
     return false;
   }
   if (params.hasRemainingCommands) {
+    return true;
+  }
+  if (unsupportedFormatFailure && params.hasPriorEffectiveCommand) {
     return true;
   }
   return params.isDocOnlyChange || params.isNoOpChange;
@@ -607,12 +631,13 @@ ${clippedDiff || "(diff unavailable)"}
           command: normalizedCommand,
           output,
           hasRemainingCommands,
+          hasPriorEffectiveCommand: ranEffectiveCommand,
           isDocOnlyChange,
           isNoOpChange: changedFiles.length === 0 || relevantFiles.length === 0,
         })
       ) {
         console.warn(
-          `[Verify] Skipping explicit command due to missing script and continuing: ${normalizedCommand}`,
+          `[Verify] Skipping explicit command failure and continuing: ${normalizedCommand}`,
         );
         commandResults[commandResults.length - 1] = {
           ...result,
