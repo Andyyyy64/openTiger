@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@openTiger/db";
-import { agents, config as configTable, leases, runs, tasks } from "@openTiger/db/schema";
+import { agents, config as configTable, events, leases, runs, tasks } from "@openTiger/db/schema";
 import { ensureConfigRow } from "../../config-store";
 import { getAuthInfo } from "../../middleware/index";
 import { buildPreflightSummary, parseBooleanSetting, parseCountSetting } from "../system-preflight";
@@ -30,11 +30,66 @@ const PROCESS_SELF_HEAL_STARTUP_GRACE_MS = Number.parseInt(
   10,
 );
 const CANONICAL_REQUIREMENT_PATH = "docs/requirement.md";
+const RUNTIME_HATCH_ENTITY_ID = "00000000-0000-0000-0000-000000000001";
+const RUNTIME_HATCH_ARMED_EVENT = "system.runtime_hatch_armed";
+const RUNTIME_HATCH_DISARMED_EVENT = "system.runtime_hatch_disarmed";
+const RUNTIME_HATCH_ARMING_KINDS = new Set(["planner", "service", "worker"]);
 
 let processSelfHealTimer: NodeJS.Timeout | null = null;
 let processSelfHealInFlight = false;
+let runtimeHatchArmed = false;
+let runtimeHatchLoaded = false;
+let runtimeHatchLoadPromise: Promise<void> | null = null;
 
 type ConfigRow = Awaited<ReturnType<typeof ensureConfigRow>>;
+
+async function ensureRuntimeHatchStateLoaded(): Promise<void> {
+  if (runtimeHatchLoaded) {
+    return;
+  }
+  if (!runtimeHatchLoadPromise) {
+    runtimeHatchLoadPromise = (async () => {
+      const [latest] = await db
+        .select({ type: events.type })
+        .from(events)
+        .where(
+          and(
+            eq(events.entityType, "system"),
+            eq(events.entityId, RUNTIME_HATCH_ENTITY_ID),
+            inArray(events.type, [RUNTIME_HATCH_ARMED_EVENT, RUNTIME_HATCH_DISARMED_EVENT]),
+          ),
+        )
+        .orderBy(desc(events.createdAt))
+        .limit(1);
+      runtimeHatchArmed = latest?.type === RUNTIME_HATCH_ARMED_EVENT;
+      runtimeHatchLoaded = true;
+    })().finally(() => {
+      runtimeHatchLoadPromise = null;
+    });
+  }
+  await runtimeHatchLoadPromise;
+}
+
+async function setRuntimeHatchArmed(
+  armed: boolean,
+  payload?: Record<string, unknown>,
+): Promise<void> {
+  await ensureRuntimeHatchStateLoaded();
+  if (runtimeHatchArmed === armed) {
+    return;
+  }
+  runtimeHatchArmed = armed;
+  await db.insert(events).values({
+    type: armed ? RUNTIME_HATCH_ARMED_EVENT : RUNTIME_HATCH_DISARMED_EVENT,
+    entityType: "system",
+    entityId: RUNTIME_HATCH_ENTITY_ID,
+    payload: payload ?? {},
+  });
+}
+
+function shouldArmRuntimeHatchOnStart(kind: string): boolean {
+  return RUNTIME_HATCH_ARMING_KINDS.has(kind);
+}
 
 function resolveBoundAgentId(processName: string): string | null {
   if (processName === "planner") {
@@ -88,6 +143,9 @@ async function detectLiveBoundAgent(processName: string): Promise<{
 }
 
 function resolveExpectedManagedProcessNames(configRow: ConfigRow): string[] {
+  if (!runtimeHatchArmed) {
+    return [];
+  }
   const processNames = new Set<string>();
   const dispatcherEnabled = parseBooleanSetting(configRow.dispatcherEnabled, true);
   const cycleManagerEnabled = parseBooleanSetting(configRow.cycleManagerEnabled, true);
@@ -214,6 +272,7 @@ async function runProcessSelfHealTick(): Promise<void> {
   if (!PROCESS_SELF_HEAL_ENABLED) {
     return;
   }
+  await ensureRuntimeHatchStateLoaded();
   if (processSelfHealInFlight) {
     return;
   }
@@ -291,6 +350,17 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
     const definition = resolveProcessDefinition(name);
     if (!definition) {
       return c.json({ error: "Process not found" }, 404);
+    }
+    if (shouldArmRuntimeHatchOnStart(definition.kind)) {
+      try {
+        await setRuntimeHatchArmed(true, {
+          source: "system.process.start",
+          process: definition.name,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to arm runtime hatch";
+        return c.json({ error: message }, 500);
+      }
     }
 
     const discoveredAgent = await detectLiveBoundAgent(name);
@@ -565,6 +635,13 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
       }
     } catch (error) {
       console.error("[System] stop-all cleanup failed:", error);
+    }
+    try {
+      await setRuntimeHatchArmed(false, {
+        source: "system.process.stop-all",
+      });
+    } catch (error) {
+      console.error("[System] Failed to disarm runtime hatch after stop-all:", error);
     }
 
     return c.json({
