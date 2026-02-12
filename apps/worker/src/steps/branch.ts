@@ -13,6 +13,22 @@ export interface BranchResult {
   error?: string;
 }
 
+const TRANSIENT_BRANCH_ERROR_PATTERNS = [
+  /timed out/i,
+  /timeout/i,
+  /connection reset/i,
+  /econnreset/i,
+  /temporarily unavailable/i,
+];
+
+function isTransientBranchError(message: string): boolean {
+  return TRANSIENT_BRANCH_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // Generate branch name
 export function generateBranchName(agentId: string, taskId: string): string {
   // Use first 8 characters of UUID
@@ -28,7 +44,11 @@ export async function createWorkBranch(options: BranchOptions): Promise<BranchRe
 
   console.log(`Creating branch: ${branchName}`);
 
-  const result = await createBranch(repoPath, branchName, baseRef);
+  let result = await createBranch(repoPath, branchName, baseRef);
+  if (!result.success && isTransientBranchError(result.stderr)) {
+    await sleep(1200);
+    result = await createBranch(repoPath, branchName, baseRef);
+  }
 
   if (!result.success) {
     return {
@@ -68,7 +88,11 @@ export async function checkoutExistingBranch(
 ): Promise<BranchResult> {
   const { repoPath, branchName, baseRef } = options;
 
-  const checkoutResult = await checkoutBranch(repoPath, branchName);
+  let checkoutResult = await checkoutBranch(repoPath, branchName);
+  if (!checkoutResult.success && isTransientBranchError(checkoutResult.stderr)) {
+    await sleep(1000);
+    checkoutResult = await checkoutBranch(repoPath, branchName);
+  }
   if (!checkoutResult.success) {
     if (!baseRef) {
       return {

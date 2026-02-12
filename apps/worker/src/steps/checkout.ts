@@ -43,6 +43,55 @@ export interface CheckoutResult {
   error?: string;
 }
 
+const TRANSIENT_GIT_ERROR_PATTERNS = [
+  /timed out/i,
+  /timeout/i,
+  /econnreset/i,
+  /connection reset/i,
+  /connection refused/i,
+  /unable to access/i,
+  /temporarily unavailable/i,
+  /service unavailable/i,
+  /remote end hung up unexpectedly/i,
+];
+
+function isTransientGitFailure(message: string): boolean {
+  const normalized = message.trim();
+  if (!normalized) {
+    return false;
+  }
+  return TRANSIENT_GIT_ERROR_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withGitResultRetry<T extends { success: boolean; stderr: string }>(
+  actionLabel: string,
+  fn: () => Promise<T>,
+  maxAttempts = 3,
+  baseDelayMs = 1200,
+): Promise<T> {
+  let lastResult: T | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const result = await fn();
+    if (result.success) {
+      return result;
+    }
+    lastResult = result;
+    if (!isTransientGitFailure(result.stderr) || attempt >= maxAttempts) {
+      return result;
+    }
+    const delayMs = baseDelayMs * attempt;
+    console.warn(
+      `[Checkout] ${actionLabel} failed (attempt ${attempt}/${maxAttempts}), retrying in ${delayMs}ms: ${result.stderr}`,
+    );
+    await sleep(delayMs);
+  }
+  return lastResult as T;
+}
+
 async function removeDirWithRetry(path: string): Promise<void> {
   await rm(path, {
     recursive: true,
@@ -120,12 +169,18 @@ export async function checkoutRepository(options: CheckoutOptions): Promise<Chec
 
       await mkdir(join(localWorktreeRoot), { recursive: true });
 
-      const addResult = await addWorktree({
-        baseRepoPath: localRepoPath,
-        worktreePath,
-        baseBranch,
-        branchName,
-      });
+      const addResult = await withGitResultRetry(
+        "worktree add",
+        () =>
+          addWorktree({
+            baseRepoPath: localRepoPath,
+            worktreePath,
+            baseBranch,
+            branchName,
+          }),
+        3,
+        1000,
+      );
 
       if (!addResult.success) {
         return {
@@ -166,7 +221,12 @@ export async function checkoutRepository(options: CheckoutOptions): Promise<Chec
     } else {
       console.warn("No GitHub token provided for clone");
     }
-    const cloneResult = await cloneRepo(repoUrl, repoPath, baseBranch, githubToken);
+    const cloneResult = await withGitResultRetry(
+      "clone",
+      () => cloneRepo(repoUrl, repoPath, baseBranch, githubToken),
+      3,
+      1500,
+    );
 
     if (!cloneResult.success) {
       return {
@@ -180,7 +240,12 @@ export async function checkoutRepository(options: CheckoutOptions): Promise<Chec
 
     if (extraFetchRefs.length > 0) {
       console.log(`[Checkout] Fetching additional refs: ${extraFetchRefs.join(", ")}`);
-      const fetchRefsResult = await fetchRefspecs(repoPath, extraFetchRefs);
+      const fetchRefsResult = await withGitResultRetry(
+        "fetch refspecs",
+        () => fetchRefspecs(repoPath, extraFetchRefs),
+        3,
+        1200,
+      );
       if (!fetchRefsResult.success) {
         return {
           success: false,

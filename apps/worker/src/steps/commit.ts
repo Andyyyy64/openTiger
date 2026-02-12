@@ -20,6 +20,21 @@ const FORBIDDEN_COMMIT_PATH_PATTERNS: RegExp[] = [
   /^apps\/judge\/test-repo(?:\/|$)/,
   /^apps\/judge\/repro(?:\/|$)/,
 ];
+const TRANSIENT_STAGE_ERROR_PATTERNS = [
+  /index\.lock/i,
+  /resource temporarily unavailable/i,
+  /timed out/i,
+  /timeout/i,
+];
+const TRANSIENT_PUSH_ERROR_PATTERNS = [
+  /timed out/i,
+  /timeout/i,
+  /connection reset/i,
+  /econnreset/i,
+  /remote end hung up unexpectedly/i,
+  /temporarily unavailable/i,
+  /service unavailable/i,
+];
 
 function findForbiddenChangedFiles(changedFiles: string[]): string[] {
   return changedFiles.filter((file) =>
@@ -34,6 +49,20 @@ function isNonFastForwardPush(stderr: string, stdout: string): boolean {
     message.includes("non-fast-forward") ||
     message.includes("failed to push some refs")
   );
+}
+
+function isTransientStageFailure(stderr: string): boolean {
+  const message = stderr.toLowerCase();
+  return TRANSIENT_STAGE_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+function isTransientPushFailure(stderr: string, stdout: string): boolean {
+  const message = `${stderr}\n${stdout}`.toLowerCase();
+  return TRANSIENT_PUSH_ERROR_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Generate commit message
@@ -81,7 +110,12 @@ export async function commitAndPush(options: CommitOptions): Promise<CommitResul
   console.log("Staging changes...");
 
   // Stage changes
-  const stageResult = await stageChanges(repoPath, changedFiles);
+  let stageResult = await stageChanges(repoPath, changedFiles);
+  if (!stageResult.success && isTransientStageFailure(stageResult.stderr)) {
+    console.warn(`[Commit] Stage failed transiently; retrying once: ${stageResult.stderr}`);
+    await sleep(1200);
+    stageResult = await stageChanges(repoPath, changedFiles);
+  }
   if (!stageResult.success) {
     return {
       success: false,
@@ -126,9 +160,12 @@ export async function commitAndPush(options: CommitOptions): Promise<CommitResul
   console.log("Pushing to remote...");
 
   if (repoMode === "git") {
-    // Push
-    let pushResult = await push(repoPath, branchName);
-    if (!pushResult.success) {
+    let pushResult: Awaited<ReturnType<typeof push>> | null = null;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      pushResult = await push(repoPath, branchName);
+      if (pushResult.success) {
+        break;
+      }
       if (
         branchName.startsWith("agent/") &&
         isNonFastForwardPush(pushResult.stderr, pushResult.stdout)
@@ -139,29 +176,36 @@ export async function commitAndPush(options: CommitOptions): Promise<CommitResul
         const forcePushResult = await push(repoPath, branchName, true);
         if (forcePushResult.success) {
           pushResult = forcePushResult;
-        } else {
+          break;
+        }
+        pushResult = forcePushResult;
+      }
+      if (!isTransientPushFailure(pushResult.stderr, pushResult.stdout) || attempt >= 3) {
+        break;
+      }
+      const delayMs = 1200 * attempt;
+      console.warn(
+        `[Commit] Push failed transiently (attempt ${attempt}/3); retrying in ${delayMs}ms: ${pushResult.stderr}`,
+      );
+      await sleep(delayMs);
+    }
+    if (!pushResult?.success) {
+      if (branchName.startsWith("agent/") && pushResult) {
+        const nonFastForward = isNonFastForwardPush(pushResult.stderr, pushResult.stdout);
+        if (nonFastForward) {
           return {
             success: false,
             committed: false,
             commitMessage,
-            error: `Failed to push after force retry: ${forcePushResult.stderr}`,
+            error: `Failed to push after force retry: ${pushResult.stderr}`,
           };
         }
-      } else {
-        return {
-          success: false,
-          committed: false,
-          commitMessage,
-          error: `Failed to push: ${pushResult.stderr}`,
-        };
       }
-    }
-    if (!pushResult.success) {
       return {
         success: false,
         committed: false,
         commitMessage,
-        error: `Failed to push: ${pushResult.stderr}`,
+        error: `Failed to push: ${pushResult?.stderr ?? "unknown push error"}`,
       };
     }
   } else {

@@ -123,7 +123,11 @@ export async function restoreExpectedBranchContext(
   console.warn(
     `[Worker] Branch drift detected after ${executorDisplayName} execution: current=${currentBranch ?? "unknown"}, expected=${expectedBranch}`,
   );
-  const restoreBranchResult = await checkoutBranch(repoPath, expectedBranch);
+  let restoreBranchResult = await checkoutBranch(repoPath, expectedBranch);
+  if (!restoreBranchResult.success) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    restoreBranchResult = await checkoutBranch(repoPath, expectedBranch);
+  }
   if (!restoreBranchResult.success) {
     throw new Error(
       `Failed to restore expected branch ${expectedBranch}: ${restoreBranchResult.stderr}`,
