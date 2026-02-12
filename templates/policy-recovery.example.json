@@ -1,0 +1,18 @@
+{
+  "mode": "aggressive",
+  "replaceDefaultCommandDrivenAllowedPathRules": false,
+  "commandDrivenAllowedPathRules": [
+    {
+      "pattern": "\\bjust\\b",
+      "paths": ["justfile"]
+    },
+    {
+      "pattern": "\\bbuck2?\\b",
+      "paths": ["BUCK", "BUCK2"]
+    }
+  ],
+  "infraSignalTokens": ["zig", "idf.py"],
+  "safeInfraFileBasenames": ["linker.ld"],
+  "safeInfraFileExtensions": [".x", ".ldscript"],
+  "safeHiddenRootFiles": [".clang-format"]
+}
