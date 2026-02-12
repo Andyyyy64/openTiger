@@ -6,6 +6,10 @@ import type { FailureClassification } from "./types";
 // Strip ANSI escapes to stabilize failure messages
 const ANSI_ESCAPE_REGEX = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
+function isCommandSubstitutionVerificationFailure(message: string): boolean {
+  return /verification failed at .*?\$\(.+?\).*?\[explicit\]:\s*stderr unavailable/.test(message);
+}
+
 export function classifyFailure(errorMessage: string | null): FailureClassification {
   const message = (errorMessage ?? "").toLowerCase();
 
@@ -54,7 +58,8 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
   if (
     /unsupported command format|shell operators are not allowed|verification failed at .*shell operators/.test(
       message,
-    )
+    ) ||
+    isCommandSubstitutionVerificationFailure(message)
   ) {
     return {
       category: "setup",

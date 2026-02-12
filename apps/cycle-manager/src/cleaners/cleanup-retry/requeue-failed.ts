@@ -56,21 +56,7 @@ function resolvePolicyRecoveryRepoPath(): string {
 
 // Requeue failed tasks (immediate, all)
 export async function requeueFailedTasks(): Promise<number> {
-  const result = await db
-    .update(tasks)
-    .set({ status: "queued", blockReason: null, updatedAt: new Date() })
-    .where(eq(tasks.status, "failed"))
-    .returning({ id: tasks.id });
-
-  for (const task of result) {
-    await recordEvent({
-      type: "task.requeued",
-      entityType: "task",
-      entityId: task.id,
-    });
-  }
-
-  return result.length;
+  return requeueFailedTasksWithCooldown(0);
 }
 
 // Requeue failed tasks after cooldown (with retry limit)

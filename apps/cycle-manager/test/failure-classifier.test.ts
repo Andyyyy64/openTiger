@@ -15,6 +15,19 @@ describe("classifyFailure", () => {
     });
   });
 
+  it("classifies command substitution stderr-unavailable failure as setup non-retryable", () => {
+    const failure = classifyFailure(
+      'Verification failed at test -z "$(git ls-files tests/test_runner)" [explicit]: stderr unavailable',
+    );
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: false,
+      reason: "verification_command_unsupported_format",
+      blockReason: "needs_rework",
+    });
+  });
+
   it("keeps missing script classification unchanged", () => {
     const failure = classifyFailure("ERR_PNPM_NO_SCRIPT Missing script: verify");
 

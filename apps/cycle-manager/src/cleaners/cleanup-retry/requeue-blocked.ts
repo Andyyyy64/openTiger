@@ -18,6 +18,8 @@ const DEFAULT_QUOTA_BASE_DELAY_MS = 30_000;
 const DEFAULT_QUOTA_MAX_DELAY_MS = 30 * 60 * 1000;
 const DEFAULT_QUOTA_BACKOFF_FACTOR = 2;
 const DEFAULT_QUOTA_JITTER_RATIO = 0.2;
+const DEFAULT_POLICY_SUPPRESSION_MAX_RETRIES = 2;
+const DEFAULT_AUTO_REWORK_MAX_DEPTH = 2;
 const VERIFY_REWORK_MARKER_PREFIX = "[verify-rework-json]";
 const CONFLICT_AUTOFIX_PREFIX = "[AutoFix-Conflict] PR #";
 const AUTOFIX_PREFIX = "[AutoFix] PR #";
@@ -156,6 +158,45 @@ function withCommandDrivenAllowanceIfNeeded(
   return mergeUniquePaths(current, extraPaths);
 }
 
+function extractAutoReworkParents(notes: string | undefined): string[] {
+  if (!notes) {
+    return [];
+  }
+  const parents: string[] = [];
+  for (const line of notes.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith(AUTO_REWORK_PARENT_MARKER_PREFIX)) {
+      continue;
+    }
+    const parentTaskId = trimmed.slice(AUTO_REWORK_PARENT_MARKER_PREFIX.length).trim();
+    if (parentTaskId.length > 0) {
+      parents.push(parentTaskId);
+    }
+  }
+  return Array.from(new Set(parents));
+}
+
+function resolveAutoReworkDepth(notes: string | undefined): number {
+  return extractAutoReworkParents(notes).length;
+}
+
+async function hasActiveReworkChild(parentTaskId: string, currentTaskId: string): Promise<boolean> {
+  const statusFilter = inArray(tasks.status, ["queued", "running", "blocked"]);
+  const markerPattern = `%${escapeSqlLikePattern(`${AUTO_REWORK_PARENT_MARKER_PREFIX}${parentTaskId}`)}%`;
+  const [activeChild] = await db
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        statusFilter,
+        ne(tasks.id, currentTaskId),
+        sql`coalesce(${tasks.context}->>'notes', '') like ${markerPattern} escape '\\'`,
+      ),
+    )
+    .limit(1);
+  return Boolean(activeChild?.id);
+}
+
 async function hasActiveAutoFixTaskForPr(
   prNumber: number,
   currentTaskId: string,
@@ -221,6 +262,11 @@ export async function requeueBlockedTasksWithCooldown(
   }
 
   const policyRecoveryConfig = await loadPolicyRecoveryConfig(resolvePolicyRecoveryRepoPath());
+  const policySuppressionMaxRetries = parseEnvInt(
+    "BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES",
+    DEFAULT_POLICY_SUPPRESSION_MAX_RETRIES,
+  );
+  const autoReworkMaxDepth = parseEnvInt("AUTO_REWORK_MAX_DEPTH", DEFAULT_AUTO_REWORK_MAX_DEPTH);
   const quotaBlockedIds = blockedTasks
     .filter((task) => normalizeBlockReason(task.blockReason) === "quota_wait")
     .map((task) => task.id);
@@ -457,11 +503,12 @@ export async function requeueBlockedTasksWithCooldown(
           continue;
         }
 
+        const suppressionExhausted = nextRetryCount >= policySuppressionMaxRetries;
         await db
           .update(tasks)
           .set({
-            status: "blocked",
-            blockReason: "needs_rework",
+            status: suppressionExhausted ? "cancelled" : "blocked",
+            blockReason: suppressionExhausted ? null : "needs_rework",
             retryCount: nextRetryCount,
             updatedAt: new Date(),
           })
@@ -472,14 +519,73 @@ export async function requeueBlockedTasksWithCooldown(
           entityType: "task",
           entityId: task.id,
           payload: {
-            reason: "policy_violation_rework_suppressed_no_safe_path",
+            reason: suppressionExhausted
+              ? "policy_violation_rework_suppressed_exhausted"
+              : "policy_violation_rework_suppressed_no_safe_path",
             retryCount: nextRetryCount,
+            suppressionExhausted,
+            suppressionLimit: policySuppressionMaxRetries,
             policyViolationPaths: outsideAllowedPaths,
             errorMessage: latestRun?.errorMessage ?? null,
           },
         });
         console.warn(
-          `[Cleanup] Suppressed rework split for policy violation without safe path recovery: ${task.id}`,
+          `[Cleanup] Suppressed rework split for policy violation without safe path recovery: ${task.id}${suppressionExhausted ? " (cancelled after repeated suppression)" : ""}`,
+        );
+        handled++;
+        continue;
+      }
+
+      if (await hasActiveReworkChild(task.id, task.id)) {
+        await db
+          .update(tasks)
+          .set({
+            status: "cancelled",
+            blockReason: null,
+            retryCount: nextRetryCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
+        await recordEvent({
+          type: "task.recovery_escalated",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: "rework_child_already_exists",
+            retryCount: nextRetryCount,
+          },
+        });
+        console.log(
+          `[Cleanup] Skipped duplicate rework split because active child already exists: ${task.id}`,
+        );
+        handled++;
+        continue;
+      }
+
+      const reworkDepth = resolveAutoReworkDepth(context.notes);
+      if (reworkDepth >= autoReworkMaxDepth) {
+        await db
+          .update(tasks)
+          .set({
+            status: "cancelled",
+            blockReason: null,
+            retryCount: nextRetryCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
+        await recordEvent({
+          type: "task.recovery_escalated",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: "rework_chain_max_depth_reached",
+            retryCount: nextRetryCount,
+            reworkDepth,
+            maxDepth: autoReworkMaxDepth,
+          },
+        });
+        console.warn(
+          `[Cleanup] Cancelled rework split due to max depth (${reworkDepth}/${autoReworkMaxDepth}) for task ${task.id}`,
         );
         handled++;
         continue;
@@ -602,6 +708,35 @@ export async function requeueBlockedTasksWithCooldown(
           },
         });
         console.log(`[Cleanup] Restored awaiting_judge run for task: ${task.id}`);
+        handled++;
+        continue;
+      }
+
+      if (
+        isPrReviewTask({
+          title: task.title,
+          goal: task.goal,
+          context: task.context,
+        })
+      ) {
+        await db
+          .update(tasks)
+          .set({
+            status: "blocked",
+            blockReason: "awaiting_judge",
+            retryCount: nextRetryCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
+        await recordEvent({
+          type: "task.recovery_escalated",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: "awaiting_judge_waiting_judge_process",
+            retryCount: nextRetryCount,
+          },
+        });
         handled++;
         continue;
       }
