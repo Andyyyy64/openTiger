@@ -82,7 +82,9 @@ function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
-  return value.filter((item): item is string => typeof item === "string").map((item) => item.trim());
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim());
 }
 
 async function loadGeneratedPathsFromJsonFile(path: string): Promise<string[]> {

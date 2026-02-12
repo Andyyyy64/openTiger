@@ -59,7 +59,10 @@ function parseGithubRepoFromUrl(rawUrl: string): { owner?: string; repo?: string
   }
   try {
     const parsed = new URL(trimmed);
-    const [owner, repo] = parsed.pathname.replace(/^\/+/u, "").replace(/\.git$/u, "").split("/");
+    const [owner, repo] = parsed.pathname
+      .replace(/^\/+/u, "")
+      .replace(/\.git$/u, "")
+      .split("/");
     return {
       owner: owner?.trim(),
       repo: repo?.trim(),
@@ -98,7 +101,9 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-async function ensureGitRepoRootForRequirement(config: RequirementRepoRootConfig): Promise<string | null> {
+async function ensureGitRepoRootForRequirement(
+  config: RequirementRepoRootConfig,
+): Promise<string | null> {
   const repoUrl = resolveGitTargetRepoUrl(config);
   if (!repoUrl) {
     return null;

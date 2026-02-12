@@ -104,7 +104,8 @@ export const StartPage: React.FC = () => {
       : "--";
   const githubReposQuery = useQuery({
     queryKey: ["system", "github-repos", configValues.GITHUB_OWNER?.trim() ?? ""],
-    queryFn: () => systemApi.listGithubRepos({ owner: configValues.GITHUB_OWNER?.trim() || undefined }),
+    queryFn: () =>
+      systemApi.listGithubRepos({ owner: configValues.GITHUB_OWNER?.trim() || undefined }),
     enabled: hasGithubAuth,
   });
   const githubRepos = useMemo(() => githubReposQuery.data ?? [], [githubReposQuery.data]);
@@ -167,12 +168,7 @@ export const StartPage: React.FC = () => {
     if (githubRepos.some((repo) => repo.fullName === fullName)) {
       setSelectedRepoFullName(fullName);
     }
-  }, [
-    configValues.GITHUB_OWNER,
-    configValues.GITHUB_REPO,
-    githubRepos,
-    selectedRepoFullName,
-  ]);
+  }, [configValues.GITHUB_OWNER, configValues.GITHUB_REPO, githubRepos, selectedRepoFullName]);
   useEffect(() => {
     if (isRepoMissing) {
       setIsRepoManagerOpen(true);
@@ -638,7 +634,9 @@ export const StartPage: React.FC = () => {
                   <select
                     value={selectedRepoFullName}
                     onChange={(event) => setSelectedRepoFullName(event.target.value)}
-                    disabled={!hasGithubAuth || githubReposQuery.isLoading || githubRepos.length === 0}
+                    disabled={
+                      !hasGithubAuth || githubReposQuery.isLoading || githubRepos.length === 0
+                    }
                     className="w-full bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none disabled:opacity-50"
                   >
                     <option value="" disabled>

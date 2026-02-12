@@ -10,7 +10,11 @@ function parseListEnv(name: string): string[] {
     .filter((value) => value.length > 0);
 }
 
-function resolvePolicyList(defaults: string[], fullOverrideEnv: string, extraEnv: string): string[] {
+function resolvePolicyList(
+  defaults: string[],
+  fullOverrideEnv: string,
+  extraEnv: string,
+): string[] {
   const override = parseListEnv(fullOverrideEnv);
   const base = override.length > 0 ? override : defaults;
   const extra = parseListEnv(extraEnv);
@@ -170,9 +174,14 @@ export async function loadTaskPolicyOverridesFromRepo(workdir: string): Promise<
   loadedPolicyWorkdir = normalizedWorkdir;
 
   const extrasCount =
-    initAllowedPaths.length + initRootFiles.length + lockfilePaths.length + docserAllowedPaths.length;
+    initAllowedPaths.length +
+    initRootFiles.length +
+    lockfilePaths.length +
+    docserAllowedPaths.length;
   if (extrasCount > 0) {
-    console.log(`[Planner] Loaded ${extrasCount} task policy override entries from .opentiger/*.txt`);
+    console.log(
+      `[Planner] Loaded ${extrasCount} task policy override entries from .opentiger/*.txt`,
+    );
   }
 }
 
@@ -615,5 +624,7 @@ export function ensureInitializationTaskForUninitializedRepo(
 }
 
 export function needsLockfileAllowance(commands: string[], allowedPaths: string[]): boolean {
-  return requiresLockfile(commands) && !allowedPaths.some((path) => getLockfilePaths().includes(path));
+  return (
+    requiresLockfile(commands) && !allowedPaths.some((path) => getLockfilePaths().includes(path))
+  );
 }

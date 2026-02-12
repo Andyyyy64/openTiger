@@ -94,7 +94,9 @@ async function collectOpenLogFiles(candidates: Set<string>): Promise<Set<string>
   return inUse;
 }
 
-async function clearLogDir(logDir: string): Promise<{ removed: number; truncated: number; failed: number }> {
+async function clearLogDir(
+  logDir: string,
+): Promise<{ removed: number; truncated: number; failed: number }> {
   if (!(await pathExists(logDir))) {
     return { removed: 0, truncated: 0, failed: 0 };
   }
