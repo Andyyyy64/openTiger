@@ -89,6 +89,24 @@ function hasMeaningfulVerificationPass(verifyResult: VerifyResult): boolean {
   return verifyResult.commandResults.some((result) => result.outcome === "passed");
 }
 
+const DOCSER_SAFE_VERIFY_COMMAND = /^\s*(?:pnpm|npm|yarn|bun)\s+(?:run\s+)?check(?:\s+.*)?$/i;
+
+function resolveVerificationCommands(taskData: Task): string[] {
+  const commands = taskData.commands ?? [];
+  if (taskData.role !== "docser") {
+    return commands;
+  }
+  const safeCommands = commands.filter((command) =>
+    DOCSER_SAFE_VERIFY_COMMAND.test(command.trim()),
+  );
+  if (safeCommands.length !== commands.length) {
+    console.warn(
+      `[Worker] Skipping non-docser-safe verification commands: ${commands.join(", ") || "(none)"}`,
+    );
+  }
+  return safeCommands;
+}
+
 function shouldEnablePolicyRecoveryLlm(): boolean {
   return (process.env.WORKER_POLICY_RECOVERY_USE_LLM ?? "true").toLowerCase() !== "false";
 }
@@ -102,12 +120,14 @@ function parsePositiveIntEnv(name: string, fallback: number): number {
 }
 
 function stripControlChars(text: string): string {
-  return text.replace(/[\u0000-\u001F\u007F]/g, (char) => {
-    if (char === "\n" || char === "\r" || char === "\t") {
+  return [...text]
+    .map((char) => {
+      const code = char.charCodeAt(0);
+      if (code === 9 || code === 10 || code === 13) return char;
+      if (code <= 31 || code === 127) return "";
       return char;
-    }
-    return "";
-  });
+    })
+    .join("");
 }
 
 function extractCodeBlockCandidates(text: string): string[] {
@@ -540,12 +560,13 @@ export async function runVerificationPhase(
   } = options;
   let executeResult = options.executeResult;
   let effectiveAllowedPaths = [...verificationAllowedPaths];
+  const verificationCommands = resolveVerificationCommands(taskData);
   const policyRecoveryConfig = await loadPolicyRecoveryConfig(repoPath);
 
   console.log("\n[5/7] Verifying changes...");
   let verifyResult = await verifyChanges({
     repoPath,
-    commands: taskData.commands,
+    commands: verificationCommands,
     allowedPaths: effectiveAllowedPaths,
     policy: effectivePolicy,
     baseBranch,
@@ -588,7 +609,7 @@ export async function runVerificationPhase(
       }
       verifyResult = await verifyChanges({
         repoPath,
-        commands: taskData.commands,
+        commands: verificationCommands,
         allowedPaths: effectiveAllowedPaths,
         policy: effectivePolicy,
         baseBranch,
@@ -608,14 +629,14 @@ export async function runVerificationPhase(
     !verifyResult.success &&
     isNoChangeFailure(verifyResult.error) &&
     shouldEnableNoChangeVerificationFallback() &&
-    (taskData.commands?.length ?? 0) > 0
+    verificationCommands.length > 0
   ) {
     console.warn(
       "[Worker] No diff detected after recovery attempts; running no-change verification fallback.",
     );
     const fallbackVerifyResult = await verifyChanges({
       repoPath,
-      commands: taskData.commands,
+      commands: verificationCommands,
       allowedPaths: effectiveAllowedPaths,
       policy: effectivePolicy,
       baseBranch,
@@ -654,7 +675,7 @@ export async function runVerificationPhase(
     if (autoAdjustedAllowedPaths) {
       verifyResult = await verifyChanges({
         repoPath,
-        commands: taskData.commands,
+        commands: verificationCommands,
         allowedPaths: effectiveAllowedPaths,
         policy: effectivePolicy,
         baseBranch,
@@ -781,7 +802,7 @@ export async function runVerificationPhase(
           if (llmApplied) {
             verifyResult = await verifyChanges({
               repoPath,
-              commands: taskData.commands,
+              commands: verificationCommands,
               allowedPaths: effectiveAllowedPaths,
               policy: effectivePolicy,
               baseBranch,
@@ -818,7 +839,7 @@ export async function runVerificationPhase(
 
           const verifyAfterCleanup = await verifyChanges({
             repoPath,
-            commands: taskData.commands,
+            commands: verificationCommands,
             allowedPaths: effectiveAllowedPaths,
             policy: effectivePolicy,
             baseBranch,
@@ -860,7 +881,7 @@ export async function runVerificationPhase(
         }
         verifyResult = await verifyChanges({
           repoPath,
-          commands: taskData.commands,
+          commands: verificationCommands,
           allowedPaths: effectiveAllowedPaths,
           policy: effectivePolicy,
           baseBranch,
@@ -932,7 +953,7 @@ export async function runVerificationPhase(
       await restoreExpectedBranchContext(repoPath, branchName, runtimeExecutorDisplayName);
       verifyResult = await verifyChanges({
         repoPath,
-        commands: taskData.commands,
+        commands: verificationCommands,
         allowedPaths: effectiveAllowedPaths,
         policy: effectivePolicy,
         baseBranch,

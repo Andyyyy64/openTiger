@@ -213,6 +213,10 @@ function isUnsupportedCommandFormatFailure(output: string): boolean {
   );
 }
 
+function usesShellCommandSubstitution(command: string): boolean {
+  return /\$\(/.test(command);
+}
+
 export function shouldSkipExplicitCommandFailure(params: {
   source: VerificationCommandSource;
   command: string;
@@ -232,7 +236,9 @@ export function shouldSkipExplicitCommandFailure(params: {
   }
   const missingScriptLikeFailure =
     isMissingScriptFailure(params.output) || isMissingPackageManifestFailure(params.output);
-  const unsupportedFormatFailure = isUnsupportedCommandFormatFailure(params.output);
+  const unsupportedFormatFailure =
+    isUnsupportedCommandFormatFailure(params.output) ||
+    usesShellCommandSubstitution(params.command);
   const isSkippableOutput = missingScriptLikeFailure || unsupportedFormatFailure;
   if (!isSkippableOutput) {
     return false;

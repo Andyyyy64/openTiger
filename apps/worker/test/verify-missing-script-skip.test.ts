@@ -102,11 +102,39 @@ describe("shouldSkipExplicitCommandFailure", () => {
     expect(shouldSkip).toBe(true);
   });
 
+  it("skips command substitution format when remaining commands exist", () => {
+    const shouldSkip = shouldSkipExplicitCommandFailure({
+      source: "explicit",
+      command: 'test -z "$(git ls-files tests/test_runner)"',
+      output: "",
+      hasRemainingCommands: true,
+      hasPriorEffectiveCommand: false,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(true);
+  });
+
   it("does not skip explicit unsupported command format when it is the last non-doc command", () => {
     const shouldSkip = shouldSkipExplicitCommandFailure({
       source: "explicit",
       command: "file kernel/kernel.elf | grep -q riscv",
       output: unsupportedFormatOutput,
+      hasRemainingCommands: false,
+      hasPriorEffectiveCommand: false,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(false);
+  });
+
+  it("does not skip command substitution format when it is the last non-doc command", () => {
+    const shouldSkip = shouldSkipExplicitCommandFailure({
+      source: "explicit",
+      command: 'test -z "$(git ls-files tests/test_runner)"',
+      output: "",
       hasRemainingCommands: false,
       hasPriorEffectiveCommand: false,
       isDocOnlyChange: false,
