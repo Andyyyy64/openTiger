@@ -1,5 +1,5 @@
 import { createWriteStream, mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const logStreams = new Set<ReturnType<typeof createWriteStream>>();
 let taskLogStream: ReturnType<typeof createWriteStream> | null = null;
@@ -29,7 +29,8 @@ export function setTaskLogPath(logPath?: string): void {
 }
 
 export function setupProcessLogging(agentId: string): string | undefined {
-  const logDir = process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
+  const defaultLogDir = resolve(import.meta.dirname, "../../../raw-logs");
+  const logDir = process.env.OPENTIGER_LOG_DIR ?? defaultLogDir;
 
   try {
     mkdirSync(logDir, { recursive: true });

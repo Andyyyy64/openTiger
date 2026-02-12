@@ -2,6 +2,7 @@ import { db } from "@openTiger/db";
 import { runs, artifacts } from "@openTiger/db/schema";
 import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { Task } from "@openTiger/core";
+import { resolve } from "node:path";
 import {
   DEFAULT_POLICY,
   getRepoMode,
@@ -43,6 +44,7 @@ import { runVerificationPhase } from "./worker-runner-verification";
 import type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 
 export type { WorkerConfig, WorkerResult } from "./worker-runner-types";
+const DEFAULT_LOG_DIR = resolve(import.meta.dirname, "../../../raw-logs");
 
 // Main task execution
 export async function runWorker(taskData: Task, config: WorkerConfig): Promise<WorkerResult> {
@@ -98,7 +100,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
   }
 
   const runId = runRecord.id;
-  const logDir = process.env.OPENTIGER_LOG_DIR ?? "/tmp/openTiger-logs";
+  const logDir = process.env.OPENTIGER_LOG_DIR ?? DEFAULT_LOG_DIR;
   const taskLogPath = buildTaskLogPath(logDir, taskId, runId, agentId);
   setTaskLogPath(taskLogPath);
   await db.update(runs).set({ logPath: taskLogPath }).where(eq(runs.id, runId));
