@@ -10,6 +10,8 @@ This folder documents openTiger behavior and operations.
   - Start-time decision matrix, exhaustive pattern classes, and runtime state diagram.
 - `docs/mode.md`
   - `REPO_MODE`, `JUDGE_MODE`, `LAUNCH_MODE`, scaling, and startup behavior.
+- `docs/execution-mode.md`
+  - `EXECUTION_ENVIRONMENT` behavior, sandbox runtime details, and Claude auth in Docker.
 - `docs/config.md`
   - `/system` APIs and `system_config` setting reference.
 - `docs/nonhumanoriented.md`
@@ -29,7 +31,8 @@ This folder documents openTiger behavior and operations.
 
 1. `docs/flow.md`
 2. `docs/mode.md`
-3. `docs/config.md`
-4. `docs/agent/*.md`
-5. `docs/startup-patterns.md`
-6. `docs/idea.md`
+3. `docs/execution-mode.md`
+4. `docs/config.md`
+5. `docs/agent/*.md`
+6. `docs/startup-patterns.md`
+7. `docs/idea.md`

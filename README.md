@@ -78,6 +78,7 @@ pnpm run up
 - `docs/flow.md`: end-to-end state transitions and convergence flow
 - `docs/startup-patterns.md`: startup decision matrix and pattern classes
 - `docs/mode.md`: operating modes and scaling setup
+- `docs/execution-mode.md`: host/sandbox execution behavior and sandbox auth details
 - `docs/config.md`: `/system` and `system_config` settings guide
 - `docs/nonhumanoriented.md`: “never stall” design principles
 - `docs/agent/*.md`: per-agent responsibilities

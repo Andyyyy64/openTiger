@@ -51,6 +51,8 @@ Important flags:
 - `host` -> `LAUNCH_MODE=process`
 - `sandbox` -> `LAUNCH_MODE=docker`
 
+For runtime details (Docker image/network, sandbox auth, and troubleshooting), see `docs/execution-mode.md`.
+
 ### `process` (recommended)
 
 - resident agents consume queue jobs

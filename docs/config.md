@@ -72,6 +72,7 @@ Notes:
 
 - `EXECUTION_ENVIRONMENT=host` uses host process launch (`LAUNCH_MODE=process`).
 - `EXECUTION_ENVIRONMENT=sandbox` uses docker launch (`LAUNCH_MODE=docker`).
+- Detailed sandbox operation and Claude authentication notes are in `docs/execution-mode.md`.
 - Planner is operationally capped to one process in system start logic.
 - Worker/tester/docser/judge can be scaled by count.
 

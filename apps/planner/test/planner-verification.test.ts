@@ -173,6 +173,7 @@ describe("augmentVerificationCommandsForTasks", () => {
 
   it("keeps existing commands in fallback mode", async () => {
     const workdir = await createWorkdir();
+    await writeJson(join(workdir, "package.json"), { name: "repo" });
     process.env.PLANNER_VERIFY_COMMAND_MODE = "fallback";
 
     const result = await augmentVerificationCommandsForTasks({
@@ -187,6 +188,7 @@ describe("augmentVerificationCommandsForTasks", () => {
 
   it("adds warning when commands stay unresolved", async () => {
     const workdir = await createWorkdir();
+    await writeJson(join(workdir, "package.json"), { name: "repo" });
     process.env.PLANNER_VERIFY_COMMAND_MODE = "contract";
 
     const result = await augmentVerificationCommandsForTasks({
