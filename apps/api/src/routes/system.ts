@@ -304,10 +304,15 @@ systemRoute.get("/requirements", async (c) => {
 
   try {
     const configRow = await ensureConfigRow();
-    const requirementRepoRoot = resolveRequirementRepoRoot({
+    const requirementRepoRoot = await resolveRequirementRepoRoot({
       repoMode: configRow.repoMode,
       localRepoPath: configRow.localRepoPath,
       replanWorkdir: configRow.replanWorkdir,
+      repoUrl: configRow.repoUrl,
+      githubOwner: configRow.githubOwner,
+      githubRepo: configRow.githubRepo,
+      githubAuthMode: configRow.githubAuthMode,
+      githubToken: configRow.githubToken,
     });
     const requirementPath = await resolveRequirementPath(
       c.req.query("path"),
@@ -337,10 +342,15 @@ systemRoute.post("/requirements", async (c) => {
 
   try {
     const configRow = await ensureConfigRow();
-    const requirementRepoRoot = resolveRequirementRepoRoot({
+    const requirementRepoRoot = await resolveRequirementRepoRoot({
       repoMode: configRow.repoMode,
       localRepoPath: configRow.localRepoPath,
       replanWorkdir: configRow.replanWorkdir,
+      repoUrl: configRow.repoUrl,
+      githubOwner: configRow.githubOwner,
+      githubRepo: configRow.githubRepo,
+      githubAuthMode: configRow.githubAuthMode,
+      githubToken: configRow.githubToken,
     });
     const result = await syncRequirementSnapshot({
       inputPath: path,

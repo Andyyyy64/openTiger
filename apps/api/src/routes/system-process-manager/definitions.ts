@@ -22,27 +22,19 @@ function buildPlannerDefinition(index: number): ProcessDefinition {
     supportsStop: true,
     buildStart: async (payload) => {
       const configRow = await ensureConfigRow();
-      const isGitMode = (configRow.repoMode ?? "git").trim().toLowerCase() === "git";
-      const fallbackRequirementPath = ".opentiger/runtime/requirement.md";
-      let useTransientRequirementSnapshot = false;
-      const effectiveRequirementRepoRoot = (() => {
-        try {
-          return resolveRequirementRepoRoot({
-            repoMode: configRow.repoMode,
-            localRepoPath: configRow.localRepoPath,
-            replanWorkdir: configRow.replanWorkdir,
-          });
-        } catch (error) {
-          if (isGitMode && payload.content) {
-            useTransientRequirementSnapshot = true;
-            return resolveRepoRoot();
-          }
-          throw error;
-        }
-      })();
+      const effectiveRequirementRepoRoot = await resolveRequirementRepoRoot({
+        repoMode: configRow.repoMode,
+        localRepoPath: configRow.localRepoPath,
+        replanWorkdir: configRow.replanWorkdir,
+        repoUrl: configRow.repoUrl,
+        githubOwner: configRow.githubOwner,
+        githubRepo: configRow.githubRepo,
+        githubAuthMode: configRow.githubAuthMode,
+        githubToken: configRow.githubToken,
+      });
       const requirementPath = await resolveRequirementPath(
         payload.requirementPath,
-        useTransientRequirementSnapshot ? fallbackRequirementPath : CANONICAL_REQUIREMENT_PATH,
+        CANONICAL_REQUIREMENT_PATH,
         {
           allowMissing: Boolean(payload.content),
           repoRoot: effectiveRequirementRepoRoot,
@@ -50,11 +42,9 @@ function buildPlannerDefinition(index: number): ProcessDefinition {
       );
       if (payload.content) {
         await syncRequirementSnapshot({
-          inputPath:
-            payload.requirementPath ??
-            (useTransientRequirementSnapshot ? fallbackRequirementPath : undefined),
+          inputPath: payload.requirementPath,
           content: payload.content,
-          commitSnapshot: !useTransientRequirementSnapshot,
+          commitSnapshot: true,
           repoRoot: effectiveRequirementRepoRoot,
         });
       }

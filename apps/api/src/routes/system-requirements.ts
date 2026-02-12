@@ -1,7 +1,9 @@
 import { execFile } from "node:child_process";
-import { readFile, stat, writeFile, mkdir } from "node:fs/promises";
+import { readFile, stat, writeFile, mkdir, rm } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, resolve, relative, isAbsolute } from "node:path";
 import { promisify } from "node:util";
+import { resolveGitHubAuthMode, resolveGitHubToken } from "@openTiger/vcs";
 
 const execFileAsync = promisify(execFile);
 export const CANONICAL_REQUIREMENT_PATH = "docs/requirement.md";
@@ -15,17 +17,148 @@ type RequirementRepoRootConfig = {
   repoMode?: string | null;
   localRepoPath?: string | null;
   replanWorkdir?: string | null;
+  repoUrl?: string | null;
+  githubOwner?: string | null;
+  githubRepo?: string | null;
+  githubAuthMode?: string | null;
+  githubToken?: string | null;
 };
 
-function normalizeOptionalPath(value: string | null | undefined): string | undefined {
+function normalizeOptionalText(value: string | null | undefined): string | undefined {
   if (typeof value !== "string") {
     return undefined;
   }
   const trimmed = value.trim();
-  return trimmed.length > 0 ? resolve(trimmed) : undefined;
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export function resolveRequirementRepoRoot(config: RequirementRepoRootConfig): string {
+function normalizeOptionalPath(value: string | null | undefined): string | undefined {
+  const normalized = normalizeOptionalText(value);
+  return normalized ? resolve(normalized) : undefined;
+}
+
+function sanitizePathSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function parseGithubRepoFromUrl(rawUrl: string): { owner?: string; repo?: string } {
+  const trimmed = rawUrl.trim();
+  if (!trimmed) {
+    return {};
+  }
+  if (trimmed.startsWith("git@")) {
+    const sshMatch = /^git@[^:]+:(.+)$/u.exec(trimmed);
+    if (!sshMatch?.[1]) {
+      return {};
+    }
+    const [owner, repo] = sshMatch[1].replace(/\.git$/u, "").split("/");
+    return {
+      owner: owner?.trim(),
+      repo: repo?.trim(),
+    };
+  }
+  try {
+    const parsed = new URL(trimmed);
+    const [owner, repo] = parsed.pathname.replace(/^\/+/u, "").replace(/\.git$/u, "").split("/");
+    return {
+      owner: owner?.trim(),
+      repo: repo?.trim(),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function resolveGitTargetRepoUrl(config: RequirementRepoRootConfig): string | undefined {
+  const repoUrl = normalizeOptionalText(config.repoUrl);
+  if (repoUrl) {
+    return repoUrl;
+  }
+  const owner = normalizeOptionalText(config.githubOwner);
+  const repo = normalizeOptionalText(config.githubRepo);
+  if (owner && repo) {
+    return `https://github.com/${owner}/${repo}`;
+  }
+  return undefined;
+}
+
+function buildAuthedGitHubUrl(rawUrl: string, token: string): string {
+  if (!rawUrl.startsWith("https://github.com/")) {
+    return rawUrl;
+  }
+  return rawUrl.replace("https://github.com/", `https://x-access-token:${token}@github.com/`);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureGitRepoRootForRequirement(config: RequirementRepoRootConfig): Promise<string | null> {
+  const repoUrl = resolveGitTargetRepoUrl(config);
+  if (!repoUrl) {
+    return null;
+  }
+
+  const parsed = parseGithubRepoFromUrl(repoUrl);
+  const owner = sanitizePathSegment(parsed.owner ?? config.githubOwner?.trim() ?? "unknown-owner");
+  const repo = sanitizePathSegment(parsed.repo ?? config.githubRepo?.trim() ?? "unknown-repo");
+  const cacheRoot = resolve(
+    process.env.OPENTIGER_REQUIREMENT_REPO_ROOT?.trim() || `${homedir()}/.opentiger/repos`,
+  );
+  const repoRoot = resolve(cacheRoot, owner, repo);
+
+  const gitCheck = await runGit(repoRoot, ["rev-parse", "--is-inside-work-tree"]);
+  if (gitCheck.success && gitCheck.stdout === "true") {
+    return repoRoot;
+  }
+
+  if (await pathExists(repoRoot)) {
+    throw new Error(
+      `Requirement repository path exists but is not a git repository: ${repoRoot}. Remove it or configure REPLAN_WORKDIR/LOCAL_REPO_PATH explicitly.`,
+    );
+  }
+
+  await mkdir(dirname(repoRoot), { recursive: true });
+  const cloneDirect = await runGit(cacheRoot, ["clone", repoUrl, repoRoot]);
+  if (cloneDirect.success) {
+    return repoRoot;
+  }
+
+  let token: string | undefined;
+  try {
+    token = resolveGitHubToken({
+      token: config.githubToken ?? undefined,
+      authMode: resolveGitHubAuthMode(config.githubAuthMode ?? undefined),
+    });
+  } catch {
+    token = undefined;
+  }
+
+  if (token && repoUrl.startsWith("https://github.com/")) {
+    await rm(repoRoot, { recursive: true, force: true }).catch(() => undefined);
+    const authedUrl = buildAuthedGitHubUrl(repoUrl, token);
+    const cloneAuthed = await runGit(cacheRoot, ["clone", authedUrl, repoRoot]);
+    if (cloneAuthed.success) {
+      return repoRoot;
+    }
+    throw new Error(
+      cloneAuthed.stderr || cloneAuthed.stdout || "Failed to prepare requirement target repository",
+    );
+  }
+
+  throw new Error(
+    cloneDirect.stderr || cloneDirect.stdout || "Failed to prepare requirement target repository",
+  );
+}
+
+export async function resolveRequirementRepoRoot(
+  config: RequirementRepoRootConfig,
+): Promise<string> {
   const systemRepoRoot = resolveRepoRoot();
   const replanWorkdir = normalizeOptionalPath(config.replanWorkdir);
   if (replanWorkdir && replanWorkdir !== systemRepoRoot) {
@@ -34,6 +167,13 @@ export function resolveRequirementRepoRoot(config: RequirementRepoRootConfig): s
   const localRepoPath = normalizeOptionalPath(config.localRepoPath);
   if (localRepoPath && localRepoPath !== systemRepoRoot) {
     return localRepoPath;
+  }
+  const repoMode = (config.repoMode ?? "git").trim().toLowerCase();
+  if (repoMode === "git") {
+    const managedRepoRoot = await ensureGitRepoRootForRequirement(config);
+    if (managedRepoRoot && managedRepoRoot !== systemRepoRoot) {
+      return managedRepoRoot;
+    }
   }
   throw new Error(
     "Requirement target repository is unresolved. Configure REPLAN_WORKDIR or LOCAL_REPO_PATH to a non-openTiger repository.",
@@ -102,7 +242,15 @@ async function runGit(
   stderr: string;
 }> {
   try {
-    const { stdout, stderr } = await execFileAsync("git", args, { cwd: repoRoot });
+    const { stdout, stderr } = await execFileAsync("git", args, {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        // API request handling must never block on interactive git prompts
+        GIT_TERMINAL_PROMPT: "0",
+      },
+      timeout: 120000,
+    });
     return {
       success: true,
       exitCode: 0,
