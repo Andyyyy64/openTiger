@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { open, stat, readdir, readFile, rm } from "node:fs/promises";
+import { open, stat, readdir, readFile, writeFile, unlink, readlink } from "node:fs/promises";
 import { basename, join, resolve, relative } from "node:path";
 import { getAuthInfo } from "../middleware/index";
 import { canControlSystem } from "./system-auth";
@@ -48,27 +48,79 @@ async function pathExists(path: string): Promise<boolean> {
   }
 }
 
-async function clearLogDir(logDir: string): Promise<{ removed: number; failed: number }> {
-  if (!(await pathExists(logDir))) {
-    return { removed: 0, failed: 0 };
+function normalizeFdTargetPath(target: string): string {
+  return target.endsWith(" (deleted)") ? target.slice(0, -10) : target;
+}
+
+async function collectOpenLogFiles(candidates: Set<string>): Promise<Set<string>> {
+  const inUse = new Set<string>();
+  if (process.platform !== "linux" || candidates.size === 0) {
+    return inUse;
   }
 
-  const entries = await readdir(logDir, { withFileTypes: true });
-  let removed = 0;
-  let failed = 0;
+  let procEntries;
+  try {
+    procEntries = await readdir("/proc", { withFileTypes: true, encoding: "utf8" });
+  } catch {
+    return inUse;
+  }
 
-  for (const entry of entries) {
-    const fullPath = join(logDir, entry.name);
+  for (const entry of procEntries) {
+    if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) {
+      continue;
+    }
+    const fdDir = join("/proc", entry.name, "fd");
+    let fdEntries: string[] = [];
     try {
-      await rm(fullPath, { recursive: true, force: true });
-      removed += 1;
-    } catch (error) {
-      failed += 1;
-      console.warn("[Logs] Failed to remove log entry:", fullPath, error);
+      fdEntries = await readdir(fdDir, { encoding: "utf8" });
+    } catch {
+      continue;
+    }
+    for (const fdEntry of fdEntries) {
+      if (inUse.size >= candidates.size) {
+        return inUse;
+      }
+      try {
+        const target = normalizeFdTargetPath(await readlink(join(fdDir, fdEntry)));
+        if (candidates.has(target)) {
+          inUse.add(target);
+        }
+      } catch {
+        continue;
+      }
     }
   }
 
-  return { removed, failed };
+  return inUse;
+}
+
+async function clearLogDir(logDir: string): Promise<{ removed: number; truncated: number; failed: number }> {
+  if (!(await pathExists(logDir))) {
+    return { removed: 0, truncated: 0, failed: 0 };
+  }
+
+  const logFiles = await collectLogFiles(logDir);
+  const inUseFiles = await collectOpenLogFiles(new Set(logFiles));
+  let removed = 0;
+  let truncated = 0;
+  let failed = 0;
+
+  for (const logFile of logFiles) {
+    try {
+      if (inUseFiles.has(logFile)) {
+        await writeFile(logFile, "", "utf-8");
+        truncated += 1;
+      } else {
+        await unlink(logFile);
+        removed += 1;
+      }
+    } catch (error) {
+      failed += 1;
+      console.warn("[Logs] Failed to clear log file:", logFile, error);
+    }
+  }
+
+  return { removed, truncated, failed };
 }
 
 function buildAgentNameAliases(agentId: string): string[] {
@@ -181,7 +233,7 @@ function parseAllLimit(value: string | undefined): number {
 
 function parseSinceMinutes(value: string | undefined): number | undefined {
   const parsed = value ? parseInt(value, 10) : NaN;
-  if (!Number.isFinite(parsed) || parsed < 0) {
+  if (!Number.isFinite(parsed) || parsed <= 0) {
     return undefined;
   }
   return parsed;
@@ -216,10 +268,19 @@ function parseTimestampMs(line: string): number | undefined {
 }
 
 async function collectLogFiles(rootDir: string): Promise<string[]> {
+  if (!(await pathExists(rootDir))) {
+    return [];
+  }
+
   const files: string[] = [];
 
   async function walk(dir: string): Promise<void> {
-    const entries = await readdir(dir, { withFileTypes: true });
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true, encoding: "utf8" });
+    } catch {
+      return;
+    }
 
     for (const entry of entries) {
       const fullPath = join(dir, entry.name);
@@ -435,8 +496,8 @@ logsRoute.post("/clear", async (c) => {
 
   const logDir = resolveLogDir();
   try {
-    const { removed, failed } = await clearLogDir(logDir);
-    return c.json({ cleared: true, removed, failed, logDir });
+    const { removed, truncated, failed } = await clearLogDir(logDir);
+    return c.json({ cleared: true, removed, truncated, failed, logDir });
   } catch (error) {
     console.warn("[Logs] Failed to clear logs:", error);
     return c.json({ error: "Failed to clear logs" }, 500);
