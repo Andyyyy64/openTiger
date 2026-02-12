@@ -80,5 +80,6 @@ pnpm run up
 - `docs/mode.md`: operating modes and scaling setup
 - `docs/execution-mode.md`: host/sandbox execution behavior and sandbox auth details
 - `docs/config.md`: `/system` and `system_config` settings guide
+- `docs/policy-recovery.md`: in-run policy self-recovery and allowedPaths self-growth
 - `docs/nonhumanoriented.md`: “never stall” design principles
 - `docs/agent/*.md`: per-agent responsibilities

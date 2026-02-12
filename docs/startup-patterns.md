@@ -6,7 +6,7 @@ This document describes the code-aligned decision patterns for:
 2. Runtime convergence loop in `cycle-manager`
 3. Planner prehook guard (`/system/processes/:name/start` for planner)
 
-Last verified against code on 2026-02-11.
+Last verified against code on 2026-02-13.
 
 ## Decision Inputs
 
@@ -48,7 +48,7 @@ The 16 boolean combinations of `R/I/P/L` collapse into the classes below (same o
 Notes:
 
 - `I=1` has highest practical priority because planner is disabled and execution agents are enabled.
-- `P=1` without `L` enables Judge, even if dispatcher/workers are not started.
+- `P=1` without `L` enables Judge, even if dispatcher/workers are not started. System process self-heal detects Judge backlog and auto-starts Judge when it is down.
 - `R=1` alone triggers planner only when no backlog exists anywhere (`I/P/L` all zero).
 
 ## Planner Prehook Guard

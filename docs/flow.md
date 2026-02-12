@@ -113,7 +113,7 @@ Periodic jobs include:
 - timeout run cancellation
 - lease cleanup
 - offline agent reset
-- failed task cooldown requeue
+- failed task cooldown requeue (with failure classification; unsupported/missing verification commands trigger command adjustment instead of block)
 - blocked task cooldown recovery by reason
 - backlog ordering gate
   - `local task backlog > 0`: keep executing tasks
@@ -124,12 +124,23 @@ Blocked recovery behavior:
 
 - `awaiting_judge`
   - restore latest successful judgeable run if needed
-  - otherwise timeout-requeue
+  - otherwise timeout-requeue (PR review tasks stay `awaiting_judge` to avoid ping-pong)
 - `quota_wait`
   - cooldown then requeue
 - `needs_rework`
   - for PR review tasks: route back to `awaiting_judge`
   - for normal tasks: generate `[Rework] ...` task and move parent to failed lineage
+  - policy-only violations can be requeued in-place with adjusted `allowedPaths`; if no safe path exists, rework split is suppressed (with retry limit, then cancel)
+  - skip rework if active rework child already exists
+  - cancel if rework depth exceeds `AUTO_REWORK_MAX_DEPTH`
+
+System process self-heal:
+
+- Judge backlog detected (`openPrCount > 0` or `pendingJudgeTaskCount > 0`) arms runtime hatch and auto-starts Judge process when down
+
+Detailed policy lifecycle and growth behavior:
+
+- `docs/policy-recovery.md`
 
 ## 9. Why "Failed" and "Retry" Can Coexist
 

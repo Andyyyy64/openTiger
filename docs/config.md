@@ -90,6 +90,39 @@ Notes:
 - `PLANNER_USE_REMOTE`
 - `PLANNER_REPO_URL`
 
+### 3.6 Policy Recovery and AllowedPaths Growth
+
+Core policy recovery config:
+
+- `POLICY_RECOVERY_CONFIG_PATH`
+- `POLICY_RECOVERY_CONFIG_JSON`
+- `POLICY_RECOVERY_MODE` (`conservative` / `balanced` / `aggressive`)
+
+Worker in-run policy recovery:
+
+- `WORKER_POLICY_RECOVERY_USE_LLM`
+- `WORKER_POLICY_RECOVERY_ATTEMPTS`
+- `WORKER_POLICY_RECOVERY_TIMEOUT_SECONDS`
+- `WORKER_POLICY_RECOVERY_MODEL`
+
+Repo-level config file:
+
+- default path: `.opentiger/policy-recovery.json`
+- example: `templates/policy-recovery.example.json`
+
+Cycle Manager rework suppression (env):
+
+- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES` (default: 2)
+- `AUTO_REWORK_MAX_DEPTH` (default: 2)
+
+Verification command skip (Worker env):
+
+- `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT` (default: `true`)
+
+Operational detail:
+
+- full recovery/growth lifecycle is documented in `docs/policy-recovery.md`
+
 ## 4. `/config` API (Backed by DB)
 
 - `GET /config`
@@ -142,6 +175,7 @@ Important runtime behavior:
 
 - planner duplicate start is blocked
 - live bound agent detection can return already-running without launching duplicate process
+- Judge backlog (`openPrCount > 0` or `pendingJudgeTaskCount > 0`) arms runtime hatch and auto-starts Judge process when down (self-heal tick)
 
 ### 5.3 Requirement / Repo Utilities
 

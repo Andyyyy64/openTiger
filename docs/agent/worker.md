@@ -50,7 +50,20 @@ Both cases:
 - verify avoids long-lived dev/watch flows
 - expected-file validation supports `src/` fallback path resolution
 
-## 7. Important Settings
+## 7. Verification Command Constraints
+
+Verification commands run via `spawn` (no shell), so shell features do not work:
+
+- `$()` command substitution — rejected at parse; if explicit and failed, skipped when remaining commands exist
+- `|`, `&&`, `||`, `;`, `<`, `>`, backticks — rejected
+
+When explicit command fails due to unsupported format or missing script, Worker may skip and continue with remaining commands when appropriate (doc-only, no-op, or prior command passed).
+
+## 8. Transient Failure Retry
+
+Checkout, branch creation, stage, push, and branch restore use transient-pattern retry (timeout, connection reset, etc.) before failing. Git add ignores paths that are listed in `.gitignore` and stages the rest instead of failing.
+
+## 9. Important Settings
 
 - `AGENT_ID`, `AGENT_ROLE`
 - `WORKER_MODEL` / `TESTER_MODEL` / `DOCSER_MODEL`
