@@ -54,6 +54,8 @@ Meaning of common warnings:
 
 ## 3. Blocked Reasons Used in Recovery
 
+定義一覧は `docs/state-model.md` を参照してください。
+
 - `awaiting_judge`
   - successful run exists but not judged yet, or run restoration is needed
 - `quota_wait`

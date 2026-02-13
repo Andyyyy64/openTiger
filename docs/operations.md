@@ -5,6 +5,7 @@
 関連:
 
 - `docs/flow.md`
+- `docs/state-model.md`
 - `docs/config.md`
 - `docs/api-reference.md`
 - `docs/agent/dispatcher.md`

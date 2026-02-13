@@ -89,5 +89,6 @@ blocked reason:
 関連:
 
 - `docs/flow.md`
+- `docs/state-model.md`
 - `docs/policy-recovery.md`
 - `docs/verification.md`

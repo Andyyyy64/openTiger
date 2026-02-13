@@ -30,6 +30,8 @@
 
 ## 2. 実行モデル・復旧戦略
 
+- `docs/state-model.md`
+  - task/run/agent/cycle の状態定義
 - `docs/flow.md`
   - エンドツーエンドの状態遷移と回復ループ
 - `docs/startup-patterns.md`

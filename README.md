@@ -123,6 +123,7 @@ Start here:
 
 Execution behavior:
 
+- `docs/state-model.md`
 - `docs/flow.md`
 - `docs/startup-patterns.md`
 - `docs/mode.md`
