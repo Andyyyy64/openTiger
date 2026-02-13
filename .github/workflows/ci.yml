@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify git push guard hook
+        run: pnpm run test:git-hooks
+
       - name: Build packages
         run: pnpm build
 

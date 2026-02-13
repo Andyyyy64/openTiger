@@ -6,6 +6,7 @@
   "scripts": {
     "setup": "pnpm install && pnpm run git-hooks:install",
     "git-hooks:install": "bash scripts/install-git-hooks.sh",
+    "test:git-hooks": "bash scripts/test-pre-push-hook.sh",
     "ui": "pnpm --filter @openTiger/dashboard dev",
     "server": "pnpm --filter @openTiger/api dev",
     "up": "pnpm run build && docker compose up -d --wait --wait-timeout 120 postgres redis && pnpm db:push && pnpm runtime:hatch:disarm && pnpm config:export && pnpm -r --filter @openTiger/api --filter @openTiger/dashboard dev",

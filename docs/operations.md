@@ -334,3 +334,9 @@ For exceptional cases only, you can bypass once:
 ```bash
 ALLOW_MAIN_PUSH=1 git push -u origin <branch>
 ```
+
+You can verify hook behavior locally with:
+
+```bash
+pnpm run test:git-hooks
+```
