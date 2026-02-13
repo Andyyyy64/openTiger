@@ -129,7 +129,7 @@ query（任意）:
 
 ## 8. トラブルシューティング
 
-### sandbox で `authenticated=false`
+### `authenticated=false` になる場合（sandbox）
 
 - host 側で `claude /login` 済みか確認
 - 認証ディレクトリが存在し読み取り可能か確認
@@ -140,11 +140,11 @@ query（任意）:
 - `SANDBOX_DOCKER_IMAGE` で指定した image を build/pull する
 - 既定 tag とローカル/CI の運用方針を揃える
 
-### Docker daemon error が出る場合
+### デーモンエラー（Docker daemon error）が出る場合
 
 - Docker Desktop または `dockerd` を起動する
 - `docker` 実行権限を確認する
 
-### container 内で CLI が見つからない
+### コンテナ内で CLI が見つからない場合
 
 - `ops/docker/worker.Dockerfile` から worker image を再 build する

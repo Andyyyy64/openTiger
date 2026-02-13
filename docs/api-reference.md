@@ -1,4 +1,4 @@
-# API リファレンス
+# インターフェース参照（API）
 
 openTiger API は Hono ベースで、Dashboard からも同じエンドポイントを利用します。  
 ベース URL は通常 `http://localhost:4301` です。
@@ -162,7 +162,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `GET /logs/all`
 - `POST /logs/clear`
 
-### Webhook（GitHub 連携）
+### 連携通知（Webhook / GitHub）
 
 - `POST /webhook/github`
   - `GITHUB_WEBHOOK_SECRET` があれば署名検証を行う
@@ -183,14 +183,14 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `GET /system/github/auth`
 - `GET /system/claude/auth?environment=host|sandbox`
 
-### requirement 操作
+### 要件操作（requirement）
 
 - `GET /system/requirements`
 - `POST /system/requirements`
   - canonical path `docs/requirement.md` へ同期
   - git repository の場合は snapshot commit/push を試行
 
-### preflight / 起動判定
+### 起動前判定（preflight）
 
 - `POST /system/preflight`
   - requirement content + local backlog + GitHub issue/PR backlog から推奨起動構成を返す
@@ -203,14 +203,14 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `POST /system/processes/:name/stop`
 - `POST /system/processes/stop-all`
 
-### GitHub repository 操作
+### リポジトリ操作（GitHub）
 
 - `POST /system/github/repo`
   - repo 作成 + config 同期
 - `GET /system/github/repos`
   - 認証ユーザーでアクセス可能な repo 一覧
 
-### host 情報
+### ホスト情報（host）
 
 - `GET /system/host/neofetch`
 - `GET /system/host/context`

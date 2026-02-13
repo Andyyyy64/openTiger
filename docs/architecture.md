@@ -30,14 +30,14 @@ flowchart LR
 
 ## 1. コンポーネント
 
-### API (`@openTiger/api`)
+### サービス層（API / `@openTiger/api`）
 
 - Dashboard バックエンド
 - 設定管理 (`/config`)
 - システム制御 (`/system/*`)
 - 参照系 API (`/tasks`, `/runs`, `/agents`, `/plans`, `/judgements`, `/logs`)
 
-### Planner (`@openTiger/planner`)
+### 計画層（Planner / `@openTiger/planner`）
 
 - requirement / issue からタスク計画を生成
 - dependency 正規化
@@ -45,7 +45,7 @@ flowchart LR
 - doc gap 検知
 - 詳細: `docs/agent/planner.md`
 
-### Dispatcher (`@openTiger/dispatcher`)
+### 配布制御層（Dispatcher / `@openTiger/dispatcher`）
 
 - `queued` タスクの選別
 - lease 取得
@@ -53,7 +53,7 @@ flowchart LR
 - process / docker 起動
 - 詳細: `docs/agent/dispatcher.md`
 
-### Worker / Tester / Docser (`@openTiger/worker`)
+### 実行層（Worker / Tester / Docser / `@openTiger/worker`）
 
 - LLM 実行 (`opencode` or `claude_code`)
 - 変更検証（commands + policy）
@@ -61,14 +61,14 @@ flowchart LR
 - 失敗時の recovery 分岐
 - 詳細: `docs/agent/worker.md`, `docs/agent/tester.md`, `docs/agent/docser.md`
 
-### Judge (`@openTiger/judge`)
+### 判定層（Judge / `@openTiger/judge`）
 
 - 成功 run の評価（CI / policy / LLM）
 - approve / request_changes 判断
 - merge / retry / autofix タスク生成
 - 詳細: `docs/agent/judge.md`
 
-### Cycle Manager (`@openTiger/cycle-manager`)
+### 収束管理層（Cycle Manager / `@openTiger/cycle-manager`）
 
 - cleanup ループ
 - failed/blocked リカバリ
@@ -76,7 +76,7 @@ flowchart LR
 - replan 判定
 - 詳細: `docs/agent/cycle-manager.md`
 
-### Dashboard (`@openTiger/dashboard`)
+### ダッシュボード層（Dashboard / `@openTiger/dashboard`）
 
 - 起動/設定/状態監視の UI
 - process start/stop
@@ -84,7 +84,7 @@ flowchart LR
 
 ## 2. データストア
 
-### PostgreSQL（永続ストア）
+### 永続データストア（PostgreSQL）
 
 主要テーブル:
 

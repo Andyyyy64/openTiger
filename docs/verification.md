@@ -29,7 +29,7 @@ Planner の検証コマンドモード:
 - `PLANNER_VERIFY_PLAN_TIMEOUT_SECONDS`
 - `PLANNER_VERIFY_AUGMENT_NONEMPTY`
 
-### verify contract の扱い
+### 検証契約（verify contract）の扱い
 
 `verify.contract.json` の例:
 

@@ -27,7 +27,7 @@ pnpm run setup
 
 ## 3. 認証（初回のみ）
 
-### GitHub 連携
+### 連携設定（GitHub）
 
 デフォルトは `GITHUB_AUTH_MODE=gh` です。
 
@@ -37,7 +37,7 @@ gh auth login
 
 `token` モードを使う場合は、System Config で `GITHUB_TOKEN` を設定してください。
 
-### Claude Code（`LLM_EXECUTOR=claude_code` の場合）
+### `LLM_EXECUTOR=claude_code` 利用時
 
 ```bash
 claude /login
@@ -101,17 +101,17 @@ pnpm run up
 
 ## 9. よくある初期トラブル
 
-### GitHub repo 未設定
+### リポジトリ未設定（GitHub）
 
 - Start ページの repo manager から既存 repo を選択、または新規作成
 - `REPO_MODE=git` の場合は `REPO_URL` と `GITHUB_OWNER/REPO` が必要
 
-### Claude auth warning への対処
+### 認証警告（Claude auth warning）への対処
 
 - host 実行: `claude /login` を再実行
 - sandbox 実行: host の認証ディレクトリがマウントされることを確認
 
-### preflight で Planner が起動しない
+### 起動時に Planner が起動しない（preflight）
 
 - backlog 優先の正常動作です
 - Issue/PR/ローカル backlog が解消されると再計画対象になります

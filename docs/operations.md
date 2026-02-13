@@ -32,7 +32,7 @@
 `failed` と `retry countdown` が同時に見えるのは正常です。  
 run は失敗結果、task は次回リトライ待機を示します。
 
-### retry.reason の一次判断
+### `retry.reason` の一次判断
 
 `GET /tasks` の `retry.reason` は、次のように使い分けると切り分けが速くなります。
 
@@ -61,7 +61,7 @@ run は失敗結果、task は次回リトライ待機を示します。
 - 実行系 agent を `offline` 更新
 - runtime hatch を disarm
 
-### process 名
+### プロセス名
 
 固定:
 
@@ -103,28 +103,28 @@ pnpm runtime:hatch:disarm
 
 ## 4. 自動再起動・自己回復の関連 env
 
-### process 自動再起動
+### プロセス自動再起動
 
 - `SYSTEM_PROCESS_AUTO_RESTART`
 - `SYSTEM_PROCESS_AUTO_RESTART_DELAY_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART_WINDOW_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS`
 
-### self-heal ループ
+### 自己回復ループ（self-heal）
 
 - `SYSTEM_PROCESS_SELF_HEAL`
 - `SYSTEM_PROCESS_SELF_HEAL_INTERVAL_MS`
 - `SYSTEM_PROCESS_SELF_HEAL_STARTUP_GRACE_MS`
 - `SYSTEM_AGENT_LIVENESS_WINDOW_MS`
 
-### task リトライ
+### タスクリトライ
 
 - `FAILED_TASK_RETRY_COOLDOWN_MS`
 - `BLOCKED_TASK_RETRY_COOLDOWN_MS`
 - `FAILED_TASK_MAX_RETRY_COUNT`
 - `DISPATCH_RETRY_DELAY_MS`
 
-### policy/rework 抑制
+### ポリシー／リワーク抑制（policy/rework）
 
 - `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`
 - `AUTO_REWORK_MAX_DEPTH`

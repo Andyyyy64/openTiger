@@ -8,13 +8,13 @@
 
 ## 1. 設定の保存先
 
-### DB 管理（`config` テーブル）
+### データベース管理（`config` テーブル）
 
 - `/config` API から参照/更新
 - Dashboard の system settings から更新
 - `scripts/export-config-to-env.ts` で `.env` へ同期可能
 
-### env-only 設定
+### 環境変数専用（env-only）設定
 
 - プロセス起動時にのみ参照される設定
 - `config` テーブルには保存されない
