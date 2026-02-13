@@ -11,6 +11,11 @@
 Cycle Manager は長時間運用を前提に、システム全体の収束を維持します。  
 監視・クリーンアップ・再計画（replan）を周期実行し、停止しにくい運用を支えます。
 
+責務外:
+
+- individual task の実装内容を直接変更すること
+- PR 差分の approve/reject 判定
+
 ## 2. Runtime Loops
 
 - monitor loop

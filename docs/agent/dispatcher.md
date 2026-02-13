@@ -11,6 +11,11 @@
 Dispatcher は `queued` task を安全に `running` へ進め、適切な実行 agent へ割り当てます。  
 同時に lease/heartbeat を監視し、重複実行や取りこぼしを抑制します。
 
+責務外:
+
+- task 内容の実装（コード変更）
+- run 成果物の approve/rework 判定
+
 ## 2. Inputs
 
 - `tasks` / `runs` / `leases` / `agents` の現在状態

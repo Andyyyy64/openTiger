@@ -22,7 +22,17 @@
 - **Judge** は「結果を承認するか、再修正へ戻すか」を決める。
 - **Cycle Manager** は「収束し続ける運用」を維持する。
 
-## 3. 実行対象の差分（Worker 系）
+## 3. Agent 境界（しないこと）
+
+| Agent | しないこと（責務外） |
+| --- | --- |
+| Planner | task 実行、PR merge 判定 |
+| Dispatcher | コード変更、approve/rework 判定 |
+| Worker/Tester/Docser | グローバル再計画判断、全体収束制御 |
+| Judge | task 配布、実ファイル変更の実行 |
+| Cycle Manager | 各 task の中身実装、PR 内容レビュー |
+
+## 4. 実行対象の差分（Worker 系）
 
 | 観点 | Worker | Tester | Docser |
 | --- | --- | --- | --- |
@@ -38,7 +48,7 @@ Worker / Tester / Docser は同一 runtime を共有し、`AGENT_ROLE` で挙動
 1. `docs/agent/worker.md` で共通 runtime を把握
 2. `docs/agent/tester.md` / `docs/agent/docser.md` で差分のみ確認
 
-## 4. モデル/指示ファイルの解決順
+## 5. モデル/指示ファイルの解決順
 
 | Role | Model 設定（優先順） | Instructions 設定（優先順） |
 | --- | --- | --- |
@@ -48,7 +58,7 @@ Worker / Tester / Docser は同一 runtime を共有し、`AGENT_ROLE` で挙動
 
 `LLM_EXECUTOR=claude_code` の場合は role 別 model より `CLAUDE_CODE_MODEL` が優先されます。
 
-## 5. 共通の状態モデル
+## 6. 共通の状態モデル
 
 task status:
 
@@ -66,7 +76,7 @@ blocked reason:
 - `needs_rework`
 - `issue_linking`
 
-## 6. 詳細仕様
+## 7. 詳細仕様
 
 - `docs/agent/planner.md`
 - `docs/agent/dispatcher.md`
