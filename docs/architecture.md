@@ -22,48 +22,48 @@ flowchart LR
 
 ## 1. コンポーネント
 
-## API (`@openTiger/api`)
+### API (`@openTiger/api`)
 
 - Dashboard バックエンド
 - 設定管理 (`/config`)
 - システム制御 (`/system/*`)
 - 参照系 API (`/tasks`, `/runs`, `/agents`, `/plans`, `/judgements`, `/logs`)
 
-## Planner (`@openTiger/planner`)
+### Planner (`@openTiger/planner`)
 
 - requirement / issue からタスク計画を生成
 - dependency 正規化
 - policy 適用
 - doc gap 検知
 
-## Dispatcher (`@openTiger/dispatcher`)
+### Dispatcher (`@openTiger/dispatcher`)
 
 - `queued` タスクの選別
 - lease 取得
 - 実行エージェント割り当て
 - process / docker 起動
 
-## Worker / Tester / Docser (`@openTiger/worker`)
+### Worker / Tester / Docser (`@openTiger/worker`)
 
 - LLM 実行 (`opencode` or `claude_code`)
 - 変更検証（commands + policy）
 - commit/push/PR 作成（git mode）
 - 失敗時の recovery 分岐
 
-## Judge (`@openTiger/judge`)
+### Judge (`@openTiger/judge`)
 
 - 成功 run の評価（CI / policy / LLM）
 - approve / request_changes 判断
 - merge / retry / autofix タスク生成
 
-## Cycle Manager (`@openTiger/cycle-manager`)
+### Cycle Manager (`@openTiger/cycle-manager`)
 
 - cleanup ループ
 - failed/blocked リカバリ
 - issue backlog 同期
 - replan 判定
 
-## Dashboard (`@openTiger/dashboard`)
+### Dashboard (`@openTiger/dashboard`)
 
 - 起動/設定/状態監視の UI
 - process start/stop
@@ -71,7 +71,7 @@ flowchart LR
 
 ## 2. データストア
 
-## PostgreSQL
+### PostgreSQL
 
 主要テーブル:
 
@@ -84,7 +84,7 @@ flowchart LR
 - `cycles`
 - `config`
 
-## Redis (BullMQ)
+### Redis (BullMQ)
 
 - task queue
 - dead-letter queue

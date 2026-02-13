@@ -8,13 +8,13 @@
 
 ## 1. 設定の保存先
 
-## DB 管理（`config` テーブル）
+### DB 管理（`config` テーブル）
 
 - `/config` API から参照/更新
 - Dashboard の system settings から更新
 - `scripts/export-config-to-env.ts` で `.env` へ同期可能
 
-## env-only
+### env-only
 
 - プロセス起動時にのみ参照される設定
 - `config` テーブルには保存されない
@@ -23,14 +23,14 @@
 
 ## 2. DB 管理キー一覧（`CONFIG_FIELDS` 準拠）
 
-## 2.1 Limits
+### 2.1 Limits
 
 - `MAX_CONCURRENT_WORKERS`
 - `DAILY_TOKEN_LIMIT`
 - `HOURLY_TOKEN_LIMIT`
 - `TASK_TOKEN_LIMIT`
 
-## 2.2 Process Switches / Scaling
+### 2.2 Process Switches / Scaling
 
 - `DISPATCHER_ENABLED`
 - `JUDGE_ENABLED`
@@ -46,7 +46,7 @@
 
 - Planner は runtime 上で単一プロセス運用（重複起動ガードあり）
 
-## 2.3 Repository / GitHub
+### 2.3 Repository / GitHub
 
 - `REPO_MODE` (`git` or `local`)
 - `REPO_URL`
@@ -58,7 +58,7 @@
 - `GITHUB_OWNER`
 - `GITHUB_REPO`
 
-## 2.4 Executor / Model
+### 2.4 Executor / Model
 
 - `LLM_EXECUTOR` (`opencode` / `claude_code`)
 - `OPENCODE_MODEL`
@@ -78,7 +78,7 @@
 - `TESTER_MODEL`
 - `DOCSER_MODEL`
 
-## 2.5 Planner / Replan
+### 2.5 Planner / Replan
 
 - `PLANNER_USE_REMOTE`
 - `PLANNER_REPO_URL`
@@ -89,7 +89,7 @@
 - `REPLAN_WORKDIR`
 - `REPLAN_REPO_URL`
 
-## 2.6 LLM Provider Keys
+### 2.6 LLM Provider Keys
 
 - `ANTHROPIC_API_KEY`
 - `GEMINI_API_KEY`
@@ -97,7 +97,7 @@
 - `XAI_API_KEY`
 - `DEEPSEEK_API_KEY`
 
-## 2.7 主要デフォルト値（初期状態）
+### 2.7 主要デフォルト値（初期状態）
 
 - `EXECUTION_ENVIRONMENT=host`
 - `LLM_EXECUTOR=claude_code`
@@ -136,7 +136,7 @@
 
 ## 4. `/system` API と設定連動
 
-## 4.1 Preflight
+### 4.1 Preflight
 
 - `POST /system/preflight`
 - requirement 内容 + local backlog + GitHub backlog から推奨起動構成を返す
@@ -146,7 +146,7 @@ Issue 自動 task 化には明示 role が必要:
 - label: `role:worker|role:tester|role:docser`
 - body: `Agent: ...` / `Role: ...` / `## Agent` section
 
-## 4.2 Process Manager
+### 4.2 Process Manager
 
 - `GET /system/processes`
 - `GET /system/processes/:name`
@@ -154,7 +154,7 @@ Issue 自動 task 化には明示 role が必要:
 - `POST /system/processes/:name/stop`
 - `POST /system/processes/stop-all`
 
-## 4.3 Requirement / Repository Utilities
+### 4.3 Requirement / Repository Utilities
 
 - `GET /system/requirements`
 - `POST /system/requirements`
@@ -165,7 +165,7 @@ Issue 自動 task 化には明示 role が必要:
 - `GET /system/host/neofetch`
 - `GET /system/host/context`
 
-## 4.4 Maintenance
+### 4.4 Maintenance
 
 - `POST /system/cleanup`
 
@@ -185,7 +185,7 @@ Issue 自動 task 化には明示 role が必要:
 
 このため requirement 編集は「ファイル保存」だけでなく「repository 状態更新」を伴います。
 
-## 5.1 起動時の自動補完（config-store）
+### 5.1 起動時の自動補完（config-store）
 
 `ensureConfigRow()` は起動時に次の補完/正規化を行います。
 
@@ -203,7 +203,7 @@ Issue 自動 task 化には明示 role が必要:
 
 以下は DB ではなく env で制御される代表例です。
 
-## 6.1 Process restart / self-heal
+### 6.1 Process restart / self-heal
 
 - `SYSTEM_PROCESS_AUTO_RESTART`
 - `SYSTEM_PROCESS_AUTO_RESTART_DELAY_MS`
@@ -214,7 +214,7 @@ Issue 自動 task 化には明示 role が必要:
 - `SYSTEM_PROCESS_SELF_HEAL_STARTUP_GRACE_MS`
 - `SYSTEM_AGENT_LIVENESS_WINDOW_MS`
 
-## 6.2 Task retry / cooldown
+### 6.2 Task retry / cooldown
 
 - `FAILED_TASK_RETRY_COOLDOWN_MS`
 - `BLOCKED_TASK_RETRY_COOLDOWN_MS`
@@ -222,7 +222,7 @@ Issue 自動 task 化には明示 role が必要:
 - `DISPATCH_RETRY_DELAY_MS`
 - `STUCK_RUN_TIMEOUT_MS`
 
-## 6.3 Policy recovery
+### 6.3 Policy recovery
 
 - `POLICY_RECOVERY_CONFIG_PATH`
 - `POLICY_RECOVERY_CONFIG_JSON`
@@ -234,7 +234,7 @@ Issue 自動 task 化には明示 role が必要:
 - `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`
 - `AUTO_REWORK_MAX_DEPTH`
 
-## 6.4 Verification command planning
+### 6.4 Verification command planning
 
 Planner:
 

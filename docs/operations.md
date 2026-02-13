@@ -4,7 +4,7 @@
 
 ## 1. 運用で見るべき状態
 
-## 主要 task status
+### 主要 task status
 
 - `queued`
 - `running`
@@ -13,7 +13,7 @@
 - `blocked`
 - `cancelled`
 
-## 主要 blocked reason
+### 主要 blocked reason
 
 - `awaiting_judge`
 - `quota_wait`
@@ -25,13 +25,13 @@ run は失敗結果、task は次回リトライ待機を示します。
 
 ## 2. Process 運用
 
-## 起動/停止
+### 起動/停止
 
 - `POST /system/processes/:name/start`
 - `POST /system/processes/:name/stop`
 - `POST /system/processes/stop-all`
 
-## process 名
+### process 名
 
 固定:
 
@@ -73,28 +73,28 @@ pnpm runtime:hatch:disarm
 
 ## 4. 自動再起動・自己回復の関連 env
 
-## process auto-restart
+### process auto-restart
 
 - `SYSTEM_PROCESS_AUTO_RESTART`
 - `SYSTEM_PROCESS_AUTO_RESTART_DELAY_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART_WINDOW_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS`
 
-## self-heal loop
+### self-heal loop
 
 - `SYSTEM_PROCESS_SELF_HEAL`
 - `SYSTEM_PROCESS_SELF_HEAL_INTERVAL_MS`
 - `SYSTEM_PROCESS_SELF_HEAL_STARTUP_GRACE_MS`
 - `SYSTEM_AGENT_LIVENESS_WINDOW_MS`
 
-## task リトライ
+### task リトライ
 
 - `FAILED_TASK_RETRY_COOLDOWN_MS`
 - `BLOCKED_TASK_RETRY_COOLDOWN_MS`
 - `FAILED_TASK_MAX_RETRY_COUNT`
 - `DISPATCH_RETRY_DELAY_MS`
 
-## policy/rework 抑制
+### policy/rework 抑制
 
 - `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`
 - `AUTO_REWORK_MAX_DEPTH`
@@ -111,13 +111,13 @@ pnpm runtime:hatch:disarm
 
 ## 6. ログ運用
 
-## 参照
+### 参照
 
 - `GET /logs/agents/:id`
 - `GET /logs/cycle-manager`
 - `GET /logs/all`
 
-## クリア
+### クリア
 
 - `POST /logs/clear`
   - open 中ファイルは truncate、未使用ファイルは削除

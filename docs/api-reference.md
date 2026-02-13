@@ -5,7 +5,7 @@ openTiger API は Hono ベースで、Dashboard からも同じエンドポイ�
 
 ## 1. 認証とレート制限
 
-## 認証方式
+### 認証方式
 
 - `X-API-Key` (`API_KEYS`)
 - `Authorization: Bearer <token>` (`API_SECRET` または独自 validator)
@@ -20,7 +20,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `api-key` / `bearer` は常に許可
 - ローカル運用時は `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL !== "false"` で許可される設計
 
-## レート制限
+### レート制限
 
 - 既定: 1分あたり 100 リクエスト
 - Redis 利用可能時は Redis カウンタ、失敗時は in-memory にフォールバック
@@ -29,13 +29,13 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 ## 2. 主要エンドポイント一覧
 
-## Health
+### Health
 
 - `GET /health`
 - `GET /health/ready`
   - DB と Redis の疎通確認を返します
 
-## Config
+### Config
 
 - `GET /config`
   - `system_config` の現在値を返す
@@ -43,7 +43,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
   - `{ updates: Record<string, string> }`
   - 未知キーは拒否
 
-## Tasks
+### Tasks
 
 - `GET /tasks`
 - `GET /tasks/:id`
@@ -55,7 +55,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 - failed/blocked タスクには `retry` 情報が付与されます（cooldown / reason / retryCount 等）
 
-## Runs
+### Runs
 
 - `GET /runs`
 - `GET /runs/:id`
@@ -65,7 +65,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `POST /runs/:id/cancel`
 - `POST /runs/:id/artifacts`
 
-## Agents
+### Agents
 
 - `GET /agents`
 - `GET /agents/:id`
@@ -73,24 +73,24 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `POST /agents/:id/heartbeat`
 - `DELETE /agents/:id`
 
-## Plans
+### Plans
 
 - `GET /plans`
   - `planner.plan_created` イベントから plan スナップショットを返す
 
-## Judgements
+### Judgements
 
 - `GET /judgements`
 - `GET /judgements/:id/diff`
 
-## Logs
+### Logs
 
 - `GET /logs/agents/:id`
 - `GET /logs/cycle-manager`
 - `GET /logs/all`
 - `POST /logs/clear`
 
-## Webhook
+### Webhook
 
 - `POST /webhook/github`
   - `GITHUB_WEBHOOK_SECRET` があれば署名検証を行う
@@ -99,24 +99,24 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 ## 3. System API
 
-## 認証状態チェック
+### 認証状態チェック
 
 - `GET /system/github/auth`
 - `GET /system/claude/auth?environment=host|sandbox`
 
-## requirement 操作
+### requirement 操作
 
 - `GET /system/requirements`
 - `POST /system/requirements`
   - canonical path `docs/requirement.md` へ同期
   - git repository の場合は snapshot commit/push を試行
 
-## preflight / 起動判定
+### preflight / 起動判定
 
 - `POST /system/preflight`
   - requirement content + local backlog + GitHub issue/PR backlog から推奨起動構成を返す
 
-## process manager
+### process manager
 
 - `GET /system/processes`
 - `GET /system/processes/:name`
@@ -124,19 +124,19 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `POST /system/processes/:name/stop`
 - `POST /system/processes/stop-all`
 
-## GitHub repository 操作
+### GitHub repository 操作
 
 - `POST /system/github/repo`
   - repo 作成 + config 同期
 - `GET /system/github/repos`
   - 認証ユーザーでアクセス可能な repo 一覧
 
-## host 情報
+### host 情報
 
 - `GET /system/host/neofetch`
 - `GET /system/host/context`
 
-## メンテナンス
+### メンテナンス
 
 - `POST /system/cleanup`
   - runtime テーブルと queue を初期化
@@ -156,7 +156,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 ## 5. 代表レスポンス例
 
-## `POST /system/preflight`（抜粋）
+### `POST /system/preflight`（抜粋）
 
 ```json
 {
@@ -192,7 +192,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 }
 ```
 
-## `GET /system/processes`（抜粋）
+### `GET /system/processes`（抜粋）
 
 ```json
 {
