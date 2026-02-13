@@ -84,3 +84,12 @@ quota 圧は終端失敗ではなく、回復可能な外部圧として扱い�
 - 安全な並列性があるのに厳密逐次処理へ固定
 - 手動限定の recovery フロー
 - 固定分 watchdog だけに依存した回復設計
+
+## 7. 停滞時の実務導線
+
+このページは設計思想を示すため、実際の切り分けは次の順で確認します。
+
+1. `docs/state-model.md`（状態語彙）
+2. `docs/flow.md`（遷移と回復経路）
+3. `docs/operations.md`（API 手順と運用ショートカット）
+4. `docs/agent/README.md`（担当 agent と実装追跡）
