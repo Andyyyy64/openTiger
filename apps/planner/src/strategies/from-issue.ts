@@ -299,6 +299,7 @@ export async function generateTasksFromIssue(
       title: task.title,
       goal: task.goal,
       role: explicitRole,
+      kind: "code",
       context: {
         ...task.context,
         notes: `GitHub Issue #${issue.number}: ${issue.title}\n${task.context?.notes ?? ""}`,
@@ -340,6 +341,7 @@ export function generateSimpleTaskFromIssue(
     title: issue.title,
     goal: `Resolve GitHub Issue #${issue.number}`,
     role: explicitRole,
+    kind: "code",
     context: {
       specs: issue.body,
       notes: `Labels: ${issue.labels.join(", ") || "none"}`,

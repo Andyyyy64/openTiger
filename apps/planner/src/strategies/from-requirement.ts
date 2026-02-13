@@ -203,6 +203,7 @@ function resolveDependencies(
     title: task.title,
     goal: task.goal,
     role: (task.role as "worker" | "tester" | undefined) ?? "worker",
+    kind: "code",
     context: task.context,
     allowedPaths: task.allowedPaths,
     commands: task.commands,
@@ -280,6 +281,7 @@ export function generateSimpleTasks(requirement: Requirement): TaskGenerationRes
       title: `Implement: ${criterion.slice(0, 50)}${criterion.length > 50 ? "..." : ""}`,
       goal: criterion,
       role: "worker",
+      kind: "code",
       context: {
         specs: requirement.goal,
         notes: requirement.notes,
