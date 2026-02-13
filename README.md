@@ -139,7 +139,7 @@ Recommended order for onboarding:
 - `docs/config.md`
 - `docs/api-reference.md`
 - `docs/operations.md`
-- `docs/api-reference.md` の「2.2 API 起点の逆引き（状態語彙 -> 遷移 -> 担当 -> 実装）」
+- `docs/api-reference.md` "2.2 API-based lookup (state vocabulary -> transition -> owner -> implementation)"
 
 Runtime behavior reference:
 
