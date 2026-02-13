@@ -62,6 +62,18 @@
 - `model`
 - `model_loop`
 
+## 2.2 Task Retry Reason の見方（実運用）
+
+実運用では、次の値を優先して見れば一次判断しやすくなります。
+
+| `retry.reason` | 意味 | 主な確認先 |
+| --- | --- | --- |
+| `awaiting_judge` | judge 待ちで停滞中 | `GET /judgements`, `GET /system/processes`, `GET /logs/all` |
+| `quota_wait` | quota cooldown 待ち | `GET /tasks`, `GET /runs`, `GET /logs/all` |
+| `needs_rework` | rework ループへ移行中 | `GET /runs`, `GET /judgements`, `GET /logs/all` |
+| `cooldown_pending` | cooldown 中（自動再試行前） | `GET /tasks` の `retryAt/retryInSeconds` |
+| `retry_due` | 再試行可能時刻に到達 | `GET /tasks`, `GET /logs/all` |
+
 ## 3. Run Status
 
 - `running`

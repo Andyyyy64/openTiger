@@ -32,6 +32,17 @@
 `failed` と `retry countdown` が同時に見えるのは正常です。  
 run は失敗結果、task は次回リトライ待機を示します。
 
+### retry.reason の一次判断
+
+`GET /tasks` の `retry.reason` は、次のように使い分けると切り分けが速くなります。
+
+| reason | まず見る先 |
+| --- | --- |
+| `awaiting_judge` | `GET /judgements`, `GET /system/processes`, `GET /logs/all` |
+| `quota_wait` | `GET /tasks`, `GET /runs`, `GET /logs/all` |
+| `needs_rework` | `GET /runs`, `GET /judgements`, `GET /logs/all` |
+| `cooldown_pending` / `retry_due` | `GET /tasks` の `retryAt` / `retryInSeconds` |
+
 ## 2. Process 運用
 
 ### 起動/停止

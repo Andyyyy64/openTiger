@@ -108,6 +108,20 @@ system 制御系は `canControlSystem()` で許可判定されます。
   - `cooldown_pending`, `retry_due`, `awaiting_judge`, `quota_wait`, `needs_rework`
 - 詳細な語彙（`retry_exhausted`, `non_retryable_failure`, `unknown`, `failureCategory`）は `docs/state-model.md` を参照してください。
 
+`retry` 例:
+
+```json
+{
+  "autoRetry": true,
+  "reason": "quota_wait",
+  "retryAt": "2026-02-13T11:20:00.000Z",
+  "retryInSeconds": 42,
+  "cooldownMs": 120000,
+  "retryCount": 3,
+  "retryLimit": -1
+}
+```
+
 ### Runs
 
 - `GET /runs`
