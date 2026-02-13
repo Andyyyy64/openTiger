@@ -278,6 +278,19 @@ function normalizeCommandDrivenRules(
   return normalized;
 }
 
+function buildCommandDrivenAllowedPathSet(config: PolicyRecoveryConfig): Set<string> {
+  const set = new Set<string>();
+  for (const rule of config.commandDrivenAllowedPathRules) {
+    for (const path of rule.paths) {
+      const normalized = normalizePathForMatch(path).toLowerCase();
+      if (normalized.length > 0) {
+        set.add(normalized);
+      }
+    }
+  }
+  return set;
+}
+
 export async function loadPolicyRecoveryConfig(repoPath: string): Promise<PolicyRecoveryConfig> {
   const fromDefaults = getDefaultPolicyRecoveryConfig();
   const fromFile = await loadPolicyRecoveryFileConfig(repoPath);
@@ -468,10 +481,24 @@ export function resolvePolicyViolationAutoAllowPaths(
   const infraTask = hasBuildOrInfraSignal(task, config);
   const allowRootLevelOnInfraTask = config.mode === "aggressive";
   const allowInfraFilesOnInfraTask = config.mode !== "conservative";
+  const allowCommandDrivenPathsInAggressiveMode = config.mode === "aggressive";
+  const commandDrivenAllowedPathSet = buildCommandDrivenAllowedPathSet(config);
   const candidates: string[] = [];
 
   for (const path of outsidePaths) {
+    const normalizedPath = normalizePathForMatch(path);
+    if (!normalizedPath) {
+      continue;
+    }
     if (contextFiles.has(path)) {
+      candidates.push(path);
+      continue;
+    }
+    if (
+      allowCommandDrivenPathsInAggressiveMode &&
+      isSafePath(normalizedPath) &&
+      commandDrivenAllowedPathSet.has(normalizedPath.toLowerCase())
+    ) {
       candidates.push(path);
       continue;
     }
