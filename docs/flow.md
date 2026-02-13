@@ -166,3 +166,13 @@ Example:
 - task retry: `quota 79s` (next recovery attempt is already scheduled)
 
 This is active recovery, not a dead stop.
+
+## 関連する Agent 仕様
+
+- `docs/agent/planner.md`
+- `docs/agent/dispatcher.md`
+- `docs/agent/worker.md`
+- `docs/agent/tester.md`
+- `docs/agent/docser.md`
+- `docs/agent/judge.md`
+- `docs/agent/cycle-manager.md`

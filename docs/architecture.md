@@ -6,6 +6,7 @@ openTiger は、複数エージェントと状態管理テーブルを使って�
 
 - `docs/flow.md`
 - `docs/startup-patterns.md`
+- `docs/agent/README.md`
 - `docs/mode.md`
 - `docs/execution-mode.md`
 
@@ -42,6 +43,7 @@ flowchart LR
 - dependency 正規化
 - policy 適用
 - doc gap 検知
+- 詳細: `docs/agent/planner.md`
 
 ### Dispatcher (`@openTiger/dispatcher`)
 
@@ -49,6 +51,7 @@ flowchart LR
 - lease 取得
 - 実行エージェント割り当て
 - process / docker 起動
+- 詳細: `docs/agent/dispatcher.md`
 
 ### Worker / Tester / Docser (`@openTiger/worker`)
 
@@ -56,12 +59,14 @@ flowchart LR
 - 変更検証（commands + policy）
 - commit/push/PR 作成（git mode）
 - 失敗時の recovery 分岐
+- 詳細: `docs/agent/worker.md`, `docs/agent/tester.md`, `docs/agent/docser.md`
 
 ### Judge (`@openTiger/judge`)
 
 - 成功 run の評価（CI / policy / LLM）
 - approve / request_changes 判断
 - merge / retry / autofix タスク生成
+- 詳細: `docs/agent/judge.md`
 
 ### Cycle Manager (`@openTiger/cycle-manager`)
 
@@ -69,6 +74,7 @@ flowchart LR
 - failed/blocked リカバリ
 - issue backlog 同期
 - replan 判定
+- 詳細: `docs/agent/cycle-manager.md`
 
 ### Dashboard (`@openTiger/dashboard`)
 
