@@ -23,7 +23,7 @@
 - judge は judge backlog があるか、実行系 agent が動作中のとき起動
 - planner process 数は最大 1
 
-代表的な warning の意味:
+代表的な警告の意味:
 
 - `Issue backlog detected (...)`
   - backlog-first モードが有効
@@ -36,11 +36,11 @@
 
 1. Task が `queued` に入る
 2. Dispatcher が lease を取得し task を `running` にする
-3. 実行 role（`worker/tester/docser`）が task と verify command を実行
-   - LLM 実行前に worker は次から compact prompt context を構築:
-     - static instructions（`apps/worker/instructions/*.md`）
-     - runtime snapshot（`.opentiger/context/agent-profile.json`）
-     - failure delta（`.opentiger/context/context-delta.json`）
+3. 実行 role（`worker/tester/docser`）が task と検証コマンドを実行
+   - LLM 実行前に worker は次から圧縮プロンプトコンテキストを構築:
+     - 静的 instructions（`apps/worker/instructions/*.md`）
+     - 実行時 snapshot（`.opentiger/context/agent-profile.json`）
+     - 失敗差分（`.opentiger/context/context-delta.json`）
    - prompt 膨張を避けるため、context 注入は固定文字数の budget で制御
 4. 成功時:
    - review が必要なら通常 `blocked(awaiting_judge)`
@@ -86,8 +86,8 @@
 
 poll loop ごとに:
 
-- 期限切れ lease の cleanup
-- dangling lease の cleanup
+- 期限切れ lease のクリーンアップ
+- dangling lease のクリーンアップ
 - dead-agent lease の reclaim
 - active run がない orphaned `running` task の回復
 
@@ -113,27 +113,27 @@ task error 時:
 Queue 重複実行防止:
 
 - task ごとの runtime lock
-- lock 競合時の startup-window guard（誤った即時 requeue を回避）
+- lock 競合時の起動直後ガード（誤った即時 requeue を回避）
 
-## 7. Judge の non-approve / merge-failure 経路
+## 7. Judge の非承認 / マージ失敗経路
 
-- Non-approve で AutoFix task 作成、および親 task -> `blocked(needs_rework)` への遷移が起こる場合あり
-- Approve 後でも merge conflict があれば `[AutoFix-Conflict] PR #...` を生成する場合あり
-- conflict autofix の enqueue に失敗した場合は judge retry fallback を使用
+- 非承認で AutoFix task 作成、および親 task -> `blocked(needs_rework)` への遷移が起こる場合あり
+- 承認後でもマージ競合があれば `[AutoFix-Conflict] PR #...` を生成する場合あり
+- 競合 autofix の enqueue に失敗した場合は judge retry fallback を使用
 
 ## 8. Cycle Manager の自己回復
 
 周期ジョブの主な内容:
 
 - timeout run の cancellation
-- lease cleanup
+- lease クリーンアップ
 - offline agent の reset
 - failed task の cooldown requeue（failure classification 付き。unsupported/missing verification command は block ではなく command 調整へ）
 - blocked task の reason 別 cooldown 回復
 - backlog ordering gate
   - `local task backlog > 0`: task 実行を継続
   - `local task backlog == 0`: `/system/preflight` を実行して issue backlog を import/sync
-  - `issue backlog == 0`: planner の replan を起動
+  - `issue backlog == 0`: planner の再計画（replan）を起動
 
 起動判定・replan 判定の責務分離は `docs/startup-patterns.md` を参照してください。
 
@@ -159,13 +159,13 @@ policy のライフサイクルと自己成長の詳細:
 
 - `docs/policy-recovery.md`
 
-## 9. Host snapshot と context refresh
+## 9. Host snapshot と context 更新
 
 - API の host context endpoint:
   - `GET /system/host/neofetch`
   - `GET /system/host/context`
 - snapshot の主ソースは `neofetch`。必要時は `uname -srmo` に fallback
-- snapshot は `.opentiger/context/agent-profile.json` に cache され、TTL/fingerprint で refresh
+- snapshot は `.opentiger/context/agent-profile.json` に cache され、TTL/fingerprint で更新
 
 ## 10. `Failed` と `Retry` が共存する理由
 
