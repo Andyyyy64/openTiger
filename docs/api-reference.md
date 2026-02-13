@@ -7,6 +7,8 @@ openTiger API は Hono ベースで、Dashboard からも同じエンドポイ�
 
 - `docs/config.md`
 - `docs/operations.md`
+- `docs/agent/dispatcher.md`
+- `docs/agent/cycle-manager.md`
 
 ## 1. 認証とレート制限
 
@@ -235,3 +237,8 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `stop-all` は running run を cancel/requeue し、agent 状態も更新します
 - sandbox 実行時、worker/tester/docser の host process は通常起動しません
 - `/system/*` と `/logs/clear` は system-control 権限での呼び出しを前提にしてください
+
+運用トラブル時の補助資料:
+
+- dispatch/lease 問題: `docs/agent/dispatcher.md`
+- 収束/再計画問題: `docs/agent/cycle-manager.md`

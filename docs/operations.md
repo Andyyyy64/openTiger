@@ -7,6 +7,8 @@
 - `docs/flow.md`
 - `docs/config.md`
 - `docs/api-reference.md`
+- `docs/agent/dispatcher.md`
+- `docs/agent/cycle-manager.md`
 
 ## 1. 運用で見るべき状態
 
@@ -151,7 +153,22 @@ pnpm runtime:hatch:disarm
 4. `logs/all` で dispatcher / cycle-manager / judge / worker の相関を確認
 5. 必要なら `stop-all` -> 再起動
 
-## 8. sandbox 運用時の追加確認
+## 8. 症状別の確認先
+
+- task が `queued` から進まない
+  - `dispatcher` の稼働状態、lease 異常、role 別 idle agent 数を確認
+  - 参照: `docs/agent/dispatcher.md`
+- `awaiting_judge` が長時間解消しない
+  - judge process と pending judge run の有無を確認
+  - 参照: `docs/agent/judge.md`
+- 失敗後に復帰しない
+  - cycle-manager の cleanup/requeue 実行ログを確認
+  - 参照: `docs/agent/cycle-manager.md`
+- Planner が再起動しない
+  - backlog gate（issue/pr/local task）と replan 条件を確認
+  - 参照: `docs/startup-patterns.md`
+
+## 9. sandbox 運用時の追加確認
 
 - `EXECUTION_ENVIRONMENT=sandbox` の場合、worker/tester/docser は docker 実行
 - `SANDBOX_DOCKER_IMAGE` と `SANDBOX_DOCKER_NETWORK` を確認
