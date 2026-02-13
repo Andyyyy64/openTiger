@@ -211,3 +211,43 @@ pnpm runtime:hatch:disarm
 - 影響範囲を切り分けられない大規模設定変更
 - process 状態が不整合で、部分再起動では収束しない場合
 - 実行中 task を一度安全側に巻き戻して仕切り直したい場合
+
+## 11. 変更後の確認チェックリスト
+
+設定変更や再起動後は、以下を順に確認すると反映漏れを検知しやすくなります。
+
+### 11.1 Process 状態
+
+- `GET /system/processes`
+  - 対象 process が `running` で復帰している
+  - 意図しない process が `stopped` のまま残っていない
+
+### 11.2 Agent 状態
+
+- `GET /agents`
+  - 再起動した role の agent が再登録されている
+  - `offline` が継続し続ける agent がない
+
+### 11.3 Task / Run の収束
+
+- `GET /tasks`
+  - `running` が長時間固定されていない
+  - `blocked` が想定外に増えていない
+- `GET /runs`
+  - 再起動直後の run が連続 `failed` になっていない
+
+### 11.4 ログ確認
+
+- `GET /logs/all`
+  - 対象 process で設定値読込エラーが出ていない
+  - Dispatcher/Worker/Judge/Cycle Manager の heartbeat が継続している
+
+### 11.5 判定の目安
+
+- 正常:
+  - queue が流れ、`queued -> running -> done/blocked` の遷移が再開
+  - `awaiting_judge` backlog が増え続けない
+- 要追加調査:
+  - 同一エラーで `failed` が連続
+  - 特定 role だけ agent が復帰しない
+  - `quota_wait`/`needs_rework` が急増する
