@@ -41,11 +41,11 @@ Cycle Manager は長時間運用を前提に、システム全体の収束を維
 ## 4. 異常検知と回復
 
 - 監視対象:
-  - high failure rate
-  - cost spike
-  - stuck task
-  - no progress
-  - agent timeout
+  - 高失敗率（high failure rate）
+  - コスト急増（cost spike）
+  - 停滞 task（stuck task）
+  - 進捗停止（no progress）
+  - agent タイムアウト（agent timeout）
 - `stuck_task` など一部 critical anomaly では cycle restart を実施
 - anomaly は重複通知 cooldown を持つ
 

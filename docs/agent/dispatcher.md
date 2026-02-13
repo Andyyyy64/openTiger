@@ -35,7 +35,7 @@ Dispatcher は `queued` task を安全に `running` へ進め、適切な実行 
 
 ## 4. 選択ロジックとガードレール
 
-- `awaiting_judge` backlog は観測し、設定により hard block 可能
+- `awaiting_judge` backlog は観測し、設定により強制ブロック（hard block）可能
 - PR レビュー専用 task が `queued` に紛れた場合は `blocked(awaiting_judge)` へ戻す
 - recent failure/cancel は cooldown 中の再配布を抑止
 - `targetArea` 衝突タスクは同時実行しない
@@ -44,9 +44,9 @@ Dispatcher は `queued` task を安全に `running` へ進め、適切な実行 
 ## 5. 回復動作
 
 - expired lease を解放し task を `queued` へ戻す
-- queued task に残る dangling lease を回収
+- queued task に残る dangling lease（取り残し lease）を回収
 - `running` だが active run が無い task を回復
-- heartbeat が途切れた agent の lease を reclaim
+- heartbeat が途切れた agent の lease を reclaim（再回収）
 - `quota_wait` backlog 検知時は同時実行数を一時的に 1 に制限
 
 ## 6. 起動モード

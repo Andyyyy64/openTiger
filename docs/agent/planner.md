@@ -20,7 +20,7 @@ Planner は requirement/issue から実行可能な task 群を生成し、重�
 
 - requirement の内容/ファイル
 - 既存 backlog と dependency 情報
-- Judge の feedback / failure hints
+- Judge の feedback / failure hints（失敗ヒント）
 - repository inspection の結果
 - policy recovery ヒント（過去イベント由来）
 
@@ -29,7 +29,7 @@ Planner は requirement/issue から実行可能な task 群を生成し、重�
 1. requirement の解析と妥当性確認（parse/validate）
 2. 既存コンテキスト（feedback/hints）読込
 3. inspection 実行（LLM）
-4. task 生成（LLM + fallback）
+4. task 生成（LLM + fallback 経路）
 5. dependency の正規化
 6. role / allowedPaths / command policy 適用
 7. verification command 補強
@@ -66,7 +66,7 @@ Planner は task 生成時に検証コマンドを補強できます。
 
 ## 7. 失敗モデル
 
-- inspection は retry + quota-aware
+- inspection は retry + quota-aware で実行
 - inspection/task generation が失敗しても fallback planning を試行
 - hard failure 時も既存タスクを壊さず終了
 

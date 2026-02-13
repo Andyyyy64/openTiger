@@ -8,7 +8,7 @@
 
 ## 1. 役割
 
-Judge は successful run を評価し、task を `done` へ収束させるか、再実行/再修正へ分岐させる責務を持ちます。
+Judge は成功した run（successful run）を評価し、task を `done` へ収束させるか、再実行/再修正へ分岐させる責務を持ちます。
 
 責務外:
 
