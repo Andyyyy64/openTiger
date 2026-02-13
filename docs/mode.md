@@ -5,10 +5,22 @@ openTiger の挙動は、リポジトリモード / 判定モード / 実行環�
 関連:
 
 - `docs/config.md`
+- `docs/state-model.md`
+- `docs/flow.md`
+- `docs/operations.md`
 - `docs/startup-patterns.md`
 - `docs/execution-mode.md`
 - `docs/agent/dispatcher.md`
 - `docs/agent/judge.md`
+
+### 状態詰まり時の読み順（モード設定から入る場合）
+
+モード設定を確認したあとに停滞を追う場合は、次の順で確認してください。
+
+1. `docs/state-model.md`（状態語彙の確認）
+2. `docs/flow.md`（遷移と回復経路）
+3. `docs/operations.md`（API 確認手順と運用ショートカット）
+4. `docs/agent/README.md`（担当 agent と実装追跡ルート）
 
 ## 1. リポジトリモード（`REPO_MODE`）
 

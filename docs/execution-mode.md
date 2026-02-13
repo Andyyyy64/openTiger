@@ -7,8 +7,19 @@ sandbox モードで `claude_code` を安全に運用するための前提を説
 
 - `docs/mode.md`
 - `docs/config.md`
+- `docs/state-model.md`
+- `docs/flow.md`
 - `docs/operations.md`
 - `docs/agent/dispatcher.md`
+
+### 状態詰まり時の読み順（実行環境設定から入る場合）
+
+`host/sandbox` の設定確認から障害調査へ進む場合は、次の順で辿ると切り分けしやすくなります。
+
+1. `docs/state-model.md`（状態語彙）
+2. `docs/flow.md`（実行時遷移と回復）
+3. `docs/operations.md`（API 手順と運用ショートカット）
+4. `docs/agent/README.md`（担当 agent と実装追跡）
 
 ## 1. 概要
 
