@@ -75,6 +75,22 @@ system 制御系 API は `canControlSystem()` で許可判定されます。
 運用時の確認順（シーケンス）は `docs/operations.md` の  
 「変更後の確認チェックリスト」を一次参照にしてください。
 
+## 2.2 API 起点で状態詰まりを逆引きする導線
+
+API で異常を見つけたあと、状態語彙 -> 遷移 -> 担当 agent -> 実装へ進む最短導線です。
+
+| API で見つけた症状 | 次に読むページ |
+| --- | --- |
+| `GET /tasks` で `queued`/`running` が滞留 | `docs/state-model.md` 7章 -> `docs/flow.md` 2章/5章/6章 |
+| `GET /tasks` で `awaiting_judge` が増加 | `docs/state-model.md` 2章/7章 -> `docs/flow.md` 3章/4章/7章 |
+| `GET /tasks` で `quota_wait`/`needs_rework` が連鎖 | `docs/state-model.md` 2.2章 -> `docs/flow.md` 6章/8章 |
+| `GET /tasks` で `issue_linking` が継続 | `docs/state-model.md` 7章 -> `docs/flow.md` 3章 -> `docs/startup-patterns.md` |
+
+補足:
+
+- 運用ショートカット表は `docs/operations.md` の「8.1 状態語彙から実装までの逆引き」を参照してください。
+- 担当 agent と実装入口は `docs/agent/README.md` の「実装追跡の最短ルート」を参照してください。
+
 ---
 
 ## 3. 主要エンドポイント一覧
