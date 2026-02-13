@@ -167,7 +167,7 @@ pnpm runtime:hatch:disarm
 
 ## 8. 症状別の確認先
 
-症状から最短で一次診断したい場合は `docs/state-model.md` の「状態遷移で詰まりやすいパターン（一次診断）」を先に確認してください。
+症状から最短で一次診断したい場合は `docs/state-model.md` の「状態遷移で停滞しやすいパターン（一次診断）」を先に確認してください。
 
 - task が `queued` から進まない
   - `dispatcher` の稼働状態、lease 異常、role 別 idle agent 数を確認

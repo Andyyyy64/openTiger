@@ -119,7 +119,7 @@
   - `packages/core/src/domain/cycle.ts`
   - `packages/db/src/schema.ts`（`cycles.status`）
 
-## 7. 状態遷移で詰まりやすいパターン（一次診断）
+## 7. 状態遷移で停滞しやすいパターン（一次診断）
 
 | 症状 | まず見る状態/値 | 主な確認 API | 先に確認する担当領域 |
 | --- | --- | --- | --- |

@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | 「1. Task Status」「2. Task Block Reason」 | 「2. 基本ライフサイクル」「3. 回復で使われる Blocked Reason」 | Dispatcher / Worker / Judge |
 | 「2.2 Task Retry Reason の見方（実運用）」 | 「6. Worker の失敗処理」「8. Cycle Manager の自己回復」 | Worker / Cycle Manager |
-| 「7. 状態遷移で詰まりやすいパターン」 | 「5. Dispatcher の回復レイヤ」「7. Judge の非承認 / マージ失敗経路」 | Dispatcher / Judge |
+| 「7. 状態遷移で停滞しやすいパターン」 | 「5. Dispatcher の回復レイヤ」「7. Judge の非承認 / マージ失敗経路」 | Dispatcher / Judge |
 
 ## 1. 起動 / preflight
 

@@ -69,7 +69,7 @@ system 制御系 API は `canControlSystem()` で許可判定されます。
 | agent 稼働 | `GET /agents` | `offline` の偏り、ロールごとの稼働数 |
 | task 滞留 | `GET /tasks` | `queued` 固着、`blocked` の急増 |
 | run 異常 | `GET /runs` | 同一エラーの連続 `failed`、`running` 長期化 |
-| judge 詰まり | `GET /judgements` | non-approve の連鎖、未処理 backlog |
+| judge 停滞 | `GET /judgements` | non-approve の連鎖、未処理 backlog |
 | 相関ログ | `GET /logs/all` | dispatcher/worker/judge/cycle-manager の時系列 |
 
 運用時の確認順（シーケンス）は `docs/operations.md` の  
