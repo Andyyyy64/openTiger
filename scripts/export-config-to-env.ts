@@ -44,6 +44,9 @@ const CONFIG_FIELDS: ConfigField[] = [
     defaultValue: "30000",
   },
   { key: "OPENCODE_MAX_QUOTA_WAITS", column: "opencodeMaxQuotaWaits", defaultValue: "-1" },
+  { key: "CODEX_MODEL", column: "codexModel", defaultValue: "gpt-5.3-codex" },
+  { key: "CODEX_MAX_RETRIES", column: "codexMaxRetries", defaultValue: "3" },
+  { key: "CODEX_RETRY_DELAY_MS", column: "codexRetryDelayMs", defaultValue: "5000" },
   {
     key: "CLAUDE_CODE_PERMISSION_MODE",
     column: "claudeCodePermissionMode",
@@ -204,6 +207,15 @@ async function ensureConfigColumns(): Promise<void> {
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "codex_model" text DEFAULT 'gpt-5.3-codex' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "codex_max_retries" text DEFAULT '3' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "codex_retry_delay_ms" text DEFAULT '5000' NOT NULL`,
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_small_model" text DEFAULT 'google/gemini-2.5-flash' NOT NULL`,
