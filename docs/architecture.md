@@ -4,7 +4,9 @@ openTiger は、複数エージェントと状態管理テーブルを使って�
 
 関連:
 
+- `docs/state-model.md`
 - `docs/flow.md`
+- `docs/operations.md`
 - `docs/startup-patterns.md`
 - `docs/agent/README.md`
 - `docs/mode.md`
@@ -27,6 +29,15 @@ flowchart LR
 ```
 
 このループは「停止しない」ことを優先し、失敗時に状態遷移で回復戦略を切り替える設計です。
+
+### 障害時に読む順番（全体像からトリアージへ）
+
+アーキテクチャを把握したあと、障害調査へ進むときは次の順が最短です。
+
+1. `docs/state-model.md` で状態語彙を確定する
+2. `docs/flow.md` で遷移と回復経路を確認する
+3. `docs/operations.md` で API 手順と運用ショートカットを実行する
+4. `docs/agent/README.md` で担当 agent と実装追跡ルートを特定する
 
 ## 1. コンポーネント
 
