@@ -246,6 +246,7 @@ pnpm runtime:hatch:disarm
 - `GET /agents`
   - 再起動した role の agent が再登録されている
   - `offline` が継続し続ける agent がない
+  - `planner/worker/tester/docser/judge` が対象（Dispatcher/Cycle Manager は `GET /system/processes` で確認）
 
 ### 11.3 Task / Run の収束
 
