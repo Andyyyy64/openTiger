@@ -105,7 +105,7 @@ pnpm run up
    - start from `docs/state-model.md` triage patterns
    - then follow `docs/operations.md` for detailed runbook
 
-### 状態詰まりを最短で追う導線
+### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装）
 
 - API で異常を見つけた場合:
   - `docs/api-reference.md` の「2.2 API 起点の逆引き（状態語彙 -> 遷移 -> 担当 -> 実装）」
