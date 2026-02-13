@@ -108,7 +108,7 @@ pnpm run up
 ### 状態詰まりを最短で追う導線
 
 - API で異常を見つけた場合:
-  - `docs/api-reference.md` の「2.2 API 起点で状態詰まりを逆引きする導線」
+  - `docs/api-reference.md` の「2.2 API 起点の逆引き（状態語彙 -> 遷移 -> 担当 -> 実装）」
 - 状態語彙から遷移を追う場合:
   - `docs/state-model.md` -> `docs/flow.md`
 - 担当 agent と実装ファイルまで追う場合:
@@ -139,7 +139,7 @@ Start here:
 - `docs/config.md`
 - `docs/api-reference.md`
 - `docs/operations.md`
-- `docs/api-reference.md` の「2.2 API 起点で状態詰まりを逆引きする導線」
+- `docs/api-reference.md` の「2.2 API 起点の逆引き（状態語彙 -> 遷移 -> 担当 -> 実装）」
 
 Execution behavior:
 

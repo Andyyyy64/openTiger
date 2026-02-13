@@ -14,7 +14,7 @@
 | 障害対応したい | `docs/operations.md` + `docs/flow.md` |
 | 状態詰まりを最短で一次診断したい | `docs/state-model.md` |
 | `retry.reason` の意味を即確認したい | `docs/state-model.md` |
-| 状態語彙から担当 agent と実装まで追いたい | `docs/state-model.md` -> `docs/flow.md` -> `docs/agent/README.md` |
+| 状態語彙 -> 遷移 -> 担当 -> 実装で追いたい | `docs/state-model.md` -> `docs/flow.md` -> `docs/agent/README.md` |
 | 起動判定の式を確認したい | `docs/startup-patterns.md` |
 | agent の役割差分を確認したい | `docs/agent/README.md` |
 
@@ -46,7 +46,7 @@
 
 状態詰まり時のショートカット:
 
-- `docs/state-model.md` -> `docs/flow.md` -> `docs/operations.md`（8.1）-> `docs/agent/README.md`
+- `docs/state-model.md` -> `docs/flow.md` -> `docs/operations.md`（8.1「状態語彙 -> 遷移 -> 担当 -> 実装 の逆引き」）-> `docs/agent/README.md`
 
 ### レーンC: 実装追従（ソース差分を追う）
 
