@@ -59,3 +59,18 @@
 - 状態の意味を確認したい: このページ
 - どの条件で遷移するか知りたい: `docs/flow.md`
 - 起動時の判定式を知りたい: `docs/startup-patterns.md`
+
+## 7. 状態遷移で詰まりやすいパターン（一次診断）
+
+| 症状 | まず見る状態/値 | 先に確認する担当領域 |
+| --- | --- | --- |
+| `queued` が長時間減らない | `agents` の idle/busy、lease、dependency/targetArea 競合 | Dispatcher |
+| `running` が長時間固定 | 対応 run の `status`, startedAt、worker ログ | Worker/Tester/Docser |
+| `awaiting_judge` が増え続ける | pending judge run、judge process 稼働 | Judge |
+| `quota_wait` が連鎖する | cooldown 待機時間、同時実行数、モデル quota | Worker + Dispatcher |
+| `needs_rework` が連鎖する | non-approve 理由、policy/verification failure の内容 | Judge + Worker + Cycle Manager |
+
+補足:
+
+- 具体的な API 確認順は `docs/operations.md` の「変更後の確認チェックリスト」を参照してください。
+- 担当 agent の切り分けに迷う場合は `docs/agent/README.md` の FAQ を参照してください。
