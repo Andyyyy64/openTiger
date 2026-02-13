@@ -161,7 +161,7 @@ Design policy:
 - API authentication middleware supports:
   - `X-API-Key` (`API_KEYS`)
   - `Authorization: Bearer <token>` (`API_SECRET` or custom validator)
-- `/health` and GitHub webhook endpoint are auth-skipped.
+- `/health` と GitHub webhook endpoint（`/webhook/github`、prefix 構成時は `/api/webhook/github`）は auth-skipped.
 - System-control (`/system/*`, `POST /logs/clear`) access is checked by `canControlSystem()`:
   - `api-key` / `bearer`: always allowed
   - local insecure fallback: allowed unless `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL=false`

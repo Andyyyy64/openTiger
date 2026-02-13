@@ -21,7 +21,8 @@ openTiger API は Hono ベースで、Dashboard からも同じエンドポイ�
 認証スキップ:
 
 - `/health*`
-- `/webhook/github`（および `/api/webhook/github`）
+- `/webhook/github`
+- `/api/webhook/github`（API prefix 配下で公開する構成向け互換パス）
 
 system 制御系は `canControlSystem()` で許可判定されます。
 
