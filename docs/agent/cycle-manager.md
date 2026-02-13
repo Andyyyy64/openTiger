@@ -29,6 +29,12 @@ Out of scope:
 - Stats loop
   - Cycle stats and system state updates
 
+Research orchestrator loop:
+
+- Runs in monitor loop (`runResearchOrchestrationTick`)
+- Drives `planning/collecting/challenging/composing/judging/reworking`
+- Queues targeted research stage tasks until quality convergence
+
 ## 3. Cycle Lifecycle
 
 - Restore existing `running` cycle on startup (or auto-start if none)
@@ -56,6 +62,10 @@ Out of scope:
 - Replan only when backlog is empty and conditions such as planner idle are met
 - Requirement hash + repo head are signed to suppress no-diff replan per config
 
+Research-specific backlog note:
+
+- Research jobs with active stages are converged via research orchestration before normal replan progression.
+
 ## 6. CLI Commands
 
 - `status`
@@ -72,6 +82,7 @@ Out of scope:
 - Backlog sync and replan: `apps/cycle-manager/src/main/backlog-preflight.ts`, `apps/cycle-manager/src/main/replan.ts`
 - Anomaly detection: `apps/cycle-manager/src/monitors/anomaly-detector.ts`
 - Recovery cleanup: `apps/cycle-manager/src/cleaners/cleanup.ts`, `apps/cycle-manager/src/cleaners/cleanup-retry.ts`
+- Research orchestration: `apps/cycle-manager/src/main/research-orchestrator.ts`
 
 ## 8. Main Configuration
 
@@ -92,3 +103,12 @@ Out of scope:
 - `CYCLE_MAX_DURATION_MS`
 - `CYCLE_MAX_TASKS`
 - `CYCLE_MAX_FAILURE_RATE`
+- `RESEARCH_ENABLED`
+- `RESEARCH_PLANNER_PENDING_WINDOW_MS`
+- `RESEARCH_MAX_CONCURRENCY`
+- `RESEARCH_MAX_DEPTH`
+- `RESEARCH_MIN_EVIDENCE_PER_CLAIM`
+- `RESEARCH_MIN_DISTINCT_DOMAINS_PER_CLAIM`
+- `RESEARCH_REQUIRE_COUNTER_EVIDENCE`
+- `RESEARCH_MIN_REPORT_CONFIDENCE`
+- `RESEARCH_MIN_VERIFIABLE_RATIO`

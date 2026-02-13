@@ -41,6 +41,12 @@ Out of scope:
 - Tasks with conflicting `targetArea` are not run concurrently
 - Tasks with unresolved `dependencies` are not dispatched
 
+Research-specific:
+
+- Research tasks are `kind=research` and usually `role=worker`
+- `targetArea` is claim-scoped (`research:<jobId>:claim:<claimId>`) to avoid same-claim overlap
+- Queue and lease guards are identical to code tasks
+
 ## 5. Recovery Behavior
 
 - Release expired leases and return tasks to `queued`

@@ -24,6 +24,16 @@ Notes:
 - `running`: in execution via lease/run
 - `blocked`: waiting for recovery per block reason
 
+## 1.1 Task Kind
+
+- `code`
+- `research`
+
+Notes:
+
+- `code` follows git/local implementation pipeline
+- `research` follows non-git evidence synthesis pipeline
+
 ## 2. Task Block Reason
 
 - `awaiting_judge`
@@ -97,6 +107,34 @@ Notes:
 - `running`
 - `completed`
 - `aborted`
+
+## 5.1 Research Job Status and Stage
+
+Research job status (`research_jobs.status`):
+
+- `queued`
+- `running`
+- `blocked`
+- `done`
+- `failed`
+- `cancelled`
+
+Research task stage (`tasks.context.research.stage`):
+
+- `plan`
+- `collect`
+- `challenge`
+- `write`
+
+Research orchestrator stage (`research_jobs.metadata.orchestrator.stage`) commonly observed:
+
+- `planning`
+- `collecting`
+- `challenging`
+- `composing`
+- `judging`
+- `reworking`
+- `completed`
 
 ## 6. Usage
 

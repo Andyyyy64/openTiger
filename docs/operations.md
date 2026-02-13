@@ -78,6 +78,10 @@ Dynamic:
 - `tester-1...`
 - `docser-1...`
 
+Research-specific:
+
+- `planner` may be started with `researchJobId` payload for planner-first decomposition
+
 ## 3. Runtime Hatch and Self-Recovery
 
 openTiger controls process self-recovery via runtime hatch (event-based).
@@ -164,6 +168,13 @@ Usage:
 4. Check dispatcher / cycle-manager / judge / worker correlation in `logs/all`
 5. If needed, `stop-all` -> restart
 
+TigerResearch-specific first triage:
+
+1. `GET /research/jobs`
+2. `GET /research/jobs/:id`
+3. `GET /tasks` (filter `kind=research`)
+4. `GET /runs` + `GET /logs/all`
+
 ## 8. Symptom-Based Check Targets
 
 For fastest initial diagnosis, first check "Patterns prone to stalls (initial diagnosis)" in `docs/state-model.md`.
@@ -186,6 +197,10 @@ For fastest initial diagnosis, first check "Patterns prone to stalls (initial di
 - Planner not restarting
   - Check backlog gate (issue/pr/local task) and replan conditions
   - Ref: `docs/startup-patterns.md`
+- Research runs repeatedly cancelled
+  - Check API restart events (`SIGTERM`) and managed process churn
+  - Confirm `OPENTIGER_PRESERVE_MANAGED_ON_DEV_SIGTERM` behavior in `dev`
+  - Ref: `docs/research.md`
 
 Note:
 
@@ -300,6 +315,7 @@ After config changes or restarts, check in order to detect missing updates:
   - Same error causing consecutive `failed`
   - Only certain roles not recovering agents
   - `quota_wait`/`needs_rework` surging
+  - Research jobs stuck in `planning` with no claims/tasks growth
 
 ### 11.6 Minimal Check Commands (curl)
 

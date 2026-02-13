@@ -14,6 +14,14 @@ This page provides a cross-agent index for comparing responsibilities and differ
 | Judge         | Evaluate successful run and govern                 | run/artifacts, CI/policy/LLM results       | `done` or retry/rework/autofix                        | Circuit breaker, autofix, `awaiting_judge` restoration |
 | Cycle Manager | Convergence monitoring, recovery, replan control   | system state, events, anomaly/cost         | cycle update, cleanup, replan trigger                 | Critical anomaly restart, cooldown retry               |
 
+Research path mapping:
+
+- Planner: query decomposition for `researchJobId`
+- Dispatcher: parallel claim-level task dispatch (`kind=research`)
+- Worker: non-git research execution (`plan/collect/challenge/write`)
+- Judge: research quality verdict and `needs_rework` branching
+- Cycle Manager: research stage orchestration and targeted rework queueing
+
 Note:
 
 - This comparison table organizes by "responsibility unit."
@@ -145,3 +153,4 @@ Related:
 - `docs/state-model.md`
 - `docs/policy-recovery.md`
 - `docs/verification.md`
+- `docs/research.md`
