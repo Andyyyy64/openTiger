@@ -128,6 +128,7 @@
 | `awaiting_judge` が増え続ける | pending judge run、judge process 稼働 | `GET /judgements`, `GET /system/processes`, `GET /logs/all` | Judge |
 | `quota_wait` が連鎖する | cooldown 待機時間、同時実行数、モデル quota | `GET /tasks`, `GET /runs`, `GET /logs/all` | Worker + Dispatcher |
 | `needs_rework` が連鎖する | non-approve 理由、policy/verification failure の内容 | `GET /judgements`, `GET /runs`, `GET /logs/all` | Judge + Worker + Cycle Manager |
+| `issue_linking` が解消しない | issue 連携メタデータ不足、import/link 処理失敗 | `GET /tasks`, `POST /system/preflight`, `GET /logs/all` | Planner + API |
 
 補足:
 

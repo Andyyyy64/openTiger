@@ -181,6 +181,9 @@ pnpm runtime:hatch:disarm
 - verification command 失敗が繰り返される
   - run の失敗内容と verification recovery の有無を確認
   - 参照: `docs/verification.md`
+- task が `issue_linking` で止まり続ける
+  - issue 連携情報の解決失敗や import 未収束を確認し、必要に応じて preflight を再実行
+  - 参照: `docs/startup-patterns.md`
 - Planner が再起動しない
   - backlog gate（issue/pr/local task）と replan 条件を確認
   - 参照: `docs/startup-patterns.md`

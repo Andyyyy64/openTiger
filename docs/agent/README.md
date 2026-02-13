@@ -108,6 +108,9 @@ blocked reason:
 - Q. replan が走らない。Dispatcher を見るべきか？
   - A. replan 判定は Cycle Manager の責務です。Planner busy/backlog gate/interval/no-diff 条件を確認します。
   - 初動 API: `GET /tasks`, `GET /plans`, `GET /logs/cycle-manager`
+- Q. `issue_linking` が解消しない。Judge 側の問題か？
+  - A. まず Planner/API の issue 連携処理を確認します。Judge は `issue_linking` 解消の主体ではありません。
+  - 初動 API: `GET /tasks`, `POST /system/preflight`, `GET /logs/all`
 
 関連:
 
