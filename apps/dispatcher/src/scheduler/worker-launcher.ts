@@ -130,44 +130,6 @@ function resolveClaudeAuthMounts(): DockerMount[] {
   return mounts;
 }
 
-function resolveCodexAuthMounts(): DockerMount[] {
-  const hostHome = process.env.HOME?.trim();
-  const codexAuthOverride = process.env.CODEX_AUTH_DIR?.trim();
-  const candidates: Array<DockerMount | null> = [
-    codexAuthOverride
-      ? {
-          hostPath: resolve(codexAuthOverride),
-          containerPath: "/home/worker/.codex",
-          readonly: true,
-        }
-      : null,
-    hostHome
-      ? {
-          hostPath: join(hostHome, ".codex"),
-          containerPath: "/home/worker/.codex",
-          readonly: true,
-        }
-      : null,
-  ];
-
-  const mounts: DockerMount[] = [];
-  const seenContainerPaths = new Set<string>();
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue;
-    }
-    if (seenContainerPaths.has(candidate.containerPath)) {
-      continue;
-    }
-    if (!existsSync(candidate.hostPath)) {
-      continue;
-    }
-    mounts.push(candidate);
-    seenContainerPaths.add(candidate.containerPath);
-  }
-  return mounts;
-}
-
 function isClaudeExecutor(value: string | undefined): boolean {
   if (!value) {
     return false;
@@ -176,14 +138,6 @@ function isClaudeExecutor(value: string | undefined): boolean {
   return (
     normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
   );
-}
-
-function isCodexExecutor(value: string | undefined): boolean {
-  if (!value) {
-    return false;
-  }
-  const normalized = value.trim().toLowerCase();
-  return normalized === "codex" || normalized === "openai_codex" || normalized === "openai-codex";
 }
 
 // Launch Worker as process
@@ -201,7 +155,6 @@ async function _launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResul
     LOCAL_WORKTREE_ROOT: process.env.LOCAL_WORKTREE_ROOT,
     // Explicitly override/preserve important environment variables
     GITHUB_TOKEN: process.env.GITHUB_TOKEN,
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     OPENCODE_MODEL: process.env.OPENCODE_MODEL,
     OPENCODE_CONFIG: process.env.OPENCODE_CONFIG ?? DEFAULT_OPENCODE_CONFIG_PATH,
@@ -212,11 +165,6 @@ async function _launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResul
     CLAUDE_CODE_ALLOWED_TOOLS: process.env.CLAUDE_CODE_ALLOWED_TOOLS,
     CLAUDE_CODE_DISALLOWED_TOOLS: process.env.CLAUDE_CODE_DISALLOWED_TOOLS,
     CLAUDE_CODE_APPEND_SYSTEM_PROMPT: process.env.CLAUDE_CODE_APPEND_SYSTEM_PROMPT,
-    CODEX_MODEL: process.env.CODEX_MODEL,
-    CODEX_MAX_RETRIES: process.env.CODEX_MAX_RETRIES,
-    CODEX_RETRY_DELAY_MS: process.env.CODEX_RETRY_DELAY_MS,
-    CODEX_ECHO_STDOUT: process.env.CODEX_ECHO_STDOUT,
-    CODEX_SKIP_GIT_REPO_CHECK: process.env.CODEX_SKIP_GIT_REPO_CHECK,
     DATABASE_URL: process.env.DATABASE_URL,
     REDIS_URL: process.env.REDIS_URL,
     ...config.env,
@@ -302,7 +250,6 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
     REDIS_URL: process.env.REDIS_URL ?? "",
     GEMINI_API_KEY: process.env.GEMINI_API_KEY ?? "",
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY ?? "",
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
     OPENCODE_MODEL: process.env.OPENCODE_MODEL ?? "",
     LLM_EXECUTOR: process.env.LLM_EXECUTOR ?? "",
     CLAUDE_CODE_PERMISSION_MODE: process.env.CLAUDE_CODE_PERMISSION_MODE ?? "",
@@ -311,11 +258,6 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
     CLAUDE_CODE_ALLOWED_TOOLS: process.env.CLAUDE_CODE_ALLOWED_TOOLS ?? "",
     CLAUDE_CODE_DISALLOWED_TOOLS: process.env.CLAUDE_CODE_DISALLOWED_TOOLS ?? "",
     CLAUDE_CODE_APPEND_SYSTEM_PROMPT: process.env.CLAUDE_CODE_APPEND_SYSTEM_PROMPT ?? "",
-    CODEX_MODEL: process.env.CODEX_MODEL ?? "",
-    CODEX_MAX_RETRIES: process.env.CODEX_MAX_RETRIES ?? "",
-    CODEX_RETRY_DELAY_MS: process.env.CODEX_RETRY_DELAY_MS ?? "",
-    CODEX_ECHO_STDOUT: process.env.CODEX_ECHO_STDOUT ?? "",
-    CODEX_SKIP_GIT_REPO_CHECK: process.env.CODEX_SKIP_GIT_REPO_CHECK ?? "",
     GITHUB_TOKEN: process.env.GITHUB_TOKEN ?? "",
     OPENTIGER_LOG_DIR: DOCKER_WORKER_LOG_DIR,
     ...config.env,
@@ -336,12 +278,7 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
     `${hostLogDir}:${DOCKER_WORKER_LOG_DIR}`,
   ];
   const claudeAuthMounts = resolveClaudeAuthMounts();
-  const codexAuthMounts = resolveCodexAuthMounts();
   for (const mount of claudeAuthMounts) {
-    const readonlySuffix = mount.readonly ? ":ro" : "";
-    mountArgs.push("--volume", `${mount.hostPath}:${mount.containerPath}${readonlySuffix}`);
-  }
-  for (const mount of codexAuthMounts) {
     const readonlySuffix = mount.readonly ? ":ro" : "";
     mountArgs.push("--volume", `${mount.hostPath}:${mount.containerPath}${readonlySuffix}`);
   }
@@ -353,12 +290,6 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
     console.warn(
       "[Dispatcher] Claude executor is enabled for sandbox, but no host Claude auth directory was found. " +
         "Run `claude /login` on host or set CLAUDE_AUTH_DIR / CLAUDE_CONFIG_DIR.",
-    );
-  }
-  if (isCodexExecutor(allEnv.LLM_EXECUTOR) && codexAuthMounts.length === 0 && !allEnv.OPENAI_API_KEY) {
-    console.warn(
-      "[Dispatcher] Codex executor is enabled for sandbox, but no host Codex auth directory was found. " +
-        "Run `codex login` on host or set CODEX_AUTH_DIR (or configure OPENAI_API_KEY).",
     );
   }
 

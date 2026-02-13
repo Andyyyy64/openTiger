@@ -286,14 +286,6 @@ export interface ClaudeAuthStatus {
   message?: string;
 }
 
-export interface CodexAuthStatus {
-  available: boolean;
-  authenticated: boolean;
-  executionEnvironment?: "host" | "sandbox";
-  checkedAt: string;
-  message?: string;
-}
-
 export interface GitHubAuthStatus {
   available: boolean;
   authenticated: boolean;
@@ -400,10 +392,6 @@ export const systemApi = {
   claudeAuthStatus: (environment?: "host" | "sandbox") =>
     fetchApi<ClaudeAuthStatus>(
       `/system/claude/auth${environment ? `?environment=${encodeURIComponent(environment)}` : ""}`,
-    ),
-  codexAuthStatus: (environment?: "host" | "sandbox") =>
-    fetchApi<CodexAuthStatus>(
-      `/system/codex/auth${environment ? `?environment=${encodeURIComponent(environment)}` : ""}`,
     ),
   githubAuthStatus: () => fetchApi<GitHubAuthStatus>("/system/github/auth"),
   neofetch: () => fetchApi<HostNeofetchInfo>("/system/host/neofetch"),
