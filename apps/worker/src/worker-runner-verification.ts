@@ -554,8 +554,8 @@ async function attemptGeneratedArtifactRecovery(params: {
   repoMode: "git" | "local";
   allowNoChanges: boolean;
 }): Promise<VerifyResult | null> {
-  const violatingPaths = extractPolicyViolationPaths(params.verifyResult.policyViolations).filter((path) =>
-    isLikelyGeneratedArtifactPath(path),
+  const violatingPaths = extractPolicyViolationPaths(params.verifyResult.policyViolations).filter(
+    (path) => isLikelyGeneratedArtifactPath(path),
   );
   if (violatingPaths.length === 0) {
     return null;
@@ -570,9 +570,7 @@ async function attemptGeneratedArtifactRecovery(params: {
   }
   const learnedPaths = await persistGeneratedPathHints(params.repoPath, violatingPaths);
   if (learnedPaths.length > 0) {
-    console.log(
-      `[Worker] Learned generated artifact path hints: ${learnedPaths.join(", ")}`,
-    );
+    console.log(`[Worker] Learned generated artifact path hints: ${learnedPaths.join(", ")}`);
   }
 
   return verifyChanges({

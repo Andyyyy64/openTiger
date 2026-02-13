@@ -1,11 +1,7 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import {
-  judgementsApi,
-  type JudgementEvent,
-  type JudgementPayload,
-} from "../lib/api";
+import { judgementsApi, type JudgementEvent, type JudgementPayload } from "../lib/api";
 import { getCiStatusColor } from "../ui/status";
 
 export const JudgementsPage: React.FC = () => {
@@ -254,7 +250,10 @@ const PolicyRecoveryCard = ({
   event,
 }: {
   event: JudgementEvent & {
-    type: "task.policy_recovery_decided" | "task.policy_recovery_applied" | "task.policy_recovery_denied";
+    type:
+      | "task.policy_recovery_decided"
+      | "task.policy_recovery_applied"
+      | "task.policy_recovery_denied";
     payload: JudgementPayload | null;
   };
 }) => {
@@ -306,7 +305,11 @@ const PolicyRecoveryCard = ({
             <span className="text-zinc-500">LATENCY</span>
             <span>{typeof payload.latencyMs === "number" ? `${payload.latencyMs} ms` : "n/a"}</span>
             <span className="text-zinc-500">CONFIDENCE</span>
-            <span>{typeof payload.confidence === "number" ? `${Math.round(payload.confidence * 100)}%` : "n/a"}</span>
+            <span>
+              {typeof payload.confidence === "number"
+                ? `${Math.round(payload.confidence * 100)}%`
+                : "n/a"}
+            </span>
             <span className="text-zinc-500">SUMMARY</span>
             <span className="wrap-break-word">{payload.recoverySummary ?? "n/a"}</span>
           </div>
@@ -382,10 +385,11 @@ function isJudgeReviewEvent(
   return event.type === "judge.review";
 }
 
-function isPolicyRecoveryEvent(
-  event: JudgementEvent,
-): event is JudgementEvent & {
-  type: "task.policy_recovery_decided" | "task.policy_recovery_applied" | "task.policy_recovery_denied";
+function isPolicyRecoveryEvent(event: JudgementEvent): event is JudgementEvent & {
+  type:
+    | "task.policy_recovery_decided"
+    | "task.policy_recovery_applied"
+    | "task.policy_recovery_denied";
   payload: JudgementPayload | null;
 } {
   return (

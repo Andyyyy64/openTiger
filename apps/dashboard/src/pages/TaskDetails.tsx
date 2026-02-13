@@ -64,7 +64,9 @@ export const TaskDetailsPage: React.FC = () => {
         continue;
       }
       const applications = plan.policyRecoveryHintApplications ?? [];
-      const matchedByIndex = applications.filter((application) => application.taskIndex === taskIndex);
+      const matchedByIndex = applications.filter(
+        (application) => application.taskIndex === taskIndex,
+      );
       if (matchedByIndex.length > 0) {
         for (const application of matchedByIndex) {
           evidence.push({
@@ -80,7 +82,9 @@ export const TaskDetailsPage: React.FC = () => {
       if (!taskTitle) {
         continue;
       }
-      const matchedByTitle = applications.filter((application) => application.taskTitle === taskTitle);
+      const matchedByTitle = applications.filter(
+        (application) => application.taskTitle === taskTitle,
+      );
       for (const application of matchedByTitle) {
         evidence.push({
           planId: plan.id,
@@ -355,8 +359,8 @@ export const TaskDetailsPage: React.FC = () => {
                           key={`${entry.planId}-${entryIndex}-hint-${hintIndex}`}
                           className="text-xs text-zinc-400 wrap-break-word"
                         >
-                          {hint.path} | reason={hint.reason} | role={hint.hintRole ?? "any"} |
-                          seen={hint.hintCount}
+                          {hint.path} | reason={hint.reason} | role={hint.hintRole ?? "any"} | seen=
+                          {hint.hintCount}
                         </div>
                       ))}
                     </div>
