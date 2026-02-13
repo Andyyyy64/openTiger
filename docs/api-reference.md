@@ -1,6 +1,6 @@
 # インターフェース参照（API）
 
-openTiger API は Hono ベースで、Dashboard からも同じエンドポイントを利用します。  
+openTiger API は Hono ベースで、ダッシュボードからも同じエンドポイントを利用します。  
 ベース URL は通常 `http://localhost:4301` です。
 
 関連:
@@ -16,15 +16,15 @@ openTiger API は Hono ベースで、Dashboard からも同じエンドポイ�
 ### 認証方式
 
 - `X-API-Key` (`API_KEYS`)
-- `Authorization: Bearer <token>` (`API_SECRET` または独自 validator)
+- `Authorization: Bearer <token>`（`API_SECRET` または独自バリデーター）
 
 認証スキップ:
 
 - `/health*`
 - `/webhook/github`
-- `/api/webhook/github`（API prefix 配下で公開する構成向け互換パス）
+- `/api/webhook/github`（API プレフィックス配下で公開する構成向け互換パス）
 
-system 制御系は `canControlSystem()` で許可判定されます。
+system 制御系 API は `canControlSystem()` で許可判定されます。
 
 - `api-key` / `bearer` は常に許可
 - ローカル運用時は `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL !== "false"` で許可される設計
@@ -66,7 +66,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 | --- | --- | --- |
 | 全体ヘルス | `GET /health/ready` | DB/Redis の疎通可否 |
 | process 状態 | `GET /system/processes` | `running/stopped` の偏り、必要 process の欠落 |
-| agent 稼働 | `GET /agents` | `offline` の偏り、role ごとの稼働数 |
+| agent 稼働 | `GET /agents` | `offline` の偏り、ロールごとの稼働数 |
 | task 滞留 | `GET /tasks` | `queued` 固着、`blocked` の急増 |
 | run 異常 | `GET /runs` | 同一エラーの連続 `failed`、`running` 長期化 |
 | judge 詰まり | `GET /judgements` | non-approve の連鎖、未処理 backlog |
@@ -103,7 +103,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 補足:
 
-- failed/blocked タスクには `retry` 情報が付与されます（cooldown / reason / retryCount 等）
+- failed/blocked タスクには `retry` 情報が付与されます（cooldown / reason / retryCount など）
 - `retry.reason` の主な値:
   - `cooldown_pending`, `retry_due`, `awaiting_judge`, `quota_wait`, `needs_rework`
 - 詳細な語彙（`retry_exhausted`, `non_retryable_failure`, `unknown`, `failureCategory`）は `docs/state-model.md` を参照してください。
@@ -171,12 +171,12 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 - 受信イベントは `events` テーブルへ記録
 - `issues` / `pull_request` / `push` / `check_run` / `check_suite` を処理
-- PR close+merge 時、PR body に `[task:<uuid>]` が含まれる場合は該当 task を `done` 更新
+- PR が close+merge されたとき、PR 本文に `[task:<uuid>]` が含まれる場合は該当 task を `done` 更新
 - それ以外は主に記録/通知用途で、planner/dispatcher の主駆動は `/system/preflight` 系にあります
 
 ---
 
-## 4. System API
+## 4. システム API
 
 ### 認証状態チェック
 
@@ -187,13 +187,13 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 - `GET /system/requirements`
 - `POST /system/requirements`
-  - canonical path `docs/requirement.md` へ同期
-  - git repository の場合は snapshot commit/push を試行
+  - 正式保存先 `docs/requirement.md` へ同期
+  - `git` repository の場合は snapshot commit/push を試行
 
 ### 起動前判定（preflight）
 
 - `POST /system/preflight`
-  - requirement content + local backlog + GitHub issue/PR backlog から推奨起動構成を返す
+  - requirement 内容 + local backlog + GitHub issue/PR backlog から推奨起動構成を返す
 
 ### プロセスマネージャー（system）
 
@@ -206,7 +206,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 ### リポジトリ操作（GitHub）
 
 - `POST /system/github/repo`
-  - repo 作成 + config 同期
+  - リポジトリ作成 + config 同期
 - `GET /system/github/repos`
   - 認証ユーザーでアクセス可能な repo 一覧
 
@@ -231,7 +231,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
   - local task backlog なし
 - issue -> task 自動生成は「明示 role」が必須です
   - label: `role:worker|role:tester|role:docser`
-  - または body に `Agent:` / `Role:` 記述
+  - または本文（body）に `Agent:` / `Role:` を記述
 
 ## 6. 代表レスポンス例
 
@@ -298,7 +298,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 ## 7. 実装連携時の注意
 
-- command 実行 API を外部から直接叩く設計ではなく、process manager 経由で制御します
+- command 実行 API を外部から直接呼ぶ設計ではなく、process manager 経由で制御します
 - `stop-all` は running run を cancel/requeue し、agent 状態も更新します
 - sandbox 実行時、worker/tester/docser の host process は通常起動しません
 - `/system/*` と `POST /logs/clear` は `canControlSystem()` の許可条件で実行されます
