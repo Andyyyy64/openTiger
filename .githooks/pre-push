@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+branch="${OPENTIGER_GIT_HOOK_BRANCH:-$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)}"
+
+if [[ -z "$branch" ]]; then
+  exit 0
+fi
+
+if [[ "$branch" == "main" || "$branch" == "master" ]]; then
+  if [[ "${ALLOW_MAIN_PUSH:-0}" == "1" ]]; then
+    echo "Bypassing protected-branch push guard for '$branch' because ALLOW_MAIN_PUSH=1"
+    exit 0
+  fi
+
+  cat <<EOF
+Push blocked: direct pushes to '$branch' are disabled.
+Create/use a feature branch (e.g. cursor/<topic>-668c) and push there.
+If this push is intentional, re-run with ALLOW_MAIN_PUSH=1.
+EOF
+  exit 1
+fi
+
+exit 0

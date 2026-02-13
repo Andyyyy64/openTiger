@@ -314,3 +314,22 @@ curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/tasks
 curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/runs
 curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/logs/all
 ```
+
+## 12. Local Git Safety Guard
+
+To prevent accidental direct pushes to protected branches (`main` / `master`), install repository hooks:
+
+```bash
+pnpm run git-hooks:install
+```
+
+Expected behavior:
+
+- Push to feature branches is allowed
+- Push from `main` / `master` is blocked locally
+
+For exceptional cases only, you can bypass once:
+
+```bash
+ALLOW_MAIN_PUSH=1 git push -u origin <branch>
+```
