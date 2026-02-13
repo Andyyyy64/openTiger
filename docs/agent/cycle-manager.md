@@ -1,4 +1,4 @@
-# Cycle Manager Agent
+# サイクルマネージャー（Cycle Manager）Agent 仕様
 
 関連:
 

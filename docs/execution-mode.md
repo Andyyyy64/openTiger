@@ -1,4 +1,4 @@
-# Execution Environment Guide
+# 実行環境ガイド
 
 このドキュメントは、`EXECUTION_ENVIRONMENT` が実行時挙動にどう影響するかと、  
 sandbox モードで `claude_code` を安全に運用するための前提を説明します。
@@ -140,7 +140,7 @@ query（任意）:
 - `SANDBOX_DOCKER_IMAGE` で指定した image を build/pull する
 - 既定 tag とローカル/CI の運用方針を揃える
 
-### Docker daemon error
+### Docker daemon error が出る場合
 
 - Docker Desktop または `dockerd` を起動する
 - `docker` 実行権限を確認する

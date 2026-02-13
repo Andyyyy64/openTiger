@@ -1,4 +1,4 @@
-# Worker Agent
+# ワーカー（Worker）Agent 仕様
 
 関連:
 

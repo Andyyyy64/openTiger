@@ -1,4 +1,4 @@
-# Docser Agent
+# ドキュメント担当（Docser）Agent 仕様
 
 関連:
 

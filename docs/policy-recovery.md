@@ -1,4 +1,4 @@
-# Policy Recovery と AllowedPaths の自己成長
+# ポリシー回復（Policy Recovery）と AllowedPaths の自己成長
 
 このドキュメントは、openTiger が policy violation で停止しないための回復手順と、  
 回復結果を次回 planning に反映する自己成長の仕組みを説明します。

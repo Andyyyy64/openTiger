@@ -1,4 +1,4 @@
-# Operating Modes
+# 運用モード（Operating Modes）
 
 openTiger の挙動は、repository mode / judge mode / execution environment の組み合わせで制御されます。
 

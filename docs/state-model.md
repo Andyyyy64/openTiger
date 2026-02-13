@@ -1,4 +1,4 @@
-# State Model Reference
+# 状態モデル参照
 
 このページは、openTiger の主要ステータスと遷移用語の参照用ドキュメントです。  
 状態遷移フローそのものは `docs/flow.md` を参照してください。

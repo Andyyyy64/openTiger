@@ -1,4 +1,4 @@
-# Agent Specs Index
+# エージェント仕様索引
 
 このページは、openTiger の各 agent の責務と違いを横断的に確認するための索引です。
 

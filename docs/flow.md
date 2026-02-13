@@ -1,6 +1,6 @@
-# Operation Flow（Current）
+# 実行フロー（Current）
 
-## Scope
+## スコープ
 
 このページは、task/run を中心とした**実行時の状態遷移**を説明します。  
 起動時の preflight 判定式や全パターン表は `docs/startup-patterns.md` を参照してください。

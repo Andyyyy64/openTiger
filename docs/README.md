@@ -1,4 +1,4 @@
-# openTiger Documentation Index
+# ドキュメント索引（openTiger）
 
 このディレクトリは、openTiger の実装仕様を「導線」と「参照」に分けて整理しています。  
 ソースコードを真として、運用に必要な情報を段階的に読める構成です。

@@ -1,4 +1,4 @@
-# Architecture Overview
+# アーキテクチャ概要
 
 openTiger は、複数エージェントと状態管理テーブルを使って自律実行を継続するオーケストレーションシステムです。
 
@@ -84,7 +84,7 @@ flowchart LR
 
 ## 2. データストア
 
-### PostgreSQL
+### PostgreSQL（永続ストア）
 
 主要テーブル:
 
@@ -97,7 +97,7 @@ flowchart LR
 - `cycles`
 - `config`
 
-### Redis (BullMQ)
+### メッセージキュー（Redis / BullMQ）
 
 - task queue
 - dead-letter queue

@@ -1,4 +1,4 @@
-# Verification Command Strategy
+# 検証（Verification）コマンド戦略
 
 openTiger は Planner と Worker の両方で検証コマンドを扱います。  
 このドキュメントは、`task.commands` の生成・実行・回復の実装仕様をまとめます。
@@ -29,7 +29,7 @@ Planner の検証コマンドモード:
 - `PLANNER_VERIFY_PLAN_TIMEOUT_SECONDS`
 - `PLANNER_VERIFY_AUGMENT_NONEMPTY`
 
-### verify contract
+### verify contract の扱い
 
 `verify.contract.json` の例:
 

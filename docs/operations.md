@@ -1,4 +1,4 @@
-# Operations Guide
+# 運用ガイド
 
 このドキュメントは、openTiger を継続運用するための実務向け手順をまとめています。
 
@@ -103,14 +103,14 @@ pnpm runtime:hatch:disarm
 
 ## 4. 自動再起動・自己回復の関連 env
 
-### process auto-restart
+### process 自動再起動
 
 - `SYSTEM_PROCESS_AUTO_RESTART`
 - `SYSTEM_PROCESS_AUTO_RESTART_DELAY_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART_WINDOW_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS`
 
-### self-heal loop
+### self-heal ループ
 
 - `SYSTEM_PROCESS_SELF_HEAL`
 - `SYSTEM_PROCESS_SELF_HEAL_INTERVAL_MS`

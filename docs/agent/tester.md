@@ -1,4 +1,4 @@
-# Tester Agent
+# テスター（Tester）Agent 仕様
 
 関連:
 

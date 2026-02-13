@@ -1,4 +1,4 @@
-# Startup and Runtime Pattern Matrix
+# 起動と実行時のパターン行列
 
 このドキュメントは、実装に合わせて次の判定パターンを整理したものです。
 
@@ -17,7 +17,7 @@
 - `docs/agent/judge.md`
 - `docs/agent/cycle-manager.md`
 
-## Scope
+## スコープ
 
 このページは次だけを扱います。
 
@@ -27,7 +27,7 @@
 
 run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `docs/flow.md` を参照してください。
 
-## Decision Inputs
+## 判定入力
 
 | 記号 | 意味 | 取得元 |
 | --- | --- | --- |
@@ -36,7 +36,7 @@ run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `do
 | `P` | PR/Judge backlog が存在する | `openPrCount > 0 OR pendingJudgeTaskCount > 0` |
 | `L` | ローカル task backlog が存在する | `queued/running/failed/blocked > 0` |
 
-## Decision Ownership
+## 判定責務
 
 | 判定 | 主担当コンポーネント |
 | --- | --- |
@@ -46,7 +46,7 @@ run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `do
 | run 評価と PR merge 系分岐 | Judge |
 | backlog 収束、preflight sync、replan 起動判定 | Cycle Manager |
 
-## Start-Time Rules
+## 起動時ルール
 
 現在の判定式:
 
@@ -61,7 +61,7 @@ run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `do
 
 - `Requirements empty and no issue/PR backlog found`
 
-## Exhaustive Pattern Classes
+## パターンクラス一覧
 
 `R/I/P/L` の 16 組み合わせは、実運用上は次のクラスに集約できます（同じ出力は統合）。
 
@@ -80,7 +80,7 @@ run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `do
 - `L=0` で `P=1` の場合は dispatcher/worker を起動しなくても Judge が起動対象になります。Judge が停止中なら system process self-heal が backlog を検知して自動再起動します。
 - `R=1` 単独で planner を起動できるのは、`I/P/L` がすべて 0 のときだけです。
 
-## Planner Prehook Guard
+## プランナー（Planner）起動ガード
 
 `POST /system/processes/planner/start` を直接呼んだ場合でも、次のいずれかが真なら planner 起動は `409` で拒否されます。
 
@@ -90,7 +90,7 @@ run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `do
 
 これにより、Start UI を経由しない起動でも同じ優先順が維持されます。
 
-## Runtime Convergence Loop (Cycle Manager)
+## 実行時収束ループ（Cycle Manager）
 
 `cycle-manager` 稼働中は次の順で収束を進めます。
 
@@ -100,7 +100,7 @@ run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `do
 4. Only when `L=0` and `I=0`, evaluate replan gates.
 5. さらに replan 固有ガード（planner busy / recent active / pending judge / interval / no-diff）を満たした場合のみ replan を実行します。
 
-## State Transition Diagram
+## 状態遷移図
 
 ```mermaid
 stateDiagram-v2
@@ -129,7 +129,7 @@ stateDiagram-v2
   PlannerRun --> RunningLoop
 ```
 
-## Important Edge Patterns
+## 重要なエッジパターン
 
 | パターン | 何が起きるか |
 | --- | --- |

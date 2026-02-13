@@ -1,4 +1,4 @@
-# System Configuration Guide
+# システム設定ガイド
 
 このドキュメントは、openTiger の設定を「DB 管理設定」と「env-only 設定」に分けて整理します。  
 設定の一次ソースは以下です。
@@ -14,7 +14,7 @@
 - Dashboard の system settings から更新
 - `scripts/export-config-to-env.ts` で `.env` へ同期可能
 
-### env-only
+### env-only 設定
 
 - プロセス起動時にのみ参照される設定
 - `config` テーブルには保存されない

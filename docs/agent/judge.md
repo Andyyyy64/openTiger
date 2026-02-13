@@ -1,4 +1,4 @@
-# Judge Agent
+# ジャッジ（Judge）Agent 仕様
 
 関連:
 

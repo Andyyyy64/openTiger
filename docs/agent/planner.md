@@ -1,4 +1,4 @@
-# Planner Agent
+# プランナー（Planner）Agent 仕様
 
 関連:
 

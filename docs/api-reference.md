@@ -1,4 +1,4 @@
-# API Reference
+# API リファレンス
 
 openTiger API は Hono ベースで、Dashboard からも同じエンドポイントを利用します。  
 ベース URL は通常 `http://localhost:4301` です。
@@ -79,13 +79,13 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 ## 3. 主要エンドポイント一覧
 
-### Health
+### ヘルスチェック（Health）
 
 - `GET /health`
 - `GET /health/ready`
   - DB と Redis の疎通確認を返します
 
-### Config
+### 設定（Config）
 
 - `GET /config`
   - `system_config` の現在値を返す
@@ -93,7 +93,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
   - `{ updates: Record<string, string> }`
   - 未知キーは拒否
 
-### Tasks
+### タスク（Tasks）
 
 - `GET /tasks`
 - `GET /tasks/:id`
@@ -122,7 +122,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 }
 ```
 
-### Runs
+### 実行履歴（Runs）
 
 - `GET /runs`
 - `GET /runs/:id`
@@ -132,7 +132,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `POST /runs/:id/cancel`
 - `POST /runs/:id/artifacts`
 
-### Agents
+### エージェント（Agents）
 
 - `GET /agents`
 - `GET /agents/:id`
@@ -145,24 +145,24 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `GET /agents` は `planner/worker/tester/docser/judge` の稼働状態を返します。
 - Dispatcher / Cycle Manager は process として管理されるため、`GET /system/processes` で確認してください。
 
-### Plans
+### プラン（Plans）
 
 - `GET /plans`
   - `planner.plan_created` イベントから plan スナップショットを返す
 
-### Judgements
+### 判定（Judgements）
 
 - `GET /judgements`
 - `GET /judgements/:id/diff`
 
-### Logs
+### ログ（Logs）
 
 - `GET /logs/agents/:id`
 - `GET /logs/cycle-manager`
 - `GET /logs/all`
 - `POST /logs/clear`
 
-### Webhook
+### Webhook（GitHub 連携）
 
 - `POST /webhook/github`
   - `GITHUB_WEBHOOK_SECRET` があれば署名検証を行う
@@ -195,7 +195,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `POST /system/preflight`
   - requirement content + local backlog + GitHub issue/PR backlog から推奨起動構成を返す
 
-### process manager
+### プロセスマネージャー（system）
 
 - `GET /system/processes`
 - `GET /system/processes/:name`

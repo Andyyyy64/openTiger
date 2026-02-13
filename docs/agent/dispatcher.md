@@ -1,4 +1,4 @@
-# Dispatcher Agent
+# ディスパッチャー（Dispatcher）Agent 仕様
 
 関連:
 

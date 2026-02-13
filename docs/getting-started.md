@@ -1,4 +1,4 @@
-# Getting Started
+# はじめに（Getting Started）
 
 このガイドは、openTiger を初回起動して最初の自律実行を開始するまでの最短手順です。
 
@@ -27,7 +27,7 @@ pnpm run setup
 
 ## 3. 認証（初回のみ）
 
-### GitHub
+### GitHub 連携
 
 デフォルトは `GITHUB_AUTH_MODE=gh` です。
 
@@ -106,7 +106,7 @@ pnpm run up
 - Start ページの repo manager から既存 repo を選択、または新規作成
 - `REPO_MODE=git` の場合は `REPO_URL` と `GITHUB_OWNER/REPO` が必要
 
-### Claude auth warning
+### Claude auth warning への対処
 
 - host 実行: `claude /login` を再実行
 - sandbox 実行: host の認証ディレクトリがマウントされることを確認
