@@ -1,7 +1,7 @@
 # Execution Environment Guide
 
 This document explains how `EXECUTION_ENVIRONMENT` affects runtime behavior and  
-the prerequisites for running `claude_code` safely in sandbox mode.
+the prerequisites for running `claude_code` / `codex` safely in sandbox mode.
 
 Related:
 
@@ -39,6 +39,7 @@ Internally it maps to launch mode:
 - Process manager startup flow (`/system/processes/:name/start`)
 - Dispatcher worker launch
 - Claude auth check API (`/system/claude/auth`)
+- Codex auth check API (`/system/codex/auth`)
 
 ## 3. Behavior by Mode
 
@@ -46,6 +47,7 @@ Internally it maps to launch mode:
 
 - Worker/Tester/Docser run as host processes
 - Claude auth check runs on host (`claude -p ...`)
+- Codex auth check runs on host (`codex exec ...`)
 - Suited for fast local development iteration
 
 ### 3.2 `sandbox`
@@ -53,6 +55,7 @@ Internally it maps to launch mode:
 - Task execution runs inside Docker container
 - Host Worker/Tester/Docser startup is skipped
 - Claude auth check runs in container (`docker run ... claude -p ...`)
+- Codex auth check runs in container (`docker run ... codex exec ...`)
 - Suited for higher isolation requirements
 
 ## 4. Sandbox Prerequisites
@@ -63,6 +66,7 @@ Sandbox worker image must include:
 
 - `opencode-ai`
 - `@anthropic-ai/claude-code`
+- `@openai/codex`
 
 Default image:
 
@@ -104,7 +108,27 @@ Recommended steps:
 
 If auth mount is not found and `ANTHROPIC_API_KEY` is not set, dispatcher logs a warning.
 
-## 6. DB/Redis Connectivity from Sandbox
+## 6. Codex Auth in Sandbox
+
+When host login state is usable, `codex` can run without `OPENAI_API_KEY`.
+
+Mounted auth dirs (read-only):
+
+- `~/.codex` -> `/home/worker/.codex`
+
+Override if needed:
+
+- `CODEX_AUTH_DIR`
+
+Recommended steps:
+
+1. Run `codex login` on host
+2. Set `EXECUTION_ENVIRONMENT=sandbox`
+3. Start dispatcher and run tasks
+
+If auth mount is not found and `OPENAI_API_KEY` is not set, dispatcher logs a warning.
+
+## 7. DB/Redis Connectivity from Sandbox
 
 Dispatcher rewrites loopback destinations at sandbox container start:
 
@@ -112,11 +136,12 @@ Dispatcher rewrites loopback destinations at sandbox container start:
 
 This allows container workers to reach host services.
 
-## 7. Claude Auth Check API
+## 8. Auth Check APIs
 
 Endpoint:
 
 - `GET /system/claude/auth`
+- `GET /system/codex/auth`
 
 Query (optional):
 
@@ -131,6 +156,8 @@ Behavior:
   - Sandbox image missing
   - `claude` CLI missing in image
   - Authentication required (`/login`)
+  - `codex` CLI missing in image
+  - Codex authentication required (`codex login` or `OPENAI_API_KEY`)
 
 Access:
 
@@ -138,13 +165,19 @@ Access:
 - `api-key` / `bearer` allowed
 - Local operation: allowed when `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL !== "false"`
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 ### `authenticated=false` (sandbox)
 
 - Confirm `claude /login` on host
 - Confirm auth dir exists and is readable
 - Confirm mount target is not blocked by runtime policy
+
+### `authenticated=false` for Codex (sandbox)
+
+- Confirm `codex login` on host
+- Confirm `~/.codex` is readable (or `CODEX_AUTH_DIR` is configured)
+- Or configure `OPENAI_API_KEY` for API key based authentication
 
 ### `image unavailable`
 
