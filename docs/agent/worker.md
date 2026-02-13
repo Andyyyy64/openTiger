@@ -29,7 +29,7 @@ Out of scope:
 
 1. Acquire runtime lock
 2. Checkout / branch prep
-3. LLM execution (`claude_code` / `codex` / `opencode`)
+3. LLM execution (`opencode` or `claude_code`)
 4. Expected-file verification
 5. Run verification phase
 6. Commit/push + PR creation (git mode)
@@ -91,9 +91,7 @@ Commands are executed via spawn, not shell. The following are not supported:
 ## 8. Main Configuration
 
 - `AGENT_ID`, `AGENT_ROLE`
-- `LLM_EXECUTOR` (`claude_code` / `codex` / `opencode`)
 - `WORKER_MODEL`, `TESTER_MODEL`, `DOCSER_MODEL`
-- `CLAUDE_CODE_*`, `CODEX_*`, `OPENCODE_*`
 - `REPO_MODE`, `REPO_URL`, `BASE_BRANCH`
 - `LOCAL_REPO_PATH`, `LOCAL_WORKTREE_ROOT`
 - `WORKER_AUTO_VERIFY_MODE`

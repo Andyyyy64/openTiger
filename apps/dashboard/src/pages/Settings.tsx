@@ -24,10 +24,7 @@ const API_KEY_KEYS = new Set([
 ]);
 
 function normalizeExecutor(value?: string): ExecutorMode {
-  if (value === "claude_code" || value === "codex" || value === "opencode") {
-    return value;
-  }
-  return "claude_code";
+  return value === "opencode" ? "opencode" : "claude_code";
 }
 
 export const SettingsPage: React.FC = () => {
@@ -135,23 +132,17 @@ export const SettingsPage: React.FC = () => {
           return githubAuthMode === "token";
         }
         if (field.key.startsWith("OPENCODE_")) {
-          return selectedExecutor === "opencode" || selectedExecutor === "codex";
+          return selectedExecutor === "opencode";
         }
         if (EXECUTOR_MODEL_KEYS.has(field.key)) {
-          return selectedExecutor === "opencode" || selectedExecutor === "codex";
+          return selectedExecutor === "opencode";
         }
         // Always show Anthropic API key config even for Claude Code
         if (field.key === "ANTHROPIC_API_KEY") {
           return true;
         }
         if (API_KEY_KEYS.has(field.key)) {
-          if (selectedExecutor === "opencode") {
-            return true;
-          }
-          if (selectedExecutor === "codex") {
-            return field.key === "OPENAI_API_KEY";
-          }
-          return false;
+          return selectedExecutor === "opencode";
         }
         if (field.key.startsWith("CLAUDE_CODE_")) {
           return selectedExecutor === "claude_code";
