@@ -122,7 +122,9 @@ Behavior:
 
 Access note:
 
-- This endpoint is a system-control API and requires admin-level control permission.
+- This endpoint is a system-control API.
+- `api-key` / `bearer` は許可されます。
+- ローカル運用では `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL !== "false"` の間は許可されます。
 
 ## 8. Troubleshooting
 
