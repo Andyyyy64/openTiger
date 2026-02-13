@@ -235,7 +235,7 @@ Recommended order (general):
 
 - When changing `DISPATCH_*` / `MAX_CONCURRENT_WORKERS`
   - Restart `dispatcher`
-- When changing `WORKER_*` / `TESTER_*` / `DOCSER_*` / `LLM_EXECUTOR`
+- When changing `WORKER_*` / `TESTER_*` / `DOCSER_*` / `LLM_EXECUTOR` / `CODEX_*`
   - Restart target role agents (worker/tester/docser)
 - When changing `JUDGE_*` / `JUDGE_MODE`
   - Restart `judge`

@@ -14,8 +14,10 @@ const STRIP_ENV_PREFIXES = [
   "OPENCODE_",
   "CLAUDE_",
   "LLM_",
+  "CODEX_",
   "GEMINI_",
   "ANTHROPIC_",
+  "OPENAI_",
   "GITHUB_",
 ];
 
@@ -77,6 +79,11 @@ const OPEN_CODE_ENV_KEYS = new Set([
   "CLAUDE_CODE_ALLOWED_TOOLS",
   "CLAUDE_CODE_DISALLOWED_TOOLS",
   "CLAUDE_CODE_APPEND_SYSTEM_PROMPT",
+  "CODEX_MODEL",
+  "CODEX_MAX_RETRIES",
+  "CODEX_RETRY_DELAY_MS",
+  "CODEX_ECHO_STDOUT",
+  "CODEX_SKIP_GIT_REPO_CHECK",
 ]);
 
 function shouldStripEnvKey(key: string): boolean {
