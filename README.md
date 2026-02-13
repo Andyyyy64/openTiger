@@ -62,7 +62,7 @@ cd openTiger
 pnpm run setup
 ```
 
-`pnpm run setup` also installs local git hooks (`core.hooksPath=.githooks`) to block accidental direct push to `main` / `master`.
+`pnpm run setup` also installs local git hooks (`core.hooksPath=.githooks`) to block accidental direct updates to `main` / `master` (including refspec push like `HEAD:main`).
 If your local git config was reset, run:
 
 ```bash

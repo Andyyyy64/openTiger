@@ -3,17 +3,52 @@
 set -euo pipefail
 
 branch="${OPENTIGER_GIT_HOOK_BRANCH:-$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)}"
+allow_main_push="${ALLOW_MAIN_PUSH:-0}"
+
+if [[ "$allow_main_push" == "1" ]]; then
+  if [[ -n "$branch" ]]; then
+    echo "Bypassing protected-branch push guard for '$branch' because ALLOW_MAIN_PUSH=1"
+  else
+    echo "Bypassing protected-branch push guard because ALLOW_MAIN_PUSH=1"
+  fi
+  exit 0
+fi
+
+protected_refs=(
+  "refs/heads/main"
+  "refs/heads/master"
+)
+
+is_protected_remote_ref() {
+  local remote_ref="$1"
+  for protected_ref in "${protected_refs[@]}"; do
+    if [[ "$remote_ref" == "$protected_ref" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [[ -z "${remote_ref:-}" ]]; then
+    continue
+  fi
+  if is_protected_remote_ref "$remote_ref"; then
+    remote_branch="${remote_ref#refs/heads/}"
+    cat <<EOF
+Push blocked: direct updates to '$remote_branch' are disabled.
+Create/use a feature branch (e.g. cursor/<topic>-668c) and push there.
+If this push is intentional, re-run with ALLOW_MAIN_PUSH=1.
+EOF
+    exit 1
+  fi
+done
 
 if [[ -z "$branch" ]]; then
   exit 0
 fi
 
 if [[ "$branch" == "main" || "$branch" == "master" ]]; then
-  if [[ "${ALLOW_MAIN_PUSH:-0}" == "1" ]]; then
-    echo "Bypassing protected-branch push guard for '$branch' because ALLOW_MAIN_PUSH=1"
-    exit 0
-  fi
-
   cat <<EOF
 Push blocked: direct pushes to '$branch' are disabled.
 Create/use a feature branch (e.g. cursor/<topic>-668c) and push there.

@@ -327,6 +327,7 @@ Expected behavior:
 
 - Push to feature branches is allowed
 - Push from `main` / `master` is blocked locally
+- Push targeting remote `main` / `master` (for example `HEAD:main`) is also blocked
 
 For exceptional cases only, you can bypass once:
 
