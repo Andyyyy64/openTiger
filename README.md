@@ -6,9 +6,9 @@
 
 openTiger continuously runs:
 
-1. requirement/issue の取り込み
-2. task の計画と配布
-3. 実装/テスト/ドキュメント更新の実行
+1. requirement/issue ingestion
+2. task planning and dispatch
+3. implementation/testing/documentation updates
 4. review/judgement
 5. recovery/retry/rework
 
@@ -18,7 +18,7 @@ all under explicit runtime state transitions.
   <img src="assets/ui.png" alt="openTiger UI" width="720" />
 </p>
 
-## 主要機能
+## Key Features
 
 - Requirement -> executable task generation
 - Role-based execution (`worker` / `tester` / `docser`)
@@ -28,7 +28,7 @@ all under explicit runtime state transitions.
 - Dashboard + API for process control, logs, and system config
 - Runtime switch between host process and docker sandbox execution
 
-## アーキテクチャ概要
+## Architecture Overview
 
 - **API (`@openTiger/api`)**: system/config/control endpoints and dashboard backend
 - **Planner**: generates tasks from requirements/issues
@@ -40,21 +40,21 @@ all under explicit runtime state transitions.
 
 See `docs/architecture.md` for component-level details.
 
-## 前提環境
+## Prerequisites
 
 - Node.js `>=20`
 - pnpm `9.x`
 - Docker (for local DB/Redis and sandbox execution mode)
 
-## インストール
+## Installation
 
-### 推奨（bootstrap script）
+### Recommended (bootstrap script)
 
 ```bash
 curl -fsSL https://opentiger.dev/install.sh | bash
 ```
 
-### 手動（clone してセットアップ）
+### Manual (clone and setup)
 
 ```bash
 git clone git@github.com:Andyyyy64/openTiger.git
@@ -62,7 +62,7 @@ cd openTiger
 pnpm run setup
 ```
 
-## クイックスタート
+## Quick Start
 
 ```bash
 pnpm run up
@@ -77,44 +77,44 @@ pnpm run up
 - DB config export to `.env`
 - API + Dashboard dev startup
 
-## 初回チェックリスト
+## First-Time Checklist
 
-1. GitHub CLI を認証（default auth mode）:
+1. Authenticate GitHub CLI (default auth mode):
 
    ```bash
    gh auth login
    ```
 
-2. Claude Code executor を使う場合は host 側で認証:
+2. If using Claude Code executor, authenticate on the host:
 
    ```bash
    claude /login
    ```
 
-3. Dashboard を開く:
+3. Open the Dashboard:
    - Dashboard: `http://localhost:5190`
    - API: `http://localhost:4301`
-4. Start ページで requirement を入力して実行
+4. Enter requirement on the Start page and run
    - default canonical requirement path: `docs/requirement.md`
-5. 進行状況を監視:
+5. Monitor progress:
    - `tasks`
    - `runs`
    - `judgements`
    - `logs`
-6. 状態が停滞した場合:
-   - `docs/state-model.md` の一次診断から着手
-   - `docs/operations.md` の runbook で詳細確認
+6. If state becomes stalled:
+   - Start with initial diagnosis in `docs/state-model.md`
+   - Check detailed runbook in `docs/operations.md`
 
-### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装）
+### Common Lookup Guide (state vocabulary -> transition -> owner -> implementation)
 
-- API で異常を見つけた場合:
-  - `docs/api-reference.md` の「2.2 API 起点の逆引き（状態語彙 -> 遷移 -> 担当 -> 実装）」
-- 状態語彙から遷移を追う場合:
+- If issues found via API:
+  - `docs/api-reference.md` "2.2 API-based lookup (state vocabulary -> transition -> owner -> implementation)"
+- To trace transitions from state vocabulary:
   - `docs/state-model.md` -> `docs/flow.md`
-- 担当 agent と実装ファイルまで追う場合:
-  - `docs/agent/README.md` の「実装追跡の最短ルート」
+- To trace to owning agent and implementation files:
+  - `docs/agent/README.md` "Shortest route for implementation tracing"
 
-## 起動と実行時挙動
+## Startup and Runtime Behavior
 
 - Planner is started only when backlog gates are clear.
 - Existing local/Issue/PR backlog is always prioritized.
@@ -125,14 +125,14 @@ pnpm run up
 
 Details: `docs/startup-patterns.md`, `docs/flow.md`
 
-## ドキュメントマップ
+## Documentation Map
 
-まずは用途別索引から確認してください:
+First check the index by use case:
 
 - `docs/README.md`
-  - reader lane（初見/運用/実装追従）を含みます
+  - includes reader lanes (first-time/operations/implementation tracing)
 
-導入時の推奨順:
+Recommended order for onboarding:
 
 - `docs/getting-started.md`
 - `docs/architecture.md`
@@ -141,7 +141,7 @@ Details: `docs/startup-patterns.md`, `docs/flow.md`
 - `docs/operations.md`
 - `docs/api-reference.md` の「2.2 API 起点の逆引き（状態語彙 -> 遷移 -> 担当 -> 実装）」
 
-実行時挙動の参照:
+Runtime behavior reference:
 
 - `docs/state-model.md`
 - `docs/flow.md`
@@ -151,7 +151,7 @@ Details: `docs/startup-patterns.md`, `docs/flow.md`
 - `docs/policy-recovery.md`
 - `docs/verification.md`
 
-agent 仕様の参照:
+Agent specification reference:
 
 - `docs/agent/README.md` (role comparison)
 - `docs/agent/planner.md`
@@ -162,21 +162,21 @@ agent 仕様の参照:
 - `docs/agent/docser.md`
 - `docs/agent/cycle-manager.md`
 
-設計方針:
+Design principles:
 
 - `docs/nonhumanoriented.md`
 
-## 認証とアクセス制御の注意
+## Authentication and Access Control Notes
 
 - API authentication middleware supports:
   - `X-API-Key` (`API_KEYS`)
   - `Authorization: Bearer <token>` (`API_SECRET` or custom validator)
-- `/health` と GitHub webhook endpoint（`/webhook/github`、prefix 構成時は `/api/webhook/github`）は auth-skipped.
+- `/health` and GitHub webhook endpoint (`/webhook/github`, `/api/webhook/github` when using API prefix) are auth-skipped.
 - System-control (`/system/*`, `POST /logs/clear`) access is checked by `canControlSystem()`:
   - `api-key` / `bearer`: always allowed
   - local insecure fallback: allowed unless `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL=false`
 
-## OSS としてのスコープ
+## OSS Scope
 
 openTiger is optimized for long-running autonomous repository workflows with explicit recovery paths.  
 It does **not** guarantee one-shot success under all external conditions, but it is designed to avoid silent stalls and continuously converge by switching recovery strategy.

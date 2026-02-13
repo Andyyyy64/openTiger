@@ -1,37 +1,37 @@
-# ドキュメント索引（openTiger）
+# Documentation Index (openTiger)
 
-このディレクトリは、openTiger の実装仕様を「導線」と「参照」に分けて整理しています。  
-ソースコードを真として、運用に必要な情報を段階的に読める構成です。
+This directory organizes openTiger implementation specifications into "navigation paths" and "references."  
+With source code as the source of truth, information necessary for operations is structured for progressive reading.
 
-## 0. 目的別ナビゲーション
+## 0. Purpose-Based Navigation
 
-| 目的 | 最短で読むページ |
+| Purpose | Shortest Page to Read |
 | --- | --- |
-| まず動かしたい | `docs/getting-started.md` |
-| 全体像を掴みたい | `docs/architecture.md` |
-| 設定キーを調整したい | `docs/config.md` |
-| API 連携したい | `docs/api-reference.md` |
-| 障害対応したい | `docs/operations.md` + `docs/flow.md` |
-| 状態停滞を最短で一次診断したい | `docs/state-model.md` |
-| `retry.reason` の意味を即確認したい | `docs/state-model.md` |
-| 状態語彙 -> 遷移 -> 担当 -> 実装で追いたい | `docs/state-model.md` -> `docs/flow.md` -> `docs/agent/README.md` |
-| 起動判定の式を確認したい | `docs/startup-patterns.md` |
-| agent の役割差分を確認したい | `docs/agent/README.md` |
+| Want to get it running first | `docs/getting-started.md` |
+| Want to grasp the overview | `docs/architecture.md` |
+| Want to tune config keys | `docs/config.md` |
+| Want API integration | `docs/api-reference.md` |
+| Need incident response | `docs/operations.md` + `docs/flow.md` |
+| Quick initial diagnosis of stalled state | `docs/state-model.md` |
+| Immediate lookup of `retry.reason` meanings | `docs/state-model.md` |
+| Trace by state vocabulary -> transition -> owner -> implementation | `docs/state-model.md` -> `docs/flow.md` -> `docs/agent/README.md` |
+| Confirm startup condition formulas | `docs/startup-patterns.md` |
+| Compare agent role differences | `docs/agent/README.md` |
 
-## 0.1 読者タイプ別の推奨レーン
+## 0.1 Recommended Lanes by Reader Type
 
-### レーンA: 初見ユーザー（最短で動かす）
+### Lane A: First-Time Users (shortest path to run)
 
 1. `docs/getting-started.md`
 2. `docs/architecture.md`
 3. `docs/operations.md`
 
-目的:
+Goals:
 
-- 最初の実行を通す
-- 起動後5分チェックまで完了する
+- Complete the first run
+- Finish the 5-minute post-startup check
 
-### レーンB: 運用担当（安定運用と復旧）
+### Lane B: Operations (stable operation and recovery)
 
 1. `docs/operations.md`
 2. `docs/config.md`
@@ -39,16 +39,16 @@
 4. `docs/flow.md`
 5. `docs/startup-patterns.md`
 
-目的:
+Goals:
 
-- 障害時の切り分けと再起動判断を短時間で行う
-- 設定変更の影響範囲を誤らない
+- Perform rapid triage and restart decisions during incidents
+- Avoid mistakes in impact scope of config changes
 
-状態停滞時のショートカット:
+Shortcut for stalled state:
 
-- `docs/state-model.md` -> `docs/flow.md` -> `docs/operations.md`（8.1「状態語彙 -> 遷移 -> 担当 -> 実装 の逆引き」）-> `docs/agent/README.md`
+- `docs/state-model.md` -> `docs/flow.md` -> `docs/operations.md` (8.1 "State vocabulary -> transition -> owner -> implementation lookup") -> `docs/agent/README.md`
 
-### レーンC: 実装追従（ソース差分を追う）
+### Lane C: Implementation Tracing (track source diffs)
 
 1. `docs/architecture.md`
 2. `docs/agent/README.md`
@@ -56,45 +56,45 @@
 4. `docs/api-reference.md`
 5. `docs/config.md`
 
-目的:
+Goals:
 
-- コンポーネント責務と実装境界を把握する
-- API/設定変更時に関連箇所を漏れなく追う
-- `docs/agent/*.md` の「実装参照（source of truth）」からコードへ最短で到達する
+- Understand component responsibilities and implementation boundaries
+- Trace related areas without omission when changing API/config
+- Reach code quickly via "Implementation reference (source of truth)" in `docs/agent/*.md`
 
-## 1. 初見ユーザー向け（最短導線）
+## 1. First-Time User Path (Shortest)
 
 1. `docs/getting-started.md`
-   - 導入、初回起動、Start ページでの実行開始まで
+   - Setup, first run, execution start via Start page
 2. `docs/architecture.md`
-   - コンポーネント責務とデータフロー
+   - Component responsibilities and data flow
 3. `docs/config.md`
-   - `system_config` と環境変数の設定参照
+   - `system_config` and environment variable reference
 4. `docs/api-reference.md`
-   - Dashboard/API 連携時の主要エンドポイント参照
+   - Main endpoints for Dashboard/API integration
 5. `docs/operations.md`
-   - 運用、障害復旧、ログ確認、runtime hatch
+   - Operations, incident recovery, log inspection, runtime hatch
 
-## 2. 実行モデル・復旧戦略
+## 2. Execution Model and Recovery Strategy
 
 - `docs/state-model.md`
-  - task/run/agent/cycle の状態定義
+  - State definitions for task/run/agent/cycle
 - `docs/flow.md`
-  - エンドツーエンドの状態遷移と回復ループ
+  - End-to-end state transitions and recovery loops
 - `docs/startup-patterns.md`
-  - 起動時 preflight 判定と runtime 収束条件
+  - Startup preflight rules and runtime convergence conditions
 - `docs/mode.md`
-  - `REPO_MODE` / `JUDGE_MODE` / 実行モードの運用指針
+  - `REPO_MODE` / `JUDGE_MODE` / execution mode operation guidelines
 - `docs/execution-mode.md`
-  - host/sandbox 実行差分と sandbox 認証
+  - host/sandbox execution differences and sandbox authentication
 - `docs/policy-recovery.md`
-  - policy violation 回復、allowedPaths 自己成長
+  - Policy violation recovery, allowedPaths self-growth
 - `docs/verification.md`
-  - Planner/Worker の検証コマンド解決戦略
+  - Planner/Worker verification command resolution strategy
 
-## 3. Agent 仕様
+## 3. Agent Specifications
 
-- `docs/agent/README.md`（横断比較）
+- `docs/agent/README.md` (cross-agent comparison)
 - `docs/agent/planner.md`
 - `docs/agent/dispatcher.md`
 - `docs/agent/worker.md`
@@ -103,16 +103,16 @@
 - `docs/agent/docser.md`
 - `docs/agent/cycle-manager.md`
 
-## 4. 設計思想・補助資料
+## 4. Design Principles and Supplementary Materials
 
 - `docs/nonhumanoriented.md`
-  - non-stalling を前提とした設計原則
+  - Design principles based on non-stalling assumption
 - `docs/requirement.md`
-  - requirement テンプレート例
+  - Requirement template example
 - `docs/idea.md`
-  - 改善アイデアメモ（将来計画）
+  - Improvement idea notes (future plans)
 
-## 推奨読了順（最短）
+## Recommended Reading Order (Shortest)
 
 1. `docs/getting-started.md`
 2. `docs/architecture.md`
@@ -122,15 +122,15 @@
 6. `docs/flow.md`
 7. `docs/agent/README.md`
 
-## 変更時の逆引き
+## Lookup When Making Changes
 
-- 起動条件・replan 条件を変更した場合:
+- When changing startup conditions or replan conditions:
   - `docs/startup-patterns.md`
-  - `docs/flow.md`（関連する runtime 影響）
-- task 状態遷移や blocked 回復を変更した場合:
+  - `docs/flow.md` (related runtime impact)
+- When changing task state transitions or blocked recovery:
   - `docs/state-model.md`
   - `docs/flow.md`
   - `docs/operations.md`
-- agent 実装責務を変更した場合:
+- When changing agent implementation responsibilities:
   - `docs/agent/README.md`
-  - 対象の `docs/agent/*.md`
+  - Target `docs/agent/*.md`

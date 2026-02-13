@@ -1,9 +1,9 @@
-# 検証（Verification）コマンド戦略
+# Verification Command Strategy
 
-openTiger は Planner と Worker の両方で検証コマンドを扱います。  
-このドキュメントは、`task.commands` の生成・実行・回復の実装仕様をまとめます。
+openTiger handles verification commands in both Planner and Worker.  
+This document summarizes the implementation spec for generation, execution, and recovery of `task.commands`.
 
-関連:
+Related:
 
 - `docs/policy-recovery.md`
 - `docs/state-model.md`
@@ -12,38 +12,38 @@ openTiger は Planner と Worker の両方で検証コマンドを扱います�
 - `docs/agent/planner.md`
 - `docs/agent/worker.md`
 
-### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、検証失敗から入る場合）
+### Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Entering from Verification Failure)
 
-検証失敗を起点に調査する場合は、状態語彙 -> 遷移 -> 担当 -> 実装の順で辿ると切り分けしやすくなります。
+When tracing from verification failure, follow: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md`（`needs_rework` / `quota_wait` などの状態語彙）
-2. `docs/flow.md`（Worker 失敗処理と回復遷移）
-3. `docs/operations.md`（API 手順と運用ショートカット）
-4. `docs/agent/README.md`（担当 agent と実装追跡ルート）
+1. `docs/state-model.md` (`needs_rework` / `quota_wait`, etc.)
+2. `docs/flow.md` (Worker failure handling and recovery transitions)
+3. `docs/operations.md` (API procedures and operation shortcuts)
+4. `docs/agent/README.md` (owning agent and implementation tracing path)
 
-## 1. 全体像
+## 1. Overview
 
-1. Planner が task を生成
-2. Planner が `task.commands` を補強（mode に応じて）
-3. Worker が command を順に実行
-4. 失敗時は verification recovery / policy recovery / rework へ分岐
+1. Planner generates task
+2. Planner augments `task.commands` (per mode)
+3. Worker executes commands in order
+4. On failure, branches to verification recovery / policy recovery / rework
 
-## 2. Planner 側
+## 2. Planner Side
 
-Planner の検証コマンドモード:
+Planner verification command mode:
 
-- `PLANNER_VERIFY_COMMAND_MODE=off|fallback|contract|llm|hybrid`（既定: `hybrid`）
+- `PLANNER_VERIFY_COMMAND_MODE=off|fallback|contract|llm|hybrid` (default: `hybrid`)
 
-主要設定:
+Main config:
 
-- `PLANNER_VERIFY_CONTRACT_PATH`（既定: `.opentiger/verify.contract.json`）
-- `PLANNER_VERIFY_MAX_COMMANDS`（既定: `4`）
+- `PLANNER_VERIFY_CONTRACT_PATH` (default: `.opentiger/verify.contract.json`)
+- `PLANNER_VERIFY_MAX_COMMANDS` (default: `4`)
 - `PLANNER_VERIFY_PLAN_TIMEOUT_SECONDS`
 - `PLANNER_VERIFY_AUGMENT_NONEMPTY`
 
-### 検証契約（verify contract）の扱い
+### Verify Contract
 
-`verify.contract.json` の例:
+Example `verify.contract.json`:
 
 ```json
 {
@@ -60,67 +60,67 @@ Planner の検証コマンドモード:
 }
 ```
 
-## 3. Worker 側
+## 3. Worker Side
 
-Worker の自動補完モード:
+Worker auto-completion mode:
 
-- `WORKER_AUTO_VERIFY_MODE=off|fallback|contract|llm|hybrid`（既定: `hybrid`）
+- `WORKER_AUTO_VERIFY_MODE=off|fallback|contract|llm|hybrid` (default: `hybrid`)
 
-主要設定:
+Main config:
 
-- `WORKER_VERIFY_CONTRACT_PATH`（既定: `.opentiger/verify.contract.json`）
-- `WORKER_AUTO_VERIFY_MAX_COMMANDS`（既定: `4`）
+- `WORKER_VERIFY_CONTRACT_PATH` (default: `.opentiger/verify.contract.json`)
+- `WORKER_AUTO_VERIFY_MAX_COMMANDS` (default: `4`)
 - `WORKER_VERIFY_PLAN_TIMEOUT_SECONDS`
 - `WORKER_VERIFY_PLAN_PARSE_RETRIES`
 - `WORKER_VERIFY_RECONCILE_TIMEOUT_SECONDS`
 
-docser の場合は doc-safe command（例: `pnpm run check`）に制限されます。
+For docser, restricted to doc-safe commands (e.g. `pnpm run check`).
 
-## 4. 実行制約
+## 4. Execution Constraints
 
-verification command は shell 経由ではなく直接実行されるため、以下は不可です。
+Verification commands run via direct spawn, not shell; the following are not supported:
 
-- command substitution: `$()`
-- shell operator: `|`, `&&`, `||`, `;`, `<`, `>`, `` ` ``
+- Command substitution: `$()`
+- Shell operators: `|`, `&&`, `||`, `;`, `<`, `>`, `` ` ``
 
-missing script / unsupported format の explicit command は、条件に応じて skip される場合があります。
+Explicit commands that are missing script or unsupported format may be skipped depending on conditions.
 
-## 5. no-change と recovery
+## 5. No-Change and Recovery
 
-Worker は以下を実装しています。
+Worker implements:
 
-- no-change failure 時の再実行
-- no-change でも verification pass が確認できれば no-op success 扱い
-- command failure の recovery attempt
+- Retry on no-change failure
+- Treat as no-op success when verification pass is confirmed even with no-change
+- Recovery attempt on command failure
 
-主要設定:
+Main config:
 
 - `WORKER_NO_CHANGE_RECOVERY_ATTEMPTS`
 - `WORKER_NO_CHANGE_CONFIRM_MODE`
 - `WORKER_VERIFY_RECOVERY_ATTEMPTS`
 - `WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT`
 
-## 6. policy violation との関係
+## 6. Relation to Policy Violation
 
-verification 中に policy violation が発生した場合:
+When policy violation occurs during verification:
 
-1. deterministic allowedPaths 調整
-2. optional LLM policy recovery（`allow|discard|deny`）
-3. generated artifact の discard + 学習
-4. それでも解決しなければ `blocked(needs_rework)`
+1. Deterministic allowedPaths adjustment
+2. Optional LLM policy recovery (`allow`|`discard`|`deny`)
+3. Discard + learn generated artifacts
+4. If still unresolved -> `blocked(needs_rework)`
 
-詳細は `docs/policy-recovery.md` を参照してください。
+See `docs/policy-recovery.md` for details.
 
-## 7. 運用時の観測ポイント（一次切り分け）
+## 7. Operation Observation (Initial Triage)
 
-| 症状 | まず確認する API | 見るポイント |
+| Symptom | First APIs | What to check |
 | --- | --- | --- |
-| command failure が連続する | `GET /runs`, `GET /tasks`, `GET /logs/all` | 同一 command の繰り返し失敗、recovery attempt の有無 |
-| no-change failure が続く | `GET /runs/:id`, `GET /tasks/:id` | no-op success 判定まで到達しているか、retry 回数 |
-| policy violation で進まない | `GET /runs/:id`, `GET /tasks/:id`, `GET /logs/all` | `blocked(needs_rework)` への遷移理由、allowedPaths 調整ログ |
-| quota 系で待機が続く | `GET /tasks`, `GET /runs`, `GET /logs/all` | `blocked(quota_wait)` の増加、cooldown 復帰が再開しているか |
+| Command failure repeating | `GET /runs`, `GET /tasks`, `GET /logs/all` | Same command failing repeatedly, presence of recovery attempt |
+| No-change failure continuing | `GET /runs/:id`, `GET /tasks/:id` | Whether no-op success is reached, retry count |
+| Stuck on policy violation | `GET /runs/:id`, `GET /tasks/:id`, `GET /logs/all` | Transition reason to `blocked(needs_rework)`, allowedPaths adjustment logs |
+| Quota-related wait continuing | `GET /tasks`, `GET /runs`, `GET /logs/all` | `blocked(quota_wait)` increase, whether cooldown recovery resumes |
 
-補足:
+Notes:
 
-- 全体の運用確認順は `docs/operations.md` のチェックリストを参照してください。
-- 状態語彙（`quota_wait`, `needs_rework` など）は `docs/state-model.md` を参照してください。
+- For overall operation check order, see checklist in `docs/operations.md`.
+- For state vocabulary (`quota_wait`, `needs_rework`, etc.), see `docs/state-model.md`.

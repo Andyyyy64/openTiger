@@ -1,37 +1,37 @@
-# テスター（Tester）Agent 仕様
+# Tester Agent Specification
 
-関連:
+Related:
 
 - `docs/agent/README.md`
 - `docs/agent/worker.md`
 - `docs/verification.md`
 
-## 1. 役割
+## 1. Role
 
-Tester は `AGENT_ROLE=tester` で動作する Worker ランタイムの派生ロールです。  
-このページは Tester 固有の差分のみを記載します。
+Tester is a derived role of the Worker runtime running with `AGENT_ROLE=tester`.  
+This page documents only Tester-specific differences.
 
-共通の実行フロー・状態遷移・安全制約は `docs/agent/worker.md` を参照してください。
+For shared execution flow, state transitions, and safety constraints, see `docs/agent/worker.md`.
 
-## 2. 主な責務
+## 2. Main Responsibilities
 
-- unit/integration/e2e テストの追加・修正
-- 不安定な検証コマンドの安定化
-- Judge や autofix ループで再現可能な失敗文脈の提供
+- Add/update unit/integration/e2e tests
+- Stabilize flaky verification commands
+- Provide reproducible failure context for Judge and autofix loops
 
-## 3. 配布前連携（Planner/Dispatcher）
+## 3. Pre-Dispatch Coordination (Planner/Dispatcher)
 
-- Planner が task 内容やパスのヒントから tester ロールを推定
-- Dispatcher がロール付き task を idle な tester へ割り当て
+- Planner infers tester role from task content and path hints
+- Dispatcher assigns role-tagged tasks to idle testers
 
-## 4. 検証方針
+## 4. Verification Policy
 
-- 非対話コマンドのみ許可
-- watch モードコマンドは避ける
-- Planner/Worker の verify contract を利用可能
-- e2e コマンドは「明示的に e2e 要求がある task」にのみ自動補完される
+- Only non-interactive commands allowed
+- Avoid watch-mode commands
+- Can use Planner/Worker verify contract
+- e2e commands are auto-added only for tasks that explicitly request e2e
 
-## 5. 主な設定
+## 5. Main Configuration
 
 - `AGENT_ROLE=tester`
 - `TESTER_MODEL`
@@ -39,11 +39,11 @@ Tester は `AGENT_ROLE=tester` で動作する Worker ランタイムの派生�
 - `WORKER_AUTO_VERIFY_MODE`
 - `WORKER_VERIFY_CONTRACT_PATH`
 
-共通設定（retry/policy recovery/verify recovery など）は `docs/agent/worker.md` を参照してください。
+For shared settings (retry/policy recovery/verify recovery, etc.), see `docs/agent/worker.md`.
 
-## 6. 実装参照（source of truth）
+## 6. Implementation Reference (Source of Truth)
 
-- role 起動分岐: `apps/worker/src/main.ts`
-- role 固有指示: `apps/worker/instructions/tester.md`
-- 検証コマンド自動補完: `apps/worker/src/steps/verify/repo-scripts.ts`
-- 共通実行本体: `apps/worker/src/worker-runner.ts`, `apps/worker/src/worker-runner-verification.ts`
+- Role startup branching: `apps/worker/src/main.ts`
+- Role-specific instructions: `apps/worker/instructions/tester.md`
+- Verification command auto-completion: `apps/worker/src/steps/verify/repo-scripts.ts`
+- Shared execution body: `apps/worker/src/worker-runner.ts`, `apps/worker/src/worker-runner-verification.ts`

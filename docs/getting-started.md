@@ -1,8 +1,8 @@
-# はじめに
+# Getting Started
 
-このガイドは、openTiger を初回起動して最初の自律実行を開始するまでの最短手順です。
+This guide provides the shortest path from first run to starting autonomous execution.
 
-関連:
+Related:
 
 - `docs/architecture.md`
 - `docs/config.md`
@@ -10,123 +10,123 @@
 - `docs/operations.md`
 - `docs/agent/README.md`
 
-## 1. 前提
+## 1. Prerequisites
 
 - Node.js `>=20`
 - pnpm `9.x`
 - Docker
-- GitHub CLI (`gh`) 推奨
+- GitHub CLI (`gh`) recommended
 
-Claude Code 実行器を使う場合は `claude` CLI も必要です。
+Claude Code executor requires the `claude` CLI.
 
-## 2. セットアップ
+## 2. Setup
 
 ```bash
 pnpm run setup
 ```
 
-## 3. 認証（初回のみ）
+## 3. Authentication (First Time Only)
 
-### 連携設定（GitHub）
+### GitHub Integration
 
-デフォルトは `GITHUB_AUTH_MODE=gh` です。
+Default is `GITHUB_AUTH_MODE=gh`.
 
 ```bash
 gh auth login
 ```
 
-`token` モードを使う場合は、System Config で `GITHUB_TOKEN` を設定してください。
+For token mode, set `GITHUB_TOKEN` in System Config.
 
-### `LLM_EXECUTOR=claude_code` 利用時
+### When Using `LLM_EXECUTOR=claude_code`
 
 ```bash
 claude /login
 ```
 
-## 4. 起動
+## 4. Startup
 
 ```bash
 pnpm run up
 ```
 
-このコマンドは次を実行します。
+This command:
 
-- build
-- `postgres` / `redis` 起動
-- DB schema push
-- runtime hatch disarm
-- DB設定を `.env` へ export
-- API/Dashboard 起動
+- Builds
+- Starts `postgres` / `redis`
+- Pushes DB schema
+- Disarms runtime hatch
+- Exports DB config to `.env`
+- Starts API/Dashboard
 
-## 5. Dashboard にアクセス
+## 5. Access Dashboard
 
 - Dashboard: `http://localhost:5190`
 - API: `http://localhost:4301`
 
-## 6. Start ページで最初の実行を開始する
+## 6. Start First Execution on Start Page
 
-1. requirement を入力
-2. `EXECUTE RUN` を実行
-3. preflight 推奨に従って process を起動
+1. Enter requirement
+2. Run `EXECUTE RUN`
+3. Start processes per preflight recommendation
 
-重要:
+Important:
 
-- backlog（Issue/PR/ローカルタスク）がある場合、Planner は意図的にスキップされます。
-- Planner は backlog が空のときのみ開始されます。
+- With backlog (Issue/PR/local tasks), Planner is intentionally skipped
+- Planner starts only when backlog is empty
 
-## 7. 進行状況の確認
+## 7. Monitor Progress
 
-- `tasks`: タスク状態
-- `runs`: 実行結果・ログ
-- `judgements`: Judge 評価
-- `logs`: プロセスログ集約
+- `tasks`: task state
+- `runs`: execution results and logs
+- `judgements`: Judge evaluations
+- `logs`: aggregated process logs
 
-## 8. 初回起動後の最初の5分チェック
+## 8. First 5-Minute Check After Startup
 
-起動直後に次を確認すると、初期不整合を早く検知できます。
+These checks help detect initial misconfig quickly:
 
-1. process が生きている
-   - `GET /system/processes` で `dispatcher` / `cycle-manager` / `worker-*` / `judge-*` を確認
-2. agent が登録されている
-   - `GET /agents` で `idle`/`busy` の agent が見えることを確認
-3. task が遷移している
-   - `queued` のまま固定されず、`running` か `blocked/done` に進むことを確認
-4. run が連続失敗していない
-   - `GET /runs` で同一エラーの連続 `failed` がないことを確認
-5. ログに初期化エラーがない
-   - `GET /logs/all` で認証・接続・設定値エラーが出ていないことを確認
+1. Processes are running
+   - Confirm `dispatcher` / `cycle-manager` / `worker-*` / `judge-*` via `GET /system/processes`
+2. Agents are registered
+   - Confirm `idle`/`busy` agents via `GET /agents`
+3. Tasks are transitioning
+   - Confirm `queued` doesn't stay fixed; moves to `running` or `blocked`/`done`
+4. Runs are not failing repeatedly
+   - Confirm no consecutive `failed` with same error via `GET /runs`
+5. No startup errors in logs
+   - Confirm no auth/connection/config errors in `GET /logs/all`
 
-詳細な運用チェックは `docs/operations.md` を参照してください。
-状態遷移で詰まる場合は `docs/state-model.md` の一次診断テーブルから着手してください。
+For detailed operation checks, see `docs/operations.md`.  
+For state transitions that stall, start with the initial diagnosis table in `docs/state-model.md`.
 
-### 8.1 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、初見向け）
+### 8.1 Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, for First-Time Users)
 
-初見ユーザーは、次の順で確認すると切り分けしやすくなります。
+First-time users can triage by:
 
-1. 状態語彙を確認する  
-   - `docs/state-model.md`（7章）
-2. どこで詰まるかを遷移で確認する  
-   - `docs/flow.md`（該当する章）
-3. API の確認順を実行する  
-   - `docs/operations.md`（11章）
-4. 担当 agent と実装を特定する  
-   - `docs/agent/README.md`（FAQ と実装追跡ルート）
-5. API 起点で追う場合は逆引きを使う  
-   - `docs/api-reference.md`（2.2）
+1. Confirm state vocabulary  
+   - `docs/state-model.md` (7)
+2. Check where it stalls via transitions  
+   - `docs/flow.md` (relevant section)
+3. Run API check sequence  
+   - `docs/operations.md` (11)
+4. Identify owning agent and implementation  
+   - `docs/agent/README.md` (FAQ and implementation tracing path)
+5. Use API-based lookup when tracing from API  
+   - `docs/api-reference.md` (2.2)
 
-## 9. よくある初期トラブル
+## 9. Common Initial Issues
 
-### リポジトリ未設定（GitHub）
+### Repository Not Configured (GitHub)
 
-- Start ページの repo manager から既存 repo を選択、または新規作成
-- `REPO_MODE=git` の場合は `REPO_URL` と `GITHUB_OWNER/REPO` が必要
+- Select existing repo or create new one from Start page repo manager
+- For `REPO_MODE=git`, need `REPO_URL` and `GITHUB_OWNER/REPO`
 
-### 認証警告（Claude auth warning）への対処
+### Handling Claude Auth Warning
 
-- host 実行: `claude /login` を再実行
-- sandbox 実行: host の認証ディレクトリがマウントされることを確認
+- Host execution: rerun `claude /login`
+- Sandbox execution: confirm host auth dir is mounted
 
-### 起動時に Planner が起動しない（preflight）
+### Planner Not Starting (Preflight)
 
-- backlog 優先の正常動作です
-- Issue/PR/ローカル backlog が解消されると再計画対象になります
+- Normal behavior with backlog priority
+- Becomes replan target when Issue/PR/local backlog is cleared

@@ -1,84 +1,84 @@
-# プランナー（Planner）Agent 仕様
+# Planner Agent Specification
 
-関連:
+Related:
 
 - `docs/agent/README.md`
 - `docs/flow.md`
 - `docs/verification.md`
 
-## 1. 役割
+## 1. Role
 
-Planner は requirement/issue から実行可能な task 群を生成し、重複なく永続化します。  
-重複計画を避けるため、運用上は単一インスタンス前提です。
+Planner generates executable task sets from requirement/issue and persists them without duplication.  
+To avoid duplicate plans, operation assumes a single instance.
 
-責務外:
+Out of scope:
 
-- task 実行（コード変更・検証コマンド実行）
-- run 成果物の judge 判定
+- Task execution (code changes, verification command execution)
+- Run artifact judge decisions
 
-## 2. 入力
+## 2. Input
 
-- requirement の内容/ファイル
-- 既存 backlog と dependency 情報
-- Judge の feedback / failure hints（失敗ヒント）
-- repository inspection の結果
-- policy recovery ヒント（過去イベント由来）
+- Requirement content/file
+- Existing backlog and dependency info
+- Judge feedback / failure hints
+- Repository inspection results
+- Policy recovery hints (from past events)
 
-## 3. 処理パイプライン
+## 3. Processing Pipeline
 
-1. requirement の解析と妥当性確認（parse/validate）
-2. 既存コンテキスト（feedback/hints）読込
-3. inspection 実行（LLM）
-4. task 生成（LLM + fallback 経路）
-5. dependency の正規化
-6. role / allowedPaths / command policy 適用
-7. verification command 補強
-8. plan 保存（dedupe lock 付き）
-9. 必要に応じて issue と連携
+1. Requirement parsing and validation
+2. Load existing context (feedback/hints)
+3. Run inspection (LLM)
+4. Task generation (LLM + fallback path)
+5. Dependency normalization
+6. Apply role / allowedPaths / command policy
+7. Verification command augmentation
+8. Save plan (with dedupe lock)
+9. Link to issue when needed
 
-## 4. 主な挙動
+## 4. Main Behavior
 
-- 未初期化 repository 向けの init task 注入
-- dependency index の循環/冗長除去
-- lockfile path の自動許可
-- command-driven allowedPaths 補完
-- doc gap 検知と docser task 注入
-- policy recovery hint の将来 task への反映
-- `planner.plan_created` イベントに plan summary を保存
+- Init task injection for uninitialized repositories
+- Cycle/redundancy removal in dependency index
+- Automatic lockfile path allowance
+- Command-driven allowedPaths completion
+- Doc gap detection and docser task injection
+- Reflect policy recovery hints into future tasks
+- Save plan summary in `planner.plan_created` event
 
-## 5. 検証コマンド補強
+## 5. Verification Command Augmentation
 
-Planner は task 生成時に検証コマンドを補強できます。
+Planner can augment verification commands at task generation time.
 
-- `PLANNER_VERIFY_COMMAND_MODE=off|fallback|contract|llm|hybrid`（既定: `hybrid`）
-- verify contract: `.opentiger/verify.contract.json`（パス変更可能）
-- LLM 計画失敗時は warning を残し、Worker 側の自動戦略へ委譲
+- `PLANNER_VERIFY_COMMAND_MODE=off|fallback|contract|llm|hybrid` (default: `hybrid`)
+- Verify contract: `.opentiger/verify.contract.json` (path configurable)
+- On LLM planning failure, leaves warning and delegates to Worker auto-strategy
 
-## 6. 起動制約
+## 6. Startup Constraints
 
-以下 backlog があると Planner start はブロックされます。
+Planner start is blocked when the following backlogs exist:
 
 - local task backlog
 - issue task backlog
 - PR/judge backlog
 
-これは backlog-first 運用を保証するための仕様です。
+This is by design for backlog-first operation.
 
-## 7. 失敗モデル
+## 7. Failure Model
 
-- inspection は retry + quota-aware で実行
-- inspection/task generation が失敗しても fallback planning を試行
-- hard failure 時も既存タスクを壊さず終了
+- Inspection runs with retry + quota-aware execution
+- Fallback planning attempted even if inspection/task generation fails
+- On hard failure, exits without corrupting existing tasks
 
-## 8. 実装参照（source of truth）
+## 8. Implementation Reference (Source of Truth)
 
-- 起動と全体制御: `apps/planner/src/main.ts`, `apps/planner/src/planner-runner.ts`
-- task 永続化と plan event: `apps/planner/src/planner-tasks.ts`
-- task policy / allowedPaths 補正: `apps/planner/src/task-policies.ts`
-- 検証コマンド補強: `apps/planner/src/planner-verification.ts`
-- issue 起点の task 化: `apps/planner/src/strategies/from-issue.ts`
+- Startup and overall control: `apps/planner/src/main.ts`, `apps/planner/src/planner-runner.ts`
+- Task persistence and plan event: `apps/planner/src/planner-tasks.ts`
+- Task policy / allowedPaths adjustment: `apps/planner/src/task-policies.ts`
+- Verification command augmentation: `apps/planner/src/planner-verification.ts`
+- Issue-based task creation: `apps/planner/src/strategies/from-issue.ts`
 
-## 9. 主な設定
+## 9. Main Configuration
 
 - `PLANNER_MODEL`
 - `PLANNER_TIMEOUT`

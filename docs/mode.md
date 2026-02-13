@@ -1,8 +1,8 @@
-# 運用モード
+# Operation Modes
 
-openTiger の挙動は、リポジトリモード / 判定モード / 実行環境 の組み合わせで制御されます。
+openTiger behavior is controlled by the combination of repository mode / judge mode / execution environment.
 
-関連:
+Related:
 
 - `docs/config.md`
 - `docs/state-model.md`
@@ -13,125 +13,125 @@ openTiger の挙動は、リポジトリモード / 判定モード / 実行環�
 - `docs/agent/dispatcher.md`
 - `docs/agent/judge.md`
 
-### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、モード設定から入る場合）
+### Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Entering from Mode Config)
 
-モード設定を確認したあとに停滞を追う場合は、状態語彙 -> 遷移 -> 担当 -> 実装の順で確認してください。
+When tracing stalls from mode config, check in order: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md`（状態語彙の確認）
-2. `docs/flow.md`（遷移と回復経路）
-3. `docs/operations.md`（API 確認手順と運用ショートカット）
-4. `docs/agent/README.md`（担当 agent と実装追跡ルート）
+1. `docs/state-model.md` (state vocabulary)
+2. `docs/flow.md` (transitions and recovery paths)
+3. `docs/operations.md` (API procedures and operation shortcuts)
+4. `docs/agent/README.md` (owning agent and implementation tracing path)
 
-## 1. リポジトリモード（`REPO_MODE`）
+## 1. Repository Mode (`REPO_MODE`)
 
 ### `git`
 
-- clone/push/PR ベースの運用
-- judge は主に PR artifact を評価
+- Clone/push/PR-based operation
+- Judge mainly evaluates PR artifacts
 
-必須設定:
+Required config:
 
 - `REPO_URL`
 - `BASE_BRANCH`
-- `GITHUB_AUTH_MODE`（`gh` または `token`、既定: `gh`）
+- `GITHUB_AUTH_MODE` (`gh` or `token`; default: `gh`)
 - `GITHUB_OWNER`
 - `GITHUB_REPO`
 
-補足:
+Note:
 
-- `GITHUB_AUTH_MODE=gh` の場合は GitHub CLI（`gh auth login`）で認証します。
-- `GITHUB_AUTH_MODE=token` の場合は `GITHUB_TOKEN` を設定します。
+- With `GITHUB_AUTH_MODE=gh`, authenticate via GitHub CLI (`gh auth login`)
+- With `GITHUB_AUTH_MODE=token`, set `GITHUB_TOKEN`
 
 ### `local`
 
-- ローカルリポジトリ + worktree ベースの運用
-- remote PR 作成は不要
+- Local repository + worktree-based operation
+- No remote PR creation
 
-必須設定:
+Required config:
 
 - `LOCAL_REPO_PATH`
 - `LOCAL_WORKTREE_ROOT`
 - `BASE_BRANCH`
 
-## 2. 判定モード（`JUDGE_MODE`）
+## 2. Judge Mode (`JUDGE_MODE`)
 
-- `git`: PR review 経路を強制
-- `local`: ローカル差分経路を強制
-- `auto`: リポジトリモードに追従
+- `git`: force PR review path
+- `local`: force local diff path
+- `auto`: follow repository mode
 
-補足:
+Note:
 
-- `JUDGE_MODE` は環境変数で決まる runtime option であり、`system_config` の DB キーではありません。
+- `JUDGE_MODE` is a runtime option from env, not a `system_config` DB key.
 
-主要フラグ:
+Main flags:
 
 - `JUDGE_MERGE_ON_APPROVE`
 - `JUDGE_REQUEUE_ON_NON_APPROVE`
 
-## 3. 実行環境と起動モード
+## 3. Execution Environment and Launch Mode
 
-ユーザー向け設定キーは `EXECUTION_ENVIRONMENT`（`system_config`）です。
+User-facing key is `EXECUTION_ENVIRONMENT` (in `system_config`).
 
-内部の起動モードは次のように導出されます。
+Internal launch mode is derived as:
 
 - `host` -> `LAUNCH_MODE=process`
 - `sandbox` -> `LAUNCH_MODE=docker`
 
-実行時の詳細（Docker image/network、sandbox 認証、トラブルシュート）は `docs/execution-mode.md` を参照してください。
+For runtime details (Docker image/network, sandbox auth, troubleshooting), see `docs/execution-mode.md`.
 
-`LAUNCH_MODE` は runtime の内部値のため、通常は直接設定する必要はありません。
+`LAUNCH_MODE` is internal; you normally don't set it directly.
 
-### `process`（host）
+### `process` (host)
 
-- 常駐 agent が queue job を消化
-- 回復速度と運用可視性を優先
+- Resident agents consume queue jobs
+- Prioritizes recovery speed and operational visibility
 
-### `docker`（sandbox）
+### `docker` (sandbox)
 
-- task 単位の container 分離
-- 分離要件が厳しい環境で有効
+- Per-task container isolation
+- Useful when isolation requirements are strict
 
-## 4. スケーリングルール
+## 4. Scaling Rules
 
-- planner は API/system ロジックで 1 process に固定
-- worker/tester/docser/judge の数は設定可能
-- dispatcher の slot 制御は busy な実行 role（`worker/tester/docser`）のみを計数
+- Planner is fixed at 1 process by API/system logic
+- worker/tester/docser/judge counts are configurable
+- Dispatcher slot control counts only busy execution roles (`worker`/`tester`/`docser`)
 
-実装責務:
+Implementation responsibility:
 
-- slot 制御/配布判定: `docs/agent/dispatcher.md`
-- approve/rework 判定: `docs/agent/judge.md`
+- Slot control/dispatch: `docs/agent/dispatcher.md`
+- Approve/rework decisions: `docs/agent/judge.md`
 
-## 5. 想定される起動時挙動
+## 5. Expected Startup Behavior
 
-`/system/preflight` は意図的に planner をスキップする場合があります。
+`/system/preflight` may intentionally skip planner.
 
-典型例:
+Examples:
 
-- issue backlog がある -> issue task を先に作成/継続
-- open PR または `awaiting_judge` backlog がある -> judge を先行起動
-- planner は backlog が解消され、かつ requirement がある場合のみ起動
+- Issue backlog exists -> create/continue issue tasks first
+- Open PR or `awaiting_judge` backlog exists -> start Judge first
+- Planner starts only when backlog is cleared and requirement exists
 
-## 6. リトライ / 回復制御
+## 6. Retry / Recovery Control
 
-主要ノブ:
+Main knobs:
 
 - `FAILED_TASK_RETRY_COOLDOWN_MS`
 - `BLOCKED_TASK_RETRY_COOLDOWN_MS`
-- `FAILED_TASK_MAX_RETRY_COUNT`（`-1` は global retry budget 無制限）
+- `FAILED_TASK_MAX_RETRY_COUNT` (`-1` = global retry budget unlimited)
 - `DISPATCH_RETRY_DELAY_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART*`
 
-キュー/ロック回復ノブ:
+Queue/lock recovery knobs:
 
 - `TASK_QUEUE_LOCK_DURATION_MS`
 - `TASK_QUEUE_STALLED_INTERVAL_MS`
 - `TASK_QUEUE_MAX_STALLED_COUNT`
 
-## 7. quota 運用設定
+## 7. Quota Operation Config
 
 - `OPENCODE_WAIT_ON_QUOTA`
 - `OPENCODE_QUOTA_RETRY_DELAY_MS`
 - `OPENCODE_MAX_QUOTA_WAITS`
 
-現在の task レベル挙動は、`blocked(quota_wait)` と cycle の cooldown requeue により収束させる設計です。
+Current task-level behavior converges via `blocked(quota_wait)` and cycle cooldown requeue.

@@ -1,8 +1,8 @@
-# 運用ガイド
+# Operations Guide
 
-このドキュメントは、openTiger を継続運用するための実務向け手順をまとめています。
+This document summarizes operational procedures for continuous openTiger operation.
 
-関連:
+Related:
 
 - `docs/flow.md`
 - `docs/state-model.md`
@@ -11,9 +11,9 @@
 - `docs/agent/dispatcher.md`
 - `docs/agent/cycle-manager.md`
 
-## 1. 運用で見るべき状態
+## 1. State to Monitor
 
-### 主要タスク状態
+### Main Task States
 
 - `queued`
 - `running`
@@ -22,48 +22,47 @@
 - `blocked`
 - `cancelled`
 
-### 主要ブロック理由
+### Main Block Reasons
 
 - `awaiting_judge`
 - `quota_wait`
 - `needs_rework`
 - `issue_linking`
 
-`failed` と `retry countdown` が同時に見えるのは正常です。  
-run は失敗結果、task は次回リトライ待機を示します。
+Seeing both `failed` and `retry countdown` is normal: run shows failure, task shows next retry wait.
 
-### `retry.reason` の一次判断
+### Initial Triage for `retry.reason`
 
-`GET /tasks` の `retry.reason` は、次のように使い分けると切り分けが速くなります。
+`retry.reason` in `GET /tasks` helps triage quickly:
 
-| reason | まず見る先 |
+| reason | First check |
 | --- | --- |
 | `awaiting_judge` | `GET /judgements`, `GET /system/processes`, `GET /logs/all` |
 | `quota_wait` | `GET /tasks`, `GET /runs`, `GET /logs/all` |
 | `needs_rework` | `GET /runs`, `GET /judgements`, `GET /logs/all` |
-| `cooldown_pending` / `retry_due` | `GET /tasks` の `retryAt` / `retryInSeconds` |
+| `cooldown_pending` / `retry_due` | `retryAt` / `retryInSeconds` in `GET /tasks` |
 
-## 2. プロセス運用
+## 2. Process Operations
 
-### 起動/停止
+### Start/Stop
 
 - `POST /system/processes/:name/start`
 - `POST /system/processes/:name/stop`
 - `POST /system/processes/stop-all`
 
-`stop-all` の実装挙動:
+`stop-all` behavior:
 
-- managed process 停止
-- orphan system process の強制終了試行
-- `runs.status=running` を `cancelled` に更新
-- 対応する `tasks.status=running` を `queued` へ戻す
-- 対応 lease を解放
-- 実行系 agent を `offline` 更新
-- runtime hatch を disarm
+- Stop managed processes
+- Attempt to force-terminate orphan system processes
+- Update `runs.status=running` to `cancelled`
+- Return corresponding `tasks.status=running` to `queued`
+- Release corresponding leases
+- Update execution agents to `offline`
+- Disarm runtime hatch
 
-### プロセス名
+### Process Names
 
-固定:
+Fixed:
 
 - `planner`
 - `dispatcher`
@@ -72,28 +71,28 @@ run は失敗結果、task は次回リトライ待機を示します。
 - `db-down`
 - `db-push`
 
-動的:
+Dynamic:
 
 - `judge`, `judge-2...`
 - `worker-1...`
 - `tester-1...`
 - `docser-1...`
 
-## 3. runtime hatch と自己回復
+## 3. Runtime Hatch and Self-Recovery
 
-openTiger は runtime hatch（イベントベース）で process 自己復旧を制御します。
+openTiger controls process self-recovery via runtime hatch (event-based).
 
-主要イベント:
+Main events:
 
 - `system.runtime_hatch_armed`
 - `system.runtime_hatch_disarmed`
 
-用途:
+Used for:
 
-- 実行系 process を「継続稼働対象」として扱うかを決定
-- judge backlog 検知時の judge 自動再起動などに利用
+- Deciding whether execution processes are "continue-running target"
+- Judge auto-restart when Judge backlog is detected, etc.
 
-CLIコマンド:
+CLI commands:
 
 ```bash
 pnpm runtime:hatch:status
@@ -101,213 +100,213 @@ pnpm runtime:hatch:arm
 pnpm runtime:hatch:disarm
 ```
 
-## 4. 自動再起動・自己回復の関連環境変数
+## 4. Related Env Vars for Auto-Restart and Self-Recovery
 
-### プロセス自動再起動
+### Process Auto-Restart
 
 - `SYSTEM_PROCESS_AUTO_RESTART`
 - `SYSTEM_PROCESS_AUTO_RESTART_DELAY_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART_WINDOW_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS`
 
-### 自己回復ループ（self-heal）
+### Self-Heal Loop
 
 - `SYSTEM_PROCESS_SELF_HEAL`
 - `SYSTEM_PROCESS_SELF_HEAL_INTERVAL_MS`
 - `SYSTEM_PROCESS_SELF_HEAL_STARTUP_GRACE_MS`
 - `SYSTEM_AGENT_LIVENESS_WINDOW_MS`
 
-### タスクリトライ
+### Task Retry
 
 - `FAILED_TASK_RETRY_COOLDOWN_MS`
 - `BLOCKED_TASK_RETRY_COOLDOWN_MS`
 - `FAILED_TASK_MAX_RETRY_COUNT`
 - `DISPATCH_RETRY_DELAY_MS`
 
-### ポリシー／リワーク抑制（policy/rework）
+### Policy / Rework Suppression
 
 - `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`
 - `AUTO_REWORK_MAX_DEPTH`
 
-## 5. Cleanup の注意点
+## 5. Cleanup Warnings
 
-`POST /system/cleanup` は以下を実施します。
+`POST /system/cleanup` performs:
 
-- queue を完全初期化（obliterate）
-- runtime テーブル（tasks/runs/artifacts/leases/events/cycles）を初期化
-- agent 状態を `idle` へ更新
+- Full queue initialization (obliterate)
+- Initialize runtime tables (tasks/runs/artifacts/leases/events/cycles)
+- Update agent state to `idle`
 
-破壊的操作なので、通常運用時は限定的に使用してください。
+Destructive; use sparingly in normal operation.
 
-使い分け:
+Usage:
 
-- `stop-all`: 実行中プロセス停止 + running タスクの安全側巻き戻し
-- `cleanup`: データ/キューの初期化（履歴を消す）
+- `stop-all`: stop running processes + safe rollback of running tasks
+- `cleanup`: initialize data/queue (wipes history)
 
-## 6. ログ運用
+## 6. Log Operations
 
-### 参照
+### Read
 
 - `GET /logs/agents/:id`
 - `GET /logs/cycle-manager`
 - `GET /logs/all`
 
-### クリア
+### Clear
 
 - `POST /logs/clear`
-  - open 中ファイルは truncate、未使用ファイルは削除
+  - Truncates open files, deletes unused files
 
-## 7. 障害時の一次切り分け
+## 7. Initial Incident Triage
 
-1. `tasks` で `blockReason` を確認
-2. `runs/:id` でエラー本文と artifacts を確認
-3. `judgements` で non-approve / merge failure を確認
-4. `logs/all` で dispatcher / cycle-manager / judge / worker の相関を確認
-5. 必要なら `stop-all` -> 再起動
+1. Check `blockReason` in `tasks`
+2. Check error body and artifacts in `runs/:id`
+3. Check non-approve / merge failure in `judgements`
+4. Check dispatcher / cycle-manager / judge / worker correlation in `logs/all`
+5. If needed, `stop-all` -> restart
 
-## 8. 症状別の確認先
+## 8. Symptom-Based Check Targets
 
-症状から最短で一次診断したい場合は `docs/state-model.md` の「状態遷移で停滞しやすいパターン（一次診断）」を先に確認してください。
+For fastest initial diagnosis, first check "Patterns prone to stalls (initial diagnosis)" in `docs/state-model.md`.
 
-- task が `queued` から進まない
-  - `dispatcher` の稼働状態、lease 異常、role 別 idle agent 数を確認
-  - 参照: `docs/agent/dispatcher.md`
-- `awaiting_judge` が長時間解消しない
-  - judge process と pending judge run の有無を確認
-  - 参照: `docs/agent/judge.md`
-- 失敗後に復帰しない
-  - cycle-manager の cleanup/requeue 実行ログを確認
-  - 参照: `docs/agent/cycle-manager.md`
-- 検証コマンド失敗が繰り返される
-  - run の失敗内容と verification recovery の有無を確認
-  - 参照: `docs/verification.md`
-- task が `issue_linking` で止まり続ける
-  - issue 連携情報の解決失敗や import 未収束を確認し、必要に応じて preflight を再実行
-  - 参照: `docs/startup-patterns.md`
-- Planner が再起動しない
-  - backlog gate（issue/pr/local task）と replan 条件を確認
-  - 参照: `docs/startup-patterns.md`
+- Task not progressing from `queued`
+  - Check dispatcher status, lease anomalies, role-wise idle agent count
+  - Ref: `docs/agent/dispatcher.md`
+- `awaiting_judge` not clearing for long
+  - Check judge process and pending judge runs
+  - Ref: `docs/agent/judge.md`
+- Not recovering after failure
+  - Check cycle-manager cleanup/requeue logs
+  - Ref: `docs/agent/cycle-manager.md`
+- Verification command failures repeating
+  - Check run failure content and presence of verification recovery
+  - Ref: `docs/verification.md`
+- Task stuck at `issue_linking`
+  - Check issue linkage resolution failure or import non-convergence; rerun preflight if needed
+  - Ref: `docs/startup-patterns.md`
+- Planner not restarting
+  - Check backlog gate (issue/pr/local task) and replan conditions
+  - Ref: `docs/startup-patterns.md`
 
-補足:
+Note:
 
-- 担当 agent の切り分けで迷う場合は `docs/agent/README.md` の FAQ も参照してください。
+- For agent triage confusion, see FAQ in `docs/agent/README.md`.
 
-### 8.1 状態語彙 -> 遷移 -> 担当 -> 実装 の逆引き（運用ショートカット）
+### 8.1 State Vocabulary -> Transition -> Owner -> Implementation Lookup (Operation Shortcut)
 
-障害対応時に、状態語彙 -> 遷移 -> 担当 -> 実装の順で追う共通導線です。
+Common path when tracing from state vocabulary to transition to owner to implementation during incidents.
 
-| 起点（状態語彙/症状） | 状態語彙の確認先 | 遷移の確認先（flow） | 担当 agent の確認先 | 実装の確認先 |
+| Starting point (state/symptom) | State vocabulary ref | Transition ref (flow) | Owner agent ref | Implementation ref |
 | --- | --- | --- | --- | --- |
-| `queued` が停滞 | `docs/state-model.md` 7章 | `docs/flow.md` 2章, 5章 | Dispatcher（`docs/agent/dispatcher.md`） | `apps/dispatcher/src/` |
-| `running` が停滞 | `docs/state-model.md` 7章 | `docs/flow.md` 2章, 6章 | Worker/Tester/Docser（`docs/agent/worker.md`） | `apps/worker/src/` |
-| `awaiting_judge` が停滞 | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章, 4章, 7章 | Judge（`docs/agent/judge.md`） | `apps/judge/src/` |
-| `quota_wait`/`needs_rework` が連鎖 | `docs/state-model.md` 2章, 2.2章 | `docs/flow.md` 3章, 6章, 8章 | Worker/Judge/Cycle Manager（各 agent 仕様） | 各 agent 仕様末尾の「実装参照（source of truth）」節 |
-| `issue_linking` が停滞 | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章 | Planner（`docs/agent/planner.md`） | `apps/planner/src/` |
+| `queued` stuck | `docs/state-model.md` 7 | `docs/flow.md` 2, 5 | Dispatcher (`docs/agent/dispatcher.md`) | `apps/dispatcher/src/` |
+| `running` stuck | `docs/state-model.md` 7 | `docs/flow.md` 2, 6 | Worker/Tester/Docser (`docs/agent/worker.md`) | `apps/worker/src/` |
+| `awaiting_judge` stuck | `docs/state-model.md` 2, 7 | `docs/flow.md` 3, 4, 7 | Judge (`docs/agent/judge.md`) | `apps/judge/src/` |
+| `quota_wait`/`needs_rework` chain | `docs/state-model.md` 2, 2.2 | `docs/flow.md` 3, 6, 8 | Worker/Judge/Cycle Manager (each agent spec) | "Implementation reference" at end of each agent spec |
+| `issue_linking` stuck | `docs/state-model.md` 2, 7 | `docs/flow.md` 3 | Planner (`docs/agent/planner.md`) | `apps/planner/src/` |
 
-補足:
+Note:
 
-- agent 仕様ページの末尾にある「実装参照（source of truth）」節を使うと、`main.ts` と主要ループ実装へ直接辿れます。
+- "Implementation reference (source of truth)" at the end of agent spec pages links directly to `main.ts` and main loop implementations.
 
-## 9. sandbox 運用時の追加確認
+## 9. Extra Checks for Sandbox Operation
 
-- `EXECUTION_ENVIRONMENT=sandbox` の場合、worker/tester/docser は docker 実行
-- `SANDBOX_DOCKER_IMAGE` と `SANDBOX_DOCKER_NETWORK` を確認
-- Claude 実行器利用時は host 認証ディレクトリマウントを確認
+- With `EXECUTION_ENVIRONMENT=sandbox`, worker/tester/docser run in Docker
+- Verify `SANDBOX_DOCKER_IMAGE` and `SANDBOX_DOCKER_NETWORK`
+- For Claude executor, verify host auth dir mount
 
-## 10. 設定変更時の安全な再起動手順
+## 10. Safe Restart Procedure for Config Changes
 
-前提:
+Prerequisites:
 
-- まず `docs/config.md` の「設定変更の影響マップ」で対象コンポーネントを確認する
-- 影響範囲が狭い場合は `stop-all` ではなく、対象プロセスのみ再起動する
+- First check "Config change impact map" in `docs/config.md` for affected components
+- If scope is narrow, restart only affected processes rather than `stop-all`
 
-### 10.1 部分再起動の基本順
+### 10.1 Basic Partial Restart Order
 
-1. 影響を受ける process を `stop`
-2. 依存先から順に `start`（制御系 -> 実行系）
-3. `tasks/runs/logs` で復帰確認
+1. `stop` affected processes
+2. `start` in dependency order (control -> execution)
+3. Confirm recovery in `tasks`/`runs`/`logs`
 
-推奨順（一般形）:
+Recommended order (general):
 
-- `cycle-manager` / `dispatcher` / `judge` を先に再起動
-- 次に `worker/tester/docser` を再起動
+- Restart `cycle-manager` / `dispatcher` / `judge` first
+- Then restart `worker`/`tester`/`docser`
 
-### 10.2 代表パターン
+### 10.2 Representative Patterns
 
-- `DISPATCH_*` / `MAX_CONCURRENT_WORKERS` を変更した場合
-  - `dispatcher` を再起動
-- `WORKER_*` / `TESTER_*` / `DOCSER_*` / `LLM_EXECUTOR` を変更した場合
-  - 対象 role の agent（worker/tester/docser）を再起動
-- `JUDGE_*` / `JUDGE_MODE` を変更した場合
-  - `judge` を再起動
-- `AUTO_REPLAN` / `REPLAN_*` / `FAILED_TASK_*` を変更した場合
-  - `cycle-manager` を再起動
-- `EXECUTION_ENVIRONMENT` / `SANDBOX_DOCKER_*` を変更した場合
-  - `dispatcher` と実行系 agent を再起動
+- When changing `DISPATCH_*` / `MAX_CONCURRENT_WORKERS`
+  - Restart `dispatcher`
+- When changing `WORKER_*` / `TESTER_*` / `DOCSER_*` / `LLM_EXECUTOR`
+  - Restart target role agents (worker/tester/docser)
+- When changing `JUDGE_*` / `JUDGE_MODE`
+  - Restart `judge`
+- When changing `AUTO_REPLAN` / `REPLAN_*` / `FAILED_TASK_*`
+  - Restart `cycle-manager`
+- When changing `EXECUTION_ENVIRONMENT` / `SANDBOX_DOCKER_*`
+  - Restart `dispatcher` and execution agents
 
-### 10.3 `stop-all` を使うべきケース
+### 10.3 When to Use `stop-all`
 
-- 影響範囲を切り分けられない大規模設定変更
-- process 状態が不整合で、部分再起動では収束しない場合
-- 実行中 task を一度安全側に巻き戻して仕切り直したい場合
+- Large config change where affected scope cannot be identified
+- Process state inconsistent; partial restart doesn't converge
+- Want to safely roll back running tasks and reset
 
-## 11. 変更後の確認チェックリスト
+## 11. Post-Change Verification Checklist
 
-設定変更や再起動後は、以下を順に確認すると反映漏れを検知しやすくなります。
+After config changes or restarts, check in order to detect missing updates:
 
-### 11.0 対応 API（早見表）
+### 11.0 API Quick Reference
 
-| 確認観点 | API |
+| Check | API |
 | --- | --- |
-| process 状態 | `GET /system/processes` |
-| agent 状態 | `GET /agents` |
-| task 滞留 | `GET /tasks` |
-| run 異常 | `GET /runs` |
-| 相関ログ | `GET /logs/all` |
+| Process state | `GET /system/processes` |
+| Agent state | `GET /agents` |
+| Task backlog | `GET /tasks` |
+| Run anomalies | `GET /runs` |
+| Correlated logs | `GET /logs/all` |
 
-### 11.1 Process 状態
+### 11.1 Process State
 
 - `GET /system/processes`
-  - 対象 process が `running` で復帰している
-  - 意図しない process が `stopped` のまま残っていない
+  - Target processes returned to `running`
+  - No unintended processes left `stopped`
 
-### 11.2 Agent 状態
+### 11.2 Agent State
 
 - `GET /agents`
-  - 再起動した role の agent が再登録されている
-  - `offline` が継続し続ける agent がない
-  - `planner/worker/tester/docser/judge` が対象（Dispatcher/Cycle Manager は `GET /system/processes` で確認）
+  - Restarted role agents re-registered
+  - No agents staying `offline`
+  - Targets: `planner`/`worker`/`tester`/`docser`/`judge` (Dispatcher/Cycle Manager via `GET /system/processes`)
 
-### 11.3 Task / Run の収束
+### 11.3 Task / Run Convergence
 
 - `GET /tasks`
-  - `running` が長時間固定されていない
-  - `blocked` が想定外に増えていない
+  - `running` not stuck for long
+  - `blocked` not unexpectedly increasing
 - `GET /runs`
-  - 再起動直後の run が連続 `failed` になっていない
+  - Runs right after restart not consecutively `failed`
 
-### 11.4 ログ確認
+### 11.4 Log Check
 
 - `GET /logs/all`
-  - 対象 process で設定値読込エラーが出ていない
-  - Dispatcher/Worker/Judge/Cycle Manager の heartbeat が継続している
+  - No config read errors in target processes
+  - Dispatcher/Worker/Judge/Cycle Manager heartbeats continuing
 
-### 11.5 判定の目安
+### 11.5 Assessment Criteria
 
-- 正常:
-  - queue が流れ、`queued -> running -> done/blocked` の遷移が再開
-  - `awaiting_judge` backlog が増え続けない
-- 要追加調査:
-  - 同一エラーで `failed` が連続
-  - 特定 role だけ agent が復帰しない
-  - `quota_wait`/`needs_rework` が急増する
+- Normal:
+  - Queue flows; `queued -> running -> done`/`blocked` transitions resume
+  - `awaiting_judge` backlog not growing
+- Needs further investigation:
+  - Same error causing consecutive `failed`
+  - Only certain roles not recovering agents
+  - `quota_wait`/`needs_rework` surging
 
-### 11.6 最小確認コマンド例（curl）
+### 11.6 Minimal Check Commands (curl)
 
-認証が必要な環境では `X-API-Key` または `Authorization: Bearer` を付与します。
+Use `X-API-Key` or `Authorization: Bearer` when auth is required.
 
 ```bash
-# 例: APIキー利用時
+# Example: with API key
 curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/health/ready
 curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/system/processes
 curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/agents

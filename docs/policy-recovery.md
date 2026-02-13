@@ -1,9 +1,9 @@
-# ポリシー回復（Policy Recovery）と AllowedPaths の自己成長
+# Policy Recovery and AllowedPaths Self-Growth
 
-このドキュメントは、openTiger が policy violation で停止しないための回復手順と、  
-回復結果を次回の計画（planning）へ反映する自己成長の仕組みを説明します。
+This document explains how openTiger recovers from policy violations without stopping,  
+and how recovery results are reflected into future planning for self-growth.
 
-関連:
+Related:
 
 - `docs/agent/worker.md`
 - `docs/agent/planner.md`
@@ -11,179 +11,178 @@
 - `docs/state-model.md`
 - `docs/operations.md`
 
-### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、ポリシー違反から入る場合）
+### Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Entering from Policy Violation)
 
-policy violation（`needs_rework` 連鎖など）を起点に調査する場合は、状態語彙 -> 遷移 -> 担当 -> 実装の順で辿ると切り分けしやすくなります。
+When investigating from policy violation (`needs_rework` chain, etc.), follow: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md`（`needs_rework` / `quota_wait` など状態語彙の確認）
-2. `docs/flow.md`（Worker 失敗処理と blocked 回復経路）
-3. `docs/operations.md`（API 手順と運用ショートカット）
-4. `docs/agent/README.md`（担当 agent と実装追跡ルート）
+1. `docs/state-model.md` (`needs_rework` / `quota_wait`, etc.)
+2. `docs/flow.md` (Worker failure handling and blocked recovery paths)
+3. `docs/operations.md` (API procedures and operation shortcuts)
+4. `docs/agent/README.md` (owning agent and implementation tracing path)
 
-## 1. 目的
+## 1. Purpose
 
-task が `allowedPaths` 外のファイルを変更した場合でも、openTiger は即座に rework 連鎖へ落とさず、  
-まず同一 run 内で回復を試みます。
+Even when a task modifies files outside `allowedPaths`, openTiger does not immediately fall into rework chains;  
+it first attempts in-run recovery.
 
-設計上の狙いは次の 2 点です。
+Design goals:
 
-- **自己回復（Self-recovery）**: 現在の Worker run 内で policy violation を解消する
-- **自己成長（Self-growth）**: 有効だった回復結果を記録し、Planner の将来 `allowedPaths` に先回り反映する
+- **Self-recovery**: Resolve policy violation within current Worker run
+- **Self-growth**: Record successful recovery and reflect it into future Planner `allowedPaths` in advance
 
-## 2. 実行中の自己回復（In-Run Self-Recovery / Worker）
+## 2. In-Run Self-Recovery (Worker)
 
-Worker の検証（verification）は、次の回復優先シーケンスで進みます。
+Worker verification proceeds in this recovery-priority sequence:
 
-1. `verifyChanges` を実行
-2. policy violation があれば deterministic path recovery を試行
-   - violation の outside path を抽出
-   - task context と policy recovery 設定から auto-allow 候補を生成
-   - `aggressive` mode では、`commandDrivenAllowedPathRules[].paths`（例: `Makefile`）に一致する violating path も in-run auto-allow 候補として扱う
-   - 共有 policy rule から command-driven path を加える
-3. `allowedPaths` を調整して再検証
-4. violation が残る場合は任意の LLM recovery（`allow` / `discard` / `deny`）を実行
-   - `discard`: 変更ファイルの一部を破棄して再検証
-   - `allow`: `allowedPaths` を拡張して再検証
-   - `deny`: 回復試行を打ち切って上位エスカレーション
-5. それでも解決しなければ task を `blocked(needs_rework)` にする
+1. Execute `verifyChanges`
+2. On policy violation, try deterministic path recovery
+   - Extract outside path from violation
+   - Generate auto-allow candidates from task context and policy recovery config
+   - In `aggressive` mode, violating paths matching `commandDrivenAllowedPathRules[].paths` (e.g. `Makefile`) are also in-run auto-allow candidates
+   - Add command-driven paths from shared policy rules
+3. Adjust `allowedPaths` and re-verify
+4. If violation remains, optionally run LLM recovery (`allow` / `discard` / `deny`)
+   - `discard`: discard part of changed files and re-verify
+   - `allow`: extend `allowedPaths` and re-verify
+   - `deny`: abort recovery and escalate
+5. If still unresolved, move task to `blocked(needs_rework)`
 
-### 2.1 LLM recovery の入力
+### 2.1 LLM Recovery Input
 
-LLM には、次の実行文脈を渡します。
+LLM receives:
 
-- task メタデータ（`title`, `goal`, `role`, `commands`）
-- 現在の `allowedPaths` と `deniedPaths`
-- violating paths と violation メッセージ
-- 現在の変更ファイル（changed files）
-- queued/running task の要約（同時実行状況）
+- Task metadata (`title`, `goal`, `role`, `commands`)
+- Current `allowedPaths` and `deniedPaths`
+- Violating paths and violation message
+- Current changed files
+- Summary of queued/running tasks (concurrent execution)
 
-### 2.2 厳格ガード（Hard Guardrails）
+### 2.2 Hard Guardrails
 
-LLM が `allow` を返しても、Worker は次を満たさない path を拒否します。
+Even when LLM returns `allow`, Worker rejects paths that fail any of:
 
-- path が安全である（path traversal / absolute path / 過剰 glob を含まない）
-- 現在の violating path に含まれている
-- `deniedPaths` に該当しない（`deniedPaths` が常に優先）
+- Path is safe (no path traversal / absolute path / excessive glob)
+- Path is in current violating paths
+- Path is not in `deniedPaths` (`deniedPaths` always wins)
 
-### 2.3 mode 別 deterministic 挙動
+### 2.3 Mode-Specific Deterministic Behavior
 
-deterministic auto-allow の範囲は mode により異なります。
+Deterministic auto-allow scope varies by mode:
 
 - `conservative`
-  - context-file match のみ
-  - infra-file 拡張なし
+  - Context-file match only
+  - No infra-file extension
 - `balanced`
-  - context-file match + infra-file 拡張
-  - root-level / command-driven violation auto-allow は行わない
-- `aggressive`（既定）
-  - `balanced` の挙動に加えて:
-    - root-level infra path recovery
-    - command-driven rule path recovery（例: make 系 rule 時の `Makefile`）
+  - Context-file match + infra-file extension
+  - No root-level / command-driven violation auto-allow
+- `aggressive` (default)
+  - `balanced` plus:
+    - Root-level infra path recovery
+    - Command-driven rule path recovery (e.g. `Makefile` for make rules)
 
-### 2.4 生成物パスの自動学習（Generated Artifact Path Auto-Learning）
+### 2.4 Generated Artifact Path Auto-Learning
 
-LLM recovery 後も violation が残る場合、Worker は生成物らしい path を破棄対象として最終回復を試みます。
+When violation remains after LLM recovery, Worker attempts final recovery by discarding likely-generated paths:
 
-1. `isLikelyGeneratedArtifactPath()` で violating path を抽出  
-   - 例: `.dump`, `.log`, `.tmp`, `.trace`  
-   - 例: `coverage`, `report`, `artifact`, `build`, `dist` などの path segment
-2. 抽出したファイルを discard して再検証
-3. 学習結果を `.opentiger/generated-paths.auto.txt` に保存し、次回以降の `verifyChanges` で最初から生成物（generated）扱いにする
+1. Extract violating paths via `isLikelyGeneratedArtifactPath()`
+   - e.g. `.dump`, `.log`, `.tmp`, `.trace`
+   - Path segments like `coverage`, `report`, `artifact`, `build`, `dist`
+2. Discard extracted files and re-verify
+3. Save learning to `.opentiger/generated-paths.auto.txt`; treat as generated in future `verifyChanges`
 
-`generated-paths.txt` を手動編集する必要はありません。  
-`GENERATED_PATHS` / `WORKER_EXTRA_GENERATED_PATHS` / `.opentiger/generated-paths.auto.txt` を毎回マージして検証します。
+No manual editing of `generated-paths.txt` needed.  
+`GENERATED_PATHS` / `WORKER_EXTRA_GENERATED_PATHS` / `.opentiger/generated-paths.auto.txt` are merged for verification.
 
-### 2.5 Docser の制約
+### 2.5 Docser Constraints
 
-`docser` には意図的な制約があります。
+Docser has intentional constraints:
 
-- deterministic policy auto-allow で追加 path を返さない
-- LLM policy recovery を実行しない
-- verification command は doc-safe な `check` 系（例: `pnpm run check`）に限定
+- Deterministic policy auto-allow does not add paths
+- Does not run LLM policy recovery
+- Verification commands limited to doc-safe check-style (e.g. `pnpm run check`)
 
-## 3. 共有ポリシー回復エンジン（Shared Policy Recovery Engine / Core）
+## 3. Shared Policy Recovery Engine (Core)
 
-共有ロジックは `packages/core/src/policy-recovery.ts` にあり、Worker/Cycle Manager/Planner から再利用されます。
+Shared logic lives in `packages/core/src/policy-recovery.ts`, reused by Worker/Cycle Manager/Planner.
 
-主な責務:
+Main responsibilities:
 
-- 設定のロードとマージ
-  - built-in default
+- Load and merge config
+  - Built-in default
   - `.opentiger/policy-recovery.json`
-  - 環境変数上書き（env override）
-- command-driven path の解決
-- violation path 抽出
-- mode 別 deterministic auto-allow 候補の解決
+  - Env override
+- Resolve command-driven paths
+- Extract violation paths
+- Resolve mode-specific deterministic auto-allow candidates
   - `conservative`
   - `balanced`
-  - `aggressive`（既定）
+  - `aggressive` (default)
 
-## 4. 検証コマンド形式の回復（Verification Command Format Recovery）
+## 4. Verification Command Format Recovery
 
-verification command が unsupported format（shell operator / `$()`）や missing script で失敗した場合、  
-Cycle Manager は無限 block させず command を調整して requeue します。
+When verification command fails due to unsupported format (shell operator / `$()`) or missing script,  
+Cycle Manager adjusts the command and requeues instead of infinite block.
 
 - `requeue-failed`:
   - `verification_command_unsupported_format` / `verification_command_missing_script`
-    - 失敗 command を `commands` から除去して requeue
+    - Remove failed command from `commands` and requeue
   - `policy_violation`
-    - allowed path 調整を試みて requeue
+    - Try allowed path adjustment and requeue
 
-Worker 側も、残り command がある場合や既に前段が通っている場合（doc-only/no-op など）は、  
-同 run 内で明示 command failure（explicit command failure）を skip します。
+Worker may skip explicit command failure within the same run when remaining commands exist or earlier steps already passed (e.g. doc-only/no-op).
 
-## 5. リワーク連鎖の抑制（Rework Chain Suppression / Cycle Manager）
+## 5. Rework Chain Suppression (Cycle Manager)
 
-Cycle Manager は policy-only failure と rework 連鎖の増幅を抑制します。
+Cycle Manager suppresses policy-only failure and rework chain amplification.
 
 - `requeue-failed`:
-  - `policy_violation` に対して allowed path 調整 + requeue を試行
+  - For `policy_violation`, try allowed path adjustment + requeue
 - `requeue-blocked`:
-  - blocked task が outside-allowed violation を持つ場合:
-    - safe path を追加できるなら同一 task を requeue
-    - できない場合は `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES` まで抑制再試行し、その後 cancel
-    - `policy_violation_rework_suppressed_no_safe_path` または `policy_violation_rework_suppressed_exhausted` を emit
-  - 同一 parent に有効な rework child（active）がある場合は rework split を作らない
-  - `[auto-rework] parentTask=` の深さが `AUTO_REWORK_MAX_DEPTH` 以上なら cancel
+  - When blocked task has outside-allowed violation:
+    - Requeue same task if safe path can be added
+    - Otherwise suppress retry up to `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`, then cancel
+    - Emit `policy_violation_rework_suppressed_no_safe_path` or `policy_violation_rework_suppressed_exhausted`
+  - Do not create rework split when valid rework child (active) already exists for same parent
+  - Cancel when `[auto-rework] parentTask=` depth is `AUTO_REWORK_MAX_DEPTH` or more
 
-これにより `[Rework] ...` child の無限増殖を防止します。
+This prevents unbounded growth of `[Rework] ...` children.
 
-## 6. Planner による自己成長（Self-Growth）
+## 6. Planner Self-Growth
 
-Planner は過去の回復結果を利用して、将来 task の `allowedPaths` を先回り拡張します。
+Planner uses past recovery results to extend future task `allowedPaths` in advance.
 
-流れ:
+Flow:
 
-1. 直近の `task.policy_recovery_applied` event を読み込む
-2. role/path の頻度で hint を集約
-3. requirement note へ hint を注入して planning 文脈に渡す
-4. 一致した hint を生成 task の `allowedPaths` に直接反映
+1. Read recent `task.policy_recovery_applied` events
+2. Aggregate hints by role/path frequency
+3. Inject hints into requirement note and pass to planning context
+4. Reflect matched hints directly into generated task `allowedPaths`
 
-hint の代表 reason:
+Representative hint reasons:
 
 - `context_file_match`
 - `signal_match_strong`
 - `signal_match_repeated_weak`
 
-Planner は path 追加理由も記録します。
+Planner also records path addition reasons:
 
 - `planner.plan_created.payload.policyRecoveryHintApplications`
-  - task ごとの追加 path
-  - 一致した hint メタデータ（role, count, reason, source text）
+  - Per-task added paths
+  - Matched hint metadata (role, count, reason, source text)
 
-## 7. 設定
+## 7. Configuration
 
-### 7.1 リポジトリ設定ファイル
+### 7.1 Repository Config File
 
-既定ファイル:
+Default file:
 
 - `.opentiger/policy-recovery.json`
 
-テンプレート:
+Template:
 
 - `templates/policy-recovery.example.json`
 
-主要キー:
+Main keys:
 
 - `mode`
 - `replaceDefaultCommandDrivenAllowedPathRules`
@@ -193,65 +192,65 @@ Planner は path 追加理由も記録します。
 - `safeInfraFileExtensions`
 - `safeHiddenRootFiles`
 
-### 7.2 環境変数
+### 7.2 Environment Variables
 
-Core 設定:
+Core:
 
 - `POLICY_RECOVERY_CONFIG_PATH`
 - `POLICY_RECOVERY_CONFIG_JSON`
 - `POLICY_RECOVERY_MODE`
 
-Worker 回復設定:
+Worker recovery:
 
 - `WORKER_POLICY_RECOVERY_USE_LLM`
 - `WORKER_POLICY_RECOVERY_ATTEMPTS`
 - `WORKER_POLICY_RECOVERY_TIMEOUT_SECONDS`
 - `WORKER_POLICY_RECOVERY_MODEL`
 
-Cycle Manager の rework 抑制:
+Cycle Manager rework suppression:
 
-- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`（既定: 2）  
-  - safe path が見つからないときの最大抑制再試行回数
-- `AUTO_REWORK_MAX_DEPTH`（既定: 2）  
-  - rework 連鎖深度の上限。超過時は cancel
+- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES` (default: 2)
+  - Max suppression retries when no safe path found
+- `AUTO_REWORK_MAX_DEPTH` (default: 2)
+  - Max rework chain depth; cancel when exceeded
 
-Worker の verification skip:
+Worker verification skip:
 
-- `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT`（既定: `true`）  
-  - 残り command がある場合、missing/unsupported explicit command を skip
+- `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT` (default: `true`)
+  - Skip missing/unsupported explicit command when remaining commands exist
 
-## 8. イベント参照（Event Reference）
+## 8. Event Reference
 
-回復観測イベント:
+Recovery observation events:
 
 - `task.policy_recovery_decided`
-  - LLM decision 要約と raw decision group
+  - LLM decision summary and raw decision group
 - `task.policy_recovery_applied`
-  - 適用 action（`allow` / `discard` / `allow+discard`）と結果 path
+  - Applied action (`allow` / `discard` / `allow+discard`) and result paths
 - `task.policy_recovery_denied`
-  - denied decision の詳細
+  - Details of denied decision
 
-関連 queue 回復イベント:
+Related queue recovery events:
 
-- `task.requeued`（reason）
+- `task.requeued` (reason)
   - `policy_allowed_paths_adjusted`
   - `policy_allowed_paths_adjusted_from_blocked`
   - `verification_command_missing_script_adjusted`
   - `verification_command_unsupported_format_adjusted`
   - `cooldown_retry`
-- `task.recovery_escalated`（reason）
+- `task.recovery_escalated` (reason)
   - `policy_violation_rework_suppressed_no_safe_path`
   - `policy_violation_rework_suppressed_exhausted`
   - `rework_child_already_exists`
   - `rework_chain_max_depth_reached`
 
-Planner 観測:
+Planner observation:
 
 - `planner.plan_created.payload.policyRecoveryHintApplications`
 
-## 9. 運用メモ
+## 9. Operation Notes
 
-- 本機構は既存の events/tasks データを利用するため、schema migration は不要です。
-- より厳密な挙動が必要な場合は `balanced` または `conservative` へ切り替えます。
-- 回復判断を速くしたい場合は Worker の timeout/model を調整します。
-- 判断品質を優先する場合は attempts を慎重に増やし、queue 遅延を監視します。
+- This mechanism uses existing events/tasks data; no schema migration needed
+- For stricter behavior, switch to `balanced` or `conservative`
+- Adjust Worker timeout/model for faster recovery decisions
+- For decision quality, increase attempts carefully and monitor queue delay

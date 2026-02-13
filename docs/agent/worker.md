@@ -1,95 +1,94 @@
-# ワーカー（Worker）Agent 仕様
+# Worker Agent Specification
 
-関連:
+Related:
 
 - `docs/agent/README.md`
 - `docs/policy-recovery.md`
 - `docs/verification.md`
 
-## 1. 役割
+## 1. Role
 
-Worker 実行環境（ランタイム）は `AGENT_ROLE` に応じて実行モードを切り替えます。
+Worker runtime switches execution mode based on `AGENT_ROLE`:
 
-- `worker`: 実装変更
-- `tester`: テスト中心変更
-- `docser`: ドキュメント変更
+- `worker`: implementation changes
+- `tester`: test-centric changes
+- `docser`: documentation changes
 
-このページは Worker ランタイムの**共通動作**を説明します。  
-Tester/Docser 固有差分は以下を参照してください。
+This page describes **shared behavior** of the Worker runtime.  
+For Tester/Docser-specific differences, see:
 
 - `docs/agent/tester.md`
 - `docs/agent/docser.md`
 
-責務外:
+Out of scope:
 
-- 全体 backlog の再計画判断
-- PR の承認/差し戻し判定
+- Overall backlog replan decisions
+- PR approve/rework decisions
 
-## 2. 標準実行フロー
+## 2. Standard Execution Flow
 
-1. 実行ロック（runtime lock）取得
-2. checkout / branch 準備
-3. LLM 実行（`opencode` または `claude_code`）
-4. expected-file 検証
-5. 検証フェーズ（verification phase）実行
-6. commit/push + PR 作成（`git` mode）
-7. run/task/artifact 更新
-8. lease 解放 + agent を idle へ復帰
+1. Acquire runtime lock
+2. Checkout / branch prep
+3. LLM execution (`opencode` or `claude_code`)
+4. Expected-file verification
+5. Run verification phase
+6. Commit/push + PR creation (git mode)
+7. Update run/task/artifact
+8. Release lease and return agent to idle
 
-## 3. 検証フェーズ（Verification Phase）
+## 3. Verification Phase
 
-検証フェーズは単純なコマンド実行だけではなく、複数の回復処理（recovery）を含みます。
+The verification phase includes multiple recovery steps, not just simple command execution.
 
-- 明示コマンド（explicit command）実行
-- no-change failure（変更なし失敗）の再試行
-- no-op 判定（検証 pass 前提）
-- policy violation の deterministic 回復
-- optional な LLM policy recovery（`allow|discard|deny`）
-- generated artifact の discard + 学習
-- verification recovery 実行（失敗コマンドを軸に再試行）
+- Execute explicit commands
+- Retry on no-change failure
+- No-op detection (pass assumed when verification passes)
+- Deterministic policy violation recovery
+- Optional LLM policy recovery (`allow|discard|deny`)
+- Discard + learn generated artifacts
+- Verification recovery (retry around failed commands)
 
-解決不可の場合:
+When unresolvable:
 
 - policy/verification failure -> `blocked(needs_rework)`
 
-## 4. 状態遷移
+## 4. State Transitions
 
-成功:
+Success:
 
-- レビュー必要 -> `blocked(awaiting_judge)`
-- レビュー不要 -> `done`
+- Review required -> `blocked(awaiting_judge)`
+- No review required -> `done`
 
-失敗:
+Failure:
 
-- quota 系 -> `blocked(quota_wait)`
-- verification/policy -> `blocked(needs_rework)`
-- その他 -> `failed`
+- Quota-related -> `blocked(quota_wait)`
+- Verification/policy -> `blocked(needs_rework)`
+- Other -> `failed`
 
-## 5. 安全性とガードレール
+## 5. Safety and Guardrails
 
-- denied command の事前検査
-- shell operator を含むコマンドは実行対象外
-- runtime lock + queue guard による重複実行防止
-- expected-file mismatch 時は警告（warning）/失敗へ反映
+- Pre-check for denied commands
+- Commands containing shell operators are excluded from execution
+- Runtime lock + queue guard prevent duplicate execution
+- Expected-file mismatch reflected as warning/failure
 
-## 6. 検証コマンドの制約
+## 6. Verification Command Constraints
 
-コマンドは shell ではなく spawn 実行です。  
-以下はサポートされません。
+Commands are executed via spawn, not shell. The following are not supported:
 
 - `$()`
 - `|`, `&&`, `||`, `;`, `<`, `>`, `` ` ``
 
-## 7. 実装参照（source of truth）
+## 7. Implementation Reference (Source of Truth)
 
-- 起動と role 解決: `apps/worker/src/main.ts`
-- 実行本体: `apps/worker/src/worker-runner.ts`
-- 検証フェーズ: `apps/worker/src/worker-runner-verification.ts`
-- role 別補助挙動: `apps/worker/src/worker-task-helpers.ts`
-- 実行ロック: `apps/worker/src/worker-runtime-lock.ts`
-- 検証コマンド処理: `apps/worker/src/steps/verify/`
+- Startup and role resolution: `apps/worker/src/main.ts`
+- Execution body: `apps/worker/src/worker-runner.ts`
+- Verification phase: `apps/worker/src/worker-runner-verification.ts`
+- Role-specific helper behavior: `apps/worker/src/worker-task-helpers.ts`
+- Runtime lock: `apps/worker/src/worker-runtime-lock.ts`
+- Verification command handling: `apps/worker/src/steps/verify/`
 
-## 8. 主要設定
+## 8. Main Configuration
 
 - `AGENT_ID`, `AGENT_ROLE`
 - `WORKER_MODEL`, `TESTER_MODEL`, `DOCSER_MODEL`

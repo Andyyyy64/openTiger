@@ -1,63 +1,63 @@
-# ジャッジ（Judge）Agent 仕様
+# Judge Agent Specification
 
-関連:
+Related:
 
 - `docs/agent/README.md`
 - `docs/flow.md`
 - `docs/mode.md`
 
-## 1. 役割
+## 1. Role
 
-Judge は成功した run（successful run）を評価し、task を `done` へ収束させるか、再実行/再修正へ分岐させる責務を持ちます。
+Judge evaluates successful runs and decides whether to converge tasks to `done` or branch to re-execution/rework.
 
-責務外:
+Out of scope:
 
-- queued task の配布・lease 管理
-- 実ファイル変更の実行
+- Queued task dispatch and lease management
+- Direct file modification execution
 
-## 2. モード解決
+## 2. Mode Resolution
 
-実行モードは次で決定されます。
+Execution mode is determined by:
 
 - `JUDGE_MODE=git|local|auto`
-- `auto` の場合は `REPO_MODE` に追従
+- When `auto`, it follows `REPO_MODE`
 
-## 3. 入力
+## 3. Input
 
-- successful run + artifacts（`pr` / `worktree`）
-- CI / policy / LLM evaluator 結果
-- task の retry context / lineage
+- Successful run + artifacts (`pr` / `worktree`)
+- CI / policy / LLM evaluator results
+- Task retry context / lineage
 
-## 4. 中核判断
+## 4. Core Decisions
 
 - `approve`
 - `request_changes`
 
-legacy の `needs_human` は request_changes 系の回復フローへ正規化されます。
+Legacy `needs_human` is normalized into request_changes-style recovery flow.
 
-## 5. 判定後の遷移
+## 5. Post-Decision Transitions
 
-- approve + merge 成功 -> `done`
-- non-approve -> retry または `needs_rework` へ移行
-- merge conflict -> `[AutoFix-Conflict]` task 作成を試行
+- approve + merge success -> `done`
+- non-approve -> retry or move to `needs_rework`
+- merge conflict -> attempt `[AutoFix-Conflict]` task creation
 
-## 6. ループ防止と回復
+## 6. Loop Prevention and Recovery
 
-- run claim の冪等制御（`judgedAt`, `judgementVersion`）
-- non-approve circuit breaker
-- doom loop circuit breaker
-- awaiting_judge backlog の run 復元
-- conflict 時の autofix fallback
+- Idempotent run claim control (`judgedAt`, `judgementVersion`)
+- Non-approve circuit breaker
+- Doom loop circuit breaker
+- Run restoration for awaiting_judge backlog
+- Autofix fallback on conflict
 
-## 7. 実装参照（source of truth）
+## 7. Implementation Reference (Source of Truth)
 
-- 起動とループ: `apps/judge/src/main.ts`, `apps/judge/src/judge-loops.ts`
-- 判定の中核処理: `apps/judge/src/judge-agent.ts`, `apps/judge/src/judge-evaluate.ts`
-- 再試行と回復: `apps/judge/src/judge-retry.ts`, `apps/judge/src/judge-pending.ts`
-- autofix 経路: `apps/judge/src/judge-autofix.ts`
-- ローカル運用経路: `apps/judge/src/judge-local-loop.ts`, `apps/judge/src/judge-local-merge.ts`
+- Startup and loop: `apps/judge/src/main.ts`, `apps/judge/src/judge-loops.ts`
+- Core decision logic: `apps/judge/src/judge-agent.ts`, `apps/judge/src/judge-evaluate.ts`
+- Retry and recovery: `apps/judge/src/judge-retry.ts`, `apps/judge/src/judge-pending.ts`
+- Autofix path: `apps/judge/src/judge-autofix.ts`
+- Local operation path: `apps/judge/src/judge-local-loop.ts`, `apps/judge/src/judge-local-merge.ts`
 
-## 8. 主な設定
+## 8. Main Configuration
 
 - `JUDGE_MODE`
 - `JUDGE_MODEL`

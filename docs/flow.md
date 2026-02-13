@@ -1,194 +1,194 @@
-# 実行フロー（Current）
+# Execution Flow (Current)
 
-## スコープ
+## Scope
 
-このページは、task/run を中心とした**実行時の状態遷移**を説明します。  
-起動時の preflight 判定式や全パターン表は `docs/startup-patterns.md` を参照してください。
+This page describes **runtime state transitions** for task/run.  
+For startup preflight rules and full pattern matrix, see `docs/startup-patterns.md`.
 
-## 0.1 状態モデルから読むときの入口
+## 0.1 Entry Point from State Model
 
-状態語彙から入る場合は、まず `docs/state-model.md` で用語を確定し、その後このページで遷移と回復経路を確認します。
+When entering from state vocabulary, first fix terminology in `docs/state-model.md`, then check transitions and recovery paths here.
 
-| 状態語彙の確認先（state-model） | このページで次に読む節 | 主担当 agent |
+| State model section | Next section here | Owning agent |
 | --- | --- | --- |
-| 「1. Task Status」「2. Task Block Reason」 | 「2. 基本ライフサイクル」「3. 回復で使われる Blocked Reason」 | Dispatcher / Worker / Judge |
-| 「2.2 Task Retry Reason の見方（実運用）」 | 「6. Worker の失敗処理」「8. Cycle Manager の自己回復」 | Worker / Cycle Manager |
-| 「7. 状態遷移で停滞しやすいパターン」 | 「5. Dispatcher の回復レイヤ」「7. Judge の非承認 / マージ失敗経路」 | Dispatcher / Judge |
+| "1. Task Status" "2. Task Block Reason" | "2. Basic Lifecycle" "3. Blocked Reasons Used for Recovery" | Dispatcher / Worker / Judge |
+| "2.2 Task Retry Reason (Operations)" | "6. Worker Failure Handling" "8. Cycle Manager Self-Recovery" | Worker / Cycle Manager |
+| "7. Patterns Prone to Stalls" | "5. Dispatcher Recovery Layer" "7. Judge Non-Approval / Merge Failure Paths" | Dispatcher / Judge |
 
-## 1. 起動 / preflight
+## 1. Startup / Preflight
 
-システム起動時は `/system/preflight` を呼び出し、推奨起動構成を組み立てます。
+On system startup, call `/system/preflight` to build recommended startup configuration.
 
-確認する入力:
+Inputs:
 
-- requirement の内容
-- GitHub の open issue
-- GitHub の open PR
-- ローカル task backlog（`queued/running/failed/blocked`）
+- Requirement content
+- GitHub open issues
+- GitHub open PRs
+- Local task backlog (`queued`/`running`/`failed`/`blocked`)
 
-判定ルール:
+Rules:
 
 - `startPlanner = hasRequirementContent && !hasIssueBacklog && !hasJudgeBacklog`
-- 実行系 agent（`dispatcher/worker/tester/docser`）は planner 作業または backlog があるとき起動
-- judge は judge backlog があるか、実行系 agent が動作中のとき起動
-- planner process 数は最大 1
+- Execution agents (`dispatcher`/`worker`/`tester`/`docser`) start when planner work or backlog exists
+- Judge starts when judge backlog exists or execution agents are active
+- Planner process count is max 1
 
-代表的な警告の意味:
+Meaning of common warnings:
 
 - `Issue backlog detected (...)`
-  - backlog-first モードが有効
+  - Backlog-first mode is active
 - `Planner is skipped for this launch`
-  - issue/pr backlog がある場合の正常挙動
+  - Normal when issue/pr backlog exists
 
-判定の厳密な式・全組み合わせは `docs/startup-patterns.md` に集約しています。
+Exact formulas and all combinations are in `docs/startup-patterns.md`.
 
-## 2. 基本ライフサイクル
+## 2. Basic Lifecycle
 
-1. Task が `queued` に入る
-2. Dispatcher が lease を取得し task を `running` にする
-3. 実行 role（`worker/tester/docser`）が task と検証コマンドを実行
-   - LLM 実行前に worker は次から圧縮プロンプトコンテキストを構築:
-     - 静的 instructions（`apps/worker/instructions/*.md`）
-     - 実行時 snapshot（`.opentiger/context/agent-profile.json`）
-     - 失敗差分（`.opentiger/context/context-delta.json`）
-   - prompt 膨張を避けるため、context 注入は固定文字数の budget で制御
-4. 成功時:
-   - review が必要なら通常 `blocked(awaiting_judge)`
-   - 直接完了なら `done`
-5. Judge が成功 run を評価
-6. Task は次へ遷移:
+1. Task enters `queued`
+2. Dispatcher acquires lease and moves task to `running`
+3. Execution role (`worker`/`tester`/`docser`) runs task and verification commands
+   - Before LLM execution, worker builds compressed prompt context from:
+     - Static instructions (`apps/worker/instructions/*.md`)
+     - Runtime snapshot (`.opentiger/context/agent-profile.json`)
+     - Failure delta (`.opentiger/context/context-delta.json`)
+   - Context injection uses a fixed character budget to avoid prompt bloat
+4. On success:
+   - Usually `blocked(awaiting_judge)` if review needed
+   - Otherwise `done`
+5. Judge evaluates successful run
+6. Task transitions to:
    - `done`
-   - `blocked(awaiting_judge)`（retry/recovery）
-   - `blocked(needs_rework)`（split/autofix 経路）
-7. Cycle Manager が収束まで継続的に requeue / rebuild する
+   - `blocked(awaiting_judge)` (retry/recovery)
+   - `blocked(needs_rework)` (split/autofix path)
+7. Cycle Manager continues requeue / rebuild until convergence
 
-## 3. 回復で使われる Blocked Reason
+## 3. Blocked Reasons Used for Recovery
 
-定義一覧は `docs/state-model.md` を参照してください。
+Definitions are in `docs/state-model.md`.
 
 - `awaiting_judge`
-  - 成功 run があるが未判定、または run 復元が必要
+  - Successful run exists but not judged, or run restore needed
 - `quota_wait`
-  - worker が LLM quota エラーを検知し、cooldown retry のため待機
+  - Worker detected LLM quota error; waiting for cooldown retry
 - `needs_rework`
-  - non-approve 昇格、失敗シグネチャ反復、または明示的 autofix 経路
+  - Non-approve escalation, repeated failure signature, or explicit autofix path
 
-互換性のため、legacy の `needs_human` は有効な回復経路へ正規化されます。
+Legacy `needs_human` is normalized into valid recovery paths.
 
-その他の runtime blocked reason:
+Other runtime blocked reasons:
 
 - `issue_linking`
-  - planner が issue-link metadata 解決まで task を一時待機させ、解決後に `queued` へ戻す
+  - Planner temporarily holds task for issue-link metadata; returns to `queued` when resolved
 
-## 4. Run Lifecycle と Judge の冪等性
+## 4. Run Lifecycle and Judge Idempotency
 
-- Worker は開始時に `runs(status=running)` を作成
-- Worker は run を `success/failed` に更新
-- Judge は未判定の成功 run のみを対象化
-- Judge は review 前に run を原子的に claim（`judgedAt`, `judgementVersion`）
+- Worker creates `runs(status=running)` at start
+- Worker updates run to `success`/`failed`
+- Judge only processes unjudged successful runs
+- Judge atomically claims run before review (`judgedAt`, `judgementVersion`)
 
-結果:
+Result:
 
-- 同一 run の二重 review を防止
-- 重複 judge loop を抑制
+- Prevents double review of same run
+- Suppresses duplicate judge loops
 
-## 5. Dispatcher の回復レイヤ
+## 5. Dispatcher Recovery Layer
 
-poll loop ごとに:
+Each poll loop:
 
-- 期限切れ lease のクリーンアップ
-- dangling lease のクリーンアップ
-- dead-agent lease の reclaim
-- active run がない orphaned `running` task の回復
+- Clean up expired leases
+- Clean up dangling leases
+- Reclaim dead-agent leases
+- Recover orphaned `running` tasks with no active run
 
-タスクのフィルタ条件:
+Task filter conditions:
 
-- 未解決 dependency は block
-- `targetArea` 競合は block
-- 直近の非 quota failure は cooldown block 対象
-- 最新 quota failure は dispatcher 側 cooldown block から除外
+- Unresolved dependencies blocked
+- `targetArea` conflict blocked
+- Recent non-quota failure subject to cooldown block
+- Latest quota failure excluded from dispatcher cooldown block
 
-## 6. Worker の失敗処理
+## 6. Worker Failure Handling
 
-task error 時:
+On task error:
 
-- run を `failed` に更新
-- task を次のように更新:
-  - quota シグネチャに一致する場合は `blocked(quota_wait)`
-  - それ以外は `failed`
-- failure signature に応じて context delta（`.opentiger/context/context-delta.json`）を更新する場合あり
-- lease を解放
-- agent を `idle` に戻す
+- Update run to `failed`
+- Update task:
+  - If matches quota signature: `blocked(quota_wait)`
+  - Otherwise: `failed`
+- Optionally update context delta (`.opentiger/context/context-delta.json`) by failure signature
+- Release lease
+- Return agent to `idle`
 
-Queue 重複実行防止:
+Queue duplicate prevention:
 
-- task ごとの runtime lock
-- lock 競合時の起動直後ガード（誤った即時 requeue を回避）
+- Per-task runtime lock
+- Post-start guard on lock conflict (avoids wrong immediate requeue)
 
-## 7. Judge の非承認 / マージ失敗経路
+## 7. Judge Non-Approval / Merge Failure Paths
 
-- 非承認で AutoFix task 作成、および親 task -> `blocked(needs_rework)` への遷移が起こる場合あり
-- 承認後でもマージ競合があれば `[AutoFix-Conflict] PR #...` を生成する場合あり
-- 競合 autofix の enqueue に失敗した場合は judge retry fallback を使用
+- Non-approval may create AutoFix task and move parent to `blocked(needs_rework)`
+- On approval, merge conflict may generate `[AutoFix-Conflict] PR #...`
+- On conflict autofix enqueue failure, uses judge retry fallback
 
-## 8. Cycle Manager の自己回復
+## 8. Cycle Manager Self-Recovery
 
-周期ジョブの主な内容:
+Main periodic actions:
 
-- timeout run の cancellation
-- lease クリーンアップ
-- offline agent の reset
-- failed task の cooldown requeue（failure classification 付き。unsupported/missing verification command は block ではなく command 調整へ）
-- blocked task の reason 別 cooldown 回復
-- backlog ordering gate
-  - `local task backlog > 0`: task 実行を継続
-  - `local task backlog == 0`: `/system/preflight` を実行して issue backlog を import/sync
-  - `issue backlog == 0`: planner の再計画（replan）を起動
+- Cancel timeout runs
+- Lease cleanup
+- Reset offline agents
+- Cooldown requeue of failed tasks (with failure classification; unsupported/missing verification command goes to command adjustment, not block)
+- Reason-specific cooldown recovery for blocked tasks
+- Backlog ordering gate
+  - `local task backlog > 0`: continue task execution
+  - `local task backlog == 0`: call `/system/preflight` to import/sync issue backlog
+  - `issue backlog == 0`: trigger Planner replan
 
-起動判定・replan 判定の責務分離は `docs/startup-patterns.md` を参照してください。
+For startup vs replan responsibility split, see `docs/startup-patterns.md`.
 
-blocked 回復挙動:
+Blocked recovery behavior:
 
 - `awaiting_judge`
-  - 必要に応じて最新の judge 可能な成功 run を復元
-  - それ以外は timeout-requeue（PR review task は ping-pong 回避のため `awaiting_judge` を維持）
+  - Restore latest judgable successful run when needed
+  - Otherwise timeout-requeue (PR review tasks keep `awaiting_judge` to avoid ping-pong)
 - `quota_wait`
-  - cooldown 後に requeue
+  - Requeue after cooldown
 - `needs_rework`
-  - PR review task: `awaiting_judge` へ戻す
-  - 通常 task: `[Rework] ...` task を生成し、親を failed lineage へ移動
-  - policy-only violation は `allowedPaths` 調整後の in-place requeue が可能。安全経路がなければ rework split を抑制（retry 上限後に cancel）
-  - 有効な rework child が既にある場合は追加 rework を作らない
-  - rework depth が `AUTO_REWORK_MAX_DEPTH` を超えた場合は cancel
+  - PR review task: return to `awaiting_judge`
+  - Normal task: create `[Rework] ...` task, move parent to failed lineage
+  - Policy-only violation: may in-place requeue after `allowedPaths` adjustment. If no safe path, suppress rework split (cancel after retry limit)
+  - Do not create additional rework if valid rework child already exists
+  - Cancel when rework depth exceeds `AUTO_REWORK_MAX_DEPTH`
 
-system process の自己回復:
+System process self-recovery:
 
-- Judge backlog（`openPrCount > 0` または `pendingJudgeTaskCount > 0`）を検知すると runtime hatch を arm し、Judge process 停止時に自動起動
+- When Judge backlog is detected (`openPrCount > 0` or `pendingJudgeTaskCount > 0`), arms runtime hatch and auto-starts Judge when Judge process stops
 
-policy のライフサイクルと自己成長の詳細:
+Policy lifecycle and self-growth details:
 
 - `docs/policy-recovery.md`
 
-## 9. Host snapshot と context 更新
+## 9. Host Snapshot and Context Update
 
-- API の host context endpoint:
+- API host context endpoints:
   - `GET /system/host/neofetch`
   - `GET /system/host/context`
-- snapshot の主ソースは `neofetch`。必要時は `uname -srmo` に fallback
-- snapshot は `.opentiger/context/agent-profile.json` に cache され、TTL/fingerprint で更新
+- Main snapshot source is `neofetch`; falls back to `uname -srmo` when needed
+- Snapshot cached in `.opentiger/context/agent-profile.json`, updated by TTL/fingerprint
 
-## 10. `Failed` と `Retry` が共存する理由
+## 10. Why `Failed` and `Retry` Coexist
 
-Runs table で即時 failed を表示しつつ、task card で retry countdown を表示することがあります。
+Runs table may show immediate `failed` while task card shows retry countdown.
 
-例:
+Example:
 
-- run status: `failed`（その試行の実結果）
-- task retry: `quota 79s`（次の回復試行が既に予定済み）
+- run status: `failed` (actual result of that attempt)
+- task retry: `quota 79s` (next recovery attempt already scheduled)
 
-これは停止ではなく、能動的な回復動作です。
+This indicates active recovery, not a halt.
 
-## 関連する Agent 仕様
+## Related Agent Specifications
 
 - `docs/agent/planner.md`
 - `docs/agent/dispatcher.md`
@@ -198,4 +198,4 @@ Runs table で即時 failed を表示しつつ、task card で retry countdown �
 - `docs/agent/judge.md`
 - `docs/agent/cycle-manager.md`
 
-実装を直接追う場合は、各ページ末尾の「実装参照（source of truth）」節から対応する `apps/*/src` を確認してください。
+To trace implementation, use the "Implementation reference (source of truth)" section at the end of each page to locate the corresponding `apps/*/src`.

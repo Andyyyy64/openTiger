@@ -1,14 +1,14 @@
-# 起動と実行時のパターン行列
+# Startup and Runtime Pattern Matrix
 
-このドキュメントは、実装に合わせて次の判定パターンを整理したものです。
+This document organizes the following decision patterns to match implementation:
 
-1. 起動時 `/system/preflight` の推奨判定
-2. `cycle-manager` の実行時収束ループ
-3. Planner 起動時の事前フック（prehook）ガード（`/system/processes/:name/start`）
+1. Startup `/system/preflight` recommendation rules
+2. `cycle-manager` runtime convergence loop
+3. Planner startup prehook guards (`/system/processes/:name/start`)
 
-最終検証日: 2026-02-13
+Last verified: 2026-02-13
 
-## 関連
+## Related
 
 - `docs/api-reference.md`
 - `docs/flow.md`
@@ -17,47 +17,47 @@
 - `docs/agent/judge.md`
 - `docs/agent/cycle-manager.md`
 
-## スコープ
+## Scope
 
-このページは次だけを扱います。
+This page covers only:
 
-1. 起動時 preflight の意思決定
-2. planner 起動ガード
-3. backlog 枯渇後の再計画（replan）入口条件
+1. Startup preflight decision
+2. Planner startup guard
+3. Replan entry conditions after backlog depletion
 
-run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `docs/flow.md` を参照してください。
+For run failure handling, blocked recovery, and detailed state transitions in judge/worker, see `docs/flow.md`.
 
-### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、起動判定から入る場合）
+### Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Entering from Startup Rules)
 
-起動判定を確認したあとに停滞を追う場合は、状態語彙 -> 遷移 -> 担当 -> 実装の順で辿ると切り分けが速くなります。
+When tracing stalls from startup rules, follow: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md`（状態語彙の確認）
-2. `docs/flow.md`（実行時遷移と回復経路）
-3. `docs/operations.md`（API 手順と運用ショートカット）
-4. `docs/agent/README.md`（担当 agent と実装追跡ルート）
+1. `docs/state-model.md` (state vocabulary)
+2. `docs/flow.md` (runtime transitions and recovery paths)
+3. `docs/operations.md` (API procedures and operation shortcuts)
+4. `docs/agent/README.md` (owning agent and implementation tracing path)
 
-## 判定入力
+## Decision Inputs
 
-| 記号 | 意味 | 取得元 |
+| Symbol | Meaning | Source |
 | --- | --- | --- |
-| `R` | Requirement が空でない | `/system/preflight` リクエスト本文 |
-| `I` | Issue task backlog が存在する | `preflight.github.issueTaskBacklogCount > 0` |
-| `P` | PR/Judge backlog が存在する | `openPrCount > 0 OR pendingJudgeTaskCount > 0` |
-| `L` | ローカル task backlog が存在する | `queued/running/failed/blocked > 0` |
+| `R` | Requirement is non-empty | `/system/preflight` request body |
+| `I` | Issue task backlog exists | `preflight.github.issueTaskBacklogCount > 0` |
+| `P` | PR/Judge backlog exists | `openPrCount > 0 OR pendingJudgeTaskCount > 0` |
+| `L` | Local task backlog exists | `queued`/`running`/`failed`/`blocked` > 0 |
 
-## 判定責務
+## Decision Responsibility
 
-| 判定 | 主担当コンポーネント |
+| Decision | Primary component |
 | --- | --- |
-| preflight 推奨判定 | API（`/system/preflight`） |
-| planner 起動ガード | API のプロセス事前フック（`/system/processes/planner/start`） |
-| queued task の選別と lease 付与 | Dispatcher |
-| run 評価と PR マージ分岐 | Judge |
-| backlog 収束、preflight sync、replan 起動判定 | Cycle Manager |
+| Preflight recommendation | API (`/system/preflight`) |
+| Planner startup guard | API process prehook (`/system/processes/planner/start`) |
+| Queued task selection and lease grant | Dispatcher |
+| Run evaluation and PR merge branching | Judge |
+| Backlog convergence, preflight sync, replan trigger | Cycle Manager |
 
-## 起動時ルール
+## Startup Rules
 
-現在の判定式:
+Current formulas:
 
 - `startPlanner = R && !I && !P && !L`
 - `startExecutionAgents = startPlanner || I || L`
@@ -66,50 +66,50 @@ run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `do
 - `startCycleManager = cycleManagerEnabled && (startExecutionAgents || P || blockedTaskCount > 0)`
 - `worker/tester/docser count = configured count if startExecutionAgents else 0`
 
-`!startPlanner && backlogTotal == 0` の場合、Start UI は次のメッセージを返します。
+When `!startPlanner && backlogTotal == 0`, Start UI returns:
 
 - `Requirements empty and no issue/PR backlog found`
 
-## パターンクラス一覧
+## Pattern Classes
 
-`R/I/P/L` の 16 組み合わせは、実運用上は次のクラスに集約できます（同じ出力は統合）。
+The 16 combinations of `R/I/P/L` collapse into these classes in practice (same output merged):
 
-| クラス | 条件 | Planner | Dispatcher/Worker/Tester/Docser | Judge | 期待挙動 |
+| Class | Condition | Planner | Dispatcher/Worker/Tester/Docser | Judge | Expected behavior |
 | --- | --- | --- | --- | --- | --- |
-| S0 | `R=0,I=0,P=0,L=0` | なし | なし | なし | Start は reject（処理対象なし） |
-| S1 | `R=1,I=0,P=0,L=0` | あり | あり | あり | Planner で task 生成後に通常実行 |
-| S2 | `I=1`（`R/P/L` は任意） | なし | あり | あり | Issue backlog を最優先で処理 |
-| S3 | `P=1,I=0,L=0`（`R` は任意） | なし | なし | あり | Judge backlog のみを処理 |
-| S4 | `L=1,I=0,P=0`（`R` は任意） | なし | あり | あり | 既存ローカル task を先に処理 |
-| S5 | `L=1,P=1,I=0`（`R` は任意） | なし | あり | あり | ローカル backlog + Judge backlog を先に処理 |
+| S0 | `R=0,I=0,P=0,L=0` | none | none | none | Start rejects (nothing to process) |
+| S1 | `R=1,I=0,P=0,L=0` | yes | yes | yes | Normal execution after Planner creates tasks |
+| S2 | `I=1` (any `R/P/L`) | none | yes | yes | Issue backlog highest priority |
+| S3 | `P=1,I=0,L=0` (any `R`) | none | none | yes | Process Judge backlog only |
+| S4 | `L=1,I=0,P=0` (any `R`) | none | yes | yes | Process existing local tasks first |
+| S5 | `L=1,P=1,I=0` (any `R`) | none | yes | yes | Local backlog + Judge backlog first |
 
-補足:
+Notes:
 
-- `I=1` がある場合は planner が無効化され、実行系が有効化されるため実質的に最優先です。
-- `L=0` で `P=1` の場合は dispatcher/worker を起動しなくても Judge が起動対象になります。Judge が停止中なら system process 自己回復が backlog を検知して自動再起動します。
-- `R=1` 単独で planner を起動できるのは、`I/P/L` がすべて 0 のときだけです。
+- When `I=1`, planner is disabled and execution agents enabled, so Issue is effectively highest priority
+- When `L=0` and `P=1`, Judge can start without dispatcher/worker. System process self-recovery detects backlog and auto-restarts Judge when stopped
+- Planner can start only when `I/P/L` are all 0 and `R=1`
 
-## プランナー（Planner）起動ガード
+## Planner Startup Guard
 
-`POST /system/processes/planner/start` を直接呼んだ場合でも、次のいずれかが真なら planner 起動は `409` で拒否されます。
+Even when `POST /system/processes/planner/start` is called directly, planner start is rejected with `409` if any of:
 
-1. ローカル task backlog（`L=1`）
-2. Issue backlog（`I=1`）
+1. Local task backlog (`L=1`)
+2. Issue backlog (`I=1`)
 3. PR/Judge backlog (`P=1`)
 
-これにより、Start UI を経由しない起動でも同じ優先順が維持されます。
+This keeps the same priority when starting without going through Start UI.
 
-## 実行時収束ループ（Cycle Manager）
+## Runtime Convergence Loop (Cycle Manager)
 
-`cycle-manager` 稼働中は次の順で収束を進めます。
+When `cycle-manager` is running, convergence proceeds as:
 
-1. ローカル task backlog がある場合（`L=1`）、task 実行を継続します。
-2. ローカル task backlog が空なら、`/system/preflight` を呼び issue/PR backlog を同期（sync/import）します。
-3. sync 後に issue backlog がある場合（`I=1`）、replan は行いません。
-4. `L=0` かつ `I=0` のときだけ、replan gate を評価します。
-5. さらに replan 固有ガード（planner busy / recent active / pending judge / interval / no-diff）を満たした場合のみ replan を実行します。
+1. If local task backlog exists (`L=1`), continue task execution
+2. If local task backlog is empty, call `/system/preflight` to sync/import issue/PR backlog
+3. If issue backlog exists after sync (`I=1`), do not replan
+4. Replan gate is evaluated only when `L=0` and `I=0`
+5. Replan runs only when replan-specific guards (planner busy / recent active / pending judge / interval / no-diff) are satisfied
 
-## 状態遷移図
+## State Diagram
 
 ```mermaid
 stateDiagram-v2
@@ -138,11 +138,11 @@ stateDiagram-v2
   PlannerRun --> RunningLoop
 ```
 
-## 重要なエッジパターン
+## Important Edge Patterns
 
-| パターン | 何が起きるか |
+| Pattern | What happens |
 | --- | --- |
-| Issue は存在するが明示 role が不足 | Issue task が `blocked(issue_linking)` のまま残る場合があり、issue metadata が整うまで planner は進みません |
-| preflight で GitHub 問い合わせ失敗 | 警告（warning）が出力され、残りのローカル信号に依存して Start 判定されます |
-| 実行時の issue-sync リクエスト失敗 | その cycle では replan をスキップします（fail-closed） |
-| backlog がある状態で手動 planner start | planner prehook で `409` 拒否されます |
+| Issue exists but explicit role missing | Issue task may stay `blocked(issue_linking)` until issue metadata is complete; planner does not proceed |
+| GitHub query fails in preflight | Warning emitted; Start decision falls back to remaining local signals |
+| Issue-sync request fails at runtime | Replan skipped for that cycle (fail-closed) |
+| Manual planner start with backlog | Rejected with `409` by planner prehook |

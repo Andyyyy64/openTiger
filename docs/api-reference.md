@@ -1,9 +1,9 @@
-# インターフェース参照（API）
+# API Reference
 
-openTiger API は Hono ベースで、ダッシュボードからも同じエンドポイントを利用します。  
-ベース URL は通常 `http://localhost:4301` です。
+The openTiger API is Hono-based; the dashboard uses the same endpoints.  
+Base URL is typically `http://localhost:4301`.
 
-関連:
+Related:
 
 - `docs/config.md`
 - `docs/operations.md`
@@ -11,105 +11,104 @@ openTiger API は Hono ベースで、ダッシュボードからも同じエン
 - `docs/agent/dispatcher.md`
 - `docs/agent/cycle-manager.md`
 
-## 1. 認証とレート制限
+## 1. Authentication and Rate Limiting
 
-### 認証方式
+### Authentication Methods
 
 - `X-API-Key` (`API_KEYS`)
-- `Authorization: Bearer <token>`（`API_SECRET` または独自バリデーター）
+- `Authorization: Bearer <token>` (`API_SECRET` or custom validator)
 
-認証スキップ:
+Auth skipped:
 
 - `/health*`
 - `/webhook/github`
-- `/api/webhook/github`（API プレフィックス配下で公開する構成向け互換パス）
+- `/api/webhook/github` (compatibility path when API prefix is used)
 
-system 制御系 API は `canControlSystem()` で許可判定されます。
+System control APIs require `canControlSystem()` for access.
 
-- `api-key` / `bearer` は常に許可
-- ローカル運用時は `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL !== "false"` で許可される設計
+- `api-key` / `bearer`: always allowed
+- Local operation: allowed unless `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL=false`
 
-主な対象:
+Main targets:
 
 - `/system/*`
 - `POST /logs/clear`
 
-### レート制限
+### Rate Limiting
 
-- 既定: 1分あたり 100 リクエスト
-- Redis 利用可能時は Redis カウンタ、失敗時は in-memory にフォールバック
+- Default: 100 requests per minute
+- Redis counter when available; in-memory fallback on failure
 
 ---
 
-## 2. 運用目的別 API マップ
+## 2. API Map by Operation Purpose
 
-| 運用目的 | 主な API |
+| Purpose | Main APIs |
 | --- | --- |
-| ヘルス確認 | `GET /health`, `GET /health/ready` |
-| 状態監視 | `GET /tasks`, `GET /runs`, `GET /judgements`, `GET /agents`, `GET /logs/all` |
-| 設定変更 | `GET /config`, `PATCH /config` |
-| 起動制御 | `POST /system/processes/:name/start`, `POST /system/processes/:name/stop`, `POST /system/processes/stop-all` |
-| 起動前判定 | `POST /system/preflight` |
-| 復旧・メンテナンス | `POST /system/cleanup`, `POST /logs/clear` |
-| GitHub 連携 | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github` |
-| requirement 更新 | `GET /system/requirements`, `POST /system/requirements` |
+| Health check | `GET /health`, `GET /health/ready` |
+| State monitoring | `GET /tasks`, `GET /runs`, `GET /judgements`, `GET /agents`, `GET /logs/all` |
+| Config changes | `GET /config`, `PATCH /config` |
+| Startup control | `POST /system/processes/:name/start`, `POST /system/processes/:name/stop`, `POST /system/processes/stop-all` |
+| Pre-start validation | `POST /system/preflight` |
+| Recovery/maintenance | `POST /system/cleanup`, `POST /logs/clear` |
+| GitHub integration | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github` |
+| Requirement updates | `GET /system/requirements`, `POST /system/requirements` |
 
-補足:
+Note:
 
-- task/run の状態語彙（`queued`, `blocked`, `awaiting_judge` など）は `docs/state-model.md` を参照してください。
+- For task/run state vocabulary (`queued`, `blocked`, `awaiting_judge`, etc.), see `docs/state-model.md`.
 
-## 2.1 運用担当向け最小 API セット
+## 2.1 Minimal API Set for Operations
 
-障害切り分けや日次運用で、まず押さえる最小セットです。
+Minimum set for incident triage and daily operations.
 
-| 用途 | API | 見るポイント |
+| Use | API | What to check |
 | --- | --- | --- |
-| 全体ヘルス | `GET /health/ready` | DB/Redis の疎通可否 |
-| process 状態 | `GET /system/processes` | `running/stopped` の偏り、必要 process の欠落 |
-| agent 稼働 | `GET /agents` | `offline` の偏り、ロールごとの稼働数 |
-| task 滞留 | `GET /tasks` | `queued` 固着、`blocked` の急増 |
-| run 異常 | `GET /runs` | 同一エラーの連続 `failed`、`running` 長期化 |
-| judge 停滞 | `GET /judgements` | non-approve の連鎖、未処理 backlog |
-| 相関ログ | `GET /logs/all` | dispatcher/worker/judge/cycle-manager の時系列 |
+| Overall health | `GET /health/ready` | DB/Redis connectivity |
+| Process state | `GET /system/processes` | running/stopped distribution, missing processes |
+| Agent activity | `GET /agents` | offline distribution, counts per role |
+| Task backlog | `GET /tasks` | stuck `queued`, surge in `blocked` |
+| Run anomalies | `GET /runs` | consecutive `failed` with same error, long `running` |
+| Judge stall | `GET /judgements` | non-approve chain, unprocessed backlog |
+| Correlated logs | `GET /logs/all` | dispatcher/worker/judge/cycle-manager timeline |
 
-運用時の確認順（シーケンス）は `docs/operations.md` の  
-「変更後の確認チェックリスト」を一次参照にしてください。
+For operation check sequence, refer to "Post-change verification checklist" in `docs/operations.md`.
 
-## 2.2 API 起点の逆引き（状態語彙 -> 遷移 -> 担当 -> 実装）
+## 2.2 API-Based Lookup (State Vocabulary -> Transition -> Owner -> Implementation)
 
-API で異常を見つけたあとに、状態語彙 -> 遷移 -> 担当 -> 実装の順で追う共通導線です。
+Common path when tracing from state vocabulary to transition to owner to implementation after finding anomalies via API.
 
-| 起点（API/症状） | 状態語彙の確認先 | 遷移の確認先（flow） | 担当 agent の確認先 | 実装の確認先 |
+| Starting point (API/symptom) | State vocabulary ref | Transition ref (flow) | Owner agent ref | Implementation ref |
 | --- | --- | --- | --- | --- |
-| `GET /tasks` で `queued`/`running` が停滞 | `docs/state-model.md` 7章 | `docs/flow.md` 2章, 5章, 6章 | Dispatcher/Worker（`docs/agent/dispatcher.md`, `docs/agent/worker.md`） | `apps/dispatcher/src/`, `apps/worker/src/` |
-| `GET /tasks` で `awaiting_judge` が停滞 | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章, 4章, 7章 | Judge（`docs/agent/judge.md`） | `apps/judge/src/` |
-| `GET /tasks` で `quota_wait`/`needs_rework` が連鎖 | `docs/state-model.md` 2.2章, 7章 | `docs/flow.md` 3章, 6章, 8章 | Worker/Judge/Cycle Manager（各 agent 仕様） | 各 agent 仕様末尾の「実装参照（source of truth）」節 |
-| `GET /tasks` で `issue_linking` が停滞 | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章 | Planner（`docs/agent/planner.md`） | `apps/planner/src/` |
+| `queued`/`running` stuck in `GET /tasks` | `docs/state-model.md` 7 | `docs/flow.md` 2, 5, 6 | Dispatcher/Worker (`docs/agent/dispatcher.md`, `docs/agent/worker.md`) | `apps/dispatcher/src/`, `apps/worker/src/` |
+| `awaiting_judge` stuck in `GET /tasks` | `docs/state-model.md` 2, 7 | `docs/flow.md` 3, 4, 7 | Judge (`docs/agent/judge.md`) | `apps/judge/src/` |
+| `quota_wait`/`needs_rework` chain in `GET /tasks` | `docs/state-model.md` 2.2, 7 | `docs/flow.md` 3, 6, 8 | Worker/Judge/Cycle Manager (each agent spec) | "Implementation reference" in each agent spec |
+| `issue_linking` stuck in `GET /tasks` | `docs/state-model.md` 2, 7 | `docs/flow.md` 3 | Planner (`docs/agent/planner.md`) | `apps/planner/src/` |
 
-補足:
+Note:
 
-- 運用ショートカット表は `docs/operations.md` の「8.1 状態語彙 -> 遷移 -> 担当 -> 実装 の逆引き」を参照してください。
-- 担当 agent と実装入口は `docs/agent/README.md` の「実装追跡の最短ルート」を参照してください。
+- Operation shortcut table: `docs/operations.md` "8.1 State vocabulary -> transition -> owner -> implementation lookup"
+- Owner agent and implementation entry: `docs/agent/README.md` "Shortest route for implementation tracing"
 
 ---
 
-## 3. 主要エンドポイント一覧
+## 3. Main Endpoints
 
-### ヘルスチェック（Health）
+### Health
 
 - `GET /health`
 - `GET /health/ready`
-  - DB と Redis の疎通確認を返します
+  - Returns DB and Redis connectivity check
 
-### 設定（Config）
+### Config
 
 - `GET /config`
-  - `system_config` の現在値を返す
+  - Returns current `system_config` values
 - `PATCH /config`
   - `{ updates: Record<string, string> }`
-  - 未知キーは拒否
+  - Unknown keys are rejected
 
-### タスク（Tasks）
+### Tasks
 
 - `GET /tasks`
 - `GET /tasks/:id`
@@ -117,14 +116,14 @@ API で異常を見つけたあとに、状態語彙 -> 遷移 -> 担当 -> 実�
 - `PATCH /tasks/:id`
 - `DELETE /tasks/:id`
 
-補足:
+Note:
 
-- failed/blocked タスクには `retry` 情報が付与されます（cooldown / reason / retryCount など）
-- `retry.reason` の主な値:
+- failed/blocked tasks include `retry` info (cooldown / reason / retryCount, etc.)
+- Main `retry.reason` values:
   - `cooldown_pending`, `retry_due`, `awaiting_judge`, `quota_wait`, `needs_rework`
-- 詳細な語彙（`retry_exhausted`, `non_retryable_failure`, `unknown`, `failureCategory`）は `docs/state-model.md` を参照してください。
+- Full vocabulary (`retry_exhausted`, `non_retryable_failure`, `unknown`, `failureCategory`) in `docs/state-model.md`
 
-`retry` 例:
+`retry` example:
 
 ```json
 {
@@ -138,7 +137,7 @@ API で異常を見つけたあとに、状態語彙 -> 遷移 -> 担当 -> 実�
 }
 ```
 
-### 実行履歴（Runs）
+### Runs
 
 - `GET /runs`
 - `GET /runs/:id`
@@ -148,7 +147,7 @@ API で異常を見つけたあとに、状態語彙 -> 遷移 -> 担当 -> 実�
 - `POST /runs/:id/cancel`
 - `POST /runs/:id/artifacts`
 
-### エージェント（Agents）
+### Agents
 
 - `GET /agents`
 - `GET /agents/:id`
@@ -156,62 +155,62 @@ API で異常を見つけたあとに、状態語彙 -> 遷移 -> 担当 -> 実�
 - `POST /agents/:id/heartbeat`
 - `DELETE /agents/:id`
 
-補足:
+Note:
 
-- `GET /agents` は `planner/worker/tester/docser/judge` の稼働状態を返します。
-- Dispatcher / Cycle Manager は process として管理されるため、`GET /system/processes` で確認してください。
+- `GET /agents` returns `planner/worker/tester/docser/judge` status.
+- Dispatcher / Cycle Manager are managed as processes; use `GET /system/processes`.
 
-### プラン（Plans）
+### Plans
 
 - `GET /plans`
-  - `planner.plan_created` イベントから plan スナップショットを返す
+  - Returns plan snapshots from `planner.plan_created` events
 
-### 判定（Judgements）
+### Judgements
 
 - `GET /judgements`
 - `GET /judgements/:id/diff`
 
-### ログ（Logs）
+### Logs
 
 - `GET /logs/agents/:id`
 - `GET /logs/cycle-manager`
 - `GET /logs/all`
 - `POST /logs/clear`
 
-### 連携通知（Webhook / GitHub）
+### Webhook / GitHub
 
 - `POST /webhook/github`
-  - `GITHUB_WEBHOOK_SECRET` があれば署名検証を行う
+  - Signature verification when `GITHUB_WEBHOOK_SECRET` is set
 
-実装上の現在挙動:
+Current implementation behavior:
 
-- 受信イベントは `events` テーブルへ記録
-- `issues` / `pull_request` / `push` / `check_run` / `check_suite` を処理
-- PR が close+merge されたとき、PR 本文に `[task:<uuid>]` が含まれる場合は該当 task を `done` 更新
-- それ以外は主に記録/通知用途で、planner/dispatcher の主駆動は `/system/preflight` 系にあります
+- Received events stored in `events` table
+- Handles `issues` / `pull_request` / `push` / `check_run` / `check_suite`
+- When PR is closed+merged with `[task:<uuid>]` in body, updates task to `done`
+- Otherwise mainly for recording/notification; planner/dispatcher drive via `/system/preflight` etc.
 
 ---
 
-## 4. システム API
+## 4. System APIs
 
-### 認証状態チェック
+### Auth Status
 
 - `GET /system/github/auth`
 - `GET /system/claude/auth?environment=host|sandbox`
 
-### 要件操作（requirement）
+### Requirement Operations
 
 - `GET /system/requirements`
 - `POST /system/requirements`
-  - 正式保存先 `docs/requirement.md` へ同期
-  - `git` repository の場合は snapshot commit/push を試行
+  - Syncs to canonical path `docs/requirement.md`
+  - For git repositories, attempts snapshot commit/push
 
-### 起動前判定（preflight）
+### Preflight
 
 - `POST /system/preflight`
-  - requirement 内容 + local backlog + GitHub issue/PR backlog から推奨起動構成を返す
+  - Returns recommended startup configuration from requirement content + local backlog + GitHub issue/PR backlog
 
-### プロセスマネージャー（system）
+### Process Manager (system)
 
 - `GET /system/processes`
 - `GET /system/processes/:name`
@@ -219,39 +218,39 @@ API で異常を見つけたあとに、状態語彙 -> 遷移 -> 担当 -> 実�
 - `POST /system/processes/:name/stop`
 - `POST /system/processes/stop-all`
 
-### リポジトリ操作（GitHub）
+### Repository Operations (GitHub)
 
 - `POST /system/github/repo`
-  - リポジトリ作成 + config 同期
+  - Create repository + config sync
 - `GET /system/github/repos`
-  - 認証ユーザーでアクセス可能な repo 一覧
+  - List repos accessible to authenticated user
 
-### ホスト情報（host）
+### Host Info
 
 - `GET /system/host/neofetch`
 - `GET /system/host/context`
 
-### メンテナンス
+### Maintenance
 
 - `POST /system/cleanup`
-  - runtime テーブルと queue を初期化
+  - Initializes runtime tables and queue
 
 ---
 
-## 5. preflight の重要挙動
+## 5. Important Preflight Behavior
 
-- Planner は次をすべて満たすときのみ推奨されます:
-  - requirement が空でない
-  - issue backlog なし
-  - judge backlog なし
-  - local task backlog なし
-- issue -> task 自動生成は「明示 role」が必須です
+- Planner is recommended only when all of the following hold:
+  - Requirement is non-empty
+  - No issue backlog
+  - No judge backlog
+  - No local task backlog
+- Issue -> task auto-generation requires explicit role:
   - label: `role:worker|role:tester|role:docser`
-  - または本文（body）に `Agent:` / `Role:` を記述
+  - or body with `Agent:` / `Role:` or `## Agent` section
 
-## 6. 代表レスポンス例
+## 6. Sample Responses
 
-### `POST /system/preflight`（抜粋）
+### `POST /system/preflight` (excerpt)
 
 ```json
 {
@@ -287,7 +286,7 @@ API で異常を見つけたあとに、状態語彙 -> 遷移 -> 担当 -> 実�
 }
 ```
 
-### `GET /system/processes`（抜粋）
+### `GET /system/processes` (excerpt)
 
 ```json
 {
@@ -312,14 +311,14 @@ API で異常を見つけたあとに、状態語彙 -> 遷移 -> 担当 -> 実�
 
 ---
 
-## 7. 実装連携時の注意
+## 7. Integration Notes
 
-- command 実行 API を外部から直接呼ぶ設計ではなく、process manager 経由で制御します
-- `stop-all` は running run を cancel/requeue し、agent 状態も更新します
-- sandbox 実行時、worker/tester/docser の host process は通常起動しません
-- `/system/*` と `POST /logs/clear` は `canControlSystem()` の許可条件で実行されます
+- No direct command execution API from outside; control via process manager
+- `stop-all` cancels/requeues running runs and updates agent state
+- In sandbox execution, worker/tester/docser host processes are not normally started
+- `/system/*` and `POST /logs/clear` require `canControlSystem()` permission
 
-運用トラブル時の補助資料:
+Supplemental material for operational issues:
 
-- dispatch/lease 問題: `docs/agent/dispatcher.md`
-- 収束/再計画問題: `docs/agent/cycle-manager.md`
+- dispatch/lease: `docs/agent/dispatcher.md`
+- convergence/replan: `docs/agent/cycle-manager.md`

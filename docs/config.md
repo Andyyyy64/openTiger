@@ -1,45 +1,45 @@
-# システム設定ガイド
+# System Configuration Guide
 
-このドキュメントは、openTiger の設定を「DB 管理設定」と「環境変数専用設定（env-only）」に分けて整理します。  
-設定の一次ソースは以下です。
+This document organizes openTiger configuration into "DB-managed config" and "env-only config."  
+Primary sources are:
 
-- DB 管理キー: `apps/api/src/system-config.ts` (`CONFIG_FIELDS`)
-- 環境変数専用設定: 各 runtime 実装（dispatcher/worker/judge/cycle-manager/api）
+- DB-managed keys: `apps/api/src/system-config.ts` (`CONFIG_FIELDS`)
+- Env-only config: each runtime (dispatcher/worker/judge/cycle-manager/api)
 
-### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、設定変更から入る場合）
+### Common Lookup Path (state vocabulary -> transition -> owner -> implementation, when entering from config change)
 
-設定変更後に停滞が発生した場合は、状態語彙 -> 遷移 -> 担当 -> 実装の順で確認してください。
+If stalls occur after config changes, check in order: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md`（状態語彙の確認）
-2. `docs/flow.md`（遷移と回復経路）
-3. `docs/operations.md`（API 手順と運用ショートカット）
-4. `docs/agent/README.md`（担当 agent と実装追跡ルート）
+1. `docs/state-model.md` (state vocabulary)
+2. `docs/flow.md` (transitions and recovery paths)
+3. `docs/operations.md` (API procedures and operation shortcuts)
+4. `docs/agent/README.md` (owning agent and implementation tracing path)
 
-## 1. 設定の保存先
+## 1. Config Storage
 
-### データベース管理（`config` テーブル）
+### Database-Managed (`config` table)
 
-- `/config` API から参照/更新
-- Dashboard の system settings から更新
-- `scripts/export-config-to-env.ts` で `.env` へ同期可能
+- Read/update via `/config` API
+- Update from Dashboard system settings
+- Can sync to `.env` via `scripts/export-config-to-env.ts`
 
-### 環境変数専用（env-only）設定
+### Env-Only Configuration
 
-- プロセス起動時にのみ参照される設定
-- `config` テーブルには保存されない
+- Read only at process startup
+- Not stored in `config` table
 
 ---
 
-## 2. DB 管理キー一覧（`CONFIG_FIELDS` 準拠）
+## 2. DB-Managed Key List (`CONFIG_FIELDS`)
 
-### 2.1 制限値（Limits）
+### 2.1 Limits
 
 - `MAX_CONCURRENT_WORKERS`
 - `DAILY_TOKEN_LIMIT`
 - `HOURLY_TOKEN_LIMIT`
 - `TASK_TOKEN_LIMIT`
 
-### 2.2 プロセス有効化 / スケーリング
+### 2.2 Process Enablement / Scaling
 
 - `DISPATCHER_ENABLED`
 - `JUDGE_ENABLED`
@@ -51,11 +51,11 @@
 - `JUDGE_COUNT`
 - `PLANNER_COUNT`
 
-補足:
+Note:
 
-- Planner は runtime 上で単一プロセス運用（重複起動ガードあり）
+- Planner runs as a single process (duplicate-start guard)
 
-### 2.3 リポジトリ / GitHub
+### 2.3 Repository / GitHub
 
 - `REPO_MODE` (`git` or `local`)
 - `REPO_URL`
@@ -67,7 +67,7 @@
 - `GITHUB_OWNER`
 - `GITHUB_REPO`
 
-### 2.4 実行器 / モデル
+### 2.4 Executor / Model
 
 - `LLM_EXECUTOR` (`opencode` / `claude_code`)
 - `OPENCODE_MODEL`
@@ -87,7 +87,7 @@
 - `TESTER_MODEL`
 - `DOCSER_MODEL`
 
-### 2.5 Planner / 再計画（replan）
+### 2.5 Planner / Replan
 
 - `PLANNER_USE_REMOTE`
 - `PLANNER_REPO_URL`
@@ -98,7 +98,7 @@
 - `REPLAN_WORKDIR`
 - `REPLAN_REPO_URL`
 
-### 2.6 LLM プロバイダーキー
+### 2.6 LLM Provider Keys
 
 - `ANTHROPIC_API_KEY`
 - `GEMINI_API_KEY`
@@ -106,7 +106,7 @@
 - `XAI_API_KEY`
 - `DEEPSEEK_API_KEY`
 
-### 2.7 主要デフォルト値（初期状態）
+### 2.7 Main Defaults (Initial State)
 
 - `EXECUTION_ENVIRONMENT=host`
 - `LLM_EXECUTOR=claude_code`
@@ -121,36 +121,36 @@
 - `REPLAN_REQUIREMENT_PATH=docs/requirement.md`
 - `REPLAN_INTERVAL_MS=60000`
 - `GITHUB_AUTH_MODE=gh`
-- `MAX_CONCURRENT_WORKERS=-1`（無制限扱い）
-- `DAILY_TOKEN_LIMIT=-1`（無制限扱い）
-- `HOURLY_TOKEN_LIMIT=-1`（無制限扱い）
-- `TASK_TOKEN_LIMIT=-1`（無制限扱い）
+- `MAX_CONCURRENT_WORKERS=-1` (unlimited)
+- `DAILY_TOKEN_LIMIT=-1` (unlimited)
+- `HOURLY_TOKEN_LIMIT=-1` (unlimited)
+- `TASK_TOKEN_LIMIT=-1` (unlimited)
 
 ---
 
 ## 3. `/config` API
 
 - `GET /config`
-  - 現在の設定スナップショット
+  - Current config snapshot
 - `PATCH /config`
   - body: `{ updates: Record<string, string> }`
 
-挙動:
+Behavior:
 
-- 未知キーは拒否
-- 指定しないキーは保持
-- `AUTO_REPLAN=true` の場合、`REPLAN_REQUIREMENT_PATH` は必須
+- Unknown keys rejected
+- Unspecified keys retained
+- When `AUTO_REPLAN=true`, `REPLAN_REQUIREMENT_PATH` is required
 
 ---
 
-## 4. `/system` API と設定連動
+## 4. `/system` API and Config Interaction
 
 ### 4.1 Preflight
 
 - `POST /system/preflight`
-- requirement 内容 + local backlog + GitHub backlog から推奨起動構成を返す
+- Returns recommended startup configuration from requirement content + local backlog + GitHub backlog
 
-Issue 自動 task 化には明示 role が必要:
+Issue auto-task requires explicit role:
 
 - label: `role:worker|role:tester|role:docser`
 - body: `Agent: ...` / `Role: ...` / `## Agent` section
@@ -163,7 +163,7 @@ Issue 自動 task 化には明示 role が必要:
 - `POST /system/processes/:name/stop`
 - `POST /system/processes/stop-all`
 
-### 4.3 要件 / リポジトリ補助 API
+### 4.3 Requirement / Repository APIs
 
 - `GET /system/requirements`
 - `POST /system/requirements`
@@ -178,41 +178,41 @@ Issue 自動 task 化には明示 role が必要:
 
 - `POST /system/cleanup`
 
-注意:
+Warning:
 
-- runtime テーブルと queue を初期化する破壊的操作です
+- Destructive operation that initializes runtime tables and queue
 
 ---
 
-## 5. Requirement 同期の実装挙動
+## 5. Requirement Sync Behavior
 
-`POST /system/requirements` は次を行います。
+`POST /system/requirements` performs:
 
-1. 入力内容を requirement ファイルへ保存
-2. 正規保存先 `docs/requirement.md` へ同期
-3. `git` repository の場合、snapshot commit/push を試行
+1. Save input to requirement file
+2. Sync to canonical path `docs/requirement.md`
+3. For git repositories, attempt snapshot commit/push
 
-このため requirement 編集は「ファイル保存」だけでなく「repository 状態更新」を伴います。
+Thus requirement edits affect both "file save" and "repository state update."
 
-### 5.1 起動時の自動補完（config-store）
+### 5.1 Startup Auto-Completion (config-store)
 
-`ensureConfigRow()` は起動時に次の補完/正規化を行います。
+`ensureConfigRow()` performs the following on startup:
 
-- 必須カラムの自己修復（`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`）
-- workspace/git 情報からの自動補完
+- Self-repair of required columns (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`)
+- Auto-completion from workspace/git info
   - `repoUrl`, `githubOwner`, `githubRepo`, `baseBranch`
-  - requirement path 候補（`docs/requirement.md` など）
-- 旧値（legacy）の正規化
-  - 旧 `REPLAN_COMMAND` を `pnpm --filter @openTiger/planner run start:fresh` へ統一
-  - 旧 token/concurrency 固定値を `-1` 無制限へ統一
+  - requirement path candidates (e.g. `docs/requirement.md`)
+- Legacy value normalization
+  - Unify old `REPLAN_COMMAND` to `pnpm --filter @openTiger/planner run start:fresh`
+  - Unify old token/concurrency fixed values to `-1` unlimited
 
 ---
 
-## 6. env-only 主要設定
+## 6. Env-Only Main Config
 
-以下は DB ではなく env で制御される代表例です。
+Representative examples controlled only by env (not DB):
 
-### 6.1 プロセス再起動 / 自己修復
+### 6.1 Process Restart / Self-Heal
 
 - `SYSTEM_PROCESS_AUTO_RESTART`
 - `SYSTEM_PROCESS_AUTO_RESTART_DELAY_MS`
@@ -223,7 +223,7 @@ Issue 自動 task 化には明示 role が必要:
 - `SYSTEM_PROCESS_SELF_HEAL_STARTUP_GRACE_MS`
 - `SYSTEM_AGENT_LIVENESS_WINDOW_MS`
 
-### 6.2 タスクリトライ / クールダウン
+### 6.2 Task Retry / Cooldown
 
 - `FAILED_TASK_RETRY_COOLDOWN_MS`
 - `BLOCKED_TASK_RETRY_COOLDOWN_MS`
@@ -233,7 +233,7 @@ Issue 自動 task 化には明示 role が必要:
 - `DISPATCH_MAX_POLL_INTERVAL_MS`
 - `DISPATCH_NO_IDLE_LOG_INTERVAL_MS`
 
-### 6.3 ポリシー回復
+### 6.3 Policy Recovery
 
 - `POLICY_RECOVERY_CONFIG_PATH`
 - `POLICY_RECOVERY_CONFIG_JSON`
@@ -245,9 +245,9 @@ Issue 自動 task 化には明示 role が必要:
 - `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`
 - `AUTO_REWORK_MAX_DEPTH`
 
-### 6.4 検証コマンド計画
+### 6.4 Verification Command Planning
 
-Planner 関連:
+Planner:
 
 - `PLANNER_VERIFY_COMMAND_MODE`
 - `PLANNER_VERIFY_CONTRACT_PATH`
@@ -255,7 +255,7 @@ Planner 関連:
 - `PLANNER_VERIFY_PLAN_TIMEOUT_SECONDS`
 - `PLANNER_VERIFY_AUGMENT_NONEMPTY`
 
-Worker 関連:
+Worker:
 
 - `WORKER_AUTO_VERIFY_MODE`
 - `WORKER_VERIFY_CONTRACT_PATH`
@@ -267,7 +267,7 @@ Worker 関連:
 - `WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT`
 - `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT`
 
-### 6.5 Dispatcher / Lease / Agent 生存監視
+### 6.5 Dispatcher / Lease / Agent Liveness
 
 - `POLL_INTERVAL_MS`
 - `DISPATCH_BLOCK_ON_AWAITING_JUDGE`
@@ -277,7 +277,7 @@ Worker 関連:
 - `TASK_QUEUE_STALLED_INTERVAL_MS`
 - `TASK_QUEUE_MAX_STALLED_COUNT`
 
-### 6.6 Cycle Manager ループ / 異常検知 / 再計画
+### 6.6 Cycle Manager Loop / Anomaly / Replan
 
 - `MONITOR_INTERVAL_MS`
 - `CLEANUP_INTERVAL_MS`
@@ -295,7 +295,7 @@ Worker 関連:
 - `REPLAN_PLANNER_ACTIVE_WINDOW_MS`
 - `REPLAN_SKIP_SAME_SIGNATURE`
 
-### 6.7 sandbox 実行
+### 6.7 Sandbox Execution
 
 - `SANDBOX_DOCKER_IMAGE`
 - `SANDBOX_DOCKER_NETWORK`
@@ -304,44 +304,44 @@ Worker 関連:
 
 ---
 
-## 7. 認証・アクセス制御の実務注意
+## 7. Authentication / Access Control Notes
 
-- system 制御系は `api-key` / `bearer` が基本
-- ローカル開発では `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL` の値で挙動が変わる
-  - 厳密運用する場合は `false` を明示
-- GitHub CLI モード（`gh`）を使う場合は `gh auth login` 済みであること
-
----
-
-## 8. 最低限の運用セット
-
-1. Repo 設定 (`REPO_MODE`, `REPO_URL` または local path)
-2. GitHub 設定 (`GITHUB_AUTH_MODE`, owner/repo, 必要なら token)
-3. LLM 設定 (`LLM_EXECUTOR`, model, provider key)
-4. 実行数 (`WORKER_COUNT`, `JUDGE_COUNT`, `PLANNER_COUNT=1`)
-5. 回復設定（retry / cooldown / auto restart）
-
-より詳細な運用は `docs/operations.md` を参照してください。
+- System control uses `api-key` / `bearer`
+- In local development, `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL` changes behavior
+  - Set to `false` for strict operation
+- When using GitHub CLI mode (`gh`), ensure `gh auth login` is done
 
 ---
 
-## 9. 設定変更の影響マップ（運用目安）
+## 8. Minimum Operation Set
 
-設定は「どのプロセスが読むか」で影響範囲が決まります。  
-特に env-only 設定は、対象プロセスの再起動まで反映されません。
+1. Repo config (`REPO_MODE`, `REPO_URL` or local path)
+2. GitHub config (`GITHUB_AUTH_MODE`, owner/repo, token if needed)
+3. LLM config (`LLM_EXECUTOR`, model, provider key)
+4. Counts (`WORKER_COUNT`, `JUDGE_COUNT`, `PLANNER_COUNT=1`)
+5. Recovery config (retry / cooldown / auto restart)
 
-| 設定カテゴリ | 主なキー | 影響コンポーネント | 反映タイミングの目安 |
+See `docs/operations.md` for more detailed operation.
+
+---
+
+## 9. Config Change Impact Map (Operation Reference)
+
+Config impact depends on which processes read it.  
+Env-only config is not reflected until the target process restarts.
+
+| Config category | Main keys | Affected components | When reflected |
 | --- | --- | --- | --- |
-| リポジトリ/GitHub | `REPO_MODE`, `REPO_URL`, `BASE_BRANCH`, `GITHUB_*` | API preflight, Planner, Dispatcher, Worker, Judge | 対象プロセス再起動後 |
-| 実行環境/起動 | `EXECUTION_ENVIRONMENT`, `SANDBOX_DOCKER_*` | API process manager, Dispatcher launcher, sandbox worker | Dispatcher 再起動後（新規 task から） |
-| Planner | `PLANNER_*`, `AUTO_REPLAN`, `REPLAN_*` | Planner, Cycle Manager | Planner / Cycle Manager 再起動後 |
-| Dispatcher | `MAX_CONCURRENT_WORKERS`, `POLL_INTERVAL_MS`, `DISPATCH_*` | Dispatcher | Dispatcher 再起動後 |
-| Worker 実行設定 | `WORKER_*`, `TESTER_*`, `DOCSER_*`, `LLM_EXECUTOR`, `CLAUDE_CODE_*`, `OPENCODE_*` | Worker/Tester/Docser | 対象 agent 再起動後 |
-| Judge | `JUDGE_*`, `JUDGE_MODE` | Judge | Judge 再起動後 |
-| リトライ/クリーンアップ | `FAILED_TASK_*`, `BLOCKED_TASK_*`, `STUCK_RUN_TIMEOUT_MS` | Cycle Manager, API tasks retry 表示 | Cycle Manager / API 再起動後 |
+| Repository/GitHub | `REPO_MODE`, `REPO_URL`, `BASE_BRANCH`, `GITHUB_*` | API preflight, Planner, Dispatcher, Worker, Judge | After target process restart |
+| Execution/launch | `EXECUTION_ENVIRONMENT`, `SANDBOX_DOCKER_*` | API process manager, Dispatcher launcher, sandbox worker | After Dispatcher restart (from new tasks) |
+| Planner | `PLANNER_*`, `AUTO_REPLAN`, `REPLAN_*` | Planner, Cycle Manager | After Planner / Cycle Manager restart |
+| Dispatcher | `MAX_CONCURRENT_WORKERS`, `POLL_INTERVAL_MS`, `DISPATCH_*` | Dispatcher | After Dispatcher restart |
+| Worker execution | `WORKER_*`, `TESTER_*`, `DOCSER_*`, `LLM_EXECUTOR`, `CLAUDE_CODE_*`, `OPENCODE_*` | Worker/Tester/Docser | After target agent restart |
+| Judge | `JUDGE_*`, `JUDGE_MODE` | Judge | After Judge restart |
+| Retry/cleanup | `FAILED_TASK_*`, `BLOCKED_TASK_*`, `STUCK_RUN_TIMEOUT_MS` | Cycle Manager, API task retry display | After Cycle Manager / API restart |
 
-### 補足
+### Notes
 
-- DB 管理キーを更新しても、すでに起動中のプロセス環境変数は自動更新されません。
-- 影響のあるプロセスだけ `start/stop` で再起動すると、全停止より安全に反映できます。
-- 再起動の具体手順は `docs/operations.md` の「設定変更時の安全な再起動手順」を参照してください。
+- Updating DB-managed keys does not auto-update env for already-running processes.
+- Restarting only affected processes via start/stop is safer than full stop-all.
+- See "Safe restart procedure for config changes" in `docs/operations.md` for specific steps.

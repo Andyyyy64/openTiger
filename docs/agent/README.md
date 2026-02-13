@@ -1,71 +1,71 @@
-# エージェント仕様索引
+# Agent Specification Index
 
-このページは、openTiger の各 agent の責務と差分を横断的に確認するための索引です。
+This page provides a cross-agent index for comparing responsibilities and differences of each openTiger agent.
 
-## 1. エージェント比較表
+## 1. Agent Comparison Table
 
-| エージェント | 主責務 | 主入力 | 主要遷移/出力 | 主な失敗時挙動 |
+| Agent | Primary responsibility | Primary input | Main transitions/output | Primary failure behavior |
 | --- | --- | --- | --- | --- |
-| Planner | requirement/issue から task 計画を生成 | requirement、backlog、feedback、inspection | `tasks` 作成、plan event 保存 | 代替計画（fallback planning）、重複計画ガード |
-| Dispatcher | 実行順制御と task 配布 | queued task、leases、agent heartbeat | `queued -> running`、lease 付与、agent 割当 | lease 回収、孤立 task 回復、再 queue |
-| Worker | 実装変更 + 検証 + PR 化 | task、repo/worktree、コマンド | `runs/artifacts` 生成、`awaiting_judge` または `done` | `quota_wait` / `needs_rework` / `failed` |
-| Tester | テスト中心 task の実行 | tester ロール task | Worker と同等（テスト文脈） | Worker と同等 |
-| Docser | ドキュメント同期 task の実行 | docser ロール task | docs 更新 run/artifact | doc-safe command 制約、LLM policy recovery なし |
-| Judge | successful run の評価と統治 | run/artifacts、CI/policy/LLM 結果 | `done` または retry/rework/autofix | 回路遮断（circuit breaker）、autofix、awaiting_judge 復元 |
-| Cycle Manager | 収束監視・回復・replan 制御 | system state、events、anomaly/cost | cycle 更新、cleanup、replan 起動 | 重大異常時の再起動（critical anomaly restart）、cooldown 再試行 |
+| Planner | Generate task plans from requirement/issue | requirement, backlog, feedback, inspection | Create `tasks`, save plan event | Fallback planning, duplicate-plan guard |
+| Dispatcher | Execution order control and task dispatch | queued task, leases, agent heartbeat | `queued -> running`, grant lease, assign agent | Lease recovery, orphan task recovery, requeue |
+| Worker | Implementation change + verification + PR creation | task, repo/worktree, commands | Generate `runs/artifacts`, `awaiting_judge` or `done` | `quota_wait` / `needs_rework` / `failed` |
+| Tester | Execute test-centric tasks | tester-role task | Same as Worker (test context) | Same as Worker |
+| Docser | Execute documentation sync tasks | docser-role task | docs update run/artifact | doc-safe command constraints, no LLM policy recovery |
+| Judge | Evaluate successful run and govern | run/artifacts, CI/policy/LLM results | `done` or retry/rework/autofix | Circuit breaker, autofix, `awaiting_judge` restoration |
+| Cycle Manager | Convergence monitoring, recovery, replan control | system state, events, anomaly/cost | cycle update, cleanup, replan trigger | Critical anomaly restart, cooldown retry |
 
-補足:
+Note:
 
-- この比較表は「責務単位」の整理です。
-- `GET /agents` に現れるのは `planner/worker/tester/docser/judge` で、Dispatcher / Cycle Manager は process 管理（`GET /system/processes`）で確認します。
+- This comparison table organizes by "responsibility unit."
+- `GET /agents` shows `planner/worker/tester/docser/judge`; Dispatcher / Cycle Manager are checked via process management (`GET /system/processes`).
 
-## 2. 役割の使い分け
+## 2. Role Usage
 
-- **Planner** は「何を実行するか」を決める。
-- **Dispatcher** は「誰に実行させるか」と「いつ実行させるか」を決める。
-- **Worker/Tester/Docser** は「実行して検証する」。
-- **Judge** は「結果を承認するか、再修正へ戻すか」を決める。
-- **Cycle Manager** は「収束し続ける運用」を維持する。
+- **Planner** decides "what to execute."
+- **Dispatcher** decides "who executes" and "when to execute."
+- **Worker/Tester/Docser** "execute and verify."
+- **Judge** decides "approve result or send back for rework."
+- **Cycle Manager** maintains "operations that keep converging."
 
-## 3. エージェント境界（しないこと）
+## 3. Agent Boundaries (What They Don't Do)
 
-| エージェント | しないこと（責務外） |
+| Agent | Out of scope |
 | --- | --- |
-| Planner | task 実行、PR merge 判定 |
-| Dispatcher | コード変更、approve/rework 判定 |
-| Worker/Tester/Docser | グローバル再計画判断、全体収束制御 |
-| Judge | task 配布、実ファイル変更の実行 |
-| Cycle Manager | 各 task の中身実装、PR 内容レビュー |
+| Planner | Task execution, PR merge decisions |
+| Dispatcher | Code changes, approve/rework decisions |
+| Worker/Tester/Docser | Global replan decisions, overall convergence control |
+| Judge | Task dispatch, direct file modification execution |
+| Cycle Manager | Individual task implementation, PR content review |
 
-## 4. 実行対象の差分（Worker 系）
+## 4. Execution Target Differences (Worker Family)
 
-| 観点 | Worker | Tester | Docser |
+| Aspect | Worker | Tester | Docser |
 | --- | --- | --- | --- |
-| 主変更対象 | 実装コード | テストコード | ドキュメント |
-| 検証コマンド | task/policy に従う | task/policy に従う（テスト中心） | doc-safe command 優先 |
-| LLM policy recovery | 有効化可能 | 有効化可能 | 実行しない |
-| 典型タスク | 機能追加・不具合修正 | テスト追加・不安定検証の改善 | docs 同期・不足補完 |
+| Primary change target | Implementation code | Test code | Documentation |
+| Verification commands | Per task/policy | Per task/policy (test-centric) | doc-safe command preferred |
+| LLM policy recovery | Can be enabled | Can be enabled | Not executed |
+| Typical tasks | Feature addition, bug fix | Test addition, flaky verification improvement | docs sync, gap fill |
 
-Worker / Tester / Docser は同一ランタイムを共有し、`AGENT_ROLE` で挙動を切り替えます。
+Worker / Tester / Docser share the same runtime; behavior is switched by `AGENT_ROLE`.
 
-重複を避ける読み方:
+To avoid duplication when reading:
 
-1. `docs/agent/worker.md` で共通ランタイムを把握
-2. `docs/agent/tester.md` / `docs/agent/docser.md` で差分のみ確認
+1. Understand shared runtime in `docs/agent/worker.md`
+2. Check differences only in `docs/agent/tester.md` / `docs/agent/docser.md`
 
-## 5. モデル/指示ファイルの解決順
+## 5. Model / Instruction File Resolution Order
 
-| ロール | モデル設定（優先順） | 指示ファイル設定（優先順） |
+| Role | Model config (priority) | Instruction file config (priority) |
 | --- | --- | --- |
 | worker | `WORKER_MODEL` -> `OPENCODE_MODEL` | `WORKER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/base.md` |
 | tester | `TESTER_MODEL` -> `OPENCODE_MODEL` | `TESTER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/tester.md` |
 | docser | `DOCSER_MODEL` -> `OPENCODE_MODEL` | `DOCSER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/docser.md` |
 
-`LLM_EXECUTOR=claude_code` の場合はロール別 model より `CLAUDE_CODE_MODEL` が優先されます。
+When `LLM_EXECUTOR=claude_code`, `CLAUDE_CODE_MODEL` takes precedence over role-specific models.
 
-## 6. 共通の状態モデル
+## 6. Common State Model
 
-task 状態（status）:
+Task status:
 
 - `queued`
 - `running`
@@ -74,14 +74,14 @@ task 状態（status）:
 - `blocked`
 - `cancelled`
 
-blocked 理由（reason）:
+Blocked reason:
 
 - `awaiting_judge`
 - `quota_wait`
 - `needs_rework`
 - `issue_linking`
 
-## 7. 詳細仕様
+## 7. Detailed Specifications
 
 - `docs/agent/planner.md`
 - `docs/agent/dispatcher.md`
@@ -91,35 +91,35 @@ blocked 理由（reason）:
 - `docs/agent/docser.md`
 - `docs/agent/cycle-manager.md`
 
-## 8. よくある誤解（担当 agent の切り分け）
+## 8. Common Misconceptions (Agent Responsibility Triage)
 
-- Q. `queued` task が進まない。Worker の問題か？
-  - A. まず Dispatcher を確認します。配布・lease・agent 割当は Dispatcher の責務です。
-  - 初動 API: `GET /agents`, `GET /tasks`, `GET /logs/all`
-- Q. `awaiting_judge` が長く残る。Cycle Manager の問題か？
-  - A. まず Judge を確認します。approve/rework 判定と backlog 消化は Judge の責務です。
-  - 初動 API: `GET /judgements`, `GET /system/processes`, `GET /logs/all`
-- Q. 同じ失敗が続く。Planner が悪いか？
-  - A. 実行中 task の失敗は Worker/Tester/Docser と Cycle Manager 側の再試行・回復を先に確認します。
-  - 初動 API: `GET /runs`, `GET /tasks`, `GET /logs/all`
-- Q. 起動時に Planner が動かない。障害か？
-  - A. backlog-first の仕様で正常な場合があります。起動判定は preflight / 起動ルールを確認します。
-  - 初動 API: `POST /system/preflight`, `GET /system/processes`, `GET /tasks`
-- Q. replan が走らない。Dispatcher を見るべきか？
-  - A. replan 判定は Cycle Manager の責務です。Planner の busy/backlog gate/interval/no-diff 条件を確認します。
-  - 初動 API: `GET /tasks`, `GET /plans`, `GET /logs/cycle-manager`
-- Q. `issue_linking` が解消しない。Judge 側の問題か？
-  - A. まず Planner/API の issue 連携処理を確認します。Judge は `issue_linking` 解消の主体ではありません。
-  - 初動 API: `GET /tasks`, `POST /system/preflight`, `GET /logs/all`
+- Q. `queued` task not progressing. Is it Worker's problem?
+  - A. Check Dispatcher first. Dispatch, lease, agent assignment are Dispatcher's responsibility.
+  - Initial APIs: `GET /agents`, `GET /tasks`, `GET /logs/all`
+- Q. `awaiting_judge` remains long. Is it Cycle Manager's problem?
+  - A. Check Judge first. Approve/rework decisions and backlog consumption are Judge's responsibility.
+  - Initial APIs: `GET /judgements`, `GET /system/processes`, `GET /logs/all`
+- Q. Same failure repeats. Is Planner bad?
+  - A. Check Worker/Tester/Docser and Cycle Manager retry/recovery first for in-progress task failures.
+  - Initial APIs: `GET /runs`, `GET /tasks`, `GET /logs/all`
+- Q. Planner doesn't start on boot. Is it a failure?
+  - A. May be normal due to backlog-first spec. Confirm startup conditions and preflight rules.
+  - Initial APIs: `POST /system/preflight`, `GET /system/processes`, `GET /tasks`
+- Q. Replan doesn't run. Should I look at Dispatcher?
+  - A. Replan decision is Cycle Manager's responsibility. Confirm Planner busy/backlog gate/interval/no-diff conditions.
+  - Initial APIs: `GET /tasks`, `GET /plans`, `GET /logs/cycle-manager`
+- Q. `issue_linking` doesn't clear. Is it Judge's problem?
+  - A. Check Planner/API issue linkage first. Judge is not responsible for resolving `issue_linking`.
+  - Initial APIs: `GET /tasks`, `POST /system/preflight`, `GET /logs/all`
 
-補足（共通逆引き導線）:
+Common lookup path:
 
-- 状態語彙の確認: `docs/state-model.md`
-- 遷移と回復経路の確認: `docs/flow.md`
-- 担当/実装の逆引き実行: `docs/operations.md`（8.1）
-- 起動判定の分岐確認: `docs/startup-patterns.md`
+- State vocabulary: `docs/state-model.md`
+- Transitions and recovery paths: `docs/flow.md`
+- Owner/implementation lookup: `docs/operations.md` (8.1)
+- Startup condition branches: `docs/startup-patterns.md`
 
-## 9. 実装参照マップ（source of truth）
+## 9. Implementation Reference Map (Source of Truth)
 
 - Planner: `apps/planner/src/`
 - Dispatcher: `apps/dispatcher/src/`
@@ -127,18 +127,18 @@ blocked 理由（reason）:
 - Judge: `apps/judge/src/`
 - Cycle Manager: `apps/cycle-manager/src/`
 
-各ページの「実装参照（source of truth）」節には、上記ディレクトリ内の主要ファイルを列挙しています。
+The "Implementation reference (source of truth)" section in each page lists key files in the above directories.
 
-## 10. 実装追跡の最短ルート（コードを読む順番）
+## 10. Shortest Route for Implementation Tracing (Code Reading Order)
 
-1. `docs/agent/README.md` で担当 agent を特定する
-2. 対象の `docs/agent/*.md` を開き、「実装参照（source of truth）」節を確認する
-3. 該当ディレクトリ（`apps/*/src`）の entrypoint（`main.ts`）から読む
-4. その後にループ実装・回復実装（`*-runner.ts`, `*-loops.ts`, `scheduler/*` など）へ進む
+1. Identify owning agent in `docs/agent/README.md`
+2. Open target `docs/agent/*.md` and check "Implementation reference (source of truth)"
+3. Read entrypoint (`main.ts`) in the target directory (`apps/*/src`)
+4. Then proceed to loop/recovery implementations (`*-runner.ts`, `*-loops.ts`, `scheduler/*`, etc.)
 
-この順番にすると、仕様説明から実装までを最短で往復しやすくなります。
+This order makes it easy to round-trip between spec and implementation quickly.
 
-関連:
+Related:
 
 - `docs/flow.md`
 - `docs/state-model.md`

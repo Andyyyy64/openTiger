@@ -1,9 +1,9 @@
-# 実行環境ガイド
+# Execution Environment Guide
 
-このドキュメントは、`EXECUTION_ENVIRONMENT` が実行時挙動にどう影響するかと、  
-sandbox モードで `claude_code` を安全に運用するための前提を説明します。
+This document explains how `EXECUTION_ENVIRONMENT` affects runtime behavior and  
+the prerequisites for running `claude_code` safely in sandbox mode.
 
-関連:
+Related:
 
 - `docs/mode.md`
 - `docs/config.md`
@@ -12,150 +12,150 @@ sandbox モードで `claude_code` を安全に運用するための前提を説
 - `docs/operations.md`
 - `docs/agent/dispatcher.md`
 
-### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、実行環境設定から入る場合）
+### Common Lookup Path (state vocabulary -> transition -> owner -> implementation, when entering from execution env config)
 
-`host/sandbox` の設定確認から障害調査へ進む場合は、状態語彙 -> 遷移 -> 担当 -> 実装の順で辿ると切り分けしやすくなります。
+When tracing incidents from host/sandbox config, follow: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md`（状態語彙）
-2. `docs/flow.md`（実行時遷移と回復）
-3. `docs/operations.md`（API 手順と運用ショートカット）
-4. `docs/agent/README.md`（担当 agent と実装追跡）
+1. `docs/state-model.md` (state vocabulary)
+2. `docs/flow.md` (runtime transitions and recovery)
+3. `docs/operations.md` (API procedures and operation shortcuts)
+4. `docs/agent/README.md` (owning agent and implementation tracing)
 
-## 1. 概要
+## 1. Overview
 
-`EXECUTION_ENVIRONMENT` は `system_config` のキーで、次の2値を取ります。
+`EXECUTION_ENVIRONMENT` is a `system_config` key with two values:
 
 - `host`
 - `sandbox`
 
-内部では次の起動モードに対応します。
+Internally it maps to launch mode:
 
 - `host` -> `LAUNCH_MODE=process`
 - `sandbox` -> `LAUNCH_MODE=docker`
 
-## 2. 利用箇所
+## 2. Where It Is Used
 
-- Dashboard の System ページ（`Execution_Environment` セレクタ）
-- process manager の起動フロー（`/system/processes/:name/start`）
-- Dispatcher の worker 起動処理
-- Claude 認証確認 API（`/system/claude/auth`）
+- Dashboard System page (`Execution_Environment` selector)
+- Process manager startup flow (`/system/processes/:name/start`)
+- Dispatcher worker launch
+- Claude auth check API (`/system/claude/auth`)
 
-## 3. モード別の実行挙動
+## 3. Behavior by Mode
 
 ### 3.1 `host`
 
-- Worker/Tester/Docser は host プロセスとして起動します。
-- Claude 認証確認は host 側で実行されます（`claude -p ...`）。
-- ローカル開発での高速反復に向いています。
+- Worker/Tester/Docser run as host processes
+- Claude auth check runs on host (`claude -p ...`)
+- Suited for fast local development iteration
 
 ### 3.2 `sandbox`
 
-- task 実行は Docker コンテナ内で行われます。
-- host 側 Worker/Tester/Docser の起動はスキップされます。
-- Claude 認証確認はコンテナ側で実行されます（`docker run ... claude -p ...`）。
-- 分離性を高く保ちたい運用に向いています。
+- Task execution runs inside Docker container
+- Host Worker/Tester/Docser startup is skipped
+- Claude auth check runs in container (`docker run ... claude -p ...`)
+- Suited for higher isolation requirements
 
-## 4. sandbox の前提
+## 4. Sandbox Prerequisites
 
-### 4.1 Worker image
+### 4.1 Worker Image
 
-sandbox 用 worker image には次の CLI が必要です。
+Sandbox worker image must include:
 
 - `opencode-ai`
 - `@anthropic-ai/claude-code`
 
-既定イメージ:
+Default image:
 
 - `openTiger/worker:latest`
 
-別タグを使う場合は次を設定します。
+To use a different tag:
 
 - `SANDBOX_DOCKER_IMAGE=<your-image>`
 
-### 4.2 Docker ネットワーク
+### 4.2 Docker Network
 
-既定ネットワーク:
+Default network:
 
 - `bridge`
 
-必要に応じて次で上書きします。
+Override if needed:
 
 - `SANDBOX_DOCKER_NETWORK=<your-network>`
 
-## 5. sandbox での Claude 認証
+## 5. Claude Auth in Sandbox
 
-host 側のログイン状態が使える場合、`ANTHROPIC_API_KEY` なしでも `claude_code` を実行できます。
+When host login state is usable, `claude_code` can run without `ANTHROPIC_API_KEY`.
 
-マウントされる認証ディレクトリ（read-only）:
+Mounted auth dirs (read-only):
 
 - `~/.claude` -> `/home/worker/.claude`
 - `~/.config/claude` -> `/home/worker/.config/claude`
 
-必要に応じた上書き設定:
+Override if needed:
 
 - `CLAUDE_AUTH_DIR`
 - `CLAUDE_CONFIG_DIR`
 
-推奨手順:
+Recommended steps:
 
-1. host で `claude /login` を実行
-2. `EXECUTION_ENVIRONMENT=sandbox` を設定
-3. dispatcher を起動して task を実行
+1. Run `claude /login` on host
+2. Set `EXECUTION_ENVIRONMENT=sandbox`
+3. Start dispatcher and run tasks
 
-認証マウントが見つからず `ANTHROPIC_API_KEY` も未設定の場合、dispatcher は警告を出します。
+If auth mount is not found and `ANTHROPIC_API_KEY` is not set, dispatcher logs a warning.
 
-## 6. sandbox からの DB/Redis 接続
+## 6. DB/Redis Connectivity from Sandbox
 
-dispatcher は sandbox コンテナ起動時に loopback 宛先を次へ書き換えます。
+Dispatcher rewrites loopback destinations at sandbox container start:
 
 - `localhost` / `127.0.0.1` / `::1` -> `host.docker.internal`
 
-これにより、コンテナ内 worker から host 側サービスへ接続できます。
+This allows container workers to reach host services.
 
 ## 7. Claude Auth Check API
 
-エンドポイント:
+Endpoint:
 
 - `GET /system/claude/auth`
 
-クエリ（任意）:
+Query (optional):
 
 - `environment=host|sandbox`
 
-挙動:
+Behavior:
 
-- クエリ省略時は現在の `EXECUTION_ENVIRONMENT` を使います。
-- `available`, `authenticated`, `checkedAt`, `executionEnvironment` を返します。
-- sandbox では典型エラーを分類します。
+- Uses current `EXECUTION_ENVIRONMENT` when query omitted
+- Returns `available`, `authenticated`, `checkedAt`, `executionEnvironment`
+- For sandbox, classifies typical errors:
   - Docker daemon unavailable
-  - sandbox image missing
+  - Sandbox image missing
   - `claude` CLI missing in image
-  - authentication required (`/login`)
+  - Authentication required (`/login`)
 
-アクセス注意:
+Access:
 
-- このエンドポイントは system-control API です。
-- `api-key` / `bearer` は許可されます。
-- ローカル運用では `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL !== "false"` の間は許可されます。
+- This is a system-control API
+- `api-key` / `bearer` allowed
+- Local operation: allowed when `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL !== "false"`
 
-## 8. トラブルシューティング
+## 8. Troubleshooting
 
-### `authenticated=false` になる場合（sandbox）
+### `authenticated=false` (sandbox)
 
-- host 側で `claude /login` 済みか確認
-- 認証ディレクトリが存在し読み取り可能か確認
-- マウント先が runtime policy で遮断されていないか確認
+- Confirm `claude /login` on host
+- Confirm auth dir exists and is readable
+- Confirm mount target is not blocked by runtime policy
 
-### `image unavailable` が出る
+### `image unavailable`
 
-- `SANDBOX_DOCKER_IMAGE` で指定した image を build/pull する
-- 既定 tag とローカル/CI の運用方針を揃える
+- Build/pull image specified by `SANDBOX_DOCKER_IMAGE`
+- Align default tag with local/CI policy
 
-### デーモンエラー（Docker daemon error）が出る場合
+### Docker daemon error
 
-- Docker Desktop または `dockerd` を起動する
-- `docker` 実行権限を確認する
+- Start Docker Desktop or `dockerd`
+- Verify `docker` execution permissions
 
-### コンテナ内で CLI が見つからない場合
+### CLI not found in container
 
-- `ops/docker/worker.Dockerfile` から worker image を再 build する
+- Rebuild worker image from `ops/docker/worker.Dockerfile`

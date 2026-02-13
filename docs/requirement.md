@@ -1,58 +1,58 @@
-# ゴール
+# Goal
 
-QEMU（qmenu）で起動し、kernel console を提供し、自動検証付きで安全に反復開発できる  
-最小かつ拡張可能な RISC-V OS baseline を構築する。
+Build a minimal, extensible RISC-V OS baseline that boots under QEMU (qemu-system-riscv64),  
+provides a kernel console, and enables safe iterative development with automated verification.
 
-## 背景
+## Background
 
-openTiger による継続的な自律開発フローで RISC-V OS を育てることを想定する。  
-自律反復の安定化のため、最初のマイルストーンはフル機能 OS ではなく、  
-小さく検証可能な kernel baseline に限定する。
+Intended for growing a RISC-V OS via openTiger's continuous autonomous development flow.  
+To stabilize autonomous iteration, the first milestone is limited to a small, verifiable kernel baseline,  
+not a full-featured OS.
 
-## 制約
+## Constraints
 
-- 既存リポジトリで採用済みの言語/ツールチェーン選定を維持する
-- 対象は RISC-V 64-bit 仮想環境（`qemu-system-riscv64`, `virt` machine）
-- boot/kernel 挙動は CI/ローカル自動検証で扱える程度に deterministic を保つ
-- 厳密に必要な場合を除き、重い外部 runtime dependency を追加しない
-- 一括大改修より、段階的でテスト可能な小さな slice を優先する
+- Keep existing language and toolchain choices in the repo
+- Target RISC-V 64-bit virtual environment (`qemu-system-riscv64`, `virt` machine)
+- Boot/kernel behavior remains deterministic enough for CI/local automated verification
+- Avoid heavy external runtime dependencies except when strictly necessary
+- Prefer incremental, testable slices over large one-off changes
 
-## 受け入れ基準
+## Acceptance Criteria
 
-- [ ] プロジェクト標準 build command で kernel image を生成できる
-- [ ] QEMU 起動で kernel entry 到達と serial console への boot banner 出力を確認できる
-- [ ] UART console 入出力が最低限 line-based command で動作する
-- [ ] trap/exception handler が配線され、unexpected trap の cause 情報を log 出力できる
-- [ ] timer interrupt が有効化され、周期 tick を log で少なくとも 1 回確認できる
-- [ ] 4KiB page 単位の simple physical page allocator があり、allocation/free の基本テストが通る
-- [ ] 基本 kernel task 実行（少なくとも 2 task の round-robin scheduling）ができる
-- [ ] 最小 kernel command interface（`help`, `echo`, `meminfo`）がある
-- [ ] QEMU boot と log marker 検証を行う自動 smoke test が少なくとも 1 本ある
-- [ ] 実現可能な範囲で kernel 主要変更に unit/integration test を付与し、必須 checks が通る
+- [ ] Kernel image can be built with project-standard build command
+- [ ] Boot banner appears on serial console when booting with QEMU
+- [ ] UART console I/O works for minimal line-based commands
+- [ ] Trap/exception handlers are wired; unexpected trap cause info can be logged
+- [ ] Timer interrupt enabled; at least one periodic tick visible in logs
+- [ ] Simple physical page allocator (4KiB pages) with basic allocation/free tests
+- [ ] Basic kernel task execution (at least 2 tasks round-robin scheduled)
+- [ ] Minimal kernel command interface (`help`, `echo`, `meminfo`)
+- [ ] At least one automated smoke test that runs QEMU boot and verifies log markers
+- [ ] Unit/integration tests for major kernel changes where feasible; required checks pass
 
-## スコープ
+## Scope
 
-## 対象範囲（In Scope）
+## In Scope
 
-- RISC-V `virt` machine 向け boot path と early initialization
-- UART 経由の kernel console
-- trap/interrupt 初期化と timer tick 処理
-- 基本的な physical memory page allocator
-- kernel task 用 minimal scheduler 基盤
-- serial console 上の最小 command interface
-- ローカル/CI で再現可能な build/test script
-- setup/run command に関する必須ドキュメント更新
+- Boot path and early initialization for RISC-V `virt` machine
+- Kernel console via UART
+- Trap/interrupt init and timer tick handling
+- Basic physical memory page allocator
+- Minimal scheduler for kernel tasks
+- Minimal command interface on serial console
+- Build/test scripts reproducible in local/CI
+- Required documentation updates for setup/run commands
 
-## 対象外（Out of Scope）
+## Out of Scope
 
-- user-space process 分離を含む完全な virtual memory subsystem
-- 完全な POSIX 互換
-- 最小 stub を超える file system 実装
-- network stack
-- multi-core SMP scheduling
-- baseline correctness を超える security hardening
+- Full virtual memory subsystem including user-space process isolation
+- Full POSIX compatibility
+- File system beyond minimal stub
+- Network stack
+- Multi-core SMP scheduling
+- Security hardening beyond baseline correctness
 
-## 許可パス（Allowed Paths）
+## Allowed Paths
 
 - `arch/riscv/**`
 - `boot/**`
@@ -66,19 +66,19 @@ openTiger による継続的な自律開発フローで RISC-V OS を育てる�
 - `README.md`
 - `Makefile`
 
-## リスク評価
+## Risk Assessment
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
-| QEMU 上で boot sequence が不安定になり非決定的失敗が起きる | high | 初期 boot log を明示的に保ち、boot marker 用 smoke test を追加する |
-| Trap/interrupt 設定ミスで後続 kernel 実装が詰まる | high | trap setup を段階的に実装し、分離テストで早期検証する |
-| Scheduler bug が starvation/deadlock を隠れ発生させる | medium | 最小 round-robin から開始し deterministic task test を追加する |
-| Memory allocator 破損で障害が連鎖する | high | allocator invariant と targeted allocation/free test を追加する |
-| Scope 拡張で自律反復速度が落ちる | medium | 本マイルストーンを baseline に固定し高度機能は後続へ送る |
+| Boot sequence unstable on QEMU, non-deterministic failures | high | Keep explicit boot logs; add smoke test for boot markers |
+| Trap/interrupt misconfiguration blocks later kernel work | high | Implement trap setup incrementally; validate with isolated tests |
+| Scheduler bugs hide starvation/deadlock | medium | Start with minimal round-robin; add deterministic task tests |
+| Memory allocator corruption cascades failures | high | Add allocator invariant and allocation/free tests |
+| Scope creep slows autonomous iteration | medium | Lock this milestone as baseline; defer advanced features |
 
-## 補足
+## Notes
 
-milestone-first 戦略で進める:
+Milestone-first strategy:
 
 1. boot + console
 2. trap/timer
@@ -87,14 +87,14 @@ milestone-first 戦略で進める:
 5. command interface
 6. smoke tests + docs
 
-openTiger 運用では、非対話で安定実行できる verification command を必ず用意する。  
-（例: headless QEMU 実行 + log marker 検証の smoke test script）
+For openTiger operation, always provide non-interactive, stable verification commands.  
+(e.g. headless QEMU run + smoke script that verifies log markers)
 
-## 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、要件更新後）
+## Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, After Requirement Update)
 
-要件を更新した後に停滞や想定外挙動が出た場合は、状態語彙 -> 遷移 -> 担当 -> 実装の順で確認する。
+If stalls or unexpected behavior appear after requirement updates, follow: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md`（状態語彙）
-2. `docs/flow.md`（遷移と回復経路）
-3. `docs/operations.md`（API 手順と運用ショートカット）
-4. `docs/agent/README.md`（担当 agent と実装追跡）
+1. `docs/state-model.md` (state vocabulary)
+2. `docs/flow.md` (transitions and recovery paths)
+3. `docs/operations.md` (API procedures and operation shortcuts)
+4. `docs/agent/README.md` (owning agent and implementation tracing)

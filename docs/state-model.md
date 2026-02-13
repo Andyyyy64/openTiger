@@ -1,9 +1,9 @@
-# 状態モデル参照
+# State Model Reference
 
-このページは、openTiger の主要ステータスと遷移用語の参照用ドキュメントです。  
-状態遷移フローそのものは `docs/flow.md` を参照してください。
+This page is a reference for openTiger's main status and transition vocabulary.  
+For state transition flows, see `docs/flow.md`.
 
-関連:
+Related:
 
 - `docs/flow.md`
 - `docs/operations.md`
@@ -18,30 +18,30 @@
 - `blocked`
 - `cancelled`
 
-補足:
+Notes:
 
-- `queued` は Dispatcher 配布待ち
-- `running` は lease/run により実行中
-- `blocked` は block reason ごとの回復待ち
+- `queued`: waiting for Dispatcher dispatch
+- `running`: in execution via lease/run
+- `blocked`: waiting for recovery per block reason
 
 ## 2. Task Block Reason
 
 - `awaiting_judge`
-  - 成功 run の judge 待ち、または judge 回復待ち
+  - Waiting for judge of successful run, or judge recovery
 - `quota_wait`
-  - quota 系失敗の cooldown 待ち
+  - Cooldown wait after quota-related failure
 - `needs_rework`
-  - non-approve / policy・verification 系再作業待ち
+  - Non-approve / policy / verification rework
 - `issue_linking`
-  - planner の issue 連携待ち（解決後に `queued` へ復帰）
+  - Planner issue linkage; returns to `queued` when resolved
 
-補足:
+Notes:
 
-- legacy 値 `needs_human` は `awaiting_judge` として扱われます。
+- Legacy `needs_human` is treated as `awaiting_judge`.
 
-## 2.1 Task Retry Reason（`GET /tasks`）
+## 2.1 Task Retry Reason (`GET /tasks`)
 
-`failed` / `blocked` task には `retry` 情報が付与され、`reason` は次の値を取ります。
+`failed` / `blocked` tasks include `retry` info; `reason` can be:
 
 - `cooldown_pending`
 - `retry_due`
@@ -52,7 +52,7 @@
 - `needs_rework`
 - `unknown`
 
-`failureCategory` が付く場合の値:
+When `failureCategory` is present:
 
 - `env`
 - `setup`
@@ -62,17 +62,17 @@
 - `model`
 - `model_loop`
 
-## 2.2 Task Retry Reason の見方（実運用）
+## 2.2 Task Retry Reason (Operations)
 
-実運用では、次の値を優先して見れば一次判断しやすくなります。
+For initial triage, these values are most useful:
 
-| `retry.reason` | 意味 | 主な確認先 |
+| `retry.reason` | Meaning | Main check targets |
 | --- | --- | --- |
-| `awaiting_judge` | judge 待ちで停滞中 | `GET /judgements`, `GET /system/processes`, `GET /logs/all` |
-| `quota_wait` | quota cooldown 待ち | `GET /tasks`, `GET /runs`, `GET /logs/all` |
-| `needs_rework` | rework ループへ移行中 | `GET /runs`, `GET /judgements`, `GET /logs/all` |
-| `cooldown_pending` | cooldown 中（自動再試行前） | `GET /tasks` の `retryAt/retryInSeconds` |
-| `retry_due` | 再試行可能時刻に到達 | `GET /tasks`, `GET /logs/all` |
+| `awaiting_judge` | Stuck waiting for judge | `GET /judgements`, `GET /system/processes`, `GET /logs/all` |
+| `quota_wait` | Waiting for quota cooldown | `GET /tasks`, `GET /runs`, `GET /logs/all` |
+| `needs_rework` | Moving into rework loop | `GET /runs`, `GET /judgements`, `GET /logs/all` |
+| `cooldown_pending` | In cooldown (before auto retry) | `retryAt`/`retryInSeconds` in `GET /tasks` |
+| `retry_due` | Retry time reached | `GET /tasks`, `GET /logs/all` |
 
 ## 3. Run Status
 
@@ -87,10 +87,10 @@
 - `busy`
 - `offline`
 
-補足:
+Notes:
 
-- この状態は `agents` テーブルに登録される role（`planner/worker/tester/docser/judge`）に適用されます。
-- Dispatcher / Cycle Manager は process として管理されるため、`GET /system/processes` で確認します。
+- These apply to roles in the `agents` table (`planner`/`worker`/`tester`/`docser`/`judge`).
+- Dispatcher / Cycle Manager are process-managed; use `GET /system/processes`.
 
 ## 5. Cycle Status
 
@@ -98,54 +98,54 @@
 - `completed`
 - `aborted`
 
-## 6. 参照時の使い分け
+## 6. Usage
 
-- 状態の意味を確認したい: このページ
-- どの条件で遷移するか知りたい: `docs/flow.md`
-- 起動時の判定式を知りたい: `docs/startup-patterns.md`
+- State definitions: this page
+- Transition conditions: `docs/flow.md`
+- Startup formulas: `docs/startup-patterns.md`
 
-## 6.1 実装参照（source of truth）
+## 6.1 Implementation Reference (Source of Truth)
 
 - Task status / block reason:
   - `packages/core/src/domain/task.ts`
-  - `packages/db/src/schema.ts`（`tasks.status`, `tasks.block_reason`）
+  - `packages/db/src/schema.ts` (`tasks.status`, `tasks.block_reason`)
 - Run status:
   - `packages/core/src/domain/run.ts`
-  - `packages/db/src/schema.ts`（`runs.status`）
+  - `packages/db/src/schema.ts` (`runs.status`)
 - Agent status:
   - `packages/core/src/domain/agent.ts`
-  - `packages/db/src/schema.ts`（`agents.status`）
+  - `packages/db/src/schema.ts` (`agents.status`)
 - Cycle status:
   - `packages/core/src/domain/cycle.ts`
-  - `packages/db/src/schema.ts`（`cycles.status`）
+  - `packages/db/src/schema.ts` (`cycles.status`)
 
-## 7. 状態遷移で停滞しやすいパターン（一次診断）
+## 7. Patterns Prone to Stalls (Initial Diagnosis)
 
-| 症状 | まず見る状態/値 | 主な確認 API | 先に確認する担当領域 |
+| Symptom | First check state/value | Main APIs | Primary area to check |
 | --- | --- | --- | --- |
-| `queued` が長時間減らない | `agents` の idle/busy、lease、dependency/targetArea 競合 | `GET /agents`, `GET /tasks`, `GET /logs/all` | Dispatcher |
-| `running` が長時間固定 | 対応 run の `status`, startedAt、worker ログ | `GET /runs`, `GET /tasks`, `GET /logs/all` | Worker/Tester/Docser |
-| `awaiting_judge` が増え続ける | pending judge run、judge process 稼働 | `GET /judgements`, `GET /system/processes`, `GET /logs/all` | Judge |
-| `quota_wait` が連鎖する | cooldown 待機時間、同時実行数、モデル quota | `GET /tasks`, `GET /runs`, `GET /logs/all` | Worker + Dispatcher |
-| `needs_rework` が連鎖する | non-approve 理由、policy/verification failure の内容 | `GET /judgements`, `GET /runs`, `GET /logs/all` | Judge + Worker + Cycle Manager |
-| `issue_linking` が解消しない | issue 連携メタデータ不足、import/link 処理失敗 | `GET /tasks`, `POST /system/preflight`, `GET /logs/all` | Planner + API |
+| `queued` not decreasing for long | `agents` idle/busy, lease, dependency/targetArea conflict | `GET /agents`, `GET /tasks`, `GET /logs/all` | Dispatcher |
+| `running` stuck for long | Corresponding run `status`, startedAt, worker logs | `GET /runs`, `GET /tasks`, `GET /logs/all` | Worker/Tester/Docser |
+| `awaiting_judge` increasing | Pending judge run, judge process status | `GET /judgements`, `GET /system/processes`, `GET /logs/all` | Judge |
+| `quota_wait` chaining | Cooldown wait, concurrency, model quota | `GET /tasks`, `GET /runs`, `GET /logs/all` | Worker + Dispatcher |
+| `needs_rework` chaining | Non-approve reason, policy/verification failure content | `GET /judgements`, `GET /runs`, `GET /logs/all` | Judge + Worker + Cycle Manager |
+| `issue_linking` not clearing | Issue linkage metadata missing, import/link failure | `GET /tasks`, `POST /system/preflight`, `GET /logs/all` | Planner + API |
 
-補足:
+Notes:
 
-- 具体的な API 確認順は `docs/operations.md` の「変更後の確認チェックリスト」を参照してください。
-- 担当 agent の切り分けに迷う場合は `docs/agent/README.md` の FAQ を参照してください。
+- For API check sequence, see "Post-change verification checklist" in `docs/operations.md`.
+- For agent triage confusion, see FAQ in `docs/agent/README.md`.
 
-## 8. 状態語彙 -> 遷移 -> 担当 -> 実装 の逆引き（最短ルート）
+## 8. Lookup: State Vocabulary -> Transition -> Owner -> Implementation (Shortest Path)
 
-状態語彙を起点に、状態語彙 -> 遷移 -> 担当 -> 実装の順で追う共通導線です。
+Common path when tracing from state vocabulary:
 
-| 起点（状態語彙/症状） | 状態語彙の確認先 | 遷移の確認先（flow） | 担当 agent の確認先 | 実装の確認先 |
+| Starting point (state/symptom) | State vocabulary ref | Transition ref (flow) | Owner agent ref | Implementation ref |
 | --- | --- | --- | --- | --- |
-| `queued`/`running` 停滞 | 1章, 2章, 7章 | `docs/flow.md` の「2. 基本ライフサイクル」「5. Dispatcher の回復レイヤ」「6. Worker の失敗処理」 | `docs/agent/dispatcher.md`, `docs/agent/worker.md` | `apps/dispatcher/src/`, `apps/worker/src/` |
-| `awaiting_judge` 停滞 | 2章, 7章 | `docs/flow.md` の「3. 回復で使われる Blocked Reason」「4. Run Lifecycle と Judge の冪等性」「7. Judge の非承認 / マージ失敗経路」 | `docs/agent/judge.md` | `apps/judge/src/` |
-| `quota_wait`/`needs_rework` 連鎖 | 2章, 2.2章, 7章 | `docs/flow.md` の「3. 回復で使われる Blocked Reason」「6. Worker の失敗処理」「8. Cycle Manager の自己回復」 | `docs/agent/worker.md`, `docs/agent/judge.md`, `docs/agent/cycle-manager.md` | `apps/worker/src/`, `apps/judge/src/`, `apps/cycle-manager/src/` |
-| `issue_linking` 停滞 | 2章, 7章 | `docs/flow.md` の「3. 回復で使われる Blocked Reason」 + `docs/startup-patterns.md` | `docs/agent/planner.md` | `apps/planner/src/` |
+| `queued`/`running` stuck | 1, 2, 7 | "2. Basic Lifecycle" "5. Dispatcher Recovery Layer" "6. Worker Failure Handling" in `docs/flow.md` | `docs/agent/dispatcher.md`, `docs/agent/worker.md` | `apps/dispatcher/src/`, `apps/worker/src/` |
+| `awaiting_judge` stuck | 2, 7 | "3. Blocked Reasons" "4. Run Lifecycle" "7. Judge Non-Approval / Merge Failure Paths" in `docs/flow.md` | `docs/agent/judge.md` | `apps/judge/src/` |
+| `quota_wait`/`needs_rework` chain | 2, 2.2, 7 | "3. Blocked Reasons" "6. Worker Failure Handling" "8. Cycle Manager Self-Recovery" in `docs/flow.md` | `docs/agent/worker.md`, `docs/agent/judge.md`, `docs/agent/cycle-manager.md` | `apps/worker/src/`, `apps/judge/src/`, `apps/cycle-manager/src/` |
+| `issue_linking` stuck | 2, 7 | "3. Blocked Reasons" in `docs/flow.md` + `docs/startup-patterns.md` | `docs/agent/planner.md` | `apps/planner/src/` |
 
-補足:
+Notes:
 
-- flow 側で責務を確認した後、各 agent 仕様ページ末尾の「実装参照（source of truth）」節へ進むと、ファイル単位で追跡しやすくなります。
+- After checking responsibilities in flow, use "Implementation reference (source of truth)" at the end of agent spec pages to trace at file level.

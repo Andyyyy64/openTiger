@@ -1,50 +1,50 @@
-# ドキュメント担当（Docser）Agent 仕様
+# Docser Agent Specification
 
-関連:
+Related:
 
 - `docs/agent/README.md`
 - `docs/agent/worker.md`
 - `docs/verification.md`
 - `docs/policy-recovery.md`
 
-## 1. 役割
+## 1. Role
 
-Docser は `AGENT_ROLE=docser` で動作する Worker ランタイムの派生ロールです。  
-このページは Docser 固有の差分のみを記載します。
+Docser is a derived role of the Worker runtime running with `AGENT_ROLE=docser`.  
+This page documents only Docser-specific differences.
 
-共通の実行フロー・状態遷移・安全制約は `docs/agent/worker.md` を参照してください。
+For shared execution flow, state transitions, and safety constraints, see `docs/agent/worker.md`.
 
-## 2. 主な起点
+## 2. Main Triggers
 
-- Judge 後のドキュメント追従 task 作成
-- repository の docs が不足・未整備な場合の Planner による doc-gap task 注入
+- Doc-follow task creation after Judge
+- Planner-injected doc-gap task when repository docs are insufficient or incomplete
 
-## 3. 期待される出力
+## 3. Expected Output
 
-- allowed paths 配下に限定した簡潔なドキュメント差分
-- run/task レコードに紐づく検証済みドキュメント更新
+- Concise documentation diffs under allowed paths
+- Verified documentation updates tied to run/task records
 
-## 4. ガードレール
+## 4. Guardrails
 
-- 推測的な設計案より、実装済みの事実を優先する
-- strict な allowed paths を厳守する
-- 変更をレビュー可能なサイズに保ち、影響範囲を絞る
-- doc-safe な検証コマンド（例: `pnpm run check`）を使う
-- LLM ベースの policy recovery は行わず、deterministic な処理に限定する
+- Prefer implemented facts over speculative design
+- Strictly respect strict allowed paths
+- Keep changes reviewable in size and scope
+- Use doc-safe verification commands (e.g. `pnpm run check`)
+- No LLM-based policy recovery; limited to deterministic handling
 
-## 5. 主な設定
+## 5. Main Configuration
 
 - `AGENT_ROLE=docser`
 - `DOCSER_MODEL`
 - `DOCSER_INSTRUCTIONS_PATH`
 - `OPENTIGER_LOG_DIR`
 
-共通設定（retry/policy recovery/verify recovery など）は `docs/agent/worker.md` を参照してください。
+For shared settings (retry/policy recovery/verify recovery, etc.), see `docs/agent/worker.md`.
 
-## 6. 実装参照（source of truth）
+## 6. Implementation Reference (Source of Truth)
 
-- role 起動分岐: `apps/worker/src/main.ts`
-- role 固有指示: `apps/worker/instructions/docser.md`
-- doc-safe 検証制約: `apps/worker/src/worker-runner-verification.ts`
-- docser 固有補助挙動: `apps/worker/src/worker-task-helpers.ts`
-- 共通実行本体: `apps/worker/src/worker-runner.ts`
+- Role startup branching: `apps/worker/src/main.ts`
+- Role-specific instructions: `apps/worker/instructions/docser.md`
+- Doc-safe verification constraints: `apps/worker/src/worker-runner-verification.ts`
+- Docser-specific helper behavior: `apps/worker/src/worker-task-helpers.ts`
+- Shared execution body: `apps/worker/src/worker-runner.ts`

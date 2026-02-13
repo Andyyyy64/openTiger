@@ -1,72 +1,72 @@
-# ディスパッチャー（Dispatcher）Agent 仕様
+# Dispatcher Agent Specification
 
-関連:
+Related:
 
 - `docs/agent/README.md`
 - `docs/flow.md`
 - `docs/mode.md`
 
-## 1. 役割
+## 1. Role
 
-Dispatcher は `queued` task を安全に `running` へ進め、適切な実行 agent へ割り当てます。  
-同時に lease/heartbeat を監視し、重複実行や取りこぼしを抑制します。
+Dispatcher safely advances `queued` tasks to `running` and assigns them to the right execution agent.  
+It also monitors lease/heartbeat to prevent duplicate execution and dropped tasks.
 
-責務外:
+Out of scope:
 
-- task 内容の実装（コード変更）
-- run 成果物の approve/rework 判定
+- Task content implementation (code changes)
+- Run artifact approve/rework decisions
 
-## 2. 入力
+## 2. Input
 
-- `tasks` / `runs` / `leases` / `agents` の現在状態
-- task の `priority`, `dependencies`, `targetArea`, `role`
-- 実行モード（`LAUNCH_MODE=process|docker`）
-- リポジトリ実行モード（`REPO_MODE=git|local`）
+- Current state of `tasks` / `runs` / `leases` / `agents`
+- Task `priority`, `dependencies`, `targetArea`, `role`
+- Execution mode (`LAUNCH_MODE=process|docker`)
+- Repository execution mode (`REPO_MODE=git|local`)
 
-## 3. 配布パイプライン
+## 3. Dispatch Pipeline
 
-1. lease 異常と孤立した running task を先に回復
-2. 利用可能スロットを計算（busy agent 数 + 上限）
-3. `queued` task を収集し、依存関係/競合で絞り込み
-4. 優先度スコアで並べ替え
-5. role に一致する idle agent を選択
-6. lease 取得 + `queued -> running` を原子的に更新
-7. worker 起動（queue enqueue または docker 起動）
+1. First recover lease anomalies and orphaned running tasks
+2. Compute available slots (busy agent count + limit)
+3. Collect `queued` tasks, filter by dependencies/conflicts
+4. Sort by priority score
+5. Select idle agent matching role
+6. Atomically acquire lease and update `queued -> running`
+7. Launch worker (queue enqueue or docker start)
 
-## 4. 選択ロジックとガードレール
+## 4. Selection Logic and Guardrails
 
-- `awaiting_judge` backlog は観測し、設定により強制ブロック（hard block）可能
-- PR レビュー専用 task が `queued` に紛れた場合は `blocked(awaiting_judge)` へ戻す
-- recent failure/cancel は cooldown 中の再配布を抑止
-- `targetArea` 衝突タスクは同時実行しない
-- `dependencies` 未解決タスクは配布しない
+- `awaiting_judge` backlog is observed; hard block can be configured
+- PR-review-only tasks that end up `queued` are moved to `blocked(awaiting_judge)`
+- Recent failure/cancel suppresses re-dispatch during cooldown
+- Tasks with conflicting `targetArea` are not run concurrently
+- Tasks with unresolved `dependencies` are not dispatched
 
-## 5. 回復動作
+## 5. Recovery Behavior
 
-- expired lease を解放し task を `queued` へ戻す
-- queued task に残る dangling lease（取り残し lease）を回収
-- `running` だが active run が無い task を回復
-- heartbeat が途切れた agent の lease を reclaim（再回収）
-- `quota_wait` backlog 検知時は同時実行数を一時的に 1 に制限
+- Release expired leases and return tasks to `queued`
+- Recover dangling leases left on queued tasks
+- Recover tasks in `running` with no active run
+- Reclaim leases from agents with lost heartbeat
+- When `quota_wait` backlog is detected, temporarily limit concurrency to 1
 
-## 6. 起動モード
+## 6. Launch Modes
 
 - `process`:
-  - 常駐 worker への agent 専用 queue に enqueue
-  - Dispatcher は新規プロセスを毎回起動しない
+  - Enqueue to agent-specific queue for resident worker
+  - Dispatcher does not start a new process each time
 - `docker`:
-  - task ごとに worker container を起動
-  - Docker image/network とログ mount を利用
+  - Start worker container per task
+  - Uses Docker image/network and log mount
 
-## 7. 実装参照（source of truth）
+## 7. Implementation Reference (Source of Truth)
 
-- 起動と制御ループ: `apps/dispatcher/src/main.ts`, `apps/dispatcher/src/scheduler/index.ts`
-- lease 管理: `apps/dispatcher/src/scheduler/lease.ts`
-- agent heartbeat 回復: `apps/dispatcher/src/scheduler/heartbeat.ts`
-- 優先度計算: `apps/dispatcher/src/scheduler/priority.ts`
-- worker 起動分岐: `apps/dispatcher/src/scheduler/worker-launcher.ts`
+- Startup and control loop: `apps/dispatcher/src/main.ts`, `apps/dispatcher/src/scheduler/index.ts`
+- Lease management: `apps/dispatcher/src/scheduler/lease.ts`
+- Agent heartbeat recovery: `apps/dispatcher/src/scheduler/heartbeat.ts`
+- Priority calculation: `apps/dispatcher/src/scheduler/priority.ts`
+- Worker launch branching: `apps/dispatcher/src/scheduler/worker-launcher.ts`
 
-## 8. 主な設定
+## 8. Main Configuration
 
 - `POLL_INTERVAL_MS`
 - `MAX_CONCURRENT_WORKERS`
