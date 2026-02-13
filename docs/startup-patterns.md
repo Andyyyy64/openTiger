@@ -27,6 +27,15 @@
 
 run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `docs/flow.md` を参照してください。
 
+### 状態詰まり時の読み順（起動判定から入る場合）
+
+起動判定を確認したあとに詰まりを追う場合は、次の順で辿ると切り分けが速くなります。
+
+1. `docs/state-model.md`（状態語彙の確認）
+2. `docs/flow.md`（実行時遷移と回復経路）
+3. `docs/operations.md`（API 手順と運用ショートカット）
+4. `docs/agent/README.md`（担当 agent と実装追跡ルート）
+
 ## 判定入力
 
 | 記号 | 意味 | 取得元 |
