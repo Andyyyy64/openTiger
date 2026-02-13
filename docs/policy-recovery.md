@@ -9,6 +9,16 @@
 - `docs/agent/planner.md`
 - `docs/flow.md`
 - `docs/state-model.md`
+- `docs/operations.md`
+
+### 状態詰まり時の読み順（ポリシー違反から入る場合）
+
+policy violation（`needs_rework` 連鎖など）を起点に調査する場合は、次の順で辿ると切り分けしやすくなります。
+
+1. `docs/state-model.md`（`needs_rework` / `quota_wait` など状態語彙の確認）
+2. `docs/flow.md`（Worker 失敗処理と blocked 回復経路）
+3. `docs/operations.md`（API 手順と運用ショートカット）
+4. `docs/agent/README.md`（担当 agent と実装追跡ルート）
 
 ## 1. 目的
 
