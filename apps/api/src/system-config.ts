@@ -41,6 +41,9 @@ export const CONFIG_FIELDS: ConfigField[] = [
     defaultValue: "30000",
   },
   { key: "OPENCODE_MAX_QUOTA_WAITS", column: "opencodeMaxQuotaWaits", defaultValue: "-1" },
+  { key: "CODEX_MODEL", column: "codexModel", defaultValue: "gpt-5.3-codex" },
+  { key: "CODEX_MAX_RETRIES", column: "codexMaxRetries", defaultValue: "3" },
+  { key: "CODEX_RETRY_DELAY_MS", column: "codexRetryDelayMs", defaultValue: "5000" },
   {
     key: "CLAUDE_CODE_PERMISSION_MODE",
     column: "claudeCodePermissionMode",

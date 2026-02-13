@@ -324,6 +324,15 @@ async function ensureConfigColumns(): Promise<void> {
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_max_quota_waits" text DEFAULT '-1' NOT NULL`,
   );
   await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "codex_model" text DEFAULT 'gpt-5.3-codex' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "codex_max_retries" text DEFAULT '3' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "codex_retry_delay_ms" text DEFAULT '5000' NOT NULL`,
+  );
+  await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_small_model" text DEFAULT 'google/gemini-2.5-flash' NOT NULL`,
   );
   await db.execute(
