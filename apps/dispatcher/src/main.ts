@@ -89,7 +89,7 @@ function logNoIdleAgent(requiredRole: string): void {
 
 // Default config
 const DEFAULT_CONFIG: DispatcherConfig = {
-  pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS ?? "5000", 10),
+  pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS ?? "3000", 10),
   maxConcurrentWorkers: parseMaxConcurrentWorkers(process.env.MAX_CONCURRENT_WORKERS),
   launchMode: (process.env.LAUNCH_MODE as LaunchMode) ?? "process",
   repoMode: getRepoMode(),

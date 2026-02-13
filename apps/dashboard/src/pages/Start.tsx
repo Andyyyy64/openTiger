@@ -476,7 +476,7 @@ export const StartPage: React.FC = () => {
         </div>
       )}
       {shouldCheckClaudeAuth && claudeAuthQuery.isError && (
-        <div className="border border-yellow-600 bg-yellow-900/10 p-3 text-xs font-mono text-yellow-500">
+        <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
           &gt; WARN: Failed to check Claude Code authentication status.
         </div>
       )}
