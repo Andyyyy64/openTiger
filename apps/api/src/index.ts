@@ -16,6 +16,7 @@ import { judgementsRoute } from "./routes/judgements";
 import { logsRoute } from "./routes/logs";
 import { configRoute } from "./routes/config";
 import { systemRoute } from "./routes/system";
+import { researchRoute } from "./routes/research";
 import { authMiddleware, rateLimitMiddleware } from "./middleware/index";
 import { resolveProcessDefinition } from "./routes/system-process-manager/definitions";
 import {
@@ -45,6 +46,7 @@ app.route("/judgements", judgementsRoute);
 app.route("/logs", logsRoute);
 app.route("/config", configRoute);
 app.route("/system", systemRoute);
+app.route("/research", researchRoute);
 
 // ルートパス
 app.get("/", (c) => {

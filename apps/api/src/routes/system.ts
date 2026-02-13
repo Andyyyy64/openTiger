@@ -417,7 +417,8 @@ systemRoute.get("/codex/auth", async (c) => {
         authenticated: false,
         executionEnvironment,
         checkedAt,
-        message: "Codex CLI is not installed in sandbox image. Rebuild worker image with @openai/codex.",
+        message:
+          "Codex CLI is not installed in sandbox image. Rebuild worker image with @openai/codex.",
       });
     }
   }
@@ -449,7 +450,8 @@ systemRoute.get("/codex/auth", async (c) => {
     authenticated: true,
     executionEnvironment,
     checkedAt,
-    message: "Codex auth check returned a non-auth error; skipping warning to avoid false positives.",
+    message:
+      "Codex auth check returned a non-auth error; skipping warning to avoid false positives.",
   });
 });
 
@@ -873,7 +875,18 @@ systemRoute.post("/cleanup", async (c) => {
           last_heartbeat = NOW()
     `);
     await db.execute(sql`
-      TRUNCATE artifacts, runs, leases, events, cycles, tasks RESTART IDENTITY
+      TRUNCATE
+        artifacts,
+        runs,
+        leases,
+        events,
+        cycles,
+        tasks,
+        research_evidence,
+        research_claims,
+        research_reports,
+        research_jobs
+      RESTART IDENTITY
       CASCADE
     `);
     return c.json({ cleaned: true, queuesObliterated: queuesCleaned });
