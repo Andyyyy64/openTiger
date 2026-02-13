@@ -197,6 +197,7 @@ Current implementation behavior:
 
 - `GET /system/github/auth`
 - `GET /system/claude/auth?environment=host|sandbox`
+- `GET /system/codex/auth?environment=host|sandbox`
 
 ### Requirement Operations
 

@@ -17,6 +17,39 @@ export { runWorker, type WorkerConfig, type WorkerResult } from "./worker-runner
 
 const activeTaskIds = new Set<string>();
 
+type ExecutorKind = "opencode" | "claude_code" | "codex";
+
+function isClaudeExecutor(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code";
+}
+
+function isCodexExecutor(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized === "codex" || normalized === "openai_codex" || normalized === "openai-codex";
+}
+
+function resolveExecutorKind(value: string | undefined): ExecutorKind {
+  const normalized = (value ?? "opencode").trim().toLowerCase();
+  if (isClaudeExecutor(normalized)) {
+    return "claude_code";
+  }
+  if (isCodexExecutor(normalized)) {
+    return "codex";
+  }
+  return "opencode";
+}
+
+function resolveExecutorProvider(executor: ExecutorKind): string {
+  if (executor === "claude_code") {
+    return "anthropic";
+  }
+  if (executor === "codex") {
+    return "openai";
+  }
+  return "gemini";
+}
+
 // Entry point: receive tasks from queue and execute
 async function main() {
   const workerIndex = process.env.WORKER_INDEX;
@@ -28,9 +61,9 @@ async function main() {
   const repoUrl = process.env.REPO_URL ?? "";
   const baseBranch = process.env.BASE_BRANCH ?? "main";
   const repoMode = getRepoMode();
-  const llmExecutor = (process.env.LLM_EXECUTOR ?? "opencode").trim().toLowerCase();
+  const resolvedExecutor = resolveExecutorKind(process.env.LLM_EXECUTOR);
   const agentModel =
-    llmExecutor === "claude_code"
+    resolvedExecutor === "claude_code"
       ? process.env.CLAUDE_CODE_MODEL
       : agentRole === "tester"
         ? (process.env.TESTER_MODEL ?? process.env.OPENCODE_MODEL)
@@ -39,7 +72,11 @@ async function main() {
           : (process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL);
   const effectiveModel =
     agentModel ??
-    (llmExecutor === "claude_code" ? "claude-opus-4-6" : "google/gemini-3-flash-preview");
+    (resolvedExecutor === "claude_code"
+      ? "claude-opus-4-6"
+      : resolvedExecutor === "codex"
+        ? "openai/gpt-5-codex"
+        : "google/gemini-3-flash-preview");
   // Prefer env if set
   const instructionsPath =
     agentRole === "tester"
@@ -84,7 +121,7 @@ async function main() {
       lastHeartbeat: new Date(),
       metadata: {
         model: effectiveModel, // Record model per role
-        provider: "gemini",
+        provider: resolveExecutorProvider(resolvedExecutor),
       },
     })
     .onConflictDoUpdate({
@@ -92,6 +129,10 @@ async function main() {
       set: {
         status: "idle",
         lastHeartbeat: new Date(),
+        metadata: {
+          model: effectiveModel,
+          provider: resolveExecutorProvider(resolvedExecutor),
+        },
       },
     });
 

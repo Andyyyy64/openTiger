@@ -15,6 +15,7 @@ describe("isClaudeCodeProvider", () => {
 
   it("rejects non-claude executors", () => {
     expect(isClaudeCodeProvider("opencode")).toBe(false);
+    expect(isClaudeCodeProvider("codex")).toBe(false);
     expect(isClaudeCodeProvider(undefined)).toBe(false);
   });
 });
