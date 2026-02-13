@@ -44,6 +44,10 @@
 - 障害時の切り分けと再起動判断を短時間で行う
 - 設定変更の影響範囲を誤らない
 
+状態詰まり時のショートカット:
+
+- `docs/state-model.md` -> `docs/flow.md` -> `docs/operations.md`（8.1）-> `docs/agent/README.md`
+
 ### レーンC: 実装追従（ソース差分を追う）
 
 1. `docs/architecture.md`
