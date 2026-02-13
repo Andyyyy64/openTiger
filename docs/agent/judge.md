@@ -1,42 +1,73 @@
-# Judge Agent
+# Judge Agent Specification
+
+Related:
+
+- `docs/agent/README.md`
+- `docs/flow.md`
+- `docs/mode.md`
 
 ## 1. Role
 
-Evaluate successful implementation runs and drive state transitions toward merge completion.
+Judge evaluates successful runs and decides whether to converge tasks to `done` or branch to re-execution/rework.
 
-## 2. Inputs
+Out of scope:
 
-- successful run + artifacts (`pr`/`worktree`)
-- CI / policy / LLM evaluator summary
-- current task state and retry context
+- Queued task dispatch and lease management
+- Direct file modification execution
 
-## 3. Core Decisions
+## 2. Mode Resolution
+
+Execution mode is determined by:
+
+- `JUDGE_MODE=git|local|auto`
+- When `auto`, it follows `REPO_MODE`
+
+## 3. Input
+
+- Successful run + artifacts (`pr` / `worktree`)
+- CI / policy / LLM evaluator results
+- Task retry context / lineage
+
+## 4. Core Decisions
 
 - `approve`
 - `request_changes`
 
-(legacy `needs_human` is treated as request-changes-style recovery behavior.)
+Legacy `needs_human` is normalized into request_changes-style recovery flow.
 
-## 4. Post-Decision Actions
+## 5. Post-Decision Transitions
 
-- approve + merge success -> task `done`
-- non-approve -> requeue or escalate (`needs_rework` + autofix)
-- approve but merge not completed:
-  - conflict signals -> queue `[AutoFix-Conflict]`
-  - otherwise schedule judge retry path
+- approve + merge success -> `done`
+- non-approve -> retry or move to `needs_rework`
+- merge conflict -> attempt `[AutoFix-Conflict]` task creation
 
-## 5. Anti-Loop Mechanics
+## 6. Loop Prevention and Recovery
 
-- claim-run idempotency (`judgedAt` / `judgementVersion`)
-- non-approve circuit breaker -> AutoFix escalation
-- doom-loop detector -> AutoFix escalation
-- awaiting-judge backlog restoration for missing pending runs
+- Idempotent run claim control (`judgedAt`, `judgementVersion`)
+- Non-approve circuit breaker
+- Doom loop circuit breaker
+- Run restoration for awaiting_judge backlog
+- Autofix fallback on conflict
 
-## 6. Important Settings
+## 7. Implementation Reference (Source of Truth)
+
+- Startup and loop: `apps/judge/src/main.ts`, `apps/judge/src/judge-loops.ts`
+- Core decision logic: `apps/judge/src/judge-agent.ts`, `apps/judge/src/judge-evaluate.ts`
+- Retry and recovery: `apps/judge/src/judge-retry.ts`, `apps/judge/src/judge-pending.ts`
+- Autofix path: `apps/judge/src/judge-autofix.ts`
+- Local operation path: `apps/judge/src/judge-local-loop.ts`, `apps/judge/src/judge-local-merge.ts`
+
+## 8. Main Configuration
 
 - `JUDGE_MODE`
 - `JUDGE_MODEL`
 - `JUDGE_MERGE_ON_APPROVE`
 - `JUDGE_REQUEUE_ON_NON_APPROVE`
+- `JUDGE_AUTO_FIX_ON_FAIL`
+- `JUDGE_AUTO_FIX_MAX_ATTEMPTS`
+- `JUDGE_AWAITING_RETRY_COOLDOWN_MS`
+- `JUDGE_PR_MERGEABLE_PRECHECK_RETRIES`
+- `JUDGE_PR_MERGEABLE_PRECHECK_DELAY_MS`
+- `JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES`
 - `JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES`
-- local mode recovery settings (`JUDGE_LOCAL_BASE_REPO_RECOVERY*`)
+- `JUDGE_LOCAL_BASE_REPO_RECOVERY*`

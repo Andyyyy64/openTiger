@@ -1,77 +1,102 @@
-# Worker Agent
+# Worker Agent Specification
+
+Related:
+
+- `docs/agent/README.md`
+- `docs/policy-recovery.md`
+- `docs/verification.md`
 
 ## 1. Role
 
-Execute task implementation and verification.
+Worker runtime switches execution mode based on `AGENT_ROLE`:
 
-`AGENT_ROLE` selects behavior family:
+- `worker`: implementation changes
+- `tester`: test-centric changes
+- `docser`: documentation changes
 
-- `worker`
-- `tester`
-- `docser`
+This page describes **shared behavior** of the Worker runtime.  
+For Tester/Docser-specific differences, see:
+
+- `docs/agent/tester.md`
+- `docs/agent/docser.md`
+
+Out of scope:
+
+- Overall backlog replan decisions
+- PR approve/rework decisions
 
 ## 2. Standard Execution Flow
 
-1. Validate task and acquire runtime lock
-2. Checkout/branch preparation
-3. Task execution via selected LLM executor (`opencode` / `claude_code`)
-4. expected-file check
-5. verification command execution
-6. commit/push + PR creation (git mode)
-7. run/task/artifact updates
-8. lease release and agent idle
+1. Acquire runtime lock
+2. Checkout / branch prep
+3. LLM execution (`opencode` or `claude_code`)
+4. Expected-file verification
+5. Run verification phase
+6. Commit/push + PR creation (git mode)
+7. Update run/task/artifact
+8. Release lease and return agent to idle
 
-## 3. Success Transitions
+## 3. Verification Phase
 
-- review required -> `blocked(awaiting_judge)`
-- no review required -> `done`
+The verification phase includes multiple recovery steps, not just simple command execution.
 
-## 4. Failure Transitions
+- Execute explicit commands
+- Retry on no-change failure
+- No-op detection (pass assumed when verification passes)
+- Deterministic policy violation recovery
+- Optional LLM policy recovery (`allow|discard|deny`)
+- Discard + learn generated artifacts
+- Verification recovery (retry around failed commands)
 
-- quota signature -> `blocked(quota_wait)`
-- verification/policy failure -> `blocked(needs_rework)`
-- other non-recoverable failures -> `failed`
+When unresolvable:
 
-Both cases:
+- policy/verification failure -> `blocked(needs_rework)`
 
-- run marked `failed`
-- lease released
-- agent returned to `idle`
+## 4. State Transitions
 
-## 5. Duplicate Execution Defenses
+Success:
 
-- per-task runtime lock file
-- `activeTaskIds` in queue worker
-- startup-window lock conflict skip (avoid false immediate recovery)
+- Review required -> `blocked(awaiting_judge)`
+- No review required -> `done`
 
-## 6. Safety Rules
+Failure:
 
-- denied command checks before OpenCode and verify
-- verify avoids long-lived dev/watch flows
-- expected-file validation supports `src/` fallback path resolution
+- Quota-related -> `blocked(quota_wait)`
+- Verification/policy -> `blocked(needs_rework)`
+- Other -> `failed`
 
-## 7. Verification Commands and Smoke Tests
+## 5. Safety and Guardrails
 
-Task `commands` specify what to run for verification (e.g., `make smoke`, `pnpm run check`). Worker runs them in order. Boot smoke tests (e.g., QEMU-based tests that validate boot log markers) are treated as normal verification commands; no special handling is required.
+- Pre-check for denied commands
+- Commands containing shell operators are excluded from execution
+- Runtime lock + queue guard prevent duplicate execution
+- Expected-file mismatch reflected as warning/failure
 
-## 8. Verification Command Constraints
+## 6. Verification Command Constraints
 
-Verification commands run via `spawn` (no shell), so shell features do not work:
+Commands are executed via spawn, not shell. The following are not supported:
 
-- `$()` command substitution — rejected at parse; if explicit and failed, skipped when remaining commands exist
-- `|`, `&&`, `||`, `;`, `<`, `>`, backticks — rejected
+- `$()`
+- `|`, `&&`, `||`, `;`, `<`, `>`, `` ` ``
 
-When explicit command fails due to unsupported format or missing script, Worker may skip and continue with remaining commands when appropriate (doc-only, no-op, or prior command passed).
+## 7. Implementation Reference (Source of Truth)
 
-## 9. Transient Failure Retry
+- Startup and role resolution: `apps/worker/src/main.ts`
+- Execution body: `apps/worker/src/worker-runner.ts`
+- Verification phase: `apps/worker/src/worker-runner-verification.ts`
+- Role-specific helper behavior: `apps/worker/src/worker-task-helpers.ts`
+- Runtime lock: `apps/worker/src/worker-runtime-lock.ts`
+- Verification command handling: `apps/worker/src/steps/verify/`
 
-Checkout, branch creation, stage, push, and branch restore use transient-pattern retry (timeout, connection reset, etc.) before failing. Git add ignores paths that are listed in `.gitignore` and stages the rest instead of failing.
-
-## 10. Important Settings
+## 8. Main Configuration
 
 - `AGENT_ID`, `AGENT_ROLE`
-- `WORKER_MODEL` / `TESTER_MODEL` / `DOCSER_MODEL`
-- `WORKSPACE_PATH`
+- `WORKER_MODEL`, `TESTER_MODEL`, `DOCSER_MODEL`
 - `REPO_MODE`, `REPO_URL`, `BASE_BRANCH`
 - `LOCAL_REPO_PATH`, `LOCAL_WORKTREE_ROOT`
-- `OPENTIGER_TASK_LOCK_DIR`
+- `WORKER_AUTO_VERIFY_MODE`
+- `WORKER_VERIFY_CONTRACT_PATH`
+- `WORKER_VERIFY_RECOVERY_ATTEMPTS`
+- `WORKER_POLICY_RECOVERY_USE_LLM`
+- `WORKER_POLICY_RECOVERY_ATTEMPTS`
+- `WORKER_POLICY_RECOVERY_TIMEOUT_SECONDS`

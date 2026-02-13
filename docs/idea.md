@@ -1,26 +1,35 @@
-# Next Ideas
+# Future Ideas
 
 ## 1. Planner Fallback Layer
 
-- Add optional "degraded planning" mode when inspection repeatedly fails.
-- Generate minimal safe tasks instead of hard aborting planning.
+- Add optional `degraded planning` mode for continuous inspection failures
+- Avoid hard abort of planning; generate minimal safe tasks
 
 ## 2. Recovery Explainability
 
-- Add first-class timeline panel: state transition graph per task.
-- Show reason evolution (`quota_wait -> queued -> running -> awaiting_judge`).
+- Add task-level state transition timeline panel as first-class feature
+- Visualize reason changes (`quota_wait -> queued -> running -> awaiting_judge`)
 
 ## 3. Judge Throughput Controls
 
-- Dynamic judge scaling based on awaiting backlog slope.
-- Prioritize PRs with oldest blocked parent task first.
+- Dynamically scale judge count based on awaiting backlog trend
+- Prioritize evaluation of PRs with oldest blocked parent task
 
 ## 4. Retry Policy Profiles
 
-- profile-based retry policy (`aggressive`, `balanced`, `cost-save`).
-- allow per-project overrides by config row.
+- Add profile-based retry policy (`aggressive`, `balanced`, `cost-save`)
+- Allow project-level override per config row
 
 ## 5. Safety Hardening
 
-- stronger permission preflight for expected external paths.
-- explicit validation before passing paths to worker instructions.
+- Strengthen preflight permission check for unexpected external paths
+- Add explicit validation before passing paths to worker instructions
+
+## 6. Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Evaluating Ideas)
+
+When trying improvements, checking impact in order state vocabulary -> transition -> owner -> implementation helps compare:
+
+1. `docs/state-model.md` (how state vocabulary changes)
+2. `docs/flow.md` (what transition/recovery differences appear)
+3. `docs/operations.md` (whether API check procedures need updates)
+4. `docs/agent/README.md` (impact on owning agent and implementation responsibilities)

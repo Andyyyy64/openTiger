@@ -1,55 +1,84 @@
-# Planner Agent
+# Planner Agent Specification
+
+Related:
+
+- `docs/agent/README.md`
+- `docs/flow.md`
+- `docs/verification.md`
 
 ## 1. Role
 
-Generate executable tasks from requirement input and persist them safely.
+Planner generates executable task sets from requirement/issue and persists them without duplication.  
+To avoid duplicate plans, operation assumes a single instance.
 
-Planner is intentionally single-instance in system control to avoid duplicate planning races.
+Out of scope:
 
-## 2. Inputs
+- Task execution (code changes, verification command execution)
+- Run artifact judge decisions
 
-- requirement file/content
-- existing task backlog hints
-- judge feedback summaries
-- repository snapshot + inspection output
+## 2. Input
 
-## 3. Planning Pipeline
+- Requirement content/file
+- Existing backlog and dependency info
+- Judge feedback / failure hints
+- Repository inspection results
+- Policy recovery hints (from past events)
 
-1. Parse and validate requirement
-2. Load judge feedback and existing-task hints
-3. Run codebase inspection (LLM)
-4. Generate tasks (LLM/simple fallback path)
-5. Normalize dependencies and allowed paths
-6. Attach policy fields (role, commands, notes)
-7. Save tasks with dedupe signature lock
-8. Optionally create linked GitHub issues
+## 3. Processing Pipeline
 
-## 4. Key Behaviors
+1. Requirement parsing and validation
+2. Load existing context (feedback/hints)
+3. Run inspection (LLM)
+4. Task generation (LLM + fallback path)
+5. Dependency normalization
+6. Apply role / allowedPaths / command policy
+7. Verification command augmentation
+8. Save plan (with dedupe lock)
+9. Link to issue when needed
 
-- initialization task auto-injection for uninitialized repos
-- dependency index sanitization and redundancy reduction
-- lockfile path allowance normalization
-- doc gap detection and optional docser task injection
-- plan save dedupe using advisory lock + event signature
+## 4. Main Behavior
 
-## 5. Start Constraints
+- Init task injection for uninitialized repositories
+- Cycle/redundancy removal in dependency index
+- Automatic lockfile path allowance
+- Command-driven allowedPaths completion
+- Doc gap detection and docser task injection
+- Reflect policy recovery hints into future tasks
+- Save plan summary in `planner.plan_created` event
 
-Planner may be skipped by preflight if backlog exists.
+## 5. Verification Command Augmentation
 
-Planner start is blocked in `/system/processes/:name/start` checks when any backlog exists:
+Planner can augment verification commands at task generation time.
+
+- `PLANNER_VERIFY_COMMAND_MODE=off|fallback|contract|llm|hybrid` (default: `hybrid`)
+- Verify contract: `.opentiger/verify.contract.json` (path configurable)
+- On LLM planning failure, leaves warning and delegates to Worker auto-strategy
+
+## 6. Startup Constraints
+
+Planner start is blocked when the following backlogs exist:
 
 - local task backlog
 - issue task backlog
 - PR/judge backlog
 
-## 6. Failure Model
+This is by design for backlog-first operation.
 
-- inspection has retry and quota-aware delay logic
-- if inspection cannot produce usable output, planner falls back to simple planning for that run
-- LLM task generation failures (except hard parse failures) also fall back to simple planning
-- existing tasks remain untouched
+## 7. Failure Model
 
-## 7. Important Settings
+- Inspection runs with retry + quota-aware execution
+- Fallback planning attempted even if inspection/task generation fails
+- On hard failure, exits without corrupting existing tasks
+
+## 8. Implementation Reference (Source of Truth)
+
+- Startup and overall control: `apps/planner/src/main.ts`, `apps/planner/src/planner-runner.ts`
+- Task persistence and plan event: `apps/planner/src/planner-tasks.ts`
+- Task policy / allowedPaths adjustment: `apps/planner/src/task-policies.ts`
+- Verification command augmentation: `apps/planner/src/planner-verification.ts`
+- Issue-based task creation: `apps/planner/src/strategies/from-issue.ts`
+
+## 9. Main Configuration
 
 - `PLANNER_MODEL`
 - `PLANNER_TIMEOUT`
@@ -59,3 +88,7 @@ Planner start is blocked in `/system/processes/:name/start` checks when any back
 - `PLANNER_DEDUPE_WINDOW_MS`
 - `PLANNER_USE_REMOTE`
 - `PLANNER_REPO_URL`
+- `PLANNER_VERIFY_COMMAND_MODE`
+- `PLANNER_VERIFY_CONTRACT_PATH`
+- `PLANNER_VERIFY_MAX_COMMANDS`
+- `PLANNER_VERIFY_PLAN_TIMEOUT_SECONDS`

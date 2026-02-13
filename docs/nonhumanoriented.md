@@ -1,86 +1,95 @@
-# Non-Human-Oriented Operation Principles
+# Non-Human-First Operation Principles
 
-## 1. Objective
+## 1. Purpose
 
-Maintain autonomous progress without manual babysitting.
+To continuously make progress autonomously without constant human monitoring.
 
 Practical definition:
 
-- no silent deadlock
-- no infinite same-step loop without state change
-- repeated failures are converted into a different recovery path
+- No silent deadlocks
+- No infinite loops on the same step with no state change
+- Repeated failures always converted to a different recovery path
 
 Completion policy:
 
-- Do not promise guaranteed completion in all external conditions.
-- Guarantee that the system does not intentionally stall.
-- When progress degrades, force a strategy switch through recovery state transitions.
+- Don't assume completion guarantee for all cases including external conditions
+- Guarantee that the system does not intentionally stay stopped
+- When progress degrades, force strategy change via recovery state transition
 
 ## 2. Core Principles
 
-- Recovery-first over perfect first-run success
-- Idempotent control points (lease, run claim, dedupe signatures)
-- Backlog-first startup (clear existing work before creating new work)
-- Explicit blocked reasons for machine recovery
+- Recovery-first over first-attempt success
+- Idempotent control points (lease / run claim / dedupe signature)
+- Backlog-first startup (prioritize consuming existing backlog over new generation)
+- Explicit blocked reasons that are machine-recoverable
 
-## 3. Anti-Stall Mechanisms
+## 3. Stall-Prevention Mechanisms
 
 ### 3.1 Lease and Runtime Lock Discipline
 
-- task lease prevents duplicate dispatch
-- runtime lock prevents duplicate execution
-- dangling/expired/orphaned lease paths are continuously reclaimed
+- Task lease prevents duplicate dispatch
+- Runtime lock prevents duplicate execution
+- Continuously reclaim dangling / expired / orphaned leases
 
 ### 3.2 Judge Idempotency
 
-- only unjudged successful runs are eligible
-- claimed run cannot be judged twice concurrently
+- Only unjudged successful runs are processed
+- Claimed runs cannot be double-judged
 
-### 3.3 Recovery States Instead of Halt States
+### 3.3 Use Recovery State Instead of Halt State
 
 - `awaiting_judge`
 - `quota_wait`
 - `needs_rework`
 
-Additional runtime blocked state used for planner issue-link sequencing:
+Runtime blocked state for planner issue-link ordering:
 
 - `issue_linking`
 
-State is transformed rather than abandoned.
+Convert state to recoverable, never abandon it.
 
 ### 3.4 Adaptive Escalation
 
-- repeated same failure signatures trigger rework/autofix escalation
-- merge-conflict approvals route to conflict autofix task when possible
+- Escalate to rework/autofix on repeated same failure signature
+- On merge conflict after approve, branch to conflict autofix task when possible
 
 ### 3.5 Event-Driven Progress Recovery
 
-Recovery switching is event-driven, not fixed-time-trigger driven.
+Recovery switch is event-driven, not fixed-time triggered:
 
-- repeated failure signatures -> `needs_rework` / rework split
-- non-approve circuit breaker -> autofix path
-- quota failures -> `quota_wait` then cooldown requeue
-- missing judgeable runs -> restore `awaiting_judge` run context
+- Repeated same failure signature -> `needs_rework` / rework split
+- Non-approve circuit breaker -> autofix path
+- Quota failure -> `quota_wait` -> cooldown requeue
+- Missing judgable run -> restore `awaiting_judge` run context
 
 ## 4. Quota Philosophy
 
-Quota pressure is treated as recoverable external pressure, not terminal failure.
+Treat quota pressure as recoverable external pressure, not terminal failure.
 
-- attempt may fail quickly
-- task is parked with explicit reason (`quota_wait`)
-- cooldown retry continues until resources recover
+- Single attempt may fail quickly
+- Task waits with explicit reason (`quota_wait`)
+- Continue cooldown retry until resources recover
 
 ## 5. Observability Requirements
 
-Operators must see progress intent, not only attempt outcomes.
+Operators must observe not only trial results but also intended next steps:
 
-- run-level failures
-- task-level next retry reason/time
-- backlog gating reasons from preflight
+- Run-level failure
+- Task-level next retry reason/time
+- Backlog gate reason returned by preflight
 
 ## 6. Non-Goals
 
-- maximizing first-attempt success at the cost of recoverability
-- strict sequential processing when safe parallelism is available
-- manual-only recovery flows
-- fixed-minute watchdog automation as the primary recovery trigger
+- Maximizing first-attempt success at cost of recoverability
+- Fixed strict sequential processing when safe concurrency exists
+- Recovery flows that require manual intervention only
+- Recovery design that relies only on fixed-interval watchdog
+
+## 7. Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation)
+
+This page describes design principles; for actual triage, follow state vocabulary -> transition -> owner -> implementation.
+
+1. `docs/state-model.md` (state vocabulary)
+2. `docs/flow.md` (transitions and recovery paths)
+3. `docs/operations.md` (API procedures and operation shortcuts)
+4. `docs/agent/README.md` (owning agent and implementation tracing)

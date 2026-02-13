@@ -1,6 +1,25 @@
 # Execution Environment Guide
 
-This document explains how `EXECUTION_ENVIRONMENT` controls runtime behavior and how to run `claude_code` safely in sandbox mode.
+This document explains how `EXECUTION_ENVIRONMENT` affects runtime behavior and  
+the prerequisites for running `claude_code` safely in sandbox mode.
+
+Related:
+
+- `docs/mode.md`
+- `docs/config.md`
+- `docs/state-model.md`
+- `docs/flow.md`
+- `docs/operations.md`
+- `docs/agent/dispatcher.md`
+
+### Common Lookup Path (state vocabulary -> transition -> owner -> implementation, when entering from execution env config)
+
+When tracing incidents from host/sandbox config, follow: state vocabulary -> transition -> owner -> implementation.
+
+1. `docs/state-model.md` (state vocabulary)
+2. `docs/flow.md` (runtime transitions and recovery)
+3. `docs/operations.md` (API procedures and operation shortcuts)
+4. `docs/agent/README.md` (owning agent and implementation tracing)
 
 ## 1. Overview
 
@@ -9,47 +28,47 @@ This document explains how `EXECUTION_ENVIRONMENT` controls runtime behavior and
 - `host`
 - `sandbox`
 
-It maps to launch mode internally:
+Internally it maps to launch mode:
 
 - `host` -> `LAUNCH_MODE=process`
 - `sandbox` -> `LAUNCH_MODE=docker`
 
 ## 2. Where It Is Used
 
-- Dashboard `system` page (`Execution_Environment` selector)
-- Process manager start flow (`/system/processes/:name/start`)
-- Dispatcher worker launcher
-- Claude authentication check API (`/system/claude/auth`)
+- Dashboard System page (`Execution_Environment` selector)
+- Process manager startup flow (`/system/processes/:name/start`)
+- Dispatcher worker launch
+- Claude auth check API (`/system/claude/auth`)
 
-## 3. Runtime Behavior By Mode
+## 3. Behavior by Mode
 
 ### 3.1 `host`
 
-- Worker/Tester/Docser run as host processes.
-- Claude auth check runs on host (`claude -p ...`).
-- Best for fastest local turnaround and simple setup.
+- Worker/Tester/Docser run as host processes
+- Claude auth check runs on host (`claude -p ...`)
+- Suited for fast local development iteration
 
 ### 3.2 `sandbox`
 
-- Task execution runs in Docker containers.
-- Host Worker/Tester/Docser process start is skipped.
-- Claude auth check runs in container (`docker run ... claude -p ...`).
-- Best for stronger process isolation.
+- Task execution runs inside Docker container
+- Host Worker/Tester/Docser startup is skipped
+- Claude auth check runs in container (`docker run ... claude -p ...`)
+- Suited for higher isolation requirements
 
-## 4. Sandbox Requirements
+## 4. Sandbox Prerequisites
 
 ### 4.1 Worker Image
 
-The sandbox worker image must include both CLIs:
+Sandbox worker image must include:
 
 - `opencode-ai`
 - `@anthropic-ai/claude-code`
 
-Default image name:
+Default image:
 
 - `openTiger/worker:latest`
 
-If you use a different tag, set:
+To use a different tag:
 
 - `SANDBOX_DOCKER_IMAGE=<your-image>`
 
@@ -59,39 +78,39 @@ Default network:
 
 - `bridge`
 
-Optional override:
+Override if needed:
 
 - `SANDBOX_DOCKER_NETWORK=<your-network>`
 
-## 5. Claude Subscription Authentication in Sandbox
+## 5. Claude Auth in Sandbox
 
-You can run `claude_code` without `ANTHROPIC_API_KEY` when host login state is available.
+When host login state is usable, `claude_code` can run without `ANTHROPIC_API_KEY`.
 
-Mounted auth paths (read-only):
+Mounted auth dirs (read-only):
 
 - `~/.claude` -> `/home/worker/.claude`
 - `~/.config/claude` -> `/home/worker/.config/claude`
 
-Optional explicit overrides:
+Override if needed:
 
 - `CLAUDE_AUTH_DIR`
 - `CLAUDE_CONFIG_DIR`
 
-Recommended flow:
+Recommended steps:
 
-1. Run `claude /login` on host.
-2. Set `EXECUTION_ENVIRONMENT=sandbox`.
-3. Start dispatcher and run tasks from dashboard.
+1. Run `claude /login` on host
+2. Set `EXECUTION_ENVIRONMENT=sandbox`
+3. Start dispatcher and run tasks
 
-If no auth mount is found and no `ANTHROPIC_API_KEY` is set, dispatcher logs a warning.
+If auth mount is not found and `ANTHROPIC_API_KEY` is not set, dispatcher logs a warning.
 
-## 6. DB and Redis Access From Sandbox
+## 6. DB/Redis Connectivity from Sandbox
 
-When launching sandbox containers, dispatcher rewrites local endpoints:
+Dispatcher rewrites loopback destinations at sandbox container start:
 
 - `localhost` / `127.0.0.1` / `::1` -> `host.docker.internal`
 
-This allows containerized workers to reach host services when URLs point to local loopback.
+This allows container workers to reach host services.
 
 ## 7. Claude Auth Check API
 
@@ -99,38 +118,44 @@ Endpoint:
 
 - `GET /system/claude/auth`
 
-Optional query:
+Query (optional):
 
 - `environment=host|sandbox`
 
 Behavior:
 
-- If query is omitted, server uses current `EXECUTION_ENVIRONMENT`.
-- Returns `available`, `authenticated`, `checkedAt`, and `executionEnvironment`.
-- In sandbox mode, common runtime failures are classified:
+- Uses current `EXECUTION_ENVIRONMENT` when query omitted
+- Returns `available`, `authenticated`, `checkedAt`, `executionEnvironment`
+- For sandbox, classifies typical errors:
   - Docker daemon unavailable
-  - sandbox image missing
+  - Sandbox image missing
   - `claude` CLI missing in image
-  - authentication required (`/login`)
+  - Authentication required (`/login`)
+
+Access:
+
+- This is a system-control API
+- `api-key` / `bearer` allowed
+- Local operation: allowed when `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL !== "false"`
 
 ## 8. Troubleshooting
 
-### `authenticated=false` in sandbox
+### `authenticated=false` (sandbox)
 
-- Ensure host login exists: run `claude /login`.
-- Ensure auth directories exist and are readable.
-- Ensure mounted paths are not blocked by runtime policy.
+- Confirm `claude /login` on host
+- Confirm auth dir exists and is readable
+- Confirm mount target is not blocked by runtime policy
 
-### "image unavailable" message
+### `image unavailable`
 
-- Build or pull the image configured in `SANDBOX_DOCKER_IMAGE`.
-- Keep default tag aligned with your local/CI image strategy.
+- Build/pull image specified by `SANDBOX_DOCKER_IMAGE`
+- Align default tag with local/CI policy
 
 ### Docker daemon error
 
-- Start Docker Desktop or `dockerd`.
-- Verify user permission to run `docker`.
+- Start Docker Desktop or `dockerd`
+- Verify `docker` execution permissions
 
-### CLI missing in container
+### CLI not found in container
 
-- Rebuild worker image from `ops/docker/worker.Dockerfile`.
+- Rebuild worker image from `ops/docker/worker.Dockerfile`

@@ -1,168 +1,201 @@
-# Operation Flow (Current)
+# Execution Flow (Current)
 
-## 1. Start / Preflight
+## Scope
 
-System start calls `/system/preflight` and builds a recommendation.
+This page describes **runtime state transitions** for task/run.  
+For startup preflight rules and full pattern matrix, see `docs/startup-patterns.md`.
 
-Inputs checked:
+## 0.1 Entry Point from State Model
 
-- requirement content
+When entering from state vocabulary, first fix terminology in `docs/state-model.md`, then check transitions and recovery paths here.
+
+| State model section | Next section here | Owning agent |
+| --- | --- | --- |
+| "1. Task Status" "2. Task Block Reason" | "2. Basic Lifecycle" "3. Blocked Reasons Used for Recovery" | Dispatcher / Worker / Judge |
+| "2.2 Task Retry Reason (Operations)" | "6. Worker Failure Handling" "8. Cycle Manager Self-Recovery" | Worker / Cycle Manager |
+| "7. Patterns Prone to Stalls" | "5. Dispatcher Recovery Layer" "7. Judge Non-Approval / Merge Failure Paths" | Dispatcher / Judge |
+
+## 1. Startup / Preflight
+
+On system startup, call `/system/preflight` to build recommended startup configuration.
+
+Inputs:
+
+- Requirement content
 - GitHub open issues
 - GitHub open PRs
-- local task backlog (`queued/running/failed/blocked`)
+- Local task backlog (`queued`/`running`/`failed`/`blocked`)
 
-Decision rules:
+Rules:
 
 - `startPlanner = hasRequirementContent && !hasIssueBacklog && !hasJudgeBacklog`
-- execution agents (`dispatcher/worker/tester/docser`) start when there is planner work or backlog
-- judge starts when judge backlog exists or execution agents are active
-- planner process count is capped at 1
+- Execution agents (`dispatcher`/`worker`/`tester`/`docser`) start when planner work or backlog exists
+- Judge starts when judge backlog exists or execution agents are active
+- Planner process count is max 1
 
 Meaning of common warnings:
 
 - `Issue backlog detected (...)`
-  - backlog-first mode is active
+  - Backlog-first mode is active
 - `Planner is skipped for this launch`
-  - expected when issue/pr backlog exists
+  - Normal when issue/pr backlog exists
 
-## 2. Primary Lifecycle
+Exact formulas and all combinations are in `docs/startup-patterns.md`.
 
-1. Task in `queued`
-2. Dispatcher acquires lease and sets task `running`
-3. Executable role (`worker/tester/docser`) executes task and verify commands
-   - before LLM execution, worker builds compact prompt context from:
-     - static instructions (`apps/worker/instructions/*.md`)
-     - runtime snapshot (`.opentiger/context/agent-profile.json`)
-     - failure delta (`.opentiger/context/context-delta.json`)
-   - context injection uses a fixed character budget to avoid prompt bloat
+## 2. Basic Lifecycle
+
+1. Task enters `queued`
+2. Dispatcher acquires lease and moves task to `running`
+3. Execution role (`worker`/`tester`/`docser`) runs task and verification commands
+   - Before LLM execution, worker builds compressed prompt context from:
+     - Static instructions (`apps/worker/instructions/*.md`)
+     - Runtime snapshot (`.opentiger/context/agent-profile.json`)
+     - Failure delta (`.opentiger/context/context-delta.json`)
+   - Context injection uses a fixed character budget to avoid prompt bloat
 4. On success:
-   - usually `blocked(awaiting_judge)` if review is needed
-   - `done` for direct/no-review completion
+   - Usually `blocked(awaiting_judge)` if review needed
+   - Otherwise `done`
 5. Judge evaluates successful run
-6. Task moves to:
+6. Task transitions to:
    - `done`
    - `blocked(awaiting_judge)` (retry/recovery)
    - `blocked(needs_rework)` (split/autofix path)
-7. Cycle Manager continuously requeues/rebuilds until convergence
+7. Cycle Manager continues requeue / rebuild until convergence
 
-## 3. Blocked Reasons Used in Recovery
+## 3. Blocked Reasons Used for Recovery
+
+Definitions are in `docs/state-model.md`.
 
 - `awaiting_judge`
-  - successful run exists but not judged yet, or run restoration is needed
+  - Successful run exists but not judged, or run restore needed
 - `quota_wait`
-  - worker detected LLM quota error and parked task for cooldown retry
+  - Worker detected LLM quota error; waiting for cooldown retry
 - `needs_rework`
-  - non-approve escalation, repeated failure signature, or explicit autofix path
+  - Non-approve escalation, repeated failure signature, or explicit autofix path
 
-Legacy `needs_human` is normalized into active recovery paths for compatibility.
+Legacy `needs_human` is normalized into valid recovery paths.
 
-Other runtime blocked reason:
+Other runtime blocked reasons:
 
 - `issue_linking`
-  - planner temporarily parks a task until issue-link metadata is resolved, then returns it to `queued`
+  - Planner temporarily holds task for issue-link metadata; returns to `queued` when resolved
 
 ## 4. Run Lifecycle and Judge Idempotency
 
 - Worker creates `runs(status=running)` at start
-- Worker updates run to `success/failed`
-- Judge only targets successful unjudged runs
-- Judge claims run atomically (`judgedAt`, `judgementVersion`) before review
+- Worker updates run to `success`/`failed`
+- Judge only processes unjudged successful runs
+- Judge atomically claims run before review (`judgedAt`, `judgementVersion`)
 
 Result:
 
-- same run is not reviewed twice
-- duplicated judge loops are constrained
+- Prevents double review of same run
+- Suppresses duplicate judge loops
 
 ## 5. Dispatcher Recovery Layer
 
-Per poll loop:
+Each poll loop:
 
-- cleanup expired leases
-- cleanup dangling leases
-- reclaim dead-agent leases
-- recover orphaned `running` tasks without active run
+- Clean up expired leases
+- Clean up dangling leases
+- Reclaim dead-agent leases
+- Recover orphaned `running` tasks with no active run
 
-Task filtering:
+Task filter conditions:
 
-- unresolved dependencies are blocked
-- `targetArea` collisions are blocked
-- recent non-quota failures can be cooldown-blocked
-- latest quota failures are excluded from dispatcher cooldown blocking
+- Unresolved dependencies blocked
+- `targetArea` conflict blocked
+- Recent non-quota failure subject to cooldown block
+- Latest quota failure excluded from dispatcher cooldown block
 
 ## 6. Worker Failure Handling
 
 On task error:
 
-- run marked `failed`
-- task marked:
-  - `blocked(quota_wait)` for quota signatures
-  - `failed` otherwise
-- failure signature may update context delta (`.opentiger/context/context-delta.json`)
-- lease released
-- agent returned to `idle`
+- Update run to `failed`
+- Update task:
+  - If matches quota signature: `blocked(quota_wait)`
+  - Otherwise: `failed`
+- Optionally update context delta (`.opentiger/context/context-delta.json`) by failure signature
+- Release lease
+- Return agent to `idle`
 
-Queue duplicate protection:
+Queue duplicate prevention:
 
-- runtime lock per task
-- startup-window guard for lock conflicts (avoid false immediate requeue)
+- Per-task runtime lock
+- Post-start guard on lock conflict (avoids wrong immediate requeue)
 
-## 7. Judge Non-Approve and Merge-Failure Paths
+## 7. Judge Non-Approval / Merge Failure Paths
 
-- Non-approve can trigger AutoFix task creation and parent task -> `blocked(needs_rework)`
-- Approve but merge conflict can trigger `[AutoFix-Conflict] PR #...`
-- If conflict autofix enqueue fails, judge retry fallback is used
+- Non-approval may create AutoFix task and move parent to `blocked(needs_rework)`
+- On approval, merge conflict may generate `[AutoFix-Conflict] PR #...`
+- On conflict autofix enqueue failure, uses judge retry fallback
 
-## 8. Cycle Manager Self-Healing
+## 8. Cycle Manager Self-Recovery
 
-Periodic jobs include:
+Main periodic actions:
 
-- timeout run cancellation
-- lease cleanup
-- offline agent reset
-- failed task cooldown requeue (with failure classification; unsupported/missing verification commands trigger command adjustment instead of block)
-- blocked task cooldown recovery by reason
-- backlog ordering gate
-  - `local task backlog > 0`: keep executing tasks
-  - `local task backlog == 0`: run `/system/preflight` to import/sync issue backlog
-  - `issue backlog == 0`: trigger planner replan
+- Cancel timeout runs
+- Lease cleanup
+- Reset offline agents
+- Cooldown requeue of failed tasks (with failure classification; unsupported/missing verification command goes to command adjustment, not block)
+- Reason-specific cooldown recovery for blocked tasks
+- Backlog ordering gate
+  - `local task backlog > 0`: continue task execution
+  - `local task backlog == 0`: call `/system/preflight` to import/sync issue backlog
+  - `issue backlog == 0`: trigger Planner replan
+
+For startup vs replan responsibility split, see `docs/startup-patterns.md`.
 
 Blocked recovery behavior:
 
 - `awaiting_judge`
-  - restore latest successful judgeable run if needed
-  - otherwise timeout-requeue (PR review tasks stay `awaiting_judge` to avoid ping-pong)
+  - Restore latest judgable successful run when needed
+  - Otherwise timeout-requeue (PR review tasks keep `awaiting_judge` to avoid ping-pong)
 - `quota_wait`
-  - cooldown then requeue
+  - Requeue after cooldown
 - `needs_rework`
-  - for PR review tasks: route back to `awaiting_judge`
-  - for normal tasks: generate `[Rework] ...` task and move parent to failed lineage
-  - policy-only violations can be requeued in-place with adjusted `allowedPaths`; if no safe path exists, rework split is suppressed (with retry limit, then cancel)
-  - skip rework if active rework child already exists
-  - cancel if rework depth exceeds `AUTO_REWORK_MAX_DEPTH`
+  - PR review task: return to `awaiting_judge`
+  - Normal task: create `[Rework] ...` task, move parent to failed lineage
+  - Policy-only violation: may in-place requeue after `allowedPaths` adjustment. If no safe path, suppress rework split (cancel after retry limit)
+  - Do not create additional rework if valid rework child already exists
+  - Cancel when rework depth exceeds `AUTO_REWORK_MAX_DEPTH`
 
-System process self-heal:
+System process self-recovery:
 
-- Judge backlog detected (`openPrCount > 0` or `pendingJudgeTaskCount > 0`) arms runtime hatch and auto-starts Judge process when down
+- When Judge backlog is detected (`openPrCount > 0` or `pendingJudgeTaskCount > 0`), arms runtime hatch and auto-starts Judge when Judge process stops
 
-Detailed policy lifecycle and growth behavior:
+Policy lifecycle and self-growth details:
 
 - `docs/policy-recovery.md`
 
-## 10. Host Snapshot and Context Refresh
+## 9. Host Snapshot and Context Update
 
 - API host context endpoints:
   - `GET /system/host/neofetch`
   - `GET /system/host/context`
-- Snapshot source is `neofetch`; `uname -srmo` is used as fallback when needed.
-- Snapshot is cached in `.opentiger/context/agent-profile.json` with TTL/fingerprint refresh.
+- Main snapshot source is `neofetch`; falls back to `uname -srmo` when needed
+- Snapshot cached in `.opentiger/context/agent-profile.json`, updated by TTL/fingerprint
 
-## 9. Why "Failed" and "Retry" Can Coexist
+## 10. Why `Failed` and `Retry` Coexist
 
-Runs table can show immediate failed runs while task card shows retry countdown.
+Runs table may show immediate `failed` while task card shows retry countdown.
 
 Example:
 
-- run status: `failed` (actual attempt outcome)
-- task retry: `quota 79s` (next recovery attempt is already scheduled)
+- run status: `failed` (actual result of that attempt)
+- task retry: `quota 79s` (next recovery attempt already scheduled)
 
-This is active recovery, not a dead stop.
+This indicates active recovery, not a halt.
+
+## Related Agent Specifications
+
+- `docs/agent/planner.md`
+- `docs/agent/dispatcher.md`
+- `docs/agent/worker.md`
+- `docs/agent/tester.md`
+- `docs/agent/docser.md`
+- `docs/agent/judge.md`
+- `docs/agent/cycle-manager.md`
+
+To trace implementation, use the "Implementation reference (source of truth)" section at the end of each page to locate the corresponding `apps/*/src`.

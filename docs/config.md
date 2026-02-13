@@ -1,189 +1,161 @@
 # System Configuration Guide
 
-This document covers runtime settings managed by `system_config` and `/system` APIs.
+This document organizes openTiger configuration into "DB-managed config" and "env-only config."  
+Primary sources are:
 
-## 1. Where Settings Live
+- DB-managed keys: `apps/api/src/system-config.ts` (`CONFIG_FIELDS`)
+- Env-only config: each runtime (dispatcher/worker/judge/cycle-manager/api)
 
-- Persistent config store:
-  - DB table `config` (served by `/config` API)
-- Process control and orchestration:
-  - `/system` API routes
-- Environment-only controls:
-  - startup env vars for services (not all are in `config` table)
+### Common Lookup Path (state vocabulary -> transition -> owner -> implementation, when entering from config change)
 
-## 2. Recommended Setup Order (Top Priority First)
+If stalls occur after config changes, check in order: state vocabulary -> transition -> owner -> implementation.
 
-Configure these first:
+1. `docs/state-model.md` (state vocabulary)
+2. `docs/flow.md` (transitions and recovery paths)
+3. `docs/operations.md` (API procedures and operation shortcuts)
+4. `docs/agent/README.md` (owning agent and implementation tracing path)
 
-1. Git and repository settings
-2. LLM provider API keys
-3. Model selection
-4. Agent/process counts
-5. Recovery and quota behavior
-6. Replan behavior
+## 1. Config Storage
 
-## 3. Core `system_config` Keys
+### Database-Managed (`config` table)
 
-### 3.1 Git / Repo
+- Read/update via `/config` API
+- Update from Dashboard system settings
+- Can sync to `.env` via `scripts/export-config-to-env.ts`
 
-- `REPO_MODE` (`git` or `local`)
-- `REPO_URL`
-- `BASE_BRANCH`
-- `LOCAL_REPO_PATH`
-- `LOCAL_WORKTREE_ROOT`
-- `GITHUB_AUTH_MODE` (`gh` or `token`, default: `gh`)
-- `GITHUB_TOKEN` (required only when `GITHUB_AUTH_MODE=token`)
-- `GITHUB_OWNER`
-- `GITHUB_REPO`
+### Env-Only Configuration
 
-### 3.2 LLM Provider Keys
+- Read only at process startup
+- Not stored in `config` table
 
-- `GEMINI_API_KEY`
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `XAI_API_KEY`
-- `DEEPSEEK_API_KEY`
+---
 
-### 3.3 Model Selection
+## 2. DB-Managed Key List (`CONFIG_FIELDS`)
 
-- `LLM_EXECUTOR` (`opencode` / `claude_code`)
-- `OPENCODE_MODEL`
-- `OPENCODE_SMALL_MODEL`
-- `PLANNER_MODEL`
-- `JUDGE_MODEL`
-- `WORKER_MODEL`
-- `TESTER_MODEL`
-- `DOCSER_MODEL`
-- `CLAUDE_CODE_MODEL`
+### 2.1 Limits
 
-### 3.4 Agent Scaling and Switches
+- `MAX_CONCURRENT_WORKERS`
+- `DAILY_TOKEN_LIMIT`
+- `HOURLY_TOKEN_LIMIT`
+- `TASK_TOKEN_LIMIT`
 
-- `EXECUTION_ENVIRONMENT` (`host` or `sandbox`)
+### 2.2 Process Enablement / Scaling
+
 - `DISPATCHER_ENABLED`
 - `JUDGE_ENABLED`
 - `CYCLE_MANAGER_ENABLED`
+- `EXECUTION_ENVIRONMENT` (`host` or `sandbox`)
 - `WORKER_COUNT`
 - `TESTER_COUNT`
 - `DOCSER_COUNT`
 - `JUDGE_COUNT`
 - `PLANNER_COUNT`
 
-Notes:
+Note:
 
-- `EXECUTION_ENVIRONMENT=host` uses host process launch (`LAUNCH_MODE=process`).
-- `EXECUTION_ENVIRONMENT=sandbox` uses docker launch (`LAUNCH_MODE=docker`).
-- Detailed sandbox operation and Claude authentication notes are in `docs/execution-mode.md`.
-- Planner is operationally capped to one process in system start logic.
-- Worker/tester/docser/judge can be scaled by count.
+- Planner runs as a single process (duplicate-start guard)
 
-### 3.5 Quota and Replan
+### 2.3 Repository / GitHub
 
+- `REPO_MODE` (`git` or `local`)
+- `REPO_URL`
+- `LOCAL_REPO_PATH`
+- `LOCAL_WORKTREE_ROOT`
+- `BASE_BRANCH`
+- `GITHUB_AUTH_MODE` (`gh` or `token`)
+- `GITHUB_TOKEN`
+- `GITHUB_OWNER`
+- `GITHUB_REPO`
+
+### 2.4 Executor / Model
+
+- `LLM_EXECUTOR` (`opencode` / `claude_code`)
+- `OPENCODE_MODEL`
+- `OPENCODE_SMALL_MODEL`
 - `OPENCODE_WAIT_ON_QUOTA`
 - `OPENCODE_QUOTA_RETRY_DELAY_MS`
 - `OPENCODE_MAX_QUOTA_WAITS`
+- `CLAUDE_CODE_PERMISSION_MODE`
+- `CLAUDE_CODE_MODEL`
+- `CLAUDE_CODE_MAX_TURNS`
+- `CLAUDE_CODE_ALLOWED_TOOLS`
+- `CLAUDE_CODE_DISALLOWED_TOOLS`
+- `CLAUDE_CODE_APPEND_SYSTEM_PROMPT`
+- `PLANNER_MODEL`
+- `JUDGE_MODEL`
+- `WORKER_MODEL`
+- `TESTER_MODEL`
+- `DOCSER_MODEL`
+
+### 2.5 Planner / Replan
+
+- `PLANNER_USE_REMOTE`
+- `PLANNER_REPO_URL`
 - `AUTO_REPLAN`
 - `REPLAN_REQUIREMENT_PATH`
 - `REPLAN_INTERVAL_MS`
 - `REPLAN_COMMAND`
 - `REPLAN_WORKDIR`
 - `REPLAN_REPO_URL`
-- `PLANNER_USE_REMOTE`
-- `PLANNER_REPO_URL`
 
-### 3.6 Policy Recovery and AllowedPaths Growth
+### 2.6 LLM Provider Keys
 
-Core policy recovery config:
+- `ANTHROPIC_API_KEY`
+- `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
+- `XAI_API_KEY`
+- `DEEPSEEK_API_KEY`
 
-- `POLICY_RECOVERY_CONFIG_PATH`
-- `POLICY_RECOVERY_CONFIG_JSON`
-- `POLICY_RECOVERY_MODE` (`conservative` / `balanced` / `aggressive`)
+### 2.7 Main Defaults (Initial State)
 
-Worker in-run policy recovery:
+- `EXECUTION_ENVIRONMENT=host`
+- `LLM_EXECUTOR=claude_code`
+- `BASE_BRANCH=main`
+- `REPO_MODE=git`
+- `WORKER_COUNT=4`
+- `TESTER_COUNT=4`
+- `DOCSER_COUNT=4`
+- `JUDGE_COUNT=4`
+- `PLANNER_COUNT=1`
+- `AUTO_REPLAN=true`
+- `REPLAN_REQUIREMENT_PATH=docs/requirement.md`
+- `REPLAN_INTERVAL_MS=60000`
+- `GITHUB_AUTH_MODE=gh`
+- `MAX_CONCURRENT_WORKERS=-1` (unlimited)
+- `DAILY_TOKEN_LIMIT=-1` (unlimited)
+- `HOURLY_TOKEN_LIMIT=-1` (unlimited)
+- `TASK_TOKEN_LIMIT=-1` (unlimited)
 
-- `WORKER_POLICY_RECOVERY_USE_LLM`
-- `WORKER_POLICY_RECOVERY_ATTEMPTS`
-- `WORKER_POLICY_RECOVERY_TIMEOUT_SECONDS`
-- `WORKER_POLICY_RECOVERY_MODEL`
+---
 
-Repo-level config file:
-
-- default path: `.opentiger/policy-recovery.json`
-- example: `templates/policy-recovery.example.json`
-
-Cycle Manager rework suppression (env):
-
-- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES` (default: 2)
-- `AUTO_REWORK_MAX_DEPTH` (default: 2)
-
-Verification command skip (Worker env):
-
-- `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT` (default: `true`)
-
-Operational detail:
-
-- full recovery/growth lifecycle is documented in `docs/policy-recovery.md`
-
-### 3.7 Prompt Context Snapshot and Delta
-
-openTiger keeps runtime prompt context in local files under `.opentiger/context/`:
-
-- `.opentiger/context/agent-profile.json`
-  - host snapshot generated from `neofetch`
-  - `uname -srmo` is used as a fallback for minimal host/kernel/arch context
-  - refreshed by TTL/fingerprint checks
-- `.opentiger/context/context-delta.json`
-  - failure signatures and promoted context keys
-  - updated on execution/verification failures for next-task hints
-
-Notes:
-
-- These JSON files are local runtime artifacts and are intentionally git-ignored.
-- Prompt context is injected in compact form with a fixed character budget:
-  - Host context: `550`
-  - Failure hints: `350`
-  - Total: `900`
-
-## 4. `/config` API (Backed by DB)
+## 3. `/config` API
 
 - `GET /config`
-  - returns current config snapshot
+  - Current config snapshot
 - `PATCH /config`
-  - updates selected keys via `{ updates: Record<string, string> }`
+  - body: `{ updates: Record<string, string> }`
 
 Behavior:
 
-- unknown keys are rejected
-- missing keys retain previous values
-- config is persisted and reflected in UI `system_config`
+- Unknown keys rejected
+- Unspecified keys retained
+- When `AUTO_REPLAN=true`, `REPLAN_REQUIREMENT_PATH` is required
 
-## 5. `/system` API (Runtime Orchestration)
+---
 
-### 5.1 Startup Planning
+## 4. `/system` API and Config Interaction
+
+### 4.1 Preflight
 
 - `POST /system/preflight`
-  - builds launch recommendation from requirement content + issue/PR/task backlog
-  - may skip planner intentionally when issue/pr backlog exists
+- Returns recommended startup configuration from requirement content + local backlog + GitHub backlog
 
-Issue role assignment (required for automatic issue -> task import):
+Issue auto-task requires explicit role:
 
-- open issue must explicitly declare agent role
-- accepted label format:
-  - `role:worker`
-  - `role:tester`
-  - `role:docser`
-- accepted body format:
-  - `Agent: worker` (or `tester`, `docser`)
-  - `Role: worker` (or `tester`, `docser`)
-  - markdown section:
-    - `## Agent`
-    - `- worker` (or `tester`, `docser`)
+- label: `role:worker|role:tester|role:docser`
+- body: `Agent: ...` / `Role: ...` / `## Agent` section
 
-If explicit role is missing:
-
-- preflight does not auto-create a task from that issue
-- warning is reported in preflight summary
-
-### 5.2 Process Control
+### 4.2 Process Manager
 
 - `GET /system/processes`
 - `GET /system/processes/:name`
@@ -191,67 +163,185 @@ If explicit role is missing:
 - `POST /system/processes/:name/stop`
 - `POST /system/processes/stop-all`
 
-Important runtime behavior:
-
-- planner duplicate start is blocked
-- live bound agent detection can return already-running without launching duplicate process
-- Judge backlog (`openPrCount > 0` or `pendingJudgeTaskCount > 0`) arms runtime hatch and auto-starts Judge process when down (self-heal tick)
-
-### 5.3 Requirement / Repo Utilities
+### 4.3 Requirement / Repository APIs
 
 - `GET /system/requirements`
+- `POST /system/requirements`
 - `POST /system/github/repo`
+- `GET /system/github/repos`
+- `GET /system/github/auth`
+- `GET /system/claude/auth`
 - `GET /system/host/neofetch`
-  - returns normalized host info source output for dashboard display
 - `GET /system/host/context`
-  - returns current host snapshot payload and refresh status
 
-### 5.4 Maintenance
+### 4.4 Maintenance
 
 - `POST /system/cleanup`
 
 Warning:
 
-- `/system/cleanup` truncates runtime tables and clears queue state.
-- process restart control is managed by `SYSTEM_PROCESS_AUTO_RESTART*` environment variables.
+- Destructive operation that initializes runtime tables and queue
 
-## 6. Process Names You Can Start/Stop
+---
 
-Static names:
+## 5. Requirement Sync Behavior
 
-- `planner`
-- `dispatcher`
-- `cycle-manager`
-- `db-up`
-- `db-down`
-- `db-push`
+`POST /system/requirements` performs:
 
-Dynamic names:
+1. Save input to requirement file
+2. Sync to canonical path `docs/requirement.md`
+3. For git repositories, attempt snapshot commit/push
 
-- `judge`, `judge-2`, `judge-3`, ...
-- `worker-1`, `worker-2`, ...
-- `tester-1`, `tester-2`, ...
-- `docser-1`, `docser-2`, ...
+Thus requirement edits affect both "file save" and "repository state update."
 
-## 7. Operational Policy Alignment
+### 5.1 Startup Auto-Completion (config-store)
 
-This project policy is:
+`ensureConfigRow()` performs the following on startup:
 
-- do not stall
-- no fixed-minute watchdog as primary trigger
-- force recovery strategy switching based on runtime events
+- Self-repair of required columns (`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`)
+- Auto-completion from workspace/git info
+  - `repoUrl`, `githubOwner`, `githubRepo`, `baseBranch`
+  - requirement path candidates (e.g. `docs/requirement.md`)
+- Legacy value normalization
+  - Unify old `REPLAN_COMMAND` to `pnpm --filter @openTiger/planner run start:fresh`
+  - Unify old token/concurrency fixed values to `-1` unlimited
 
-Examples:
+---
 
-- repeated failures -> `needs_rework` path
-- quota failure -> `quota_wait` path
-- judge backlog inconsistencies -> run restoration / requeue path
+## 6. Env-Only Main Config
 
-## 8. Minimal Production Baseline
+Representative examples controlled only by env (not DB):
 
-- set `GITHUB_AUTH_MODE` and valid `GITHUB_OWNER`/`GITHUB_REPO`
-- if `GITHUB_AUTH_MODE=token`, set valid `GITHUB_TOKEN`
-- set at least one working LLM API key and model
-- keep `PLANNER_COUNT=1`
-- set `WORKER_COUNT>=1`, `JUDGE_COUNT>=1`
-- keep `DISPATCHER_ENABLED=true`, `JUDGE_ENABLED=true`, `CYCLE_MANAGER_ENABLED=true`
+### 6.1 Process Restart / Self-Heal
+
+- `SYSTEM_PROCESS_AUTO_RESTART`
+- `SYSTEM_PROCESS_AUTO_RESTART_DELAY_MS`
+- `SYSTEM_PROCESS_AUTO_RESTART_WINDOW_MS`
+- `SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS`
+- `SYSTEM_PROCESS_SELF_HEAL`
+- `SYSTEM_PROCESS_SELF_HEAL_INTERVAL_MS`
+- `SYSTEM_PROCESS_SELF_HEAL_STARTUP_GRACE_MS`
+- `SYSTEM_AGENT_LIVENESS_WINDOW_MS`
+
+### 6.2 Task Retry / Cooldown
+
+- `FAILED_TASK_RETRY_COOLDOWN_MS`
+- `BLOCKED_TASK_RETRY_COOLDOWN_MS`
+- `FAILED_TASK_MAX_RETRY_COUNT`
+- `DISPATCH_RETRY_DELAY_MS`
+- `STUCK_RUN_TIMEOUT_MS`
+- `DISPATCH_MAX_POLL_INTERVAL_MS`
+- `DISPATCH_NO_IDLE_LOG_INTERVAL_MS`
+
+### 6.3 Policy Recovery
+
+- `POLICY_RECOVERY_CONFIG_PATH`
+- `POLICY_RECOVERY_CONFIG_JSON`
+- `POLICY_RECOVERY_MODE`
+- `WORKER_POLICY_RECOVERY_USE_LLM`
+- `WORKER_POLICY_RECOVERY_ATTEMPTS`
+- `WORKER_POLICY_RECOVERY_TIMEOUT_SECONDS`
+- `WORKER_POLICY_RECOVERY_MODEL`
+- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`
+- `AUTO_REWORK_MAX_DEPTH`
+
+### 6.4 Verification Command Planning
+
+Planner:
+
+- `PLANNER_VERIFY_COMMAND_MODE`
+- `PLANNER_VERIFY_CONTRACT_PATH`
+- `PLANNER_VERIFY_MAX_COMMANDS`
+- `PLANNER_VERIFY_PLAN_TIMEOUT_SECONDS`
+- `PLANNER_VERIFY_AUGMENT_NONEMPTY`
+
+Worker:
+
+- `WORKER_AUTO_VERIFY_MODE`
+- `WORKER_VERIFY_CONTRACT_PATH`
+- `WORKER_AUTO_VERIFY_MAX_COMMANDS`
+- `WORKER_VERIFY_PLAN_TIMEOUT_SECONDS`
+- `WORKER_VERIFY_PLAN_PARSE_RETRIES`
+- `WORKER_VERIFY_RECONCILE_TIMEOUT_SECONDS`
+- `WORKER_VERIFY_RECOVERY_ATTEMPTS`
+- `WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT`
+- `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT`
+
+### 6.5 Dispatcher / Lease / Agent Liveness
+
+- `POLL_INTERVAL_MS`
+- `DISPATCH_BLOCK_ON_AWAITING_JUDGE`
+- `DISPATCH_AGENT_HEARTBEAT_TIMEOUT_SECONDS`
+- `DISPATCH_AGENT_RUNNING_RUN_GRACE_MS`
+- `TASK_QUEUE_LOCK_DURATION_MS`
+- `TASK_QUEUE_STALLED_INTERVAL_MS`
+- `TASK_QUEUE_MAX_STALLED_COUNT`
+
+### 6.6 Cycle Manager Loop / Anomaly / Replan
+
+- `MONITOR_INTERVAL_MS`
+- `CLEANUP_INTERVAL_MS`
+- `STATS_INTERVAL_MS`
+- `AUTO_START_CYCLE`
+- `SYSTEM_API_BASE_URL`
+- `ISSUE_SYNC_INTERVAL_MS`
+- `ISSUE_SYNC_TIMEOUT_MS`
+- `CYCLE_MAX_DURATION_MS`
+- `CYCLE_MAX_TASKS`
+- `CYCLE_MAX_FAILURE_RATE`
+- `CYCLE_CRITICAL_ANOMALY_RESTART_COOLDOWN_MS`
+- `CYCLE_MIN_AGE_FOR_CRITICAL_RESTART_MS`
+- `ANOMALY_REPEAT_COOLDOWN_MS`
+- `REPLAN_PLANNER_ACTIVE_WINDOW_MS`
+- `REPLAN_SKIP_SAME_SIGNATURE`
+
+### 6.7 Sandbox Execution
+
+- `SANDBOX_DOCKER_IMAGE`
+- `SANDBOX_DOCKER_NETWORK`
+- `CLAUDE_AUTH_DIR`
+- `CLAUDE_CONFIG_DIR`
+
+---
+
+## 7. Authentication / Access Control Notes
+
+- System control uses `api-key` / `bearer`
+- In local development, `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL` changes behavior
+  - Set to `false` for strict operation
+- When using GitHub CLI mode (`gh`), ensure `gh auth login` is done
+
+---
+
+## 8. Minimum Operation Set
+
+1. Repo config (`REPO_MODE`, `REPO_URL` or local path)
+2. GitHub config (`GITHUB_AUTH_MODE`, owner/repo, token if needed)
+3. LLM config (`LLM_EXECUTOR`, model, provider key)
+4. Counts (`WORKER_COUNT`, `JUDGE_COUNT`, `PLANNER_COUNT=1`)
+5. Recovery config (retry / cooldown / auto restart)
+
+See `docs/operations.md` for more detailed operation.
+
+---
+
+## 9. Config Change Impact Map (Operation Reference)
+
+Config impact depends on which processes read it.  
+Env-only config is not reflected until the target process restarts.
+
+| Config category | Main keys | Affected components | When reflected |
+| --- | --- | --- | --- |
+| Repository/GitHub | `REPO_MODE`, `REPO_URL`, `BASE_BRANCH`, `GITHUB_*` | API preflight, Planner, Dispatcher, Worker, Judge | After target process restart |
+| Execution/launch | `EXECUTION_ENVIRONMENT`, `SANDBOX_DOCKER_*` | API process manager, Dispatcher launcher, sandbox worker | After Dispatcher restart (from new tasks) |
+| Planner | `PLANNER_*`, `AUTO_REPLAN`, `REPLAN_*` | Planner, Cycle Manager | After Planner / Cycle Manager restart |
+| Dispatcher | `MAX_CONCURRENT_WORKERS`, `POLL_INTERVAL_MS`, `DISPATCH_*` | Dispatcher | After Dispatcher restart |
+| Worker execution | `WORKER_*`, `TESTER_*`, `DOCSER_*`, `LLM_EXECUTOR`, `CLAUDE_CODE_*`, `OPENCODE_*` | Worker/Tester/Docser | After target agent restart |
+| Judge | `JUDGE_*`, `JUDGE_MODE` | Judge | After Judge restart |
+| Retry/cleanup | `FAILED_TASK_*`, `BLOCKED_TASK_*`, `STUCK_RUN_TIMEOUT_MS` | Cycle Manager, API task retry display | After Cycle Manager / API restart |
+
+### Notes
+
+- Updating DB-managed keys does not auto-update env for already-running processes.
+- Restarting only affected processes via start/stop is safer than full stop-all.
+- See "Safe restart procedure for config changes" in `docs/operations.md` for specific steps.

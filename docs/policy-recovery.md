@@ -1,164 +1,188 @@
-# Policy Recovery and AllowedPaths Growth
+# Policy Recovery and AllowedPaths Self-Growth
 
-This document explains how openTiger handles policy violations without stalling, and how recovery outcomes are fed back into future planning.
+This document explains how openTiger recovers from policy violations without stopping,  
+and how recovery results are reflected into future planning for self-growth.
+
+Related:
+
+- `docs/agent/worker.md`
+- `docs/agent/planner.md`
+- `docs/flow.md`
+- `docs/state-model.md`
+- `docs/operations.md`
+
+### Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Entering from Policy Violation)
+
+When investigating from policy violation (`needs_rework` chain, etc.), follow: state vocabulary -> transition -> owner -> implementation.
+
+1. `docs/state-model.md` (`needs_rework` / `quota_wait`, etc.)
+2. `docs/flow.md` (Worker failure handling and blocked recovery paths)
+3. `docs/operations.md` (API procedures and operation shortcuts)
+4. `docs/agent/README.md` (owning agent and implementation tracing path)
 
 ## 1. Purpose
 
-When a task modifies a file outside `allowedPaths`, openTiger tries to recover in the same run first, instead of immediately creating endless rework chains.
+Even when a task modifies files outside `allowedPaths`, openTiger does not immediately fall into rework chains;  
+it first attempts in-run recovery.
 
-The design has two goals:
+Design goals:
 
-- **Self-recovery**: resolve policy violations inside the current Worker run when possible.
-- **Self-growth**: persist useful recovery outcomes and proactively expand future `allowedPaths` in Planner.
+- **Self-recovery**: Resolve policy violation within current Worker run
+- **Self-growth**: Record successful recovery and reflect it into future Planner `allowedPaths` in advance
 
 ## 2. In-Run Self-Recovery (Worker)
 
-Worker verification uses a recovery-first sequence:
+Worker verification proceeds in this recovery-priority sequence:
 
-1. Run `verifyChanges`.
-2. If policy violations exist, try deterministic path recovery:
-   - extract outside paths from violations
-   - derive auto-allow candidates from task context and policy recovery config
-   - in `aggressive` mode, if a violating path is listed in `commandDrivenAllowedPathRules[].paths` (for example `Makefile`), treat it as an in-run auto-allow candidate
-   - add command-driven paths from shared policy rules
-3. Re-run verification with adjusted `allowedPaths`.
-4. If violations remain, run optional LLM recovery (`allow` / `discard` / `deny`):
-   - `discard`: remove selected changed files and re-verify
+1. Execute `verifyChanges`
+2. On policy violation, try deterministic path recovery
+   - Extract outside path from violation
+   - Generate auto-allow candidates from task context and policy recovery config
+   - In `aggressive` mode, violating paths matching `commandDrivenAllowedPathRules[].paths` (e.g. `Makefile`) are also in-run auto-allow candidates
+   - Add command-driven paths from shared policy rules
+3. Adjust `allowedPaths` and re-verify
+4. If violation remains, optionally run LLM recovery (`allow` / `discard` / `deny`)
+   - `discard`: discard part of changed files and re-verify
    - `allow`: extend `allowedPaths` and re-verify
-   - `deny`: stop recovery attempts and escalate
-5. If still unresolved, mark task as `blocked(needs_rework)`.
+   - `deny`: abort recovery and escalate
+5. If still unresolved, move task to `blocked(needs_rework)`
 
 ### 2.1 LLM Recovery Input
 
-LLM receives contextual data, including:
+LLM receives:
 
-- task metadata (`title`, `goal`, `role`, `commands`)
-- current `allowedPaths` and `deniedPaths`
-- violating paths and policy violation messages
-- current changed files
-- summaries of concurrent queued/running tasks
+- Task metadata (`title`, `goal`, `role`, `commands`)
+- Current `allowedPaths` and `deniedPaths`
+- Violating paths and violation message
+- Current changed files
+- Summary of queued/running tasks (concurrent execution)
 
 ### 2.2 Hard Guardrails
 
-Even when LLM suggests `allow`, Worker blocks unsafe decisions:
+Even when LLM returns `allow`, Worker rejects paths that fail any of:
 
-- path must be safe (no traversal, no absolute path, no glob abuse)
-- path must be one of current violating paths
-- `deniedPaths` always win over `allow`
+- Path is safe (no path traversal / absolute path / excessive glob)
+- Path is in current violating paths
+- Path is not in `deniedPaths` (`deniedPaths` always wins)
 
 ### 2.3 Mode-Specific Deterministic Behavior
 
-Deterministic auto-allow differs by policy mode:
+Deterministic auto-allow scope varies by mode:
 
 - `conservative`
-  - context-file matches only
-  - no infra-file expansion
+  - Context-file match only
+  - No infra-file extension
 - `balanced`
-  - context-file matches + infra-file expansion
-  - no aggressive root-level/command-driven violation auto-allow
+  - Context-file match + infra-file extension
+  - No root-level / command-driven violation auto-allow
 - `aggressive` (default)
-  - balanced behavior, plus:
-    - root-level infra path recovery
-    - command-driven rule path recovery from violating paths (e.g., `Makefile` when make-related rule is configured)
+  - `balanced` plus:
+    - Root-level infra path recovery
+    - Command-driven rule path recovery (e.g. `Makefile` for make rules)
 
 ### 2.4 Generated Artifact Path Auto-Learning
 
-When policy violations remain after LLM recovery, Worker attempts a final recovery by treating likely-generated artifacts (e.g., `kernel.dump`, `*.log`, build outputs) as safe to discard:
+When violation remains after LLM recovery, Worker attempts final recovery by discarding likely-generated paths:
 
-1. Filter violating paths with `isLikelyGeneratedArtifactPath()` (extensions: `.dump`, `.log`, `.tmp`, `.trace`; path segments: `coverage`, `report`, `artifact`, `build`, `dist`, etc.).
-2. Discard those files and re-run verification.
-3. Persist learned paths to `.opentiger/generated-paths.auto.txt` so future runs treat them as generated from the first `verifyChanges` call.
+1. Extract violating paths via `isLikelyGeneratedArtifactPath()`
+   - e.g. `.dump`, `.log`, `.tmp`, `.trace`
+   - Path segments like `coverage`, `report`, `artifact`, `build`, `dist`
+2. Discard extracted files and re-verify
+3. Save learning to `.opentiger/generated-paths.auto.txt`; treat as generated in future `verifyChanges`
 
-No manual edits to `generated-paths.txt` are required; learning happens at runtime. The built-in `GENERATED_PATHS`, `WORKER_EXTRA_GENERATED_PATHS`, and `.opentiger/generated-paths.auto.txt` are merged for each verification cycle.
+No manual editing of `generated-paths.txt` needed.  
+`GENERATED_PATHS` / `WORKER_EXTRA_GENERATED_PATHS` / `.opentiger/generated-paths.auto.txt` are merged for verification.
 
-### 2.5 Docser Behavior
+### 2.5 Docser Constraints
 
-`docser` is intentionally restricted:
+Docser has intentional constraints:
 
-- deterministic policy auto-allow logic returns no extra paths for `docser`
-- Worker skips LLM policy recovery for `docser`
-- `docser` verification commands are filtered to doc-safe `check` commands (e.g., `pnpm run check`)
+- Deterministic policy auto-allow does not add paths
+- Does not run LLM policy recovery
+- Verification commands limited to doc-safe check-style (e.g. `pnpm run check`)
 
 ## 3. Shared Policy Recovery Engine (Core)
 
-Shared logic lives in `packages/core/src/policy-recovery.ts` and is reused by Worker, Cycle Manager, and Planner.
+Shared logic lives in `packages/core/src/policy-recovery.ts`, reused by Worker/Cycle Manager/Planner.
 
 Main responsibilities:
 
-- config loading and merge:
-  - built-in defaults
+- Load and merge config
+  - Built-in default
   - `.opentiger/policy-recovery.json`
-  - env overrides
-- command-driven path resolution
-- policy violation path extraction
-- deterministic auto-allow candidate resolution by mode:
+  - Env override
+- Resolve command-driven paths
+- Extract violation paths
+- Resolve mode-specific deterministic auto-allow candidates
   - `conservative`
   - `balanced`
   - `aggressive` (default)
 
 ## 4. Verification Command Format Recovery
 
-When verification commands fail due to unsupported format (shell operators, `$()` command substitution) or missing script, Cycle Manager adjusts commands and requeues instead of blocking indefinitely:
+When verification command fails due to unsupported format (shell operator / `$()`) or missing script,  
+Cycle Manager adjusts the command and requeues instead of infinite block.
 
 - `requeue-failed`:
-  - for `verification_command_unsupported_format` or `verification_command_missing_script`:
-    - remove the failed command from `commands` and requeue
-  - for `policy_violation`, tries allowed path adjustment and requeue
+  - `verification_command_unsupported_format` / `verification_command_missing_script`
+    - Remove failed command from `commands` and requeue
+  - `policy_violation`
+    - Try allowed path adjustment and requeue
 
-Worker also skips such explicit command failures within the same run when remaining commands exist, or when prior commands passed (e.g., doc-only / no-op changes).
+Worker may skip explicit command failure within the same run when remaining commands exist or earlier steps already passed (e.g. doc-only/no-op).
 
 ## 5. Rework Chain Suppression (Cycle Manager)
 
-Cycle Manager prevents policy-only and rework-chain amplification:
+Cycle Manager suppresses policy-only failure and rework chain amplification.
 
 - `requeue-failed`:
-  - for `policy_violation`, tries allowed path adjustment and requeue
+  - For `policy_violation`, try allowed path adjustment + requeue
 - `requeue-blocked`:
-  - if blocked task has outside-allowed violations:
-    - requeue same task when safe paths can be added
-    - otherwise: retry suppression up to `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`, then cancel
-    - emit `policy_violation_rework_suppressed_no_safe_path` or `policy_violation_rework_suppressed_exhausted`
-  - rework split: skip if active rework child already exists for same parent
-  - rework depth: cancel if `[auto-rework] parentTask=` count >= `AUTO_REWORK_MAX_DEPTH`
+  - When blocked task has outside-allowed violation:
+    - Requeue same task if safe path can be added
+    - Otherwise suppress retry up to `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`, then cancel
+    - Emit `policy_violation_rework_suppressed_no_safe_path` or `policy_violation_rework_suppressed_exhausted`
+  - Do not create rework split when valid rework child (active) already exists for same parent
+  - Cancel when `[auto-rework] parentTask=` depth is `AUTO_REWORK_MAX_DEPTH` or more
 
-This avoids repeatedly spawning `[Rework] ...` children and runaway rework chains.
+This prevents unbounded growth of `[Rework] ...` children.
 
-## 6. Self-Growth in Planner
+## 6. Planner Self-Growth
 
-Planner uses past recovery outcomes to proactively expand future `allowedPaths`.
+Planner uses past recovery results to extend future task `allowedPaths` in advance.
 
 Flow:
 
-1. Load recent `task.policy_recovery_applied` events.
-2. Aggregate path hints by role/path frequency.
-3. Inject hints into requirement notes for planning context.
-4. Apply matched hints directly to generated tasks' `allowedPaths`.
+1. Read recent `task.policy_recovery_applied` events
+2. Aggregate hints by role/path frequency
+3. Inject hints into requirement note and pass to planning context
+4. Reflect matched hints directly into generated task `allowedPaths`
 
-Hint match reasons:
+Representative hint reasons:
 
 - `context_file_match`
 - `signal_match_strong`
 - `signal_match_repeated_weak`
 
-Planner also records why paths were added:
+Planner also records path addition reasons:
 
 - `planner.plan_created.payload.policyRecoveryHintApplications`
-  - task-level added paths
-  - matched hint metadata (role, count, reason, source text)
+  - Per-task added paths
+  - Matched hint metadata (role, count, reason, source text)
 
 ## 7. Configuration
 
-### 7.1 Repo Config File
+### 7.1 Repository Config File
 
 Default file:
 
 - `.opentiger/policy-recovery.json`
 
-Example template:
+Template:
 
 - `templates/policy-recovery.example.json`
 
-Supported keys:
+Main keys:
 
 - `mode`
 - `replaceDefaultCommandDrivenAllowedPathRules`
@@ -170,7 +194,7 @@ Supported keys:
 
 ### 7.2 Environment Variables
 
-Core config:
+Core:
 
 - `POLICY_RECOVERY_CONFIG_PATH`
 - `POLICY_RECOVERY_CONFIG_JSON`
@@ -185,45 +209,48 @@ Worker recovery:
 
 Cycle Manager rework suppression:
 
-- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES` (default: 2) — max retries when no safe policy path exists
-- `AUTO_REWORK_MAX_DEPTH` (default: 2) — max rework chain depth before cancellation
+- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES` (default: 2)
+  - Max suppression retries when no safe path found
+- `AUTO_REWORK_MAX_DEPTH` (default: 2)
+  - Max rework chain depth; cancel when exceeded
 
-Verification command skip (Worker):
+Worker verification skip:
 
-- `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT` (default: `true`) — skip missing/unsupported explicit commands when remaining commands exist
+- `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT` (default: `true`)
+  - Skip missing/unsupported explicit command when remaining commands exist
 
 ## 8. Event Reference
 
-Recovery observability events:
+Recovery observation events:
 
 - `task.policy_recovery_decided`
-  - LLM decision summary and raw decision groups
+  - LLM decision summary and raw decision group
 - `task.policy_recovery_applied`
-  - applied action (`allow`, `discard`, `allow+discard`) and resulting paths
+  - Applied action (`allow` / `discard` / `allow+discard`) and result paths
 - `task.policy_recovery_denied`
-  - denied decision details
+  - Details of denied decision
 
 Related queue recovery events:
 
-- `task.requeued` with reasons:
+- `task.requeued` (reason)
   - `policy_allowed_paths_adjusted`
   - `policy_allowed_paths_adjusted_from_blocked`
   - `verification_command_missing_script_adjusted`
   - `verification_command_unsupported_format_adjusted`
   - `cooldown_retry`
-- `task.recovery_escalated` with reason:
+- `task.recovery_escalated` (reason)
   - `policy_violation_rework_suppressed_no_safe_path`
   - `policy_violation_rework_suppressed_exhausted`
   - `rework_child_already_exists`
   - `rework_chain_max_depth_reached`
 
-Planner observability:
+Planner observation:
 
 - `planner.plan_created.payload.policyRecoveryHintApplications`
 
-## 9. Operational Notes
+## 9. Operation Notes
 
-- This mechanism uses existing events/tasks data; no schema migration is required.
-- If you need stricter behavior, switch mode to `balanced` or `conservative`.
-- If you need faster recovery decisions, tune timeout/model via Worker env vars.
-- If analysis quality matters more than speed, increase attempts carefully and watch queue latency.
+- This mechanism uses existing events/tasks data; no schema migration needed
+- For stricter behavior, switch to `balanced` or `conservative`
+- Adjust Worker timeout/model for faster recovery decisions
+- For decision quality, increase attempts carefully and monitor queue delay
