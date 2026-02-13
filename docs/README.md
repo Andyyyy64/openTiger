@@ -5,18 +5,18 @@ With source code as the source of truth, information necessary for operations is
 
 ## 0. Purpose-Based Navigation
 
-| Purpose | Shortest Page to Read |
-| --- | --- |
-| Want to get it running first | `docs/getting-started.md` |
-| Want to grasp the overview | `docs/architecture.md` |
-| Want to tune config keys | `docs/config.md` |
-| Want API integration | `docs/api-reference.md` |
-| Need incident response | `docs/operations.md` + `docs/flow.md` |
-| Quick initial diagnosis of stalled state | `docs/state-model.md` |
-| Immediate lookup of `retry.reason` meanings | `docs/state-model.md` |
+| Purpose                                                            | Shortest Page to Read                                             |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Want to get it running first                                       | `docs/getting-started.md`                                         |
+| Want to grasp the overview                                         | `docs/architecture.md`                                            |
+| Want to tune config keys                                           | `docs/config.md`                                                  |
+| Want API integration                                               | `docs/api-reference.md`                                           |
+| Need incident response                                             | `docs/operations.md` + `docs/flow.md`                             |
+| Quick initial diagnosis of stalled state                           | `docs/state-model.md`                                             |
+| Immediate lookup of `retry.reason` meanings                        | `docs/state-model.md`                                             |
 | Trace by state vocabulary -> transition -> owner -> implementation | `docs/state-model.md` -> `docs/flow.md` -> `docs/agent/README.md` |
-| Confirm startup condition formulas | `docs/startup-patterns.md` |
-| Compare agent role differences | `docs/agent/README.md` |
+| Confirm startup condition formulas                                 | `docs/startup-patterns.md`                                        |
+| Compare agent role differences                                     | `docs/agent/README.md`                                            |
 
 ## 0.1 Recommended Lanes by Reader Type
 

@@ -9,11 +9,11 @@ For startup preflight rules and full pattern matrix, see `docs/startup-patterns.
 
 When entering from state vocabulary, first fix terminology in `docs/state-model.md`, then check transitions and recovery paths here.
 
-| State model section | Next section here | Owning agent |
-| --- | --- | --- |
-| "1. Task Status" "2. Task Block Reason" | "2. Basic Lifecycle" "3. Blocked Reasons Used for Recovery" | Dispatcher / Worker / Judge |
-| "2.2 Task Retry Reason (Operations)" | "6. Worker Failure Handling" "8. Cycle Manager Self-Recovery" | Worker / Cycle Manager |
-| "7. Patterns Prone to Stalls" | "5. Dispatcher Recovery Layer" "7. Judge Non-Approval / Merge Failure Paths" | Dispatcher / Judge |
+| State model section                     | Next section here                                                            | Owning agent                |
+| --------------------------------------- | ---------------------------------------------------------------------------- | --------------------------- |
+| "1. Task Status" "2. Task Block Reason" | "2. Basic Lifecycle" "3. Blocked Reasons Used for Recovery"                  | Dispatcher / Worker / Judge |
+| "2.2 Task Retry Reason (Operations)"    | "6. Worker Failure Handling" "8. Cycle Manager Self-Recovery"                | Worker / Cycle Manager      |
+| "7. Patterns Prone to Stalls"           | "5. Dispatcher Recovery Layer" "7. Judge Non-Approval / Merge Failure Paths" | Dispatcher / Judge          |
 
 ## 1. Startup / Preflight
 

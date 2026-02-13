@@ -66,13 +66,13 @@ When `failureCategory` is present:
 
 For initial triage, these values are most useful:
 
-| `retry.reason` | Meaning | Main check targets |
-| --- | --- | --- |
-| `awaiting_judge` | Stuck waiting for judge | `GET /judgements`, `GET /system/processes`, `GET /logs/all` |
-| `quota_wait` | Waiting for quota cooldown | `GET /tasks`, `GET /runs`, `GET /logs/all` |
-| `needs_rework` | Moving into rework loop | `GET /runs`, `GET /judgements`, `GET /logs/all` |
-| `cooldown_pending` | In cooldown (before auto retry) | `retryAt`/`retryInSeconds` in `GET /tasks` |
-| `retry_due` | Retry time reached | `GET /tasks`, `GET /logs/all` |
+| `retry.reason`     | Meaning                         | Main check targets                                          |
+| ------------------ | ------------------------------- | ----------------------------------------------------------- |
+| `awaiting_judge`   | Stuck waiting for judge         | `GET /judgements`, `GET /system/processes`, `GET /logs/all` |
+| `quota_wait`       | Waiting for quota cooldown      | `GET /tasks`, `GET /runs`, `GET /logs/all`                  |
+| `needs_rework`     | Moving into rework loop         | `GET /runs`, `GET /judgements`, `GET /logs/all`             |
+| `cooldown_pending` | In cooldown (before auto retry) | `retryAt`/`retryInSeconds` in `GET /tasks`                  |
+| `retry_due`        | Retry time reached              | `GET /tasks`, `GET /logs/all`                               |
 
 ## 3. Run Status
 
@@ -121,14 +121,14 @@ Notes:
 
 ## 7. Patterns Prone to Stalls (Initial Diagnosis)
 
-| Symptom | First check state/value | Main APIs | Primary area to check |
-| --- | --- | --- | --- |
-| `queued` not decreasing for long | `agents` idle/busy, lease, dependency/targetArea conflict | `GET /agents`, `GET /tasks`, `GET /logs/all` | Dispatcher |
-| `running` stuck for long | Corresponding run `status`, startedAt, worker logs | `GET /runs`, `GET /tasks`, `GET /logs/all` | Worker/Tester/Docser |
-| `awaiting_judge` increasing | Pending judge run, judge process status | `GET /judgements`, `GET /system/processes`, `GET /logs/all` | Judge |
-| `quota_wait` chaining | Cooldown wait, concurrency, model quota | `GET /tasks`, `GET /runs`, `GET /logs/all` | Worker + Dispatcher |
-| `needs_rework` chaining | Non-approve reason, policy/verification failure content | `GET /judgements`, `GET /runs`, `GET /logs/all` | Judge + Worker + Cycle Manager |
-| `issue_linking` not clearing | Issue linkage metadata missing, import/link failure | `GET /tasks`, `POST /system/preflight`, `GET /logs/all` | Planner + API |
+| Symptom                          | First check state/value                                   | Main APIs                                                   | Primary area to check          |
+| -------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------ |
+| `queued` not decreasing for long | `agents` idle/busy, lease, dependency/targetArea conflict | `GET /agents`, `GET /tasks`, `GET /logs/all`                | Dispatcher                     |
+| `running` stuck for long         | Corresponding run `status`, startedAt, worker logs        | `GET /runs`, `GET /tasks`, `GET /logs/all`                  | Worker/Tester/Docser           |
+| `awaiting_judge` increasing      | Pending judge run, judge process status                   | `GET /judgements`, `GET /system/processes`, `GET /logs/all` | Judge                          |
+| `quota_wait` chaining            | Cooldown wait, concurrency, model quota                   | `GET /tasks`, `GET /runs`, `GET /logs/all`                  | Worker + Dispatcher            |
+| `needs_rework` chaining          | Non-approve reason, policy/verification failure content   | `GET /judgements`, `GET /runs`, `GET /logs/all`             | Judge + Worker + Cycle Manager |
+| `issue_linking` not clearing     | Issue linkage metadata missing, import/link failure       | `GET /tasks`, `POST /system/preflight`, `GET /logs/all`     | Planner + API                  |
 
 Notes:
 
@@ -139,12 +139,12 @@ Notes:
 
 Common path when tracing from state vocabulary:
 
-| Starting point (state/symptom) | State vocabulary ref | Transition ref (flow) | Owner agent ref | Implementation ref |
-| --- | --- | --- | --- | --- |
-| `queued`/`running` stuck | 1, 2, 7 | "2. Basic Lifecycle" "5. Dispatcher Recovery Layer" "6. Worker Failure Handling" in `docs/flow.md` | `docs/agent/dispatcher.md`, `docs/agent/worker.md` | `apps/dispatcher/src/`, `apps/worker/src/` |
-| `awaiting_judge` stuck | 2, 7 | "3. Blocked Reasons" "4. Run Lifecycle" "7. Judge Non-Approval / Merge Failure Paths" in `docs/flow.md` | `docs/agent/judge.md` | `apps/judge/src/` |
-| `quota_wait`/`needs_rework` chain | 2, 2.2, 7 | "3. Blocked Reasons" "6. Worker Failure Handling" "8. Cycle Manager Self-Recovery" in `docs/flow.md` | `docs/agent/worker.md`, `docs/agent/judge.md`, `docs/agent/cycle-manager.md` | `apps/worker/src/`, `apps/judge/src/`, `apps/cycle-manager/src/` |
-| `issue_linking` stuck | 2, 7 | "3. Blocked Reasons" in `docs/flow.md` + `docs/startup-patterns.md` | `docs/agent/planner.md` | `apps/planner/src/` |
+| Starting point (state/symptom)    | State vocabulary ref | Transition ref (flow)                                                                                   | Owner agent ref                                                              | Implementation ref                                               |
+| --------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `queued`/`running` stuck          | 1, 2, 7              | "2. Basic Lifecycle" "5. Dispatcher Recovery Layer" "6. Worker Failure Handling" in `docs/flow.md`      | `docs/agent/dispatcher.md`, `docs/agent/worker.md`                           | `apps/dispatcher/src/`, `apps/worker/src/`                       |
+| `awaiting_judge` stuck            | 2, 7                 | "3. Blocked Reasons" "4. Run Lifecycle" "7. Judge Non-Approval / Merge Failure Paths" in `docs/flow.md` | `docs/agent/judge.md`                                                        | `apps/judge/src/`                                                |
+| `quota_wait`/`needs_rework` chain | 2, 2.2, 7            | "3. Blocked Reasons" "6. Worker Failure Handling" "8. Cycle Manager Self-Recovery" in `docs/flow.md`    | `docs/agent/worker.md`, `docs/agent/judge.md`, `docs/agent/cycle-manager.md` | `apps/worker/src/`, `apps/judge/src/`, `apps/cycle-manager/src/` |
+| `issue_linking` stuck             | 2, 7                 | "3. Blocked Reasons" in `docs/flow.md` + `docs/startup-patterns.md`                                     | `docs/agent/planner.md`                                                      | `apps/planner/src/`                                              |
 
 Notes:
 

@@ -38,22 +38,22 @@ When tracing stalls from startup rules, follow: state vocabulary -> transition -
 
 ## Decision Inputs
 
-| Symbol | Meaning | Source |
-| --- | --- | --- |
-| `R` | Requirement is non-empty | `/system/preflight` request body |
-| `I` | Issue task backlog exists | `preflight.github.issueTaskBacklogCount > 0` |
-| `P` | PR/Judge backlog exists | `openPrCount > 0 OR pendingJudgeTaskCount > 0` |
-| `L` | Local task backlog exists | `queued`/`running`/`failed`/`blocked` > 0 |
+| Symbol | Meaning                   | Source                                         |
+| ------ | ------------------------- | ---------------------------------------------- |
+| `R`    | Requirement is non-empty  | `/system/preflight` request body               |
+| `I`    | Issue task backlog exists | `preflight.github.issueTaskBacklogCount > 0`   |
+| `P`    | PR/Judge backlog exists   | `openPrCount > 0 OR pendingJudgeTaskCount > 0` |
+| `L`    | Local task backlog exists | `queued`/`running`/`failed`/`blocked` > 0      |
 
 ## Decision Responsibility
 
-| Decision | Primary component |
-| --- | --- |
-| Preflight recommendation | API (`/system/preflight`) |
-| Planner startup guard | API process prehook (`/system/processes/planner/start`) |
-| Queued task selection and lease grant | Dispatcher |
-| Run evaluation and PR merge branching | Judge |
-| Backlog convergence, preflight sync, replan trigger | Cycle Manager |
+| Decision                                            | Primary component                                       |
+| --------------------------------------------------- | ------------------------------------------------------- |
+| Preflight recommendation                            | API (`/system/preflight`)                               |
+| Planner startup guard                               | API process prehook (`/system/processes/planner/start`) |
+| Queued task selection and lease grant               | Dispatcher                                              |
+| Run evaluation and PR merge branching               | Judge                                                   |
+| Backlog convergence, preflight sync, replan trigger | Cycle Manager                                           |
 
 ## Startup Rules
 
@@ -74,14 +74,14 @@ When `!startPlanner && backlogTotal == 0`, Start UI returns:
 
 The 16 combinations of `R/I/P/L` collapse into these classes in practice (same output merged):
 
-| Class | Condition | Planner | Dispatcher/Worker/Tester/Docser | Judge | Expected behavior |
-| --- | --- | --- | --- | --- | --- |
-| S0 | `R=0,I=0,P=0,L=0` | none | none | none | Start rejects (nothing to process) |
-| S1 | `R=1,I=0,P=0,L=0` | yes | yes | yes | Normal execution after Planner creates tasks |
-| S2 | `I=1` (any `R/P/L`) | none | yes | yes | Issue backlog highest priority |
-| S3 | `P=1,I=0,L=0` (any `R`) | none | none | yes | Process Judge backlog only |
-| S4 | `L=1,I=0,P=0` (any `R`) | none | yes | yes | Process existing local tasks first |
-| S5 | `L=1,P=1,I=0` (any `R`) | none | yes | yes | Local backlog + Judge backlog first |
+| Class | Condition               | Planner | Dispatcher/Worker/Tester/Docser | Judge | Expected behavior                            |
+| ----- | ----------------------- | ------- | ------------------------------- | ----- | -------------------------------------------- |
+| S0    | `R=0,I=0,P=0,L=0`       | none    | none                            | none  | Start rejects (nothing to process)           |
+| S1    | `R=1,I=0,P=0,L=0`       | yes     | yes                             | yes   | Normal execution after Planner creates tasks |
+| S2    | `I=1` (any `R/P/L`)     | none    | yes                             | yes   | Issue backlog highest priority               |
+| S3    | `P=1,I=0,L=0` (any `R`) | none    | none                            | yes   | Process Judge backlog only                   |
+| S4    | `L=1,I=0,P=0` (any `R`) | none    | yes                             | yes   | Process existing local tasks first           |
+| S5    | `L=1,P=1,I=0` (any `R`) | none    | yes                             | yes   | Local backlog + Judge backlog first          |
 
 Notes:
 
@@ -140,9 +140,9 @@ stateDiagram-v2
 
 ## Important Edge Patterns
 
-| Pattern | What happens |
-| --- | --- |
+| Pattern                                | What happens                                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | Issue exists but explicit role missing | Issue task may stay `blocked(issue_linking)` until issue metadata is complete; planner does not proceed |
-| GitHub query fails in preflight | Warning emitted; Start decision falls back to remaining local signals |
-| Issue-sync request fails at runtime | Replan skipped for that cycle (fail-closed) |
-| Manual planner start with backlog | Rejected with `409` by planner prehook |
+| GitHub query fails in preflight        | Warning emitted; Start decision falls back to remaining local signals                                   |
+| Issue-sync request fails at runtime    | Replan skipped for that cycle (fail-closed)                                                             |
+| Manual planner start with backlog      | Rejected with `409` by planner prehook                                                                  |

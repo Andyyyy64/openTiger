@@ -35,12 +35,12 @@ Seeing both `failed` and `retry countdown` is normal: run shows failure, task sh
 
 `retry.reason` in `GET /tasks` helps triage quickly:
 
-| reason | First check |
-| --- | --- |
-| `awaiting_judge` | `GET /judgements`, `GET /system/processes`, `GET /logs/all` |
-| `quota_wait` | `GET /tasks`, `GET /runs`, `GET /logs/all` |
-| `needs_rework` | `GET /runs`, `GET /judgements`, `GET /logs/all` |
-| `cooldown_pending` / `retry_due` | `retryAt` / `retryInSeconds` in `GET /tasks` |
+| reason                           | First check                                                 |
+| -------------------------------- | ----------------------------------------------------------- |
+| `awaiting_judge`                 | `GET /judgements`, `GET /system/processes`, `GET /logs/all` |
+| `quota_wait`                     | `GET /tasks`, `GET /runs`, `GET /logs/all`                  |
+| `needs_rework`                   | `GET /runs`, `GET /judgements`, `GET /logs/all`             |
+| `cooldown_pending` / `retry_due` | `retryAt` / `retryInSeconds` in `GET /tasks`                |
 
 ## 2. Process Operations
 
@@ -195,13 +195,13 @@ Note:
 
 Common path when tracing from state vocabulary to transition to owner to implementation during incidents.
 
-| Starting point (state/symptom) | State vocabulary ref | Transition ref (flow) | Owner agent ref | Implementation ref |
-| --- | --- | --- | --- | --- |
-| `queued` stuck | `docs/state-model.md` 7 | `docs/flow.md` 2, 5 | Dispatcher (`docs/agent/dispatcher.md`) | `apps/dispatcher/src/` |
-| `running` stuck | `docs/state-model.md` 7 | `docs/flow.md` 2, 6 | Worker/Tester/Docser (`docs/agent/worker.md`) | `apps/worker/src/` |
-| `awaiting_judge` stuck | `docs/state-model.md` 2, 7 | `docs/flow.md` 3, 4, 7 | Judge (`docs/agent/judge.md`) | `apps/judge/src/` |
-| `quota_wait`/`needs_rework` chain | `docs/state-model.md` 2, 2.2 | `docs/flow.md` 3, 6, 8 | Worker/Judge/Cycle Manager (each agent spec) | "Implementation reference" at end of each agent spec |
-| `issue_linking` stuck | `docs/state-model.md` 2, 7 | `docs/flow.md` 3 | Planner (`docs/agent/planner.md`) | `apps/planner/src/` |
+| Starting point (state/symptom)    | State vocabulary ref         | Transition ref (flow)  | Owner agent ref                               | Implementation ref                                   |
+| --------------------------------- | ---------------------------- | ---------------------- | --------------------------------------------- | ---------------------------------------------------- |
+| `queued` stuck                    | `docs/state-model.md` 7      | `docs/flow.md` 2, 5    | Dispatcher (`docs/agent/dispatcher.md`)       | `apps/dispatcher/src/`                               |
+| `running` stuck                   | `docs/state-model.md` 7      | `docs/flow.md` 2, 6    | Worker/Tester/Docser (`docs/agent/worker.md`) | `apps/worker/src/`                                   |
+| `awaiting_judge` stuck            | `docs/state-model.md` 2, 7   | `docs/flow.md` 3, 4, 7 | Judge (`docs/agent/judge.md`)                 | `apps/judge/src/`                                    |
+| `quota_wait`/`needs_rework` chain | `docs/state-model.md` 2, 2.2 | `docs/flow.md` 3, 6, 8 | Worker/Judge/Cycle Manager (each agent spec)  | "Implementation reference" at end of each agent spec |
+| `issue_linking` stuck             | `docs/state-model.md` 2, 7   | `docs/flow.md` 3       | Planner (`docs/agent/planner.md`)             | `apps/planner/src/`                                  |
 
 Note:
 
@@ -256,13 +256,13 @@ After config changes or restarts, check in order to detect missing updates:
 
 ### 11.0 API Quick Reference
 
-| Check | API |
-| --- | --- |
-| Process state | `GET /system/processes` |
-| Agent state | `GET /agents` |
-| Task backlog | `GET /tasks` |
-| Run anomalies | `GET /runs` |
-| Correlated logs | `GET /logs/all` |
+| Check           | API                     |
+| --------------- | ----------------------- |
+| Process state   | `GET /system/processes` |
+| Agent state     | `GET /agents`           |
+| Task backlog    | `GET /tasks`            |
+| Run anomalies   | `GET /runs`             |
+| Correlated logs | `GET /logs/all`         |
 
 ### 11.1 Process State
 

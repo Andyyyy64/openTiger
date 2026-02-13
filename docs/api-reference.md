@@ -43,16 +43,16 @@ Main targets:
 
 ## 2. API Map by Operation Purpose
 
-| Purpose | Main APIs |
-| --- | --- |
-| Health check | `GET /health`, `GET /health/ready` |
-| State monitoring | `GET /tasks`, `GET /runs`, `GET /judgements`, `GET /agents`, `GET /logs/all` |
-| Config changes | `GET /config`, `PATCH /config` |
-| Startup control | `POST /system/processes/:name/start`, `POST /system/processes/:name/stop`, `POST /system/processes/stop-all` |
-| Pre-start validation | `POST /system/preflight` |
-| Recovery/maintenance | `POST /system/cleanup`, `POST /logs/clear` |
-| GitHub integration | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github` |
-| Requirement updates | `GET /system/requirements`, `POST /system/requirements` |
+| Purpose              | Main APIs                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Health check         | `GET /health`, `GET /health/ready`                                                                           |
+| State monitoring     | `GET /tasks`, `GET /runs`, `GET /judgements`, `GET /agents`, `GET /logs/all`                                 |
+| Config changes       | `GET /config`, `PATCH /config`                                                                               |
+| Startup control      | `POST /system/processes/:name/start`, `POST /system/processes/:name/stop`, `POST /system/processes/stop-all` |
+| Pre-start validation | `POST /system/preflight`                                                                                     |
+| Recovery/maintenance | `POST /system/cleanup`, `POST /logs/clear`                                                                   |
+| GitHub integration   | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github`    |
+| Requirement updates  | `GET /system/requirements`, `POST /system/requirements`                                                      |
 
 Note:
 
@@ -62,15 +62,15 @@ Note:
 
 Minimum set for incident triage and daily operations.
 
-| Use | API | What to check |
-| --- | --- | --- |
-| Overall health | `GET /health/ready` | DB/Redis connectivity |
-| Process state | `GET /system/processes` | running/stopped distribution, missing processes |
-| Agent activity | `GET /agents` | offline distribution, counts per role |
-| Task backlog | `GET /tasks` | stuck `queued`, surge in `blocked` |
-| Run anomalies | `GET /runs` | consecutive `failed` with same error, long `running` |
-| Judge stall | `GET /judgements` | non-approve chain, unprocessed backlog |
-| Correlated logs | `GET /logs/all` | dispatcher/worker/judge/cycle-manager timeline |
+| Use             | API                     | What to check                                        |
+| --------------- | ----------------------- | ---------------------------------------------------- |
+| Overall health  | `GET /health/ready`     | DB/Redis connectivity                                |
+| Process state   | `GET /system/processes` | running/stopped distribution, missing processes      |
+| Agent activity  | `GET /agents`           | offline distribution, counts per role                |
+| Task backlog    | `GET /tasks`            | stuck `queued`, surge in `blocked`                   |
+| Run anomalies   | `GET /runs`             | consecutive `failed` with same error, long `running` |
+| Judge stall     | `GET /judgements`       | non-approve chain, unprocessed backlog               |
+| Correlated logs | `GET /logs/all`         | dispatcher/worker/judge/cycle-manager timeline       |
 
 For operation check sequence, refer to "Post-change verification checklist" in `docs/operations.md`.
 
@@ -78,12 +78,12 @@ For operation check sequence, refer to "Post-change verification checklist" in `
 
 Common path when tracing from state vocabulary to transition to owner to implementation after finding anomalies via API.
 
-| Starting point (API/symptom) | State vocabulary ref | Transition ref (flow) | Owner agent ref | Implementation ref |
-| --- | --- | --- | --- | --- |
-| `queued`/`running` stuck in `GET /tasks` | `docs/state-model.md` 7 | `docs/flow.md` 2, 5, 6 | Dispatcher/Worker (`docs/agent/dispatcher.md`, `docs/agent/worker.md`) | `apps/dispatcher/src/`, `apps/worker/src/` |
-| `awaiting_judge` stuck in `GET /tasks` | `docs/state-model.md` 2, 7 | `docs/flow.md` 3, 4, 7 | Judge (`docs/agent/judge.md`) | `apps/judge/src/` |
-| `quota_wait`/`needs_rework` chain in `GET /tasks` | `docs/state-model.md` 2.2, 7 | `docs/flow.md` 3, 6, 8 | Worker/Judge/Cycle Manager (each agent spec) | "Implementation reference" in each agent spec |
-| `issue_linking` stuck in `GET /tasks` | `docs/state-model.md` 2, 7 | `docs/flow.md` 3 | Planner (`docs/agent/planner.md`) | `apps/planner/src/` |
+| Starting point (API/symptom)                      | State vocabulary ref         | Transition ref (flow)  | Owner agent ref                                                        | Implementation ref                            |
+| ------------------------------------------------- | ---------------------------- | ---------------------- | ---------------------------------------------------------------------- | --------------------------------------------- |
+| `queued`/`running` stuck in `GET /tasks`          | `docs/state-model.md` 7      | `docs/flow.md` 2, 5, 6 | Dispatcher/Worker (`docs/agent/dispatcher.md`, `docs/agent/worker.md`) | `apps/dispatcher/src/`, `apps/worker/src/`    |
+| `awaiting_judge` stuck in `GET /tasks`            | `docs/state-model.md` 2, 7   | `docs/flow.md` 3, 4, 7 | Judge (`docs/agent/judge.md`)                                          | `apps/judge/src/`                             |
+| `quota_wait`/`needs_rework` chain in `GET /tasks` | `docs/state-model.md` 2.2, 7 | `docs/flow.md` 3, 6, 8 | Worker/Judge/Cycle Manager (each agent spec)                           | "Implementation reference" in each agent spec |
+| `issue_linking` stuck in `GET /tasks`             | `docs/state-model.md` 2, 7   | `docs/flow.md` 3       | Planner (`docs/agent/planner.md`)                                      | `apps/planner/src/`                           |
 
 Note:
 

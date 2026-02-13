@@ -68,13 +68,13 @@ not a full-featured OS.
 
 ## Risk Assessment
 
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| Boot sequence unstable on QEMU, non-deterministic failures | high | Keep explicit boot logs; add smoke test for boot markers |
-| Trap/interrupt misconfiguration blocks later kernel work | high | Implement trap setup incrementally; validate with isolated tests |
-| Scheduler bugs hide starvation/deadlock | medium | Start with minimal round-robin; add deterministic task tests |
-| Memory allocator corruption cascades failures | high | Add allocator invariant and allocation/free tests |
-| Scope creep slows autonomous iteration | medium | Lock this milestone as baseline; defer advanced features |
+| Risk                                                       | Impact | Mitigation                                                       |
+| ---------------------------------------------------------- | ------ | ---------------------------------------------------------------- |
+| Boot sequence unstable on QEMU, non-deterministic failures | high   | Keep explicit boot logs; add smoke test for boot markers         |
+| Trap/interrupt misconfiguration blocks later kernel work   | high   | Implement trap setup incrementally; validate with isolated tests |
+| Scheduler bugs hide starvation/deadlock                    | medium | Start with minimal round-robin; add deterministic task tests     |
+| Memory allocator corruption cascades failures              | high   | Add allocator invariant and allocation/free tests                |
+| Scope creep slows autonomous iteration                     | medium | Lock this milestone as baseline; defer advanced features         |
 
 ## Notes
 

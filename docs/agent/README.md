@@ -4,15 +4,15 @@ This page provides a cross-agent index for comparing responsibilities and differ
 
 ## 1. Agent Comparison Table
 
-| Agent | Primary responsibility | Primary input | Main transitions/output | Primary failure behavior |
-| --- | --- | --- | --- | --- |
-| Planner | Generate task plans from requirement/issue | requirement, backlog, feedback, inspection | Create `tasks`, save plan event | Fallback planning, duplicate-plan guard |
-| Dispatcher | Execution order control and task dispatch | queued task, leases, agent heartbeat | `queued -> running`, grant lease, assign agent | Lease recovery, orphan task recovery, requeue |
-| Worker | Implementation change + verification + PR creation | task, repo/worktree, commands | Generate `runs/artifacts`, `awaiting_judge` or `done` | `quota_wait` / `needs_rework` / `failed` |
-| Tester | Execute test-centric tasks | tester-role task | Same as Worker (test context) | Same as Worker |
-| Docser | Execute documentation sync tasks | docser-role task | docs update run/artifact | doc-safe command constraints, no LLM policy recovery |
-| Judge | Evaluate successful run and govern | run/artifacts, CI/policy/LLM results | `done` or retry/rework/autofix | Circuit breaker, autofix, `awaiting_judge` restoration |
-| Cycle Manager | Convergence monitoring, recovery, replan control | system state, events, anomaly/cost | cycle update, cleanup, replan trigger | Critical anomaly restart, cooldown retry |
+| Agent         | Primary responsibility                             | Primary input                              | Main transitions/output                               | Primary failure behavior                               |
+| ------------- | -------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------- | ------------------------------------------------------ |
+| Planner       | Generate task plans from requirement/issue         | requirement, backlog, feedback, inspection | Create `tasks`, save plan event                       | Fallback planning, duplicate-plan guard                |
+| Dispatcher    | Execution order control and task dispatch          | queued task, leases, agent heartbeat       | `queued -> running`, grant lease, assign agent        | Lease recovery, orphan task recovery, requeue          |
+| Worker        | Implementation change + verification + PR creation | task, repo/worktree, commands              | Generate `runs/artifacts`, `awaiting_judge` or `done` | `quota_wait` / `needs_rework` / `failed`               |
+| Tester        | Execute test-centric tasks                         | tester-role task                           | Same as Worker (test context)                         | Same as Worker                                         |
+| Docser        | Execute documentation sync tasks                   | docser-role task                           | docs update run/artifact                              | doc-safe command constraints, no LLM policy recovery   |
+| Judge         | Evaluate successful run and govern                 | run/artifacts, CI/policy/LLM results       | `done` or retry/rework/autofix                        | Circuit breaker, autofix, `awaiting_judge` restoration |
+| Cycle Manager | Convergence monitoring, recovery, replan control   | system state, events, anomaly/cost         | cycle update, cleanup, replan trigger                 | Critical anomaly restart, cooldown retry               |
 
 Note:
 
@@ -29,22 +29,22 @@ Note:
 
 ## 3. Agent Boundaries (What They Don't Do)
 
-| Agent | Out of scope |
-| --- | --- |
-| Planner | Task execution, PR merge decisions |
-| Dispatcher | Code changes, approve/rework decisions |
+| Agent                | Out of scope                                         |
+| -------------------- | ---------------------------------------------------- |
+| Planner              | Task execution, PR merge decisions                   |
+| Dispatcher           | Code changes, approve/rework decisions               |
 | Worker/Tester/Docser | Global replan decisions, overall convergence control |
-| Judge | Task dispatch, direct file modification execution |
-| Cycle Manager | Individual task implementation, PR content review |
+| Judge                | Task dispatch, direct file modification execution    |
+| Cycle Manager        | Individual task implementation, PR content review    |
 
 ## 4. Execution Target Differences (Worker Family)
 
-| Aspect | Worker | Tester | Docser |
-| --- | --- | --- | --- |
-| Primary change target | Implementation code | Test code | Documentation |
-| Verification commands | Per task/policy | Per task/policy (test-centric) | doc-safe command preferred |
-| LLM policy recovery | Can be enabled | Can be enabled | Not executed |
-| Typical tasks | Feature addition, bug fix | Test addition, flaky verification improvement | docs sync, gap fill |
+| Aspect                | Worker                    | Tester                                        | Docser                     |
+| --------------------- | ------------------------- | --------------------------------------------- | -------------------------- |
+| Primary change target | Implementation code       | Test code                                     | Documentation              |
+| Verification commands | Per task/policy           | Per task/policy (test-centric)                | doc-safe command preferred |
+| LLM policy recovery   | Can be enabled            | Can be enabled                                | Not executed               |
+| Typical tasks         | Feature addition, bug fix | Test addition, flaky verification improvement | docs sync, gap fill        |
 
 Worker / Tester / Docser share the same runtime; behavior is switched by `AGENT_ROLE`.
 
@@ -55,9 +55,9 @@ To avoid duplication when reading:
 
 ## 5. Model / Instruction File Resolution Order
 
-| Role | Model config (priority) | Instruction file config (priority) |
-| --- | --- | --- |
-| worker | `WORKER_MODEL` -> `OPENCODE_MODEL` | `WORKER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/base.md` |
+| Role   | Model config (priority)            | Instruction file config (priority)                                 |
+| ------ | ---------------------------------- | ------------------------------------------------------------------ |
+| worker | `WORKER_MODEL` -> `OPENCODE_MODEL` | `WORKER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/base.md`   |
 | tester | `TESTER_MODEL` -> `OPENCODE_MODEL` | `TESTER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/tester.md` |
 | docser | `DOCSER_MODEL` -> `OPENCODE_MODEL` | `DOCSER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/docser.md` |
 

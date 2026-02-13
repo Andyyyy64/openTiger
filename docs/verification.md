@@ -113,12 +113,12 @@ See `docs/policy-recovery.md` for details.
 
 ## 7. Operation Observation (Initial Triage)
 
-| Symptom | First APIs | What to check |
-| --- | --- | --- |
-| Command failure repeating | `GET /runs`, `GET /tasks`, `GET /logs/all` | Same command failing repeatedly, presence of recovery attempt |
-| No-change failure continuing | `GET /runs/:id`, `GET /tasks/:id` | Whether no-op success is reached, retry count |
-| Stuck on policy violation | `GET /runs/:id`, `GET /tasks/:id`, `GET /logs/all` | Transition reason to `blocked(needs_rework)`, allowedPaths adjustment logs |
-| Quota-related wait continuing | `GET /tasks`, `GET /runs`, `GET /logs/all` | `blocked(quota_wait)` increase, whether cooldown recovery resumes |
+| Symptom                       | First APIs                                         | What to check                                                              |
+| ----------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------- |
+| Command failure repeating     | `GET /runs`, `GET /tasks`, `GET /logs/all`         | Same command failing repeatedly, presence of recovery attempt              |
+| No-change failure continuing  | `GET /runs/:id`, `GET /tasks/:id`                  | Whether no-op success is reached, retry count                              |
+| Stuck on policy violation     | `GET /runs/:id`, `GET /tasks/:id`, `GET /logs/all` | Transition reason to `blocked(needs_rework)`, allowedPaths adjustment logs |
+| Quota-related wait continuing | `GET /tasks`, `GET /runs`, `GET /logs/all`         | `blocked(quota_wait)` increase, whether cooldown recovery resumes          |
 
 Notes:
 

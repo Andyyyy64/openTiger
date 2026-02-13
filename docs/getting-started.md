@@ -103,15 +103,15 @@ For state transitions that stall, start with the initial diagnosis table in `doc
 
 First-time users can triage by:
 
-1. Confirm state vocabulary  
+1. Confirm state vocabulary
    - `docs/state-model.md` (7)
-2. Check where it stalls via transitions  
+2. Check where it stalls via transitions
    - `docs/flow.md` (relevant section)
-3. Run API check sequence  
+3. Run API check sequence
    - `docs/operations.md` (11)
-4. Identify owning agent and implementation  
+4. Identify owning agent and implementation
    - `docs/agent/README.md` (FAQ and implementation tracing path)
-5. Use API-based lookup when tracing from API  
+5. Use API-based lookup when tracing from API
    - `docs/api-reference.md` (2.2)
 
 ## 9. Common Initial Issues
