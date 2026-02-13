@@ -28,6 +28,11 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `api-key` / `bearer` は常に許可
 - ローカル運用時は `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL !== "false"` で許可される設計
 
+主な対象:
+
+- `/system/*`
+- `POST /logs/clear`
+
 ### レート制限
 
 - 既定: 1分あたり 100 リクエスト
@@ -273,7 +278,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - command 実行 API を外部から直接叩く設計ではなく、process manager 経由で制御します
 - `stop-all` は running run を cancel/requeue し、agent 状態も更新します
 - sandbox 実行時、worker/tester/docser の host process は通常起動しません
-- `/system/*` と `/logs/clear` は system-control 権限での呼び出しを前提にしてください
+- `/system/*` と `POST /logs/clear` は `canControlSystem()` の許可条件で実行されます
 
 運用トラブル時の補助資料:
 

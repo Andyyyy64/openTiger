@@ -267,3 +267,17 @@ pnpm runtime:hatch:disarm
   - 同一エラーで `failed` が連続
   - 特定 role だけ agent が復帰しない
   - `quota_wait`/`needs_rework` が急増する
+
+### 11.6 最小確認コマンド例（curl）
+
+認証が必要な環境では `X-API-Key` または `Authorization: Bearer` を付与します。
+
+```bash
+# 例: APIキー利用時
+curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/health/ready
+curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/system/processes
+curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/agents
+curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/tasks
+curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/runs
+curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/logs/all
+```
