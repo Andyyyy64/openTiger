@@ -1,7 +1,11 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { judgementsApi, type JudgementEvent } from "../lib/api";
+import {
+  judgementsApi,
+  type JudgementEvent,
+  type JudgementPayload,
+} from "../lib/api";
 import { getCiStatusColor } from "../ui/status";
 
 export const JudgementsPage: React.FC = () => {
@@ -11,7 +15,7 @@ export const JudgementsPage: React.FC = () => {
     error,
   } = useQuery({
     queryKey: ["judgements"],
-    queryFn: () => judgementsApi.list({ limit: 50 }),
+    queryFn: () => judgementsApi.list({ limit: 80, includeRecovery: true }),
   });
 
   return (
@@ -43,15 +47,23 @@ export const JudgementsPage: React.FC = () => {
           </div>
         )}
 
-        {(judgements ?? []).map((event) => (
-          <JudgementCard key={event.id} event={event} />
-        ))}
+        {(judgements ?? []).map((event) =>
+          isJudgeReviewEvent(event) ? (
+            <JudgementCard key={event.id} event={event} />
+          ) : isPolicyRecoveryEvent(event) ? (
+            <PolicyRecoveryCard key={event.id} event={event} />
+          ) : null,
+        )}
       </div>
     </div>
   );
 };
 
-const JudgementCard = ({ event }: { event: JudgementEvent }) => {
+const JudgementCard = ({
+  event,
+}: {
+  event: JudgementEvent & { type: "judge.review"; payload: JudgementPayload | null };
+}) => {
   const payload = event.payload ?? {};
   const verdict = normalizeLegacyVerdict(payload.verdict ?? "unknown");
   const actions = payload.actions ?? {};
@@ -238,6 +250,117 @@ const JudgementCard = ({ event }: { event: JudgementEvent }) => {
   );
 };
 
+const PolicyRecoveryCard = ({
+  event,
+}: {
+  event: JudgementEvent & {
+    type: "task.policy_recovery_decided" | "task.policy_recovery_applied" | "task.policy_recovery_denied";
+    payload: JudgementPayload | null;
+  };
+}) => {
+  const payload = event.payload ?? {};
+  const decisionSummary = payload.decisionSummary ?? {};
+  const violatingPaths = payload.violatingPaths ?? [];
+  const allowedPaths = payload.allowedPaths ?? [];
+  const discardedPaths = payload.discardedPaths ?? payload.discardPaths ?? [];
+  const deniedPaths = payload.denyPaths ?? [];
+  const eventLabel =
+    event.type === "task.policy_recovery_applied"
+      ? "RECOVERY_APPLIED"
+      : event.type === "task.policy_recovery_denied"
+        ? "RECOVERY_DENIED"
+        : "RECOVERY_DECIDED";
+  const eventColor =
+    event.type === "task.policy_recovery_applied"
+      ? "text-term-tiger"
+      : event.type === "task.policy_recovery_denied"
+        ? "text-red-500"
+        : "text-yellow-500";
+
+  return (
+    <section className="border border-term-border p-0 font-mono">
+      <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-zinc-500">{new Date(event.createdAt).toLocaleString()}</span>
+          <div className={`font-bold ${eventColor}`}>[{eventLabel}]</div>
+          <div className="flex items-center gap-2 text-zinc-400">
+            <span>TASK:</span>
+            <Link to={`/tasks/${event.taskId}`} className="text-term-tiger hover:underline">
+              {event.taskId.slice(0, 8)}
+            </Link>
+          </div>
+        </div>
+        <div className="text-xs text-zinc-500">AGENT: {event.agentId ?? "system"}</div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-term-border text-xs">
+        <div className="p-4 space-y-2">
+          <div className="text-zinc-500 uppercase font-bold tracking-wider mb-2">Decision</div>
+          <div className="grid grid-cols-[110px_1fr] gap-1">
+            <span className="text-zinc-500">ATTEMPT</span>
+            <span>{payload.attempt ?? "-"}</span>
+            <span className="text-zinc-500">ACTION</span>
+            <span>{payload.action ?? "n/a"}</span>
+            <span className="text-zinc-500">MODEL</span>
+            <span>{payload.model ?? "n/a"}</span>
+            <span className="text-zinc-500">LATENCY</span>
+            <span>{typeof payload.latencyMs === "number" ? `${payload.latencyMs} ms` : "n/a"}</span>
+            <span className="text-zinc-500">CONFIDENCE</span>
+            <span>{typeof payload.confidence === "number" ? `${Math.round(payload.confidence * 100)}%` : "n/a"}</span>
+            <span className="text-zinc-500">SUMMARY</span>
+            <span className="wrap-break-word">{payload.recoverySummary ?? "n/a"}</span>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-2">
+          <div className="text-zinc-500 uppercase font-bold tracking-wider mb-2">Summary</div>
+          <div className="grid grid-cols-[110px_1fr] gap-1">
+            <span className="text-zinc-500">VIOLATIONS</span>
+            <span className={violatingPaths.length > 0 ? "text-red-500" : "text-zinc-400"}>
+              {violatingPaths.length}
+            </span>
+            <span className="text-zinc-500">ALLOW</span>
+            <span>{decisionSummary.allowCount ?? 0}</span>
+            <span className="text-zinc-500">DISCARD</span>
+            <span>{decisionSummary.discardCount ?? 0}</span>
+            <span className="text-zinc-500">DENY</span>
+            <span>{decisionSummary.denyCount ?? 0}</span>
+            <span className="text-zinc-500">DROPPED</span>
+            <span>{decisionSummary.droppedCount ?? 0}</span>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-2">
+          <div className="text-zinc-500 uppercase font-bold tracking-wider mb-2">
+            Growth/Recovery Paths
+          </div>
+          {allowedPaths.length === 0 && discardedPaths.length === 0 && deniedPaths.length === 0 ? (
+            <div className="text-zinc-600 italic">// No paths recorded</div>
+          ) : (
+            <div className="space-y-2">
+              {allowedPaths.map((path, index) => (
+                <div key={`allow-${event.id}-${index}`} className="text-term-tiger break-all">
+                  + allow {path}
+                </div>
+              ))}
+              {discardedPaths.map((path, index) => (
+                <div key={`discard-${event.id}-${index}`} className="text-yellow-500 break-all">
+                  - discard {path}
+                </div>
+              ))}
+              {deniedPaths.map((path, index) => (
+                <div key={`deny-${event.id}-${index}`} className="text-red-500 break-all">
+                  ! deny {path}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+};
+
 const getVerdictColor = (verdict: string) => {
   switch (verdict) {
     case "approve":
@@ -251,4 +374,23 @@ const getVerdictColor = (verdict: string) => {
 
 function normalizeLegacyVerdict(verdict: string): string {
   return verdict === "needs_human" ? "request_changes" : verdict;
+}
+
+function isJudgeReviewEvent(
+  event: JudgementEvent,
+): event is JudgementEvent & { type: "judge.review"; payload: JudgementPayload | null } {
+  return event.type === "judge.review";
+}
+
+function isPolicyRecoveryEvent(
+  event: JudgementEvent,
+): event is JudgementEvent & {
+  type: "task.policy_recovery_decided" | "task.policy_recovery_applied" | "task.policy_recovery_denied";
+  payload: JudgementPayload | null;
+} {
+  return (
+    event.type === "task.policy_recovery_decided" ||
+    event.type === "task.policy_recovery_applied" ||
+    event.type === "task.policy_recovery_denied"
+  );
 }

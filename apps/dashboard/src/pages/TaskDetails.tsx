@@ -1,7 +1,7 @@
 import React from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { tasksApi, runsApi } from "../lib/api";
+import { plansApi, runsApi, tasksApi, type PolicyRecoveryHintApplication } from "../lib/api";
 import {
   getRunStatusColor,
   getTaskRiskColor,
@@ -9,11 +9,12 @@ import {
   formatTaskRetryStatus,
 } from "../ui/status";
 
+const REWORK_PARENT_PATTERN = /\[auto-rework\] parentTask=([0-9a-f-]{36})/i;
+
 export const TaskDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [now, setNow] = React.useState(Date.now());
-  const reworkParentPattern = /\[auto-rework\] parentTask=([0-9a-f-]{36})/i;
 
   React.useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -36,12 +37,66 @@ export const TaskDetailsPage: React.FC = () => {
     queryFn: () => tasksApi.list(),
     enabled: !!id,
   });
+  const { data: plans } = useQuery({
+    queryKey: ["plans", "task-details-growth"],
+    queryFn: () => plansApi.list(50),
+    enabled: !!id,
+  });
+
+  const growthApplications = React.useMemo<
+    Array<{
+      planId: string;
+      planCreatedAt: string;
+      application: PolicyRecoveryHintApplication;
+    }>
+  >(() => {
+    if (!task || !plans) {
+      return [];
+    }
+    const evidence: Array<{
+      planId: string;
+      planCreatedAt: string;
+      application: PolicyRecoveryHintApplication;
+    }> = [];
+    for (const plan of plans) {
+      const taskIndex = plan.taskIds.indexOf(task.id);
+      if (taskIndex < 0) {
+        continue;
+      }
+      const applications = plan.policyRecoveryHintApplications ?? [];
+      const matchedByIndex = applications.filter((application) => application.taskIndex === taskIndex);
+      if (matchedByIndex.length > 0) {
+        for (const application of matchedByIndex) {
+          evidence.push({
+            planId: plan.id,
+            planCreatedAt: plan.createdAt,
+            application,
+          });
+        }
+        continue;
+      }
+
+      const taskTitle = plan.tasks.find((candidate) => candidate.id === task.id)?.title;
+      if (!taskTitle) {
+        continue;
+      }
+      const matchedByTitle = applications.filter((application) => application.taskTitle === taskTitle);
+      for (const application of matchedByTitle) {
+        evidence.push({
+          planId: plan.id,
+          planCreatedAt: plan.createdAt,
+          application,
+        });
+      }
+    }
+    return evidence;
+  }, [plans, task]);
 
   const replacedByReworkParentIds = React.useMemo(() => {
     const parentIds = new Set<string>();
     for (const candidate of allTasks ?? []) {
       const notes = candidate.context?.notes ?? "";
-      const matched = notes.match(reworkParentPattern);
+      const matched = notes.match(REWORK_PARENT_PATTERN);
       const parentId = matched?.[1];
       if (parentId) {
         parentIds.add(parentId);
@@ -262,6 +317,51 @@ export const TaskDetailsPage: React.FC = () => {
               ))}
               {task.allowedPaths.length === 0 && (
                 <div className="text-xs text-zinc-600 italic">// No paths defined</div>
+              )}
+            </div>
+          </section>
+
+          <section className="border border-term-border p-0">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
+              <h2 className="text-sm font-bold uppercase tracking-wider">Growth: Policy_Hints</h2>
+            </div>
+            <div className="p-4 space-y-4">
+              {growthApplications.length === 0 ? (
+                <div className="text-xs text-zinc-600 italic">
+                  // No policy growth evidence for this task yet
+                </div>
+              ) : (
+                growthApplications.map((entry, entryIndex) => (
+                  <div key={`${entry.planId}-${entryIndex}`} className="border border-zinc-800 p-3">
+                    <div className="text-[11px] text-zinc-500 mb-2">
+                      PLAN {entry.planId.slice(0, 8)} @{" "}
+                      {new Date(entry.planCreatedAt).toLocaleString()}
+                    </div>
+                    <div className="space-y-1 mb-3">
+                      <div className="text-[11px] text-zinc-500 uppercase">Added Allowed Paths</div>
+                      {entry.application.addedAllowedPaths.map((path, pathIndex) => (
+                        <div
+                          key={`${entry.planId}-${entryIndex}-path-${pathIndex}`}
+                          className="text-xs text-term-tiger break-all"
+                        >
+                          + {path}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="space-y-1">
+                      <div className="text-[11px] text-zinc-500 uppercase">Hint Basis</div>
+                      {entry.application.matchedHints.map((hint, hintIndex) => (
+                        <div
+                          key={`${entry.planId}-${entryIndex}-hint-${hintIndex}`}
+                          className="text-xs text-zinc-400 wrap-break-word"
+                        >
+                          {hint.path} | reason={hint.reason} | role={hint.hintRole ?? "any"} |
+                          seen={hint.hintCount}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </section>

@@ -5,9 +5,10 @@ import { tasksApi } from "../lib/api";
 import type { TaskView } from "../lib/api";
 import { formatTaskRetryStatus, getTaskRiskColor, getTaskStatusColor } from "../ui/status";
 
+const REWORK_PARENT_PATTERN = /\[auto-rework\] parentTask=([0-9a-f-]{36})/i;
+
 export const TasksPage: React.FC = () => {
   const [now, setNow] = React.useState(Date.now());
-  const reworkParentPattern = /\[auto-rework\] parentTask=([0-9a-f-]{36})/i;
 
   React.useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -27,7 +28,7 @@ export const TasksPage: React.FC = () => {
     const parentIds = new Set<string>();
     for (const task of tasks ?? []) {
       const notes = task.context?.notes ?? "";
-      const matched = notes.match(reworkParentPattern);
+      const matched = notes.match(REWORK_PARENT_PATTERN);
       const parentId = matched?.[1];
       if (parentId) {
         parentIds.add(parentId);

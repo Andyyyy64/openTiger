@@ -52,12 +52,34 @@ export interface PlanTaskSnapshot {
   dependencies?: string[];
 }
 
+export type PolicyRecoveryHintMatchReason =
+  | "context_file_match"
+  | "signal_match_strong"
+  | "signal_match_repeated_weak";
+
+export interface PolicyRecoveryHintUsage {
+  path: string;
+  hintRole: string | null;
+  hintCount: number;
+  hintSourceText: string;
+  reason: PolicyRecoveryHintMatchReason;
+}
+
+export interface PolicyRecoveryHintApplication {
+  taskIndex: number;
+  taskTitle: string;
+  taskRole: string | null;
+  addedAllowedPaths: string[];
+  matchedHints: PolicyRecoveryHintUsage[];
+}
+
 export interface PlanSnapshot {
   id: string;
   createdAt: string;
   agentId: string | null;
   requirement: PlanRequirement;
   summary: PlanSummary;
+  policyRecoveryHintApplications?: PolicyRecoveryHintApplication[];
   taskIds: string[];
   tasks: PlanTaskSnapshot[];
 }
@@ -93,10 +115,33 @@ export interface JudgementPayload {
   worktreePath?: string;
   branchName?: string;
   baseBranch?: string;
+  // Policy recovery event fields (shared stream in /judgements)
+  attempt?: number;
+  action?: "allow" | "discard" | "allow+discard";
+  model?: string | null;
+  violatingPaths?: string[];
+  allowPaths?: string[];
+  discardPaths?: string[];
+  denyPaths?: string[];
+  droppedPaths?: string[];
+  allowedPaths?: string[];
+  discardedPaths?: string[];
+  nextAllowedPaths?: string[];
+  decisionSummary?: PolicyRecoveryDecisionSummary;
+  recoverySummary?: string | null;
+  latencyMs?: number;
+}
+
+export interface PolicyRecoveryDecisionSummary {
+  allowCount?: number;
+  discardCount?: number;
+  denyCount?: number;
+  droppedCount?: number;
 }
 
 export interface JudgementEvent {
   id: string;
+  type: string;
   createdAt: string;
   agentId: string | null;
   taskId: string;
@@ -355,12 +400,19 @@ export const plansApi = {
 
 // Judge-related
 export const judgementsApi = {
-  list: (params?: { taskId?: string; runId?: string; verdict?: string; limit?: number }) => {
+  list: (params?: {
+    taskId?: string;
+    runId?: string;
+    verdict?: string;
+    limit?: number;
+    includeRecovery?: boolean;
+  }) => {
     const query = new URLSearchParams();
     if (params?.taskId) query.set("taskId", params.taskId);
     if (params?.runId) query.set("runId", params.runId);
     if (params?.verdict) query.set("verdict", params.verdict);
     if (params?.limit) query.set("limit", String(params.limit));
+    if (params?.includeRecovery) query.set("includeRecovery", "true");
     const suffix = query.toString();
     return fetchApi<{ judgements: JudgementEvent[] }>(
       `/judgements${suffix ? `?${suffix}` : ""}`,
