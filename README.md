@@ -128,6 +128,7 @@ Execution behavior:
 
 Agent-level specifications:
 
+- `docs/agent/README.md` (role comparison)
 - `docs/agent/planner.md`
 - `docs/agent/worker.md`
 - `docs/agent/tester.md`

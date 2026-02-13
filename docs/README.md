@@ -48,3 +48,13 @@
   - requirement テンプレート例
 - `docs/idea.md`
   - 改善アイデアメモ（将来計画）
+
+## 推奨読了順（最短）
+
+1. `docs/getting-started.md`
+2. `docs/architecture.md`
+3. `docs/config.md`
+4. `docs/api-reference.md`
+5. `docs/operations.md`
+6. `docs/flow.md`
+7. `docs/agent/README.md`
