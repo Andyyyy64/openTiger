@@ -90,9 +90,9 @@ milestone-first 戦略で進める:
 openTiger 運用では、非対話で安定実行できる verification command を必ず用意する。  
 （例: headless QEMU 実行 + log marker 検証の smoke test script）
 
-## 要件更新後の確認順（運用）
+## 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、要件更新後）
 
-要件を更新した後に停滞や想定外挙動が出た場合は、次の順で確認する。
+要件を更新した後に停滞や想定外挙動が出た場合は、状態語彙 -> 遷移 -> 担当 -> 実装の順で確認する。
 
 1. `docs/state-model.md`（状態語彙）
 2. `docs/flow.md`（遷移と回復経路）

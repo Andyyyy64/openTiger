@@ -11,9 +11,9 @@
 - `docs/state-model.md`
 - `docs/operations.md`
 
-### 状態詰まり時の読み順（ポリシー違反から入る場合）
+### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、ポリシー違反から入る場合）
 
-policy violation（`needs_rework` 連鎖など）を起点に調査する場合は、次の順で辿ると切り分けしやすくなります。
+policy violation（`needs_rework` 連鎖など）を起点に調査する場合は、状態語彙 -> 遷移 -> 担当 -> 実装の順で辿ると切り分けしやすくなります。
 
 1. `docs/state-model.md`（`needs_rework` / `quota_wait` など状態語彙の確認）
 2. `docs/flow.md`（Worker 失敗処理と blocked 回復経路）

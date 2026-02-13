@@ -6,9 +6,9 @@
 - DB 管理キー: `apps/api/src/system-config.ts` (`CONFIG_FIELDS`)
 - 環境変数専用設定: 各 runtime 実装（dispatcher/worker/judge/cycle-manager/api）
 
-### 状態詰まり時の読み順（設定変更から入る場合）
+### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、設定変更から入る場合）
 
-設定変更後に停滞が発生した場合は、次の順で確認してください。
+設定変更後に停滞が発生した場合は、状態語彙 -> 遷移 -> 担当 -> 実装の順で確認してください。
 
 1. `docs/state-model.md`（状態語彙の確認）
 2. `docs/flow.md`（遷移と回復経路）

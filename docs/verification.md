@@ -12,9 +12,9 @@ openTiger は Planner と Worker の両方で検証コマンドを扱います�
 - `docs/agent/planner.md`
 - `docs/agent/worker.md`
 
-### 状態詰まり時の読み順（検証失敗から入る場合）
+### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装、検証失敗から入る場合）
 
-検証失敗を起点に調査する場合は、次の順で辿ると切り分けしやすくなります。
+検証失敗を起点に調査する場合は、状態語彙 -> 遷移 -> 担当 -> 実装の順で辿ると切り分けしやすくなります。
 
 1. `docs/state-model.md`（`needs_rework` / `quota_wait` などの状態語彙）
 2. `docs/flow.md`（Worker 失敗処理と回復遷移）
