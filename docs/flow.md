@@ -11,10 +11,10 @@
 
 確認する入力:
 
-- requirement content
-- GitHub open issues
-- GitHub open PRs
-- local task backlog (`queued/running/failed/blocked`)
+- requirement の内容
+- GitHub の open issue
+- GitHub の open PR
+- ローカル task backlog（`queued/running/failed/blocked`）
 
 判定ルール:
 
@@ -26,7 +26,7 @@
 代表的な warning の意味:
 
 - `Issue backlog detected (...)`
-  - backlog-first mode が有効
+  - backlog-first モードが有効
 - `Planner is skipped for this launch`
   - issue/pr backlog がある場合の正常挙動
 
@@ -41,7 +41,7 @@
      - static instructions（`apps/worker/instructions/*.md`）
      - runtime snapshot（`.opentiger/context/agent-profile.json`）
      - failure delta（`.opentiger/context/context-delta.json`）
-   - prompt 膨張を避けるため、context 注入は固定文字数 budget で制御
+   - prompt 膨張を避けるため、context 注入は固定文字数の budget で制御
 4. 成功時:
    - review が必要なら通常 `blocked(awaiting_judge)`
    - 直接完了なら `done`
@@ -104,8 +104,8 @@ task error 時:
 
 - run を `failed` に更新
 - task を次のように更新:
-- quota シグネチャに一致する場合は `blocked(quota_wait)`
-- それ以外は `failed`
+  - quota シグネチャに一致する場合は `blocked(quota_wait)`
+  - それ以外は `failed`
 - failure signature に応じて context delta（`.opentiger/context/context-delta.json`）を更新する場合あり
 - lease を解放
 - agent を `idle` に戻す
@@ -131,9 +131,9 @@ Queue 重複実行防止:
 - failed task の cooldown requeue（failure classification 付き。unsupported/missing verification command は block ではなく command 調整へ）
 - blocked task の reason 別 cooldown 回復
 - backlog ordering gate
-  - `local task backlog > 0`: keep executing tasks
-  - `local task backlog == 0`: run `/system/preflight` to import/sync issue backlog
-  - `issue backlog == 0`: trigger planner replan
+  - `local task backlog > 0`: task 実行を継続
+  - `local task backlog == 0`: `/system/preflight` を実行して issue backlog を import/sync
+  - `issue backlog == 0`: planner の replan を起動
 
 起動判定・replan 判定の責務分離は `docs/startup-patterns.md` を参照してください。
 
@@ -141,7 +141,7 @@ blocked 回復挙動:
 
 - `awaiting_judge`
   - 必要に応じて最新の judge 可能な成功 run を復元
-  - それ以外は timeout-requeue（PR review task は ping-pong 回避のため `awaiting_judge` 維持）
+  - それ以外は timeout-requeue（PR review task は ping-pong 回避のため `awaiting_judge` を維持）
 - `quota_wait`
   - cooldown 後に requeue
 - `needs_rework`
