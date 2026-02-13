@@ -1,4 +1,4 @@
-# はじめに（Getting Started）
+# はじめに
 
 このガイドは、openTiger を初回起動して最初の自律実行を開始するまでの最短手順です。
 
@@ -17,7 +17,7 @@
 - Docker
 - GitHub CLI (`gh`) 推奨
 
-Claude Code executor を使う場合は `claude` CLI も必要です。
+Claude Code 実行器を使う場合は `claude` CLI も必要です。
 
 ## 2. セットアップ
 
@@ -63,7 +63,7 @@ pnpm run up
 - Dashboard: `http://localhost:5190`
 - API: `http://localhost:4301`
 
-## 6. Start ページで最初の実行を開始
+## 6. Start ページで最初の実行を開始する
 
 1. requirement を入力
 2. `EXECUTE RUN` を実行
