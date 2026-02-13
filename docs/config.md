@@ -123,6 +123,26 @@ Operational detail:
 
 - full recovery/growth lifecycle is documented in `docs/policy-recovery.md`
 
+### 3.7 Prompt Context Snapshot and Delta
+
+openTiger keeps runtime prompt context in local files under `.opentiger/context/`:
+
+- `.opentiger/context/agent-profile.json`
+  - host snapshot generated from `neofetch`
+  - `uname -srmo` is used as a fallback for minimal host/kernel/arch context
+  - refreshed by TTL/fingerprint checks
+- `.opentiger/context/context-delta.json`
+  - failure signatures and promoted context keys
+  - updated on execution/verification failures for next-task hints
+
+Notes:
+
+- These JSON files are local runtime artifacts and are intentionally git-ignored.
+- Prompt context is injected in compact form with a fixed character budget:
+  - Host context: `550`
+  - Failure hints: `350`
+  - Total: `900`
+
 ## 4. `/config` API (Backed by DB)
 
 - `GET /config`
@@ -181,6 +201,10 @@ Important runtime behavior:
 
 - `GET /system/requirements`
 - `POST /system/github/repo`
+- `GET /system/host/neofetch`
+  - returns normalized host info source output for dashboard display
+- `GET /system/host/context`
+  - returns current host snapshot payload and refresh status
 
 ### 5.4 Maintenance
 

@@ -30,6 +30,11 @@ Meaning of common warnings:
 1. Task in `queued`
 2. Dispatcher acquires lease and sets task `running`
 3. Executable role (`worker/tester/docser`) executes task and verify commands
+   - before LLM execution, worker builds compact prompt context from:
+     - static instructions (`apps/worker/instructions/*.md`)
+     - runtime snapshot (`.opentiger/context/agent-profile.json`)
+     - failure delta (`.opentiger/context/context-delta.json`)
+   - context injection uses a fixed character budget to avoid prompt bloat
 4. On success:
    - usually `blocked(awaiting_judge)` if review is needed
    - `done` for direct/no-review completion
@@ -92,6 +97,7 @@ On task error:
 - task marked:
   - `blocked(quota_wait)` for quota signatures
   - `failed` otherwise
+- failure signature may update context delta (`.opentiger/context/context-delta.json`)
 - lease released
 - agent returned to `idle`
 
@@ -141,6 +147,14 @@ System process self-heal:
 Detailed policy lifecycle and growth behavior:
 
 - `docs/policy-recovery.md`
+
+## 10. Host Snapshot and Context Refresh
+
+- API host context endpoints:
+  - `GET /system/host/neofetch`
+  - `GET /system/host/context`
+- Snapshot source is `neofetch`; `uname -srmo` is used as fallback when needed.
+- Snapshot is cached in `.opentiger/context/agent-profile.json` with TTL/fingerprint refresh.
 
 ## 9. Why "Failed" and "Retry" Can Coexist
 

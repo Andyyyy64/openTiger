@@ -13,7 +13,7 @@ This folder documents openTiger behavior and operations.
 - `docs/execution-mode.md`
   - `EXECUTION_ENVIRONMENT` behavior, sandbox runtime details, and Claude auth in Docker.
 - `docs/config.md`
-  - `/system` APIs and `system_config` setting reference.
+  - `/system` APIs, `system_config` setting reference, and prompt context snapshot/delta settings.
 - `docs/nonhumanoriented.md`
   - Design principles for long-running autonomous operation.
 - `docs/idea.md`

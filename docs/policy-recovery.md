@@ -19,6 +19,7 @@ Worker verification uses a recovery-first sequence:
 2. If policy violations exist, try deterministic path recovery:
    - extract outside paths from violations
    - derive auto-allow candidates from task context and policy recovery config
+   - in `aggressive` mode, if a violating path is listed in `commandDrivenAllowedPathRules[].paths` (for example `Makefile`), treat it as an in-run auto-allow candidate
    - add command-driven paths from shared policy rules
 3. Re-run verification with adjusted `allowedPaths`.
 4. If violations remain, run optional LLM recovery (`allow` / `discard` / `deny`):
@@ -45,6 +46,21 @@ Even when LLM suggests `allow`, Worker blocks unsafe decisions:
 - path must be one of current violating paths
 - `deniedPaths` always win over `allow`
 
+### 2.3 Mode-Specific Deterministic Behavior
+
+Deterministic auto-allow differs by policy mode:
+
+- `conservative`
+  - context-file matches only
+  - no infra-file expansion
+- `balanced`
+  - context-file matches + infra-file expansion
+  - no aggressive root-level/command-driven violation auto-allow
+- `aggressive` (default)
+  - balanced behavior, plus:
+    - root-level infra path recovery
+    - command-driven rule path recovery from violating paths (e.g., `Makefile` when make-related rule is configured)
+
 ### 2.4 Generated Artifact Path Auto-Learning
 
 When policy violations remain after LLM recovery, Worker attempts a final recovery by treating likely-generated artifacts (e.g., `kernel.dump`, `*.log`, build outputs) as safe to discard:
@@ -53,7 +69,7 @@ When policy violations remain after LLM recovery, Worker attempts a final recove
 2. Discard those files and re-run verification.
 3. Persist learned paths to `.opentiger/generated-paths.auto.txt` so future runs treat them as generated from the first `verifyChanges` call.
 
-No manual edits to `generated-paths.txt` are required; learning happens at runtime. The built-in `GENERATED_PATHS` and `WORKER_EXTRA_GENERATED_PATHS` are merged with the auto-learned file.
+No manual edits to `generated-paths.txt` are required; learning happens at runtime. The built-in `GENERATED_PATHS`, `WORKER_EXTRA_GENERATED_PATHS`, and `.opentiger/generated-paths.auto.txt` are merged for each verification cycle.
 
 ### 2.5 Docser Behavior
 

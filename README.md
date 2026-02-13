@@ -31,15 +31,32 @@ openTiger continuously runs requirement-to-task generation, implementation, revi
   - lease, runtime lock, and judge idempotency
 - Planner is single-instance; execution agents can scale horizontally
 
-## How To Use
+## Install
 
-### 1. Setup
+Runtime: Node `>=20`, pnpm `9.x`, Docker.
+
+No manual `.env` setup is required for first boot.
+
+Preferred setup (one-command bootstrap):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Andyyyy64/openTiger/main/scripts/install.sh | bash
+```
+
+Alternative (pnpm, no git history):
+
+```bash
+pnpm dlx degit Andyyyy64/openTiger openTiger
+cd openTiger
+pnpm run setup
+```
+
+Alternative (git clone over SSH):
 
 ```bash
 git clone git@github.com:Andyyyy64/openTiger.git
 cd openTiger
-pnpm install
-cp .env.example .env
+pnpm run setup
 ```
 
 GitHub authentication defaults to `gh` mode.
@@ -47,24 +64,22 @@ GitHub authentication defaults to `gh` mode.
 - Recommended: install GitHub CLI
 - Optional: set `GITHUB_AUTH_MODE=token` and provide `GITHUB_TOKEN`
 
-### 2. Start
-
-Fastest path:
+## Quick Start
 
 ```bash
 pnpm run up
 ```
 
-### 3. Access
+## Access
 
 - Dashboard: `http://localhost:5190`
 - API: `http://localhost:4301`
 
-### 4. First Run Flow
+## First Run Flow
 
-1. Configure GitHub, model, and API keys in Dashboard `system_config`
-2. Choose execution environment in Dashboard `system` (`host` for native process, `sandbox` for Docker)
-3. Load `docs/requirement.md` (or your own requirement path) and start
+1. Complete `gh auth login` and `claude /login` on the host
+2. Run `pnpm run up` and open Dashboard `system`
+3. Start planner with your requirement content (default path: `docs/requirement.md`)
 4. Monitor progress in `tasks`, `runs`, and `judgements`
 
 ## Best For Teams That
