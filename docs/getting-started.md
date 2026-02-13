@@ -2,6 +2,13 @@
 
 このガイドは、openTiger を初回起動して最初の自律実行を開始するまでの最短手順です。
 
+関連:
+
+- `docs/architecture.md`
+- `docs/config.md`
+- `docs/api-reference.md`
+- `docs/operations.md`
+
 ## 1. 前提
 
 - Node.js `>=20`

@@ -2,6 +2,13 @@
 
 openTiger は、複数エージェントと状態管理テーブルを使って自律実行を継続するオーケストレーションシステムです。
 
+関連:
+
+- `docs/flow.md`
+- `docs/startup-patterns.md`
+- `docs/mode.md`
+- `docs/execution-mode.md`
+
 ## 0. ランタイム制御ループ（概要）
 
 ```mermaid

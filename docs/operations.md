@@ -2,6 +2,12 @@
 
 このドキュメントは、openTiger を継続運用するための実務向け手順をまとめています。
 
+関連:
+
+- `docs/flow.md`
+- `docs/config.md`
+- `docs/api-reference.md`
+
 ## 1. 運用で見るべき状態
 
 ### 主要 task status

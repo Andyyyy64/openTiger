@@ -3,6 +3,11 @@
 openTiger API は Hono ベースで、Dashboard からも同じエンドポイントを利用します。  
 ベース URL は通常 `http://localhost:4301` です。
 
+関連:
+
+- `docs/config.md`
+- `docs/operations.md`
+
 ## 1. 認証とレート制限
 
 ### 認証方式

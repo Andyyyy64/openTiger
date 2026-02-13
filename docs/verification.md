@@ -3,6 +3,12 @@
 openTiger は Planner と Worker の両方で検証コマンドを扱います。  
 このドキュメントは、`task.commands` の生成・実行・回復の実装仕様をまとめます。
 
+関連:
+
+- `docs/policy-recovery.md`
+- `docs/agent/planner.md`
+- `docs/agent/worker.md`
+
 ## 1. 全体像
 
 1. Planner が task を生成
