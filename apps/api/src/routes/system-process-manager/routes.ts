@@ -1,5 +1,5 @@
 import type { Hono } from "hono";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, not } from "drizzle-orm";
 import { db } from "@openTiger/db";
 import { agents, config as configTable, events, leases, runs, tasks } from "@openTiger/db/schema";
 import { ensureConfigRow } from "../../config-store";
@@ -140,6 +140,26 @@ async function detectLiveBoundAgent(processName: string): Promise<{
     agentId,
     lastHeartbeat: agent.lastHeartbeat.toISOString(),
   };
+}
+
+async function hasLiveExecutionAgents(): Promise<boolean> {
+  const livenessWindowMs =
+    Number.isFinite(AGENT_LIVENESS_WINDOW_MS) && AGENT_LIVENESS_WINDOW_MS > 0
+      ? AGENT_LIVENESS_WINDOW_MS
+      : 120000;
+  const threshold = new Date(Date.now() - livenessWindowMs);
+  const [liveAgent] = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(
+      and(
+        inArray(agents.role, ["judge", "worker", "tester", "docser"]),
+        not(eq(agents.status, "offline")),
+        gte(agents.lastHeartbeat, threshold),
+      ),
+    )
+    .limit(1);
+  return Boolean(liveAgent?.id);
 }
 
 function resolveExpectedManagedProcessNames(configRow: ConfigRow): string[] {
@@ -296,6 +316,12 @@ async function runProcessSelfHealTick(): Promise<void> {
       autoCreateIssueTasks: false,
       autoCreatePrJudgeTasks: false,
     });
+    const hasLiveAgents = await hasLiveExecutionAgents();
+    if (hasLiveAgents && !runtimeHatchArmed) {
+      await setRuntimeHatchArmed(true, {
+        source: "system.self_heal.live_execution_agent",
+      });
+    }
     const hasJudgeBacklog =
       preflight.github.openPrCount > 0 || preflight.local.pendingJudgeTaskCount > 0;
     if (hasJudgeBacklog && !runtimeHatchArmed) {
