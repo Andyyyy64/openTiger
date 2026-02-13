@@ -19,7 +19,28 @@
 - **Worker/Tester/Docser** は「実行して検証する」。
 - **Judge** は「結果を承認するか、再修正へ戻すか」を決める。
 
-## 3. 共通の状態モデル
+## 3. 実行対象の差分（Worker 系）
+
+| 観点 | Worker | Tester | Docser |
+| --- | --- | --- | --- |
+| 主変更対象 | 実装コード | テストコード | ドキュメント |
+| 検証コマンド | task/policy に従う | task/policy に従う（テスト中心） | doc-safe command 優先 |
+| LLM policy recovery | 有効化可能 | 有効化可能 | 実行しない |
+| 典型タスク | 機能追加・不具合修正 | テスト追加・不安定検証の改善 | docs 同期・不足補完 |
+
+Worker / Tester / Docser は同一 runtime を共有し、`AGENT_ROLE` で挙動を切り替えます。
+
+## 4. モデル/指示ファイルの解決順
+
+| Role | Model 設定（優先順） | Instructions 設定（優先順） |
+| --- | --- | --- |
+| worker | `WORKER_MODEL` -> `OPENCODE_MODEL` | `WORKER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/base.md` |
+| tester | `TESTER_MODEL` -> `OPENCODE_MODEL` | `TESTER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/tester.md` |
+| docser | `DOCSER_MODEL` -> `OPENCODE_MODEL` | `DOCSER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/docser.md` |
+
+`LLM_EXECUTOR=claude_code` の場合は role 別 model より `CLAUDE_CODE_MODEL` が優先されます。
+
+## 5. 共通の状態モデル
 
 task status:
 
@@ -37,7 +58,7 @@ blocked reason:
 - `needs_rework`
 - `issue_linking`
 
-## 4. 詳細仕様
+## 6. 詳細仕様
 
 - `docs/agent/planner.md`
 - `docs/agent/worker.md`
