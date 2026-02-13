@@ -112,6 +112,7 @@ Details: `docs/startup-patterns.md`, `docs/flow.md`
 Need a purpose-based index first:
 
 - `docs/README.md`
+  - includes reader lanes (first-time / operations / implementation-follow-up)
 
 Start here:
 

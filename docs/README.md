@@ -15,6 +15,45 @@
 | 起動判定の式を確認したい | `docs/startup-patterns.md` |
 | agent の役割差分を確認したい | `docs/agent/README.md` |
 
+## 0.1 読者タイプ別の推奨レーン
+
+### A. 初見ユーザー（最短で動かす）
+
+1. `docs/getting-started.md`
+2. `docs/architecture.md`
+3. `docs/operations.md`
+
+目的:
+
+- 最初の実行を通す
+- 起動後5分チェックまで完了する
+
+### B. 運用担当（安定運用と復旧）
+
+1. `docs/operations.md`
+2. `docs/config.md`
+3. `docs/state-model.md`
+4. `docs/flow.md`
+5. `docs/startup-patterns.md`
+
+目的:
+
+- 障害時の切り分けと再起動判断を短時間で行う
+- 設定変更の影響範囲を誤らない
+
+### C. 実装追従（ソース差分を追う）
+
+1. `docs/architecture.md`
+2. `docs/agent/README.md`
+3. `docs/agent/*.md`
+4. `docs/api-reference.md`
+5. `docs/config.md`
+
+目的:
+
+- コンポーネント責務と実装境界を把握する
+- API/設定変更時に関連箇所を漏れなく追う
+
 ## 1. 初見ユーザー向け（最短導線）
 
 1. `docs/getting-started.md`
