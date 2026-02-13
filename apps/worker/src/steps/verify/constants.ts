@@ -4,6 +4,7 @@ export const GENERATED_PATHS = [
   ".openTiger-opencode-*/**",
   "**/.openTiger-opencode-*",
   "**/.openTiger-opencode-*/**",
+  ".opentiger/generated-paths.auto.txt",
   "node_modules",
   "node_modules/**",
   "**/node_modules",

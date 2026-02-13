@@ -19,7 +19,11 @@ import { discardChangesForPaths } from "@openTiger/vcs";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { executeTask, verifyChanges, type ExecuteResult, type VerifyResult } from "./steps/index";
 import { buildOpenCodeEnv } from "./env";
-import { matchesPattern } from "./steps/verify/paths";
+import {
+  isLikelyGeneratedArtifactPath,
+  matchesPattern,
+  persistGeneratedPathHints,
+} from "./steps/verify/paths";
 import { shouldAllowNoChanges } from "./worker-task-helpers";
 import { finalizeTaskState } from "./worker-runner-state";
 import {
@@ -539,6 +543,51 @@ async function tryAutoAllowViolationPaths(params: {
   });
 }
 
+async function attemptGeneratedArtifactRecovery(params: {
+  repoPath: string;
+  verifyResult: VerifyResult;
+  verificationCommands: string[];
+  allowedPaths: string[];
+  policy: Policy;
+  baseBranch: string;
+  headBranch: string;
+  repoMode: "git" | "local";
+  allowNoChanges: boolean;
+}): Promise<VerifyResult | null> {
+  const violatingPaths = extractPolicyViolationPaths(params.verifyResult.policyViolations).filter((path) =>
+    isLikelyGeneratedArtifactPath(path),
+  );
+  if (violatingPaths.length === 0) {
+    return null;
+  }
+
+  const cleanupResult = await discardChangesForPaths(params.repoPath, violatingPaths);
+  if (!cleanupResult.success) {
+    console.warn(
+      `[Worker] Failed to discard generated artifact candidates: ${cleanupResult.stderr || "(no stderr)"}`,
+    );
+    return null;
+  }
+  const learnedPaths = await persistGeneratedPathHints(params.repoPath, violatingPaths);
+  if (learnedPaths.length > 0) {
+    console.log(
+      `[Worker] Learned generated artifact path hints: ${learnedPaths.join(", ")}`,
+    );
+  }
+
+  return verifyChanges({
+    repoPath: params.repoPath,
+    commands: params.verificationCommands,
+    allowedPaths: params.allowedPaths,
+    policy: params.policy,
+    baseBranch: params.baseBranch,
+    headBranch: params.headBranch,
+    allowLockfileOutsidePaths: true,
+    allowEnvExampleOutsidePaths: params.repoMode === "local",
+    allowNoChanges: params.allowNoChanges,
+  });
+}
+
 export async function runVerificationPhase(
   options: RunVerificationPhaseOptions,
 ): Promise<VerificationPhaseResult> {
@@ -742,6 +791,15 @@ export async function runVerificationPhase(
               console.log(
                 `[Worker] Discarded LLM-selected paths: ${llmRecovery.discardPaths.join(", ")}`,
               );
+              const learnedPaths = await persistGeneratedPathHints(
+                repoPath,
+                llmRecovery.discardPaths,
+              );
+              if (learnedPaths.length > 0) {
+                console.log(
+                  `[Worker] Learned generated artifact path hints: ${learnedPaths.join(", ")}`,
+                );
+              }
             }
           }
 
@@ -835,6 +893,12 @@ export async function runVerificationPhase(
             console.log(
               `[Worker] Cleaned policy-violating paths before recovery: ${violatingPaths.join(", ")}`,
             );
+            const learnedPaths = await persistGeneratedPathHints(repoPath, violatingPaths);
+            if (learnedPaths.length > 0) {
+              console.log(
+                `[Worker] Learned generated artifact path hints: ${learnedPaths.join(", ")}`,
+              );
+            }
           }
 
           const verifyAfterCleanup = await verifyChanges({
@@ -899,6 +963,23 @@ export async function runVerificationPhase(
           "[Worker] Policy recovery was denied by LLM decision; escalating to blocked for explicit follow-up.",
         );
       }
+    }
+  }
+
+  if (!verifyResult.success && verifyResult.policyViolations.length > 0) {
+    const generatedArtifactRecovery = await attemptGeneratedArtifactRecovery({
+      repoPath,
+      verifyResult,
+      verificationCommands,
+      allowedPaths: effectiveAllowedPaths,
+      policy: effectivePolicy,
+      baseBranch,
+      headBranch: branchName,
+      repoMode,
+      allowNoChanges: shouldAllowNoChanges(taskData),
+    });
+    if (generatedArtifactRecovery) {
+      verifyResult = generatedArtifactRecovery;
     }
   }
 

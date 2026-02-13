@@ -1,5 +1,5 @@
-import { access, readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { access, appendFile, mkdir, readdir, readFile } from "node:fs/promises";
+import { dirname, extname, join } from "node:path";
 import { minimatch } from "minimatch";
 import { parseCommand } from "./command-parser";
 import { GENERATED_EXTENSIONS, GENERATED_PATHS } from "./constants";
@@ -41,6 +41,28 @@ export function isGeneratedPath(path: string): boolean {
   }
   return matchesPattern(path, GENERATED_PATHS);
 }
+
+const GENERATED_HINT_EXTENSIONS = new Set([
+  ".dump",
+  ".log",
+  ".tmp",
+  ".trace",
+  ".trc",
+  ".lst",
+  ".out",
+]);
+const GENERATED_HINT_SEGMENTS = new Set([
+  "coverage",
+  "report",
+  "reports",
+  "artifact",
+  "artifacts",
+  "tmp",
+  "out",
+  "build",
+  "dist",
+]);
+const AUTO_GENERATED_PATH_HINT_FILE = ".opentiger/generated-paths.auto.txt";
 
 function parseExtraGeneratedPathsFromEnv(): string[] {
   return (process.env.WORKER_EXTRA_GENERATED_PATHS ?? "")
@@ -104,10 +126,19 @@ export async function resolveGeneratedPathPatterns(repoPath: string): Promise<st
   const textPatterns = await loadGeneratedPathsFromTextFile(
     join(repoPath, ".opentiger/generated-paths.txt"),
   );
+  const autoTextPatterns = await loadGeneratedPathsFromTextFile(
+    join(repoPath, AUTO_GENERATED_PATH_HINT_FILE),
+  );
   const jsonPatterns = await loadGeneratedPathsFromJsonFile(
     join(repoPath, ".opentiger/generated-paths.json"),
   );
-  return dedupePatterns([...GENERATED_PATHS, ...envPatterns, ...textPatterns, ...jsonPatterns]);
+  return dedupePatterns([
+    ...GENERATED_PATHS,
+    ...envPatterns,
+    ...textPatterns,
+    ...autoTextPatterns,
+    ...jsonPatterns,
+  ]);
 }
 
 export function isGeneratedPathWithPatterns(path: string, patterns: string[]): boolean {
@@ -115,6 +146,66 @@ export function isGeneratedPathWithPatterns(path: string, patterns: string[]): b
     return true;
   }
   return matchesPattern(path, patterns);
+}
+
+function isSafeGeneratedHintPath(path: string): boolean {
+  const normalized = normalizePathForMatch(path);
+  if (!normalized || normalized.startsWith("/")) {
+    return false;
+  }
+  if (normalized.includes("..")) {
+    return false;
+  }
+  if (/[*?[\]{}]/.test(normalized)) {
+    return false;
+  }
+  return true;
+}
+
+export function isLikelyGeneratedArtifactPath(path: string): boolean {
+  const normalized = normalizePathForMatch(path);
+  if (!isSafeGeneratedHintPath(normalized)) {
+    return false;
+  }
+  if (isGeneratedPath(normalized)) {
+    return true;
+  }
+  const lower = normalized.toLowerCase();
+  const extension = extname(lower);
+  if (extension && GENERATED_HINT_EXTENSIONS.has(extension)) {
+    return true;
+  }
+  return lower
+    .split("/")
+    .some((segment) => segment.length > 0 && GENERATED_HINT_SEGMENTS.has(segment));
+}
+
+export async function persistGeneratedPathHints(
+  repoPath: string,
+  rawPaths: string[],
+): Promise<string[]> {
+  const normalized = Array.from(
+    new Set(
+      rawPaths
+        .map((path) => normalizePathForMatch(path))
+        .filter((path) => isLikelyGeneratedArtifactPath(path)),
+    ),
+  );
+  if (normalized.length === 0) {
+    return [];
+  }
+
+  const hintsPath = join(repoPath, AUTO_GENERATED_PATH_HINT_FILE);
+  const existing = await loadGeneratedPathsFromTextFile(hintsPath);
+  const existingSet = new Set(existing.map((entry) => normalizePathForMatch(entry)));
+  const toAppend = normalized.filter((path) => !existingSet.has(path));
+  if (toAppend.length === 0) {
+    return [];
+  }
+
+  await mkdir(dirname(hintsPath), { recursive: true });
+  await appendFile(hintsPath, `${toAppend.join("\n")}\n`, "utf-8");
+  return toAppend;
 }
 
 export function mergeAllowedPaths(current: string[], extra: string[]): string[] {
