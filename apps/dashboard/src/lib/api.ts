@@ -208,6 +208,32 @@ export interface SystemProcess {
   lastCommand?: string;
 }
 
+export function resolveProcessNameFromAgentId(agentId: string | null | undefined): string | null {
+  if (!agentId) {
+    return null;
+  }
+  const normalized = agentId.trim();
+  if (!normalized) {
+    return null;
+  }
+  if (normalized === "judge-1") {
+    return "judge";
+  }
+  if (normalized === "planner-1") {
+    return "planner";
+  }
+  if (/^(judge|worker|tester|docser)-\d+$/.test(normalized)) {
+    return normalized;
+  }
+  if (normalized === "judge" || normalized === "planner" || normalized === "dispatcher") {
+    return normalized;
+  }
+  if (normalized === "cycle-manager") {
+    return normalized;
+  }
+  return null;
+}
+
 export interface SystemPreflightSummary {
   preflight: {
     github: {
@@ -322,6 +348,85 @@ export interface TaskRetryInfo {
 
 export type TaskView = Task & { retry?: TaskRetryInfo | null };
 
+export interface ResearchJob {
+  id: string;
+  query: string;
+  qualityProfile: string;
+  status: string;
+  latestReportId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ResearchClaim {
+  id: string;
+  jobId: string;
+  claimText: string;
+  stance: string;
+  confidence: number;
+  originRunId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ResearchEvidence {
+  id: string;
+  jobId: string;
+  claimId: string | null;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+  snippet: string | null;
+  publishedAt: string | null;
+  reliability: number;
+  stance: string;
+  originRunId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface ResearchReport {
+  id: string;
+  jobId: string;
+  summary: string;
+  findings: Record<string, unknown> | null;
+  limitations: string | null;
+  confidence: number;
+  originRunId: string | null;
+  createdAt: string;
+}
+
+export interface ResearchJobDetails {
+  job: ResearchJob;
+  claims: ResearchClaim[];
+  evidence: ResearchEvidence[];
+  reports: ResearchReport[];
+  tasks: TaskView[];
+  runs: Run[];
+}
+
+export interface CreateResearchJobInput {
+  query: string;
+  qualityProfile?: string;
+  priority?: number;
+  riskLevel?: "low" | "medium" | "high";
+  timeboxMinutes?: number;
+}
+
+export interface CreateResearchTaskInput {
+  stage?: string;
+  profile?: string;
+  title?: string;
+  goal?: string;
+  claimId?: string;
+  claimText?: string;
+  claims?: string[];
+  priority?: number;
+  riskLevel?: "low" | "medium" | "high";
+  timeboxMinutes?: number;
+}
+
 // Task-related
 export const tasksApi = {
   list: () => fetchApi<{ tasks: TaskView[] }>("/tasks").then((res) => res.tasks),
@@ -342,7 +447,10 @@ export const systemApi = {
   health: () => fetchApi<{ status: string; timestamp: string }>("/health"),
   processes: () =>
     fetchApi<{ processes: SystemProcess[] }>("/system/processes").then((res) => res.processes),
-  startProcess: (name: string, payload?: { requirementPath?: string; content?: string }) =>
+  startProcess: (
+    name: string,
+    payload?: { requirementPath?: string; content?: string; researchJobId?: string },
+  ) =>
     fetchApi<{ process: SystemProcess }>(`/system/processes/${name}/start`, {
       method: "POST",
       body: JSON.stringify(payload ?? {}),
@@ -384,7 +492,11 @@ export const systemApi = {
     const suffix = query.toString();
     return fetchApi<GitHubRepoListResponse>(`/system/github/repos${suffix ? `?${suffix}` : ""}`);
   },
-  preflight: (payload?: { content?: string; autoCreateIssueTasks?: boolean }) =>
+  preflight: (payload?: {
+    content?: string;
+    autoCreateIssueTasks?: boolean;
+    autoCreatePrJudgeTasks?: boolean;
+  }) =>
     fetchApi<SystemPreflightSummary>("/system/preflight", {
       method: "POST",
       body: JSON.stringify(payload ?? {}),
@@ -401,6 +513,20 @@ export const systemApi = {
 export const agentsApi = {
   list: () => fetchApi<{ agents: Agent[] }>("/agents").then((res) => res.agents),
   get: (id: string) => fetchApi<{ agent: Agent }>(`/agents/${id}`).then((res) => res.agent),
+  start: (id: string) => {
+    const processName = resolveProcessNameFromAgentId(id);
+    if (!processName) {
+      throw new Error(`No controllable process mapped for agent: ${id}`);
+    }
+    return systemApi.startProcess(processName);
+  },
+  stop: (id: string) => {
+    const processName = resolveProcessNameFromAgentId(id);
+    if (!processName) {
+      throw new Error(`No controllable process mapped for agent: ${id}`);
+    }
+    return systemApi.stopProcess(processName);
+  },
 };
 
 // Planner-related
@@ -437,6 +563,43 @@ export const judgementsApi = {
     const suffix = query.toString();
     return fetchApi<JudgementDiffResponse>(`/judgements/${id}/diff${suffix ? `?${suffix}` : ""}`);
   },
+};
+
+// Research-related
+export const researchApi = {
+  listJobs: (params?: { status?: string; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set("status", params.status);
+    if (params?.limit !== undefined) query.set("limit", String(params.limit));
+    const suffix = query.toString();
+    return fetchApi<{ jobs: ResearchJob[] }>(`/research/jobs${suffix ? `?${suffix}` : ""}`).then(
+      (res) => res.jobs,
+    );
+  },
+  getJob: (id: string) =>
+    fetchApi<ResearchJobDetails>(`/research/jobs/${id}`).then((res) => ({
+      ...res,
+      tasks: res.tasks as TaskView[],
+    })),
+  createJob: (payload: CreateResearchJobInput) =>
+    fetchApi<{
+      job: ResearchJob;
+      runtime: { started: string[]; skipped: string[]; errors: string[] };
+      planner: { started: string[]; skipped: string[]; errors: string[] };
+      fallbackTask?: TaskView;
+    }>("/research/jobs", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  createTask: (jobId: string, payload: CreateResearchTaskInput) =>
+    fetchApi<{ task: TaskView }>(`/research/jobs/${jobId}/tasks`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }).then((res) => res.task),
+  deleteAllJobs: () =>
+    fetchApi<{ deleted: number; jobs: number; tasks: number }>("/research/jobs", {
+      method: "DELETE",
+    }),
 };
 
 // Log-related

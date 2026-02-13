@@ -167,7 +167,17 @@ runsRoute.post("/:id/cancel", async (c) => {
 
 // 成果物作成リクエストのスキーマ
 const createArtifactSchema = z.object({
-  type: z.enum(["pr", "commit", "ci_result", "branch", "base_repo_diff"]),
+  type: z.enum([
+    "pr",
+    "commit",
+    "ci_result",
+    "branch",
+    "worktree",
+    "base_repo_diff",
+    "research_claim",
+    "research_source",
+    "research_report",
+  ]),
   ref: z.string().optional(),
   url: z.string().url().optional(),
   metadata: z.record(z.unknown()).optional(),

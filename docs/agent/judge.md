@@ -27,6 +27,7 @@ Execution mode is determined by:
 - Successful run + artifacts (`pr` / `worktree`)
 - CI / policy / LLM evaluator results
 - Task retry context / lineage
+- Successful research runs (`tasks.kind=research`) in write stage
 
 ## 4. Core Decisions
 
@@ -40,6 +41,11 @@ Legacy `needs_human` is normalized into request_changes-style recovery flow.
 - approve + merge success -> `done`
 - non-approve -> retry or move to `needs_rework`
 - merge conflict -> attempt `[AutoFix-Conflict]` task creation
+
+Research decision path:
+
+- approve -> mark research task `done`, update research job status/metadata
+- request_changes -> set `blocked(needs_rework)`, cycle manager orchestrates targeted rework
 
 ## 6. Loop Prevention and Recovery
 
@@ -56,6 +62,7 @@ Legacy `needs_human` is normalized into request_changes-style recovery flow.
 - Retry and recovery: `apps/judge/src/judge-retry.ts`, `apps/judge/src/judge-pending.ts`
 - Autofix path: `apps/judge/src/judge-autofix.ts`
 - Local operation path: `apps/judge/src/judge-local-loop.ts`, `apps/judge/src/judge-local-merge.ts`
+- Research evaluator: `apps/judge/src/judge-research.ts`
 
 ## 8. Main Configuration
 
@@ -71,3 +78,10 @@ Legacy `needs_human` is normalized into request_changes-style recovery flow.
 - `JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES`
 - `JUDGE_NON_APPROVE_CIRCUIT_BREAKER_RETRIES`
 - `JUDGE_LOCAL_BASE_REPO_RECOVERY*`
+- `JUDGE_RESEARCH_MIN_CLAIMS`
+- `JUDGE_RESEARCH_MIN_EVIDENCE_PER_CLAIM`
+- `JUDGE_RESEARCH_MIN_DISTINCT_DOMAINS_PER_CLAIM`
+- `JUDGE_RESEARCH_REQUIRE_COUNTER_EVIDENCE`
+- `JUDGE_RESEARCH_MIN_CONFIDENCE`
+- `JUDGE_RESEARCH_MIN_VERIFIABLE_RATIO`
+- `RESEARCH_REQUIRE_JUDGE`

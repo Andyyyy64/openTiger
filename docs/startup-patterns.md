@@ -86,7 +86,7 @@ The 16 combinations of `R/I/P/L` collapse into these classes in practice (same o
 Notes:
 
 - When `I=1`, planner is disabled and execution agents enabled, so Issue is effectively highest priority
-- When `L=0` and `P=1`, Judge can start without dispatcher/worker. System process self-recovery detects backlog and auto-restarts Judge when stopped
+- When `L=0` and `P=1`, Judge can start without dispatcher/worker. Auto-restart still requires runtime hatch to be armed
 - Planner can start only when `I/P/L` are all 0 and `R=1`
 
 ## Planner Startup Guard
@@ -104,10 +104,16 @@ This keeps the same priority when starting without going through Start UI.
 When `cycle-manager` is running, convergence proceeds as:
 
 1. If local task backlog exists (`L=1`), continue task execution
-2. If local task backlog is empty, call `/system/preflight` to sync/import issue/PR backlog
+2. If local task backlog is empty, call `/system/preflight` to sync/import issue backlog
 3. If issue backlog exists after sync (`I=1`), do not replan
 4. Replan gate is evaluated only when `L=0` and `I=0`
 5. Replan runs only when replan-specific guards (planner busy / recent active / pending judge / interval / no-diff) are satisfied
+
+Notes:
+
+- In Cycle Manager periodic sync, PR/Judge backlog import is disabled by default.
+- To enable PR backlog import from Cycle sync, set `CYCLE_SYNC_AUTO_CREATE_PR_JUDGE_TASKS=true`.
+- Startup `/start` preflight behavior is unchanged and can still resolve PR backlog.
 
 ## State Diagram
 

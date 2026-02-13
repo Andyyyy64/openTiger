@@ -53,6 +53,7 @@ Main targets:
 | Recovery/maintenance | `POST /system/cleanup`, `POST /logs/clear`                                                                   |
 | GitHub integration   | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github`    |
 | Requirement updates  | `GET /system/requirements`, `POST /system/requirements`                                                      |
+| TigerResearch        | `GET /research/jobs`, `GET /research/jobs/:id`, `POST /research/jobs`, `POST /research/jobs/:id/tasks`       |
 
 Note:
 
@@ -177,6 +178,21 @@ Note:
 - `GET /logs/all`
 - `POST /logs/clear`
 
+### TigerResearch
+
+- `GET /research/jobs`
+  - Query params: `status`, `limit`
+- `GET /research/jobs/:id`
+  - Returns job + claims + evidence + reports + linked tasks/runs
+- `POST /research/jobs`
+  - Creates research job
+  - Ensures runtime and planner startup
+  - On planner startup failure, fallback `plan` task is created
+- `POST /research/jobs/:id/tasks`
+  - Manual stage task injection (`plan`/`collect`/`challenge`/`write`)
+- `DELETE /research/jobs`
+  - Deletes all research jobs and linked runtime rows
+
 ### Webhook / GitHub
 
 - `POST /webhook/github`
@@ -217,6 +233,11 @@ Current implementation behavior:
 - `POST /system/processes/:name/start`
 - `POST /system/processes/:name/stop`
 - `POST /system/processes/stop-all`
+
+Planner research start payload:
+
+- `POST /system/processes/planner/start` body can include `{ "researchJobId": "<uuid>" }`
+- In this mode, planner runs `--research-job` path and skips requirement preflight gating
 
 ### Repository Operations (GitHub)
 

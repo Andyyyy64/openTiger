@@ -3,7 +3,17 @@ import { ArtifactSchema, ArtifactType, CreateArtifactInput } from "../../src/dom
 
 describe("ArtifactType", () => {
   it("accepts all valid types", () => {
-    const types = ["pr", "commit", "ci_result", "branch"];
+    const types = [
+      "pr",
+      "commit",
+      "ci_result",
+      "branch",
+      "worktree",
+      "base_repo_diff",
+      "research_claim",
+      "research_source",
+      "research_report",
+    ];
     for (const type of types) {
       expect(ArtifactType.safeParse(type).success).toBe(true);
     }

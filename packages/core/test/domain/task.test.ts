@@ -4,6 +4,7 @@ import {
   CreateTaskInput,
   UpdateTaskInput,
   RiskLevel,
+  TaskKind,
   TaskRole,
   TaskStatus,
   TaskContext,
@@ -79,6 +80,7 @@ describe("TaskSchema", () => {
       expect(result.data.priority).toBe(0);
       expect(result.data.riskLevel).toBe("low");
       expect(result.data.role).toBe("worker");
+      expect(result.data.kind).toBe("code");
       expect(result.data.status).toBe("queued");
       expect(result.data.dependencies).toEqual([]);
       expect(result.data.timeboxMinutes).toBe(60);
@@ -110,6 +112,17 @@ describe("TaskRole", () => {
   it("rejects invalid roles", () => {
     expect(TaskRole.safeParse("planner").success).toBe(false);
     expect(TaskRole.safeParse("judge").success).toBe(false);
+  });
+});
+
+describe("TaskKind", () => {
+  it("accepts valid task kinds", () => {
+    expect(TaskKind.safeParse("code").success).toBe(true);
+    expect(TaskKind.safeParse("research").success).toBe(true);
+  });
+
+  it("rejects invalid task kinds", () => {
+    expect(TaskKind.safeParse("analysis").success).toBe(false);
   });
 });
 

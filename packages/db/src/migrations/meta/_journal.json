@@ -141,6 +141,13 @@
       "when": 1770956694427,
       "tag": "0019_common_layla_miller",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1770975931366,
+      "tag": "0020_mature_magdalene",
+      "breakpoints": true
     }
   ]
 }

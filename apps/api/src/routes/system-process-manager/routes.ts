@@ -9,6 +9,7 @@ import { canControlSystem } from "../system-auth";
 import { listProcessDefinitions, resolveProcessDefinition } from "./definitions";
 import {
   buildProcessInfo,
+  detectUnmanagedServiceProcess,
   forceTerminateUnmanagedSystemProcesses,
   startManagedProcess,
   stopManagedProcess,
@@ -42,6 +43,10 @@ let runtimeHatchLoaded = false;
 let runtimeHatchLoadPromise: Promise<void> | null = null;
 
 type ConfigRow = Awaited<ReturnType<typeof ensureConfigRow>>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 async function ensureRuntimeHatchStateLoaded(): Promise<void> {
   if (runtimeHatchLoaded) {
@@ -204,18 +209,6 @@ function resolveExpectedManagedProcessNames(configRow: ConfigRow): string[] {
   return Array.from(processNames.values());
 }
 
-function resolveJudgeProcessNames(configRow: ConfigRow): string[] {
-  if (!parseBooleanSetting(configRow.judgeEnabled, true)) {
-    return [];
-  }
-  const processNames: string[] = [];
-  const judgeCount = parseCountSetting(configRow.judgeCount, 1);
-  for (let index = 1; index <= judgeCount; index += 1) {
-    processNames.push(index === 1 ? "judge" : `judge-${index}`);
-  }
-  return processNames;
-}
-
 function shouldSkipSelfHeal(runtime: ProcessRuntime | undefined): boolean {
   if (!runtime) {
     return false;
@@ -230,6 +223,107 @@ async function hasRunningRunForAgent(agentId: string): Promise<boolean> {
     .where(and(eq(runs.agentId, agentId), eq(runs.status, "running")))
     .limit(1);
   return Boolean(runningRun?.id);
+}
+
+function resolveSourceTaskIdFromTaskContext(taskContext: unknown): string | null {
+  if (!isRecord(taskContext)) {
+    return null;
+  }
+  const pr = taskContext.pr;
+  if (!isRecord(pr)) {
+    return null;
+  }
+  const raw = pr.sourceTaskId;
+  if (typeof raw !== "string") {
+    return null;
+  }
+  const normalized = raw.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+async function cancelRunningWorkForAgent(agentId: string, reason: string): Promise<void> {
+  const runningRows = await db
+    .select({
+      runId: runs.id,
+      taskId: runs.taskId,
+    })
+    .from(runs)
+    .where(and(eq(runs.agentId, agentId), eq(runs.status, "running")));
+
+  if (runningRows.length === 0) {
+    await db
+      .update(agents)
+      .set({
+        status: "offline",
+        currentTaskId: null,
+        lastHeartbeat: new Date(),
+      })
+      .where(eq(agents.id, agentId));
+    return;
+  }
+
+  const runningRunIds = runningRows.map((row) => row.runId);
+  const runningTaskIds = Array.from(new Set(runningRows.map((row) => row.taskId)));
+  const sourceTaskIds = new Set<string>();
+
+  const runningTasks = await db
+    .select({
+      id: tasks.id,
+      context: tasks.context,
+    })
+    .from(tasks)
+    .where(inArray(tasks.id, runningTaskIds));
+  for (const task of runningTasks) {
+    const sourceTaskId = resolveSourceTaskIdFromTaskContext(task.context);
+    if (sourceTaskId) {
+      sourceTaskIds.add(sourceTaskId);
+    }
+  }
+
+  await db
+    .update(runs)
+    .set({
+      status: "cancelled",
+      finishedAt: new Date(),
+      errorMessage: reason,
+    })
+    .where(inArray(runs.id, runningRunIds));
+
+  await db
+    .update(tasks)
+    .set({
+      status: "cancelled",
+      blockReason: null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(tasks.status, "running"), inArray(tasks.id, runningTaskIds)));
+
+  if (sourceTaskIds.size > 0) {
+    await db
+      .update(tasks)
+      .set({
+        status: "cancelled",
+        blockReason: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          inArray(tasks.id, Array.from(sourceTaskIds)),
+          inArray(tasks.status, ["queued", "running", "blocked", "failed"]),
+        ),
+      );
+  }
+
+  await db.delete(leases).where(inArray(leases.taskId, runningTaskIds));
+
+  await db
+    .update(agents)
+    .set({
+      status: "offline",
+      currentTaskId: null,
+      lastHeartbeat: new Date(),
+    })
+    .where(eq(agents.id, agentId));
 }
 
 async function ensureProcessHealthy(processName: string): Promise<void> {
@@ -247,6 +341,21 @@ async function ensureProcessHealthy(processName: string): Promise<void> {
   if (!boundAgentId) {
     // Processes without agent heartbeat (e.g. dispatcher/cycle-manager) are not restarted if running
     if (runtime?.status === "running") {
+      return;
+    }
+    const unmanagedService = await detectUnmanagedServiceProcess(processName);
+    if (unmanagedService) {
+      managedProcesses.set(definition.name, {
+        ...(runtime ?? { status: "running" as const }),
+        status: "running",
+        pid: unmanagedService.pid,
+        process: null,
+        stopRequested: false,
+        finishedAt: undefined,
+        exitCode: null,
+        signal: null,
+        message: `Detected existing unmanaged process (pid=${unmanagedService.pid})`,
+      });
       return;
     }
     await startManagedProcess(definition, {});
@@ -311,32 +420,13 @@ async function runProcessSelfHealTick(): Promise<void> {
   processSelfHealInFlight = true;
   try {
     const configRow = await ensureConfigRow();
-    const preflight = await buildPreflightSummary({
-      configRow,
-      autoCreateIssueTasks: false,
-      autoCreatePrJudgeTasks: false,
-    });
     const hasLiveAgents = await hasLiveExecutionAgents();
     if (hasLiveAgents && !runtimeHatchArmed) {
       await setRuntimeHatchArmed(true, {
         source: "system.self_heal.live_execution_agent",
       });
     }
-    const hasJudgeBacklog =
-      preflight.github.openPrCount > 0 || preflight.local.pendingJudgeTaskCount > 0;
-    if (hasJudgeBacklog && !runtimeHatchArmed) {
-      await setRuntimeHatchArmed(true, {
-        source: "system.self_heal.judge_backlog",
-        openPrCount: preflight.github.openPrCount,
-        pendingJudgeTaskCount: preflight.local.pendingJudgeTaskCount,
-      });
-    }
     const expectedSet = new Set(resolveExpectedManagedProcessNames(configRow));
-    if (hasJudgeBacklog) {
-      for (const processName of resolveJudgeProcessNames(configRow)) {
-        expectedSet.add(processName);
-      }
-    }
     const expectedProcesses = Array.from(expectedSet.values());
     for (const processName of expectedProcesses) {
       try {
@@ -477,10 +567,13 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
     try {
       const rawBody = await c.req.json().catch(() => ({}));
       const rawContent = typeof rawBody?.content === "string" ? rawBody.content : undefined;
+      const rawResearchJobId =
+        typeof rawBody?.researchJobId === "string" ? rawBody.researchJobId.trim() : undefined;
       if (rawContent !== undefined && rawContent.trim().length === 0) {
         return c.json({ error: "Requirement content is empty" }, 400);
       }
-      if (definition.kind === "planner") {
+      const plannerResearchMode = Boolean(rawResearchJobId);
+      if (definition.kind === "planner" && !plannerResearchMode) {
         const configRow = await ensureConfigRow();
         if (rawContent && configRow.replanRequirementPath.trim() !== CANONICAL_REQUIREMENT_PATH) {
           await db
@@ -542,6 +635,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
         requirementPath:
           typeof rawBody?.requirementPath === "string" ? rawBody.requirementPath : undefined,
         content: rawContent,
+        researchJobId: rawResearchJobId,
       };
       const processInfo = await startManagedProcess(definition, payload);
       return c.json({ process: processInfo });
@@ -555,7 +649,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
     }
   });
 
-  systemRoute.post("/processes/:name/stop", (c) => {
+  systemRoute.post("/processes/:name/stop", async (c) => {
     const auth = getAuthInfo(c);
     if (!canControlSystem(auth.method)) {
       return c.json({ error: "Admin access required" }, 403);
@@ -571,7 +665,18 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
       return c.json({ error: "Process cannot be stopped" }, 400);
     }
 
+    const runtime = managedProcesses.get(definition.name);
+    const canTerminateManagedProcess =
+      runtime?.status === "running" && Boolean(runtime.process);
     const info = stopManagedProcess(definition);
+    const boundAgentId = resolveBoundAgentId(name);
+    if (boundAgentId && canTerminateManagedProcess) {
+      try {
+        await cancelRunningWorkForAgent(boundAgentId, "Stopped via system process stop request");
+      } catch (error) {
+        console.error(`[System] Failed to cancel running work for ${boundAgentId}:`, error);
+      }
+    }
     return c.json({ process: info });
   });
 

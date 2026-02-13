@@ -23,6 +23,7 @@ all under explicit runtime state transitions.
 - Requirement -> executable task generation
 - Role-based execution (`worker` / `tester` / `docser`)
 - PR and local-worktree judgement (`judge`)
+- Query-driven TigerResearch (`planner-first` claim/evidence convergence)
 - Recovery-first operation (`quota_wait`, `awaiting_judge`, `needs_rework`)
 - Backlog-first startup (Issue/PR backlog is processed before new planning)
 - Dashboard + API for process control, logs, and system config
@@ -39,6 +40,7 @@ all under explicit runtime state transitions.
 - **PostgreSQL + Redis**: persistent state + queueing
 
 See `docs/architecture.md` for component-level details.
+See `docs/research.md` for TigerResearch design and operation.
 
 ## Prerequisites
 
@@ -101,7 +103,10 @@ pnpm run up
    - `runs`
    - `judgements`
    - `logs`
-6. If state becomes stalled:
+6. (Optional) Run TigerResearch from the `research` page:
+   - submit query -> planner decomposition -> parallel collect/challenge/write -> report
+   - details: `docs/research.md`
+7. If state becomes stalled:
    - Start with initial diagnosis in `docs/state-model.md`
    - Check detailed runbook in `docs/operations.md`
 
@@ -118,6 +123,7 @@ pnpm run up
 
 - Planner is started only when backlog gates are clear.
 - Existing local/Issue/PR backlog is always prioritized.
+- Runtime hatch disarm keeps process self-heal from auto-starting workers/judge only because backlog exists.
 - Runtime convergence order:
   - `local backlog > 0`: continue execution
   - `local backlog == 0`: sync Issue backlog via preflight
@@ -150,6 +156,7 @@ Runtime behavior reference:
 - `docs/execution-mode.md`
 - `docs/policy-recovery.md`
 - `docs/verification.md`
+- `docs/research.md`
 
 Agent specification reference:
 

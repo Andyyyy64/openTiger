@@ -26,7 +26,8 @@ export function setupWorkerShutdownHandlers(params: {
     try {
       const queueWorker = getQueueWorker();
       if (queueWorker) {
-        await queueWorker.close();
+        // STOP要求時は実行中ジョブの完了待ちをせず、即時に終了して再キューへ回す
+        await queueWorker.close(true);
       }
     } catch (error) {
       console.error(`[Shutdown] Failed to close queue worker for ${agentId}:`, error);

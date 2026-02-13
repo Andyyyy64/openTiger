@@ -16,3 +16,9 @@ export {
   type GitHubIssue,
   type IssueAnalysisResult,
 } from "./from-issue";
+
+export {
+  generateResearchPlanFromQuery,
+  type ResearchClaimCandidate,
+  type ResearchQueryPlanResult,
+} from "./from-research-query";

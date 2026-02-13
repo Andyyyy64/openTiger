@@ -47,6 +47,8 @@ Exact formulas and all combinations are in `docs/startup-patterns.md`.
 1. Task enters `queued`
 2. Dispatcher acquires lease and moves task to `running`
 3. Execution role (`worker`/`tester`/`docser`) runs task and verification commands
+   - For `tasks.kind=research`, worker runs non-git research path (`plan/collect/challenge/write`)
+   - For `tasks.kind=code`, normal git-based implementation path is used
    - Before LLM execution, worker builds compressed prompt context from:
      - Static instructions (`apps/worker/instructions/*.md`)
      - Runtime snapshot (`.opentiger/context/agent-profile.json`)
@@ -163,7 +165,8 @@ Blocked recovery behavior:
 
 System process self-recovery:
 
-- When Judge backlog is detected (`openPrCount > 0` or `pendingJudgeTaskCount > 0`), arms runtime hatch and auto-starts Judge when Judge process stops
+- Self-heal starts managed processes only while runtime hatch is armed
+- Judge backlog alone does not arm runtime hatch
 
 Policy lifecycle and self-growth details:
 
@@ -199,3 +202,21 @@ This indicates active recovery, not a halt.
 - `docs/agent/cycle-manager.md`
 
 To trace implementation, use the "Implementation reference (source of truth)" section at the end of each page to locate the corresponding `apps/*/src`.
+
+## 11. TigerResearch Lifecycle (Planner-First)
+
+1. `POST /research/jobs` creates a research job and requests planner start with `researchJobId`
+2. Planner decomposes query into claims and enqueues claim-level `collect` tasks
+3. Dispatcher runs those tasks in parallel (`tasks.kind=research`)
+4. Worker persists claims/evidence/report artifacts in research tables
+5. Cycle Manager orchestrates stage transitions:
+   - `planning` -> `collecting` -> `challenging` -> `composing` -> `judging`/`reworking`
+6. Judge (if `RESEARCH_REQUIRE_JUDGE=true`) applies research verdict:
+   - pass: task/job converge to `done`
+   - fail: task blocked as `needs_rework`
+7. Cycle Manager creates targeted rework tasks until quality gate convergence or blocked terminal condition
+
+Fallback behavior:
+
+- If planner cannot be started on job creation, API enqueues a fallback `plan` task.
+- While `plannerPendingUntil` is active, cycle manager waits before fallback plan task injection.

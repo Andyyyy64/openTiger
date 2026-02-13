@@ -21,9 +21,52 @@ export interface AvailableTask {
 
 const DEFAULT_RETRY_DELAY_MS = 5 * 60 * 1000;
 const BLOCK_ON_AWAITING_JUDGE_BACKLOG = process.env.DISPATCH_BLOCK_ON_AWAITING_JUDGE === "true";
+const JUDGE_ARTIFACT_TYPES: string[] = [
+  "pr",
+  "worktree",
+  "research_claim",
+  "research_source",
+  "research_report",
+];
 let lastObservedJudgeBacklog = -1;
 let lastObservedPendingJudgeRun = false;
 let lastObservedJudgeBacklogBlocked = false;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function resolveResearchJobIdFromContext(context: unknown): string | null {
+  if (!isRecord(context)) {
+    return null;
+  }
+  const research = context.research;
+  if (!isRecord(research)) {
+    return null;
+  }
+  const raw = research.jobId;
+  if (typeof raw !== "string") {
+    return null;
+  }
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function resolveEffectiveTargetArea(task: {
+  id: string;
+  kind?: string | null;
+  targetArea?: string | null;
+  context?: unknown;
+}): string | null {
+  if (task.targetArea && task.targetArea.trim().length > 0) {
+    return task.targetArea;
+  }
+  if (task.kind !== "research") {
+    return null;
+  }
+  const jobId = resolveResearchJobIdFromContext(task.context);
+  return jobId ? `research:${jobId}` : `research:task:${task.id}`;
+}
 
 function isQuotaFailureMessage(message: string): boolean {
   return /quota exceeded|resource has been exhausted|resource_exhausted|quota limit reached|generate_requests_per_model_per_day|generate_content_paid_tier_input_token_count|retryinfo/i.test(
@@ -60,7 +103,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
       and(
         eq(runs.status, "success"),
         isNull(runs.judgedAt),
-        inArray(artifacts.type, ["pr", "worktree"]),
+        inArray(artifacts.type, JUDGE_ARTIFACT_TYPES),
         eq(tasks.status, "blocked"),
         eq(tasks.blockReason, "awaiting_judge"),
       ),
@@ -189,11 +232,18 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
 
   // Get targetArea from running tasks
   const runningTasks = await db
-    .select({ targetArea: tasks.targetArea })
+    .select({
+      id: tasks.id,
+      kind: tasks.kind,
+      targetArea: tasks.targetArea,
+      context: tasks.context,
+    })
     .from(tasks)
     .where(eq(tasks.status, "running"));
   const activeTargetAreas = new Set(
-    runningTasks.map((t) => t.targetArea).filter((a): a is string => !!a),
+    runningTasks
+      .map((task) => resolveEffectiveTargetArea(task))
+      .filter((area): area is string => Boolean(area)),
   );
 
   const resolvedDependencyTasks = await db
@@ -217,7 +267,8 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     }
 
     // Exclude targetArea conflicts
-    if (task.targetArea && activeTargetAreas.has(task.targetArea)) {
+    const effectiveTargetArea = resolveEffectiveTargetArea(task);
+    if (effectiveTargetArea && activeTargetAreas.has(effectiveTargetArea)) {
       console.log(`[Priority] Task ${task.id} blocked by targetArea conflict`);
       return false;
     }
@@ -257,7 +308,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     allowedPaths: task.allowedPaths ?? [],
     commands: task.commands ?? [],
     context: task.context as Record<string, unknown> | null,
-    targetArea: task.targetArea,
+    targetArea: resolveEffectiveTargetArea(task),
     touches: task.touches ?? [],
   }));
 }

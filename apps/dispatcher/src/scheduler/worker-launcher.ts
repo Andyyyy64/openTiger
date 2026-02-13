@@ -292,7 +292,6 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
         "Run `claude /login` on host or set CLAUDE_AUTH_DIR / CLAUDE_CONFIG_DIR.",
     );
   }
-
   const args = [
     "run",
     "--rm",

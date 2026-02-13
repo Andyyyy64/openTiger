@@ -1,6 +1,12 @@
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { agentsApi, configApi, tasksApi } from "../lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  agentsApi,
+  configApi,
+  tasksApi,
+  systemApi,
+  resolveProcessNameFromAgentId,
+} from "../lib/api";
 import { Link } from "react-router-dom";
 
 const CLAUDE_CODE_DEFAULT_MODEL = "claude-opus-4-6";
@@ -27,6 +33,7 @@ function normalizeClaudeModel(value: string | undefined): string | undefined {
 }
 
 export const AgentsPage: React.FC = () => {
+  const queryClient = useQueryClient();
   const {
     data: agents,
     isLoading,
@@ -42,6 +49,11 @@ export const AgentsPage: React.FC = () => {
   const { data: config } = useQuery({
     queryKey: ["config"],
     queryFn: () => configApi.get(),
+  });
+  const { data: processes } = useQuery({
+    queryKey: ["system", "processes"],
+    queryFn: () => systemApi.processes(),
+    refetchInterval: 10000,
   });
 
   const llmExecutor = config?.config.LLM_EXECUTOR;
@@ -98,6 +110,46 @@ export const AgentsPage: React.FC = () => {
     }
     return titleMap;
   }, [tasks]);
+  const processStatusByName = React.useMemo(() => {
+    const statusMap = new Map<string, string>();
+    for (const process of processes ?? []) {
+      statusMap.set(process.name, process.status);
+    }
+    return statusMap;
+  }, [processes]);
+
+  const stopMutation = useMutation({
+    mutationFn: (agentId: string) => agentsApi.stop(agentId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["agents"] });
+      await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      await queryClient.invalidateQueries({ queryKey: ["runs"] });
+      await queryClient.invalidateQueries({ queryKey: ["system", "processes"] });
+    },
+  });
+  const startMutation = useMutation({
+    mutationFn: (agentId: string) => agentsApi.start(agentId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["agents"] });
+      await queryClient.invalidateQueries({ queryKey: ["system", "processes"] });
+    },
+  });
+
+  const handleStop = (agentId: string) => {
+    if (stopMutation.isPending || startMutation.isPending) {
+      return;
+    }
+    if (!window.confirm(`Stop ${agentId}? Running task will be cancelled.`)) {
+      return;
+    }
+    stopMutation.mutate(agentId);
+  };
+  const handleStart = (agentId: string) => {
+    if (startMutation.isPending || stopMutation.isPending) {
+      return;
+    }
+    startMutation.mutate(agentId);
+  };
 
   return (
     <div className="p-6 text-term-fg">
@@ -122,8 +174,9 @@ export const AgentsPage: React.FC = () => {
           <div className="col-span-3">Node ID / Type</div>
           <div className="col-span-2">Status</div>
           <div className="col-span-2">Provider</div>
-          <div className="col-span-3">Current Process</div>
-          <div className="col-span-2 text-right">Last Heartbeat</div>
+          <div className="col-span-2">Current Process</div>
+          <div className="col-span-1 text-right">Last Heartbeat</div>
+          <div className="col-span-2 text-right">Actions</div>
         </div>
 
         {isLoading ? (
@@ -141,16 +194,24 @@ export const AgentsPage: React.FC = () => {
                 ? taskTitleById.get(agent.currentTaskId)
                 : undefined;
 
+              const processName = resolveProcessNameFromAgentId(agent.id);
+              const processStatus = processName ? processStatusByName.get(processName) : undefined;
+              const canControl = Boolean(processName);
+              const canStop = canControl && processStatus === "running";
+              const canStart = canControl && processStatus !== "running";
+              const isMutating = stopMutation.isPending || startMutation.isPending;
               return (
-                <Link
+                <div
                   key={agent.id}
-                  to={`/agents/${agent.id}`}
                   className="grid grid-cols-12 gap-4 px-4 py-3 hover:bg-term-tiger/5 transition-colors group items-center"
                 >
                   <div className="col-span-3 overflow-hidden">
-                    <div className="font-bold text-term-fg group-hover:text-term-tiger truncate">
+                    <Link
+                      to={`/agents/${agent.id}`}
+                      className="font-bold text-term-fg group-hover:text-term-tiger truncate block hover:underline"
+                    >
                       {agent.id}
-                    </div>
+                    </Link>
                     <div className="text-xs text-zinc-500 uppercase flex gap-2 mt-1">
                       <span>[{agent.role}]</span>
                     </div>
@@ -185,7 +246,7 @@ export const AgentsPage: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="col-span-3 text-xs">
+                  <div className="col-span-2 text-xs">
                     {agent.status === "busy" ? (
                       <div className="w-full">
                         <div className="flex justify-between mb-1">
@@ -206,17 +267,50 @@ export const AgentsPage: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="col-span-2 text-right text-xs text-zinc-600">
+                  <div className="col-span-1 text-right text-xs text-zinc-600">
                     {agent.lastHeartbeat
                       ? new Date(agent.lastHeartbeat).toLocaleTimeString()
                       : "--:--:--"}
                   </div>
-                </Link>
+                  <div className="col-span-2 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleStart(agent.id)}
+                      disabled={!canStart || isMutating}
+                      className={`px-2 py-1 text-[10px] border font-bold ${
+                        canStart && !isMutating
+                          ? "border-term-tiger text-term-tiger hover:bg-term-tiger/10"
+                          : "border-zinc-700 text-zinc-600 cursor-not-allowed"
+                      }`}
+                    >
+                      START
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleStop(agent.id)}
+                      disabled={!canStop || isMutating}
+                      className={`px-2 py-1 text-[10px] border font-bold ${
+                        canStop && !isMutating
+                          ? "border-red-500 text-red-400 hover:bg-red-500/10"
+                          : "border-zinc-700 text-zinc-600 cursor-not-allowed"
+                      }`}
+                    >
+                      STOP
+                    </button>
+                  </div>
+                </div>
               );
             })}
           </div>
         )}
       </div>
+      {(startMutation.isError || stopMutation.isError) && (
+        <div className="mt-4 text-xs text-red-400 font-mono">
+          {startMutation.isError
+            ? `START_FAILED: ${startMutation.error instanceof Error ? startMutation.error.message : "error"}`
+            : `STOP_FAILED: ${stopMutation.error instanceof Error ? stopMutation.error.message : "error"}`}
+        </div>
+      )}
     </div>
   );
 };

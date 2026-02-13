@@ -3,6 +3,14 @@ import { artifacts, runs, tasks, events } from "@openTiger/db/schema";
 import { and, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { JUDGE_AWAITING_RETRY_COOLDOWN_MS } from "./judge-config";
 
+const JUDGE_ARTIFACT_TYPES: string[] = [
+  "pr",
+  "worktree",
+  "research_claim",
+  "research_source",
+  "research_report",
+];
+
 export async function requeueTaskAfterJudge(params: {
   taskId: string;
   runId: string;
@@ -148,7 +156,7 @@ export async function recoverAwaitingJudgeBacklog(agentId: string): Promise<numb
         and(
           eq(runs.taskId, task.id),
           eq(runs.status, "success"),
-          inArray(artifacts.type, ["pr", "worktree"]),
+          inArray(artifacts.type, JUDGE_ARTIFACT_TYPES),
         ),
       )
       .orderBy(desc(runs.startedAt))

@@ -662,6 +662,7 @@ export function generateInitializationTasks(requirement: Requirement): TaskGener
     title: "Initialize repository foundation",
     goal: "Create the minimum project foundation within allowed paths so follow-up tasks can proceed.",
     role: "worker",
+    kind: "code",
     context: {
       files: bootstrapTargets,
       specs:

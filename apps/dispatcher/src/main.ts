@@ -87,6 +87,14 @@ function logNoIdleAgent(requiredRole: string): void {
   noIdleLogState.set(requiredRole, { lastLoggedAt: now, suppressed: 0 });
 }
 
+function resolveAgentRoleForTask(taskRole: string | null | undefined): string {
+  if (taskRole === "worker" || taskRole === "tester" || taskRole === "docser") {
+    return taskRole;
+  }
+  // Semantic research roles run on standard worker pool.
+  return "worker";
+}
+
 // Default config
 const DEFAULT_CONFIG: DispatcherConfig = {
   pollIntervalMs: parseInt(process.env.POLL_INTERVAL_MS ?? "3000", 10),
@@ -348,7 +356,7 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
               pendingTargetAreas.add(task.targetArea);
             }
 
-            const requiredRole = task.role ?? "worker";
+            const requiredRole = resolveAgentRoleForTask(task.role);
             const selectedAgent =
               config.launchMode === "docker"
                 ? buildDockerAgentId(requiredRole, task.id)

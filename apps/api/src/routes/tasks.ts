@@ -5,6 +5,7 @@ import { computeQuotaBackoff } from "@openTiger/core";
 import { db } from "@openTiger/db";
 import { tasks, runs } from "@openTiger/db/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { ensureResearchRuntimeStarted } from "./research-runtime";
 
 export const tasksRoute = new Hono();
 
@@ -28,6 +29,30 @@ type RetryInfo = {
   retryLimit: number;
   failureCategory?: FailureCategory;
 };
+
+const taskContextSchema = z.object({
+  files: z.array(z.string()).optional(),
+  specs: z.string().optional(),
+  notes: z.string().optional(),
+  issue: z
+    .object({
+      number: z.number().int(),
+      url: z.string().url().optional(),
+      title: z.string().optional(),
+    })
+    .optional(),
+  research: z
+    .object({
+      jobId: z.string().uuid().optional(),
+      query: z.string().optional(),
+      stage: z.string().optional(),
+      profile: z.string().optional(),
+      claimId: z.string().uuid().optional(),
+      claimText: z.string().optional(),
+      claims: z.array(z.string()).optional(),
+    })
+    .optional(),
+});
 
 const FAILED_TASK_RETRY_COOLDOWN_MS = Number.parseInt(
   process.env.FAILED_TASK_RETRY_COOLDOWN_MS ?? "30000",
@@ -324,25 +349,13 @@ tasksRoute.get("/:id", async (c) => {
 const createTaskSchema = z.object({
   title: z.string().min(1),
   goal: z.string().min(1),
-  context: z
-    .object({
-      files: z.array(z.string()).optional(),
-      specs: z.string().optional(),
-      notes: z.string().optional(),
-      issue: z
-        .object({
-          number: z.number().int(),
-          url: z.string().url().optional(),
-          title: z.string().optional(),
-        })
-        .optional(),
-    })
-    .optional(),
+  context: taskContextSchema.optional(),
   allowedPaths: z.array(z.string()),
   commands: z.array(z.string()),
   priority: z.number().int().optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
   role: z.enum(["worker", "tester", "docser"]).optional(),
+  kind: z.enum(["code", "research"]).optional(),
   dependencies: z.array(z.string().uuid()).optional(),
   timeboxMinutes: z.number().int().positive().optional(),
 });
@@ -362,37 +375,28 @@ tasksRoute.post("/", zValidator("json", createTaskSchema), async (c) => {
       priority: body.priority ?? 0,
       riskLevel: body.riskLevel ?? "low",
       role: body.role ?? "worker",
+      kind: body.kind ?? "code",
       dependencies: body.dependencies ?? [],
       timeboxMinutes: body.timeboxMinutes ?? 60,
     })
     .returning();
 
-  return c.json({ task: result[0] }, 201);
+  const runtime = body.kind === "research" ? await ensureResearchRuntimeStarted() : undefined;
+
+  return c.json({ task: result[0], runtime }, 201);
 });
 
 // Task update request schema
 const updateTaskSchema = z.object({
   title: z.string().min(1).optional(),
   goal: z.string().min(1).optional(),
-  context: z
-    .object({
-      files: z.array(z.string()).optional(),
-      specs: z.string().optional(),
-      notes: z.string().optional(),
-      issue: z
-        .object({
-          number: z.number().int(),
-          url: z.string().url().optional(),
-          title: z.string().optional(),
-        })
-        .optional(),
-    })
-    .optional(),
+  context: taskContextSchema.optional(),
   allowedPaths: z.array(z.string()).optional(),
   commands: z.array(z.string()).optional(),
   priority: z.number().int().optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
   role: z.enum(["worker", "tester", "docser"]).optional(),
+  kind: z.enum(["code", "research"]).optional(),
   status: z.enum(["queued", "running", "done", "failed", "blocked", "cancelled"]).optional(),
   blockReason: z.string().optional(),
   dependencies: z.array(z.string().uuid()).optional(),

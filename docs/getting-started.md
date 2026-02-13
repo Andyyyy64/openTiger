@@ -9,6 +9,7 @@ Related:
 - `docs/api-reference.md`
 - `docs/operations.md`
 - `docs/agent/README.md`
+- `docs/research.md`
 
 ## 1. Prerequisites
 
@@ -130,3 +131,21 @@ First-time users can triage by:
 
 - Normal behavior with backlog priority
 - Becomes replan target when Issue/PR/local backlog is cleared
+
+## 10. First TigerResearch Run (Optional)
+
+1. Open Dashboard `research` page
+2. Submit a query via `CREATE_JOB`
+3. Confirm planner-first kickoff:
+   - `GET /research/jobs`
+   - `GET /system/processes` (planner/dispatcher/cycle-manager/worker)
+4. Open job detail and confirm:
+   - claims are created
+   - `collect` tasks are queued/running in parallel
+5. Track convergence:
+   - evidence growth, report creation, judge/rework transitions
+
+If runs keep getting `cancelled` with "Agent process restarted before task completion":
+
+- Check API dev restart behavior and `OPENTIGER_PRESERVE_MANAGED_ON_DEV_SIGTERM`
+- See `docs/research.md` and `docs/operations.md`

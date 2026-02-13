@@ -67,6 +67,7 @@ export function buildDocserTaskForGap(params: {
     title: "Documentation alignment",
     goal: "Ensure docs including docs/README.md match implementation and verification commands pass.",
     role: "docser",
+    kind: "code",
     context: {
       files: ["docs/README.md", "README.md", "docs/**"],
       notes,

@@ -21,6 +21,22 @@ function buildPlannerDefinition(index: number): ProcessDefinition {
     kind: "planner",
     supportsStop: true,
     buildStart: async (payload) => {
+      if (payload.researchJobId) {
+        return {
+          command: "pnpm",
+          args: [
+            "--filter",
+            "@openTiger/planner",
+            "run",
+            "start",
+            "--research-job",
+            payload.researchJobId,
+          ],
+          cwd: resolveRepoRoot(),
+          env: { AGENT_ID: `planner-${index}` },
+        };
+      }
+
       const configRow = await ensureConfigRow();
       const effectiveRequirementRepoRoot = await resolveRequirementRepoRoot({
         repoMode: configRow.repoMode,

@@ -23,6 +23,7 @@ Out of scope:
 - Judge feedback / failure hints
 - Repository inspection results
 - Policy recovery hints (from past events)
+- Research query/job (`--research-job <id>`)
 
 ## 3. Processing Pipeline
 
@@ -46,6 +47,14 @@ Out of scope:
 - Reflect policy recovery hints into future tasks
 - Save plan summary in `planner.plan_created` event
 
+Research mode behavior:
+
+- Run planner-first decomposition from `research_jobs.query`
+- Generate atomic claims with fallback when decomposition fails
+- Persist `research_claims`
+- Enqueue initial `collect` tasks (`tasks.kind=research`)
+- Update orchestrator metadata (`plannedAt`, `claimCount`, warnings)
+
 ## 5. Verification Command Augmentation
 
 Planner can augment verification commands at task generation time.
@@ -63,6 +72,10 @@ Planner start is blocked when the following backlogs exist:
 - PR/judge backlog
 
 This is by design for backlog-first operation.
+
+Exception:
+
+- Planner started with `researchJobId` bypasses normal requirement preflight gating.
 
 ## 7. Failure Model
 

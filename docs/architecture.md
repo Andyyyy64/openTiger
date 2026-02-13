@@ -11,6 +11,7 @@ Related:
 - `docs/agent/README.md`
 - `docs/mode.md`
 - `docs/execution-mode.md`
+- `docs/research.md`
 
 ## 0. Runtime Control Loop (Overview)
 
@@ -29,6 +30,13 @@ flowchart LR
 ```
 
 This loop prioritizes "never stopping"; on failure, recovery strategy is switched via state transition.
+
+TigerResearch is implemented as a planner-first specialization on top of the same loop:
+
+- entry via `POST /research/jobs`
+- planner decomposition via `--research-job`
+- runtime execution via `tasks.kind=research`
+- convergence via Cycle Manager + Judge
 
 ### Reading Order for Incident Investigation (Common Lookup Path)
 
@@ -93,6 +101,14 @@ After understanding the architecture, when investigating incidents, tracing in t
 - Process start/stop
 - Task/run/judgement/log display
 
+### TigerResearch Subsystem (Cross-Cutting)
+
+- Query entry and job lifecycle API (`/research/*`)
+- Planner-first claim decomposition
+- Claim-level parallel collection/challenge/write tasks
+- Research quality convergence loop
+- Full UI observability in research pages
+
 ## 2. Data Stores
 
 ### Persistent Store (PostgreSQL)
@@ -107,6 +123,10 @@ Main tables:
 - `agents`
 - `cycles`
 - `config`
+- `research_jobs`
+- `research_claims`
+- `research_evidence`
+- `research_reports`
 
 ### Message Queue (Redis / BullMQ)
 
@@ -122,6 +142,14 @@ Main tables:
 4. On success: `blocked(awaiting_judge)` or `done`
 5. Judge evaluates and moves to `done` / retry / rework
 6. Cycle Manager continues recovery and replanning
+
+TigerResearch path:
+
+1. API creates `research_jobs`
+2. Planner decomposes query to claims
+3. Dispatcher/Worker execute research tasks in parallel
+4. Cycle Manager drives collect/challenge/write/rework
+5. Judge applies research quality decision (when enabled)
 
 Details in `docs/flow.md`.
 

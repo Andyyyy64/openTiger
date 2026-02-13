@@ -240,6 +240,7 @@ export async function requeueBlockedTasksWithCooldown(
   const blockedTasks = await db
     .select({
       id: tasks.id,
+      kind: tasks.kind,
       title: tasks.title,
       goal: tasks.goal,
       context: tasks.context,
@@ -633,6 +634,7 @@ export async function requeueBlockedTasksWithCooldown(
       const [reworkTask] = await db
         .insert(tasks)
         .values({
+          kind: task.kind ?? "code",
           title: reworkTitle,
           goal: task.goal,
           context: {

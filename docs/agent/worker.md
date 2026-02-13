@@ -36,6 +36,16 @@ Out of scope:
 7. Update run/task/artifact
 8. Release lease and return agent to idle
 
+Research flow (`task.kind=research`):
+
+1. Acquire runtime lock
+2. Build research input from `task.context.research`
+3. Load claim/evidence snapshot
+4. Run research prompt execution (non-git path)
+5. Persist claims/evidence/report artifacts
+6. Update run/task state (`done` or `blocked(awaiting_judge)` for write stage when judge required)
+7. Release lease/runtime lock
+
 ## 3. Verification Phase
 
 The verification phase includes multiple recovery steps, not just simple command execution.
@@ -65,6 +75,11 @@ Failure:
 - Verification/policy -> `blocked(needs_rework)`
 - Other -> `failed`
 
+Research-specific notes:
+
+- `plan/collect/challenge/write` stages run without checkout/branch/commit/pr
+- Search is model-tool-driven; no dedicated external search provider integration is required
+
 ## 5. Safety and Guardrails
 
 - Pre-check for denied commands
@@ -87,6 +102,8 @@ Commands are executed via spawn, not shell. The following are not supported:
 - Role-specific helper behavior: `apps/worker/src/worker-task-helpers.ts`
 - Runtime lock: `apps/worker/src/worker-runtime-lock.ts`
 - Verification command handling: `apps/worker/src/steps/verify/`
+- Research runner: `apps/worker/src/research/runner.ts`
+- Research prompt/persistence: `apps/worker/src/research/prompt.ts`, `apps/worker/src/research/persist.ts`
 
 ## 8. Main Configuration
 

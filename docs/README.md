@@ -17,6 +17,7 @@ With source code as the source of truth, information necessary for operations is
 | Trace by state vocabulary -> transition -> owner -> implementation | `docs/state-model.md` -> `docs/flow.md` -> `docs/agent/README.md` |
 | Confirm startup condition formulas                                 | `docs/startup-patterns.md`                                        |
 | Compare agent role differences                                     | `docs/agent/README.md`                                            |
+| Build/run TigerResearch (query -> evidence-backed report)          | `docs/research.md`                                                |
 
 ## 0.1 Recommended Lanes by Reader Type
 
@@ -62,6 +63,20 @@ Goals:
 - Trace related areas without omission when changing API/config
 - Reach code quickly via "Implementation reference (source of truth)" in `docs/agent/*.md`
 
+### Lane D: TigerResearch Design/Operation
+
+1. `docs/research.md`
+2. `docs/architecture.md`
+3. `docs/flow.md`
+4. `docs/api-reference.md`
+5. `docs/operations.md`
+
+Goals:
+
+- Understand planner-first research orchestration
+- Tune quality thresholds and runtime behavior
+- Troubleshoot research stalls/cancellations quickly
+
 ## 1. First-Time User Path (Shortest)
 
 1. `docs/getting-started.md`
@@ -91,6 +106,8 @@ Goals:
   - Policy violation recovery, allowedPaths self-growth
 - `docs/verification.md`
   - Planner/Worker verification command resolution strategy
+- `docs/research.md`
+  - TigerResearch planner-first lifecycle and quality gates
 
 ## 3. Agent Specifications
 
@@ -111,6 +128,8 @@ Goals:
   - Requirement template example
 - `docs/idea.md`
   - Improvement idea notes (future plans)
+- `docs/research.md`
+  - Query-driven research subsystem specification
 
 ## Recommended Reading Order (Shortest)
 

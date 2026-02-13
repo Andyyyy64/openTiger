@@ -29,6 +29,7 @@ import {
   triggerReplan,
 } from "./replan";
 import { syncIssueBacklogViaPreflight } from "./backlog-preflight";
+import { runResearchOrchestrationTick } from "./research-orchestrator";
 
 const CYCLE_ENDING_CRITICAL_ANOMALIES = new Set(["stuck_task"]);
 const CRITICAL_ANOMALY_RESTART_COOLDOWN_MS = (() => {
@@ -164,6 +165,8 @@ export async function runMonitorLoop(config: CycleManagerConfig): Promise<void> 
         payload: costStatus,
       });
     }
+
+    await runResearchOrchestrationTick();
 
     // When task backlog depleted:
     // 1) Continue while local tasks remain
