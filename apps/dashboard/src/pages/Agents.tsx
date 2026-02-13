@@ -66,6 +66,7 @@ export const AgentsPage: React.FC = () => {
     queuedBlockedByDeps.length === queuedTasks.length &&
     idleWorkers.length > 0;
 
+  // Sort by "last busy" time: PROCESSING first, then by lastHeartbeat descending (most recently active at top)
   const sortedAgents = React.useMemo(() => {
     if (!agents) return [];
     return [...agents].sort((a, b) => {
@@ -80,10 +81,12 @@ export const AgentsPage: React.FC = () => {
         return rankA - rankB;
       }
 
-      // 2. Sort by role
-      if (a.role !== b.role) return a.role.localeCompare(b.role);
+      // Same status: sort by lastHeartbeat descending (most recently active first)
+      const tsA = a.lastHeartbeat ? new Date(a.lastHeartbeat).getTime() : 0;
+      const tsB = b.lastHeartbeat ? new Date(b.lastHeartbeat).getTime() : 0;
+      if (tsA !== tsB) return tsB - tsA;
 
-      // 3. Sort by ID
+      if (a.role !== b.role) return a.role.localeCompare(b.role);
       return a.id.localeCompare(b.id);
     });
   }, [agents]);

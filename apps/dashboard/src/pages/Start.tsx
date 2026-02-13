@@ -84,6 +84,7 @@ export const StartPage: React.FC = () => {
   const [selectedRepoFullName, setSelectedRepoFullName] = useState("");
   const [repoMessage, setRepoMessage] = useState("");
   const [isRepoManagerOpen, setIsRepoManagerOpen] = useState(false);
+  const [ghDefaultsApplied, setGhDefaultsApplied] = useState(false);
 
   const { data: config } = useQuery({
     queryKey: ["config"],
@@ -95,6 +96,8 @@ export const StartPage: React.FC = () => {
   const githubAuthMode = (configValues.GITHUB_AUTH_MODE ?? "gh").trim().toLowerCase();
   const requiresGithubToken = githubAuthMode === "token";
   const hasGithubAuth = requiresGithubToken ? Boolean(configValues.GITHUB_TOKEN?.trim()) : true;
+  const repoListOwnerFilter =
+    githubAuthMode === "gh" ? undefined : configValues.GITHUB_OWNER?.trim() || undefined;
   const repoUrl = configValues.REPO_URL?.trim();
   const isRepoMissing =
     isGitMode && !repoUrl && (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO);
@@ -103,16 +106,23 @@ export const StartPage: React.FC = () => {
       ? `${configValues.GITHUB_OWNER}/${configValues.GITHUB_REPO}`
       : "--";
   const githubReposQuery = useQuery({
-    queryKey: ["system", "github-repos", configValues.GITHUB_OWNER?.trim() ?? ""],
-    queryFn: () =>
-      systemApi.listGithubRepos({ owner: configValues.GITHUB_OWNER?.trim() || undefined }),
+    queryKey: ["system", "github-repos", repoListOwnerFilter ?? ""],
+    queryFn: () => systemApi.listGithubRepos({ owner: repoListOwnerFilter }),
     enabled: hasGithubAuth,
   });
-  const githubRepos = useMemo(() => githubReposQuery.data ?? [], [githubReposQuery.data]);
+  const githubRepos = useMemo(() => githubReposQuery.data?.repos ?? [], [githubReposQuery.data]);
+  const viewerLogin = githubReposQuery.data?.viewerLogin?.trim() ?? "";
   const selectedRepo = useMemo(
     () => githubRepos.find((repo) => repo.fullName === selectedRepoFullName) ?? null,
     [githubRepos, selectedRepoFullName],
   );
+  const syncGhDefaultsMutation = useMutation({
+    mutationFn: (updates: Record<string, string>) => configApi.update(updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config"] });
+      queryClient.invalidateQueries({ queryKey: ["system", "github-repos"] });
+    },
+  });
 
   const { data: health, isError: isHealthError } = useQuery({
     queryKey: ["system", "health"],
@@ -146,6 +156,14 @@ export const StartPage: React.FC = () => {
     retry: 0,
     refetchInterval: 120000,
   });
+  const shouldCheckGithubAuth = githubAuthMode === "gh";
+  const githubAuthQuery = useQuery({
+    queryKey: ["system", "github-auth", githubAuthMode],
+    queryFn: () => systemApi.githubAuthStatus(),
+    enabled: shouldCheckGithubAuth,
+    retry: 0,
+    refetchInterval: 120000,
+  });
 
   const planner = useMemo(
     () => processes?.find((process) => process.name === "planner"),
@@ -167,8 +185,79 @@ export const StartPage: React.FC = () => {
     const fullName = `${configValues.GITHUB_OWNER}/${configValues.GITHUB_REPO}`;
     if (githubRepos.some((repo) => repo.fullName === fullName)) {
       setSelectedRepoFullName(fullName);
+      return;
     }
-  }, [configValues.GITHUB_OWNER, configValues.GITHUB_REPO, githubRepos, selectedRepoFullName]);
+    if (githubAuthMode === "gh" && githubRepos.length > 0) {
+      const preferredRepo =
+        githubRepos.find((repo) => repo.owner.toLowerCase() === viewerLogin.toLowerCase()) ??
+        githubRepos[0];
+      if (preferredRepo) {
+        setSelectedRepoFullName(preferredRepo.fullName);
+      }
+    }
+  }, [
+    configValues.GITHUB_OWNER,
+    configValues.GITHUB_REPO,
+    githubAuthMode,
+    githubRepos,
+    selectedRepoFullName,
+    viewerLogin,
+  ]);
+  useEffect(() => {
+    if (githubAuthMode !== "gh") {
+      return;
+    }
+    if (!hasGithubAuth || ghDefaultsApplied || syncGhDefaultsMutation.isPending) {
+      return;
+    }
+    if (!viewerLogin || githubRepos.length === 0) {
+      return;
+    }
+    const latestRepo = githubRepos[0];
+    if (!latestRepo) {
+      return;
+    }
+    const nextOwner = latestRepo.owner;
+    const nextRepo = latestRepo.name;
+    const nextUrl = latestRepo.url;
+    const nextBranch = latestRepo.defaultBranch || "main";
+    const sameOwner = (configValues.GITHUB_OWNER?.trim() ?? "") === nextOwner;
+    const sameRepo = (configValues.GITHUB_REPO?.trim() ?? "") === nextRepo;
+    const sameUrl = (configValues.REPO_URL?.trim() ?? "") === nextUrl;
+    const sameBranch = (configValues.BASE_BRANCH?.trim() ?? "") === nextBranch;
+    if (sameOwner && sameRepo && sameUrl && sameBranch) {
+      setGhDefaultsApplied(true);
+      return;
+    }
+    syncGhDefaultsMutation.mutate(
+      {
+        GITHUB_OWNER: nextOwner,
+        GITHUB_REPO: nextRepo,
+        REPO_URL: nextUrl,
+        BASE_BRANCH: nextBranch,
+      },
+      {
+        onSuccess: () => {
+          setSelectedRepoFullName(latestRepo.fullName);
+          setRepoOwner(nextOwner);
+          setRepoName(nextRepo);
+          setRepoMessage(`> REPO_AUTO_SELECTED: ${latestRepo.fullName}`);
+          setGhDefaultsApplied(true);
+        },
+      },
+    );
+  }, [
+    configValues.BASE_BRANCH,
+    configValues.GITHUB_OWNER,
+    configValues.GITHUB_REPO,
+    configValues.REPO_URL,
+    ghDefaultsApplied,
+    githubAuthMode,
+    githubRepos,
+    hasGithubAuth,
+    syncGhDefaultsMutation,
+    viewerLogin,
+  ]);
   useEffect(() => {
     if (isRepoMissing) {
       setIsRepoManagerOpen(true);
@@ -206,10 +295,10 @@ export const StartPage: React.FC = () => {
         throw new Error("GitHub repo is not configured");
       }
 
-      const workerCount = parseCount(settings.WORKER_COUNT, 1, "Worker");
-      const testerCount = parseCount(settings.TESTER_COUNT, 1, "Tester");
-      const docserCount = parseCount(settings.DOCSER_COUNT, 1, "Docser");
-      const judgeCount = parseCount(settings.JUDGE_COUNT, 1, "Judge");
+      const workerCount = parseCount(settings.WORKER_COUNT, 4, "Worker");
+      const testerCount = parseCount(settings.TESTER_COUNT, 4, "Tester");
+      const docserCount = parseCount(settings.DOCSER_COUNT, 4, "Docser");
+      const judgeCount = parseCount(settings.JUDGE_COUNT, 4, "Judge");
       const plannerCount = parseCount(settings.PLANNER_COUNT, 1, "Planner", MAX_PLANNERS);
 
       const warnings = [
@@ -406,20 +495,10 @@ export const StartPage: React.FC = () => {
     },
   });
 
-  const executionEnvironmentMutation = useMutation({
-    mutationFn: (executionEnvironment: ExecutionEnvironment) =>
-      configApi.update({ EXECUTION_ENVIRONMENT: executionEnvironment }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["config"] });
-    },
-  });
-
-  const executionEnvironment = normalizeExecutionEnvironment(configValues.EXECUTION_ENVIRONMENT);
-  const launchModeLabel = executionEnvironment === "sandbox" ? "docker" : "process";
-  const workerCount = parseCount(configValues.WORKER_COUNT, 1, "Worker").count;
-  const testerCount = parseCount(configValues.TESTER_COUNT, 1, "Tester").count;
-  const docserCount = parseCount(configValues.DOCSER_COUNT, 1, "Docser").count;
-  const judgeCount = parseCount(configValues.JUDGE_COUNT, 1, "Judge").count;
+  const workerCount = parseCount(configValues.WORKER_COUNT, 4, "Worker").count;
+  const testerCount = parseCount(configValues.TESTER_COUNT, 4, "Tester").count;
+  const docserCount = parseCount(configValues.DOCSER_COUNT, 4, "Docser").count;
+  const judgeCount = parseCount(configValues.JUDGE_COUNT, 4, "Judge").count;
   const plannerCount = parseCount(configValues.PLANNER_COUNT, 1, "Planner", MAX_PLANNERS).count;
 
   const runningWorkers =
@@ -480,49 +559,17 @@ export const StartPage: React.FC = () => {
           &gt; WARN: Failed to check Claude Code authentication status.
         </div>
       )}
-      <section className="border border-term-border p-0">
-        <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
-          <h2 className="text-sm font-bold uppercase tracking-wider">Execution_Environment</h2>
+      {shouldCheckGithubAuth && githubAuthQuery.data && !githubAuthQuery.data.authenticated && (
+        <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
+          &gt; WARN: GitHub CLI (gh) is not ready.{" "}
+          {githubAuthQuery.data.message ?? "Install `gh` and complete `gh auth login` first."}
         </div>
-        <div className="p-4 space-y-3 font-mono text-sm">
-          <div className="grid grid-cols-1 md:grid-cols-[220px_auto] gap-3 items-center">
-            <select
-              value={executionEnvironment}
-              onChange={(event) =>
-                executionEnvironmentMutation.mutate(
-                  normalizeExecutionEnvironment(event.target.value),
-                )
-              }
-              disabled={executionEnvironmentMutation.isPending}
-              className="w-full bg-black border border-term-border text-sm text-term-fg px-2 py-1 font-mono focus:border-term-tiger focus:outline-none disabled:opacity-50"
-            >
-              <option value="host">host</option>
-              <option value="sandbox">sandbox</option>
-            </select>
-            <div className="text-xs text-zinc-500">
-              {`// launch mode: ${launchModeLabel} (${executionEnvironment === "sandbox" ? "docker container" : "host process"})`}
-            </div>
-          </div>
-          <div className="text-[10px] text-zinc-500">
-            {"// Applies when processes are (re)started from this page."}
-          </div>
-          {executionEnvironmentMutation.isPending && (
-            <div className="text-[10px] text-zinc-500">&gt; ENV_UPDATING...</div>
-          )}
-          {executionEnvironmentMutation.isSuccess && !executionEnvironmentMutation.isPending && (
-            <div className="text-[10px] text-green-400">&gt; ENV_UPDATED</div>
-          )}
-          {executionEnvironmentMutation.isError && (
-            <div className="text-[10px] text-red-500">
-              &gt; ENV_UPDATE_ERR:{" "}
-              {executionEnvironmentMutation.error instanceof Error
-                ? executionEnvironmentMutation.error.message
-                : "Failed to update execution environment"}
-            </div>
-          )}
+      )}
+      {shouldCheckGithubAuth && githubAuthQuery.isError && (
+        <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
+          &gt; WARN: Failed to check GitHub CLI authentication status.
         </div>
-      </section>
-
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* System Status Panel */}
         <section className="border border-term-border p-0 h-full">

@@ -41,6 +41,9 @@ export const SettingsPage: React.FC = () => {
   const [repoMessage, setRepoMessage] = useState("");
   const [saveMessage, setSaveMessage] = useState("");
   const [saveWarnings, setSaveWarnings] = useState<string[]>([]);
+  const [viewerOwnerApplied, setViewerOwnerApplied] = useState(false);
+  const [latestRepoAutofilled, setLatestRepoAutofilled] = useState(false);
+  const [ghDefaultsSaved, setGhDefaultsSaved] = useState(false);
 
   useEffect(() => {
     if (data?.config) {
@@ -53,12 +56,14 @@ export const SettingsPage: React.FC = () => {
   const requiresGithubToken = githubAuthMode === "token";
   const hasGithubAuth = requiresGithubToken ? Boolean(values.GITHUB_TOKEN?.trim()) : true;
   const githubOwner = values.GITHUB_OWNER?.trim();
+  const repoListOwnerFilter = githubAuthMode === "gh" ? undefined : githubOwner || undefined;
   const githubReposQuery = useQuery({
-    queryKey: ["system", "github-repos", githubOwner ?? ""],
-    queryFn: () => systemApi.listGithubRepos({ owner: githubOwner || undefined }),
+    queryKey: ["system", "github-repos", repoListOwnerFilter ?? ""],
+    queryFn: () => systemApi.listGithubRepos({ owner: repoListOwnerFilter }),
     enabled: hasGithubAuth,
   });
-  const githubRepos = useMemo(() => githubReposQuery.data ?? [], [githubReposQuery.data]);
+  const githubRepos = useMemo(() => githubReposQuery.data?.repos ?? [], [githubReposQuery.data]);
+  const viewerLogin = githubReposQuery.data?.viewerLogin?.trim() ?? "";
 
   const mutation = useMutation({
     mutationFn: (updates: Record<string, string>) => configApi.update(updates),
@@ -147,6 +152,14 @@ export const SettingsPage: React.FC = () => {
       return [group, filteredFields] as [string, SettingField[]];
     }).filter(([, fields]) => fields.length > 0);
   }, [githubAuthMode, selectedExecutor]);
+
+  const syncGhDefaultsMutation = useMutation({
+    mutationFn: (updates: Record<string, string>) => configApi.update(updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config"] });
+      queryClient.invalidateQueries({ queryKey: ["system", "github-repos"] });
+    },
+  });
 
   const handleSave = () => {
     setSaveMessage("");
@@ -243,6 +256,116 @@ export const SettingsPage: React.FC = () => {
       setRepoNameInput(values.GITHUB_REPO);
     }
   }, [repoNameInput, repoOwnerInput, values.GITHUB_OWNER, values.GITHUB_REPO]);
+
+  useEffect(() => {
+    if (githubAuthMode !== "gh") {
+      return;
+    }
+    if (!viewerLogin || viewerOwnerApplied) {
+      return;
+    }
+    setValues((prev) => ({ ...prev, GITHUB_OWNER: viewerLogin }));
+    setRepoOwnerInput((prev) => (prev.trim().length > 0 ? prev : viewerLogin));
+    setViewerOwnerApplied(true);
+  }, [githubAuthMode, viewerLogin, viewerOwnerApplied]);
+
+  useEffect(() => {
+    if (githubAuthMode !== "gh") {
+      return;
+    }
+    if (latestRepoAutofilled || githubRepos.length === 0) {
+      return;
+    }
+    const latestRepo = githubRepos[0];
+    if (!latestRepo) {
+      return;
+    }
+    const currentOwner = values.GITHUB_OWNER?.trim() ?? "";
+    const currentRepo = values.GITHUB_REPO?.trim() ?? "";
+    const currentRepoUrl = values.REPO_URL?.trim() ?? "";
+    const ownerMismatch =
+      viewerLogin.length > 0 && currentOwner.toLowerCase() !== viewerLogin.toLowerCase();
+    const shouldAutofill = ownerMismatch || currentRepo.length === 0 || currentRepoUrl.length === 0;
+    if (!shouldAutofill) {
+      setLatestRepoAutofilled(true);
+      return;
+    }
+    setValues((prev) => ({
+      ...prev,
+      GITHUB_OWNER: latestRepo.owner,
+      GITHUB_REPO: latestRepo.name,
+      REPO_URL: latestRepo.url,
+      BASE_BRANCH: latestRepo.defaultBranch || prev.BASE_BRANCH,
+    }));
+    setSelectedRepoFullName(latestRepo.fullName);
+    setRepoOwnerInput(latestRepo.owner);
+    setRepoNameInput(latestRepo.name);
+    setRepoMessage(`> REPO_AUTO_SELECTED: ${latestRepo.fullName}`);
+    setLatestRepoAutofilled(true);
+  }, [githubAuthMode, githubRepos, latestRepoAutofilled, values, viewerLogin]);
+
+  useEffect(() => {
+    if (githubAuthMode !== "gh") {
+      return;
+    }
+    if (!hasGithubAuth || ghDefaultsSaved || syncGhDefaultsMutation.isPending) {
+      return;
+    }
+    if (!viewerLogin || githubRepos.length === 0) {
+      return;
+    }
+    const latestRepo = githubRepos[0];
+    if (!latestRepo) {
+      return;
+    }
+    const nextOwner = latestRepo.owner;
+    const nextRepo = latestRepo.name;
+    const nextUrl = latestRepo.url;
+    const nextBranch = latestRepo.defaultBranch || "main";
+    const sameOwner = (values.GITHUB_OWNER?.trim() ?? "") === nextOwner;
+    const sameRepo = (values.GITHUB_REPO?.trim() ?? "") === nextRepo;
+    const sameUrl = (values.REPO_URL?.trim() ?? "") === nextUrl;
+    const sameBranch = (values.BASE_BRANCH?.trim() ?? "") === nextBranch;
+    if (sameOwner && sameRepo && sameUrl && sameBranch) {
+      setGhDefaultsSaved(true);
+      return;
+    }
+    syncGhDefaultsMutation.mutate(
+      {
+        GITHUB_OWNER: nextOwner,
+        GITHUB_REPO: nextRepo,
+        REPO_URL: nextUrl,
+        BASE_BRANCH: nextBranch,
+      },
+      {
+        onSuccess: () => {
+          setValues((prev) => ({
+            ...prev,
+            GITHUB_OWNER: nextOwner,
+            GITHUB_REPO: nextRepo,
+            REPO_URL: nextUrl,
+            BASE_BRANCH: nextBranch,
+          }));
+          setSelectedRepoFullName(latestRepo.fullName);
+          setRepoOwnerInput(nextOwner);
+          setRepoNameInput(nextRepo);
+          setRepoMessage(`> REPO_AUTO_SELECTED: ${latestRepo.fullName}`);
+          setGhDefaultsSaved(true);
+        },
+      },
+    );
+  }, [
+    ghDefaultsSaved,
+    githubAuthMode,
+    githubRepos,
+    hasGithubAuth,
+    syncGhDefaultsMutation,
+    values.BASE_BRANCH,
+    values.GITHUB_OWNER,
+    values.GITHUB_REPO,
+    values.REPO_URL,
+    viewerLogin,
+  ]);
 
   useEffect(() => {
     if (selectedRepoFullName) return;

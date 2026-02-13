@@ -270,12 +270,26 @@ export interface GitHubRepoListItem {
   defaultBranch: string;
   private: boolean;
   archived: boolean;
+  updatedAt: string;
+}
+
+export interface GitHubRepoListResponse {
+  repos: GitHubRepoListItem[];
+  viewerLogin?: string;
 }
 
 export interface ClaudeAuthStatus {
   available: boolean;
   authenticated: boolean;
   executionEnvironment?: "host" | "sandbox";
+  checkedAt: string;
+  message?: string;
+}
+
+export interface GitHubAuthStatus {
+  available: boolean;
+  authenticated: boolean;
+  mode: "gh" | "token";
   checkedAt: string;
   message?: string;
 }
@@ -368,9 +382,7 @@ export const systemApi = {
       query.set("owner", params.owner);
     }
     const suffix = query.toString();
-    return fetchApi<{ repos: GitHubRepoListItem[] }>(
-      `/system/github/repos${suffix ? `?${suffix}` : ""}`,
-    ).then((res) => res.repos);
+    return fetchApi<GitHubRepoListResponse>(`/system/github/repos${suffix ? `?${suffix}` : ""}`);
   },
   preflight: (payload?: { content?: string; autoCreateIssueTasks?: boolean }) =>
     fetchApi<SystemPreflightSummary>("/system/preflight", {
@@ -381,6 +393,7 @@ export const systemApi = {
     fetchApi<ClaudeAuthStatus>(
       `/system/claude/auth${environment ? `?environment=${encodeURIComponent(environment)}` : ""}`,
     ),
+  githubAuthStatus: () => fetchApi<GitHubAuthStatus>("/system/github/auth"),
   neofetch: () => fetchApi<HostNeofetchInfo>("/system/host/neofetch"),
 };
 
