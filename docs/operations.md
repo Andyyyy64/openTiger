@@ -37,6 +37,16 @@ run は失敗結果、task は次回リトライ待機を示します。
 - `POST /system/processes/:name/stop`
 - `POST /system/processes/stop-all`
 
+`stop-all` の実装挙動:
+
+- managed process 停止
+- orphan system process の強制終了試行
+- `runs.status=running` を `cancelled` に更新
+- 対応する `tasks.status=running` を `queued` へ戻す
+- 対応 lease を解放
+- 実行系 agent を `offline` 更新
+- runtime hatch を disarm
+
 ### process 名
 
 固定:
@@ -114,6 +124,11 @@ pnpm runtime:hatch:disarm
 - agent 状態を `idle` へ更新
 
 破壊的操作なので、通常運用時は限定的に使用してください。
+
+使い分け:
+
+- `stop-all`: 実行中プロセス停止 + running タスクの安全側巻き戻し
+- `cleanup`: データ/キューの初期化（履歴を消す）
 
 ## 6. ログ運用
 

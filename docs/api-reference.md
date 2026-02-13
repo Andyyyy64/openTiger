@@ -100,6 +100,13 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `POST /webhook/github`
   - `GITHUB_WEBHOOK_SECRET` があれば署名検証を行う
 
+実装上の現在挙動:
+
+- 受信イベントは `events` テーブルへ記録
+- `issues` / `pull_request` / `push` / `check_run` / `check_suite` を処理
+- PR close+merge 時、PR body に `[task:<uuid>]` が含まれる場合は該当 task を `done` 更新
+- それ以外は主に記録/通知用途で、planner/dispatcher の主駆動は `/system/preflight` 系にあります
+
 ---
 
 ## 3. System API
@@ -227,3 +234,4 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - command 実行 API を外部から直接叩く設計ではなく、process manager 経由で制御します
 - `stop-all` は running run を cancel/requeue し、agent 状態も更新します
 - sandbox 実行時、worker/tester/docser の host process は通常起動しません
+- `/system/*` と `/logs/clear` は system-control 権限での呼び出しを前提にしてください
