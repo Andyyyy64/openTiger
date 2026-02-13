@@ -1,7 +1,7 @@
 # ポリシー回復（Policy Recovery）と AllowedPaths の自己成長
 
 このドキュメントは、openTiger が policy violation で停止しないための回復手順と、  
-回復結果を次回 planning に反映する自己成長の仕組みを説明します。
+回復結果を次回の計画（planning）へ反映する自己成長の仕組みを説明します。
 
 関連:
 
@@ -17,12 +17,12 @@ task が `allowedPaths` 外のファイルを変更した場合でも、openTige
 
 設計上の狙いは次の 2 点です。
 
-- **Self-recovery**: 現在の Worker run 内で policy violation を解消する
-- **Self-growth**: 有効だった回復結果を記録し、Planner の将来 `allowedPaths` に先回り反映する
+- **自己回復（Self-recovery）**: 現在の Worker run 内で policy violation を解消する
+- **自己成長（Self-growth）**: 有効だった回復結果を記録し、Planner の将来 `allowedPaths` に先回り反映する
 
-## 2. In-Run Self-Recovery（Worker）
+## 2. 実行中の自己回復（In-Run Self-Recovery / Worker）
 
-Worker の verification は、次の回復優先シーケンスで進みます。
+Worker の検証（verification）は、次の回復優先シーケンスで進みます。
 
 1. `verifyChanges` を実行
 2. policy violation があれば deterministic path recovery を試行
@@ -31,23 +31,23 @@ Worker の verification は、次の回復優先シーケンスで進みます�
    - `aggressive` mode では、`commandDrivenAllowedPathRules[].paths`（例: `Makefile`）に一致する violating path も in-run auto-allow 候補として扱う
    - 共有 policy rule から command-driven path を加える
 3. `allowedPaths` を調整して再検証
-4. violation が残る場合は optional LLM recovery（`allow` / `discard` / `deny`）を実行
+4. violation が残る場合は任意の LLM recovery（`allow` / `discard` / `deny`）を実行
    - `discard`: 変更ファイルの一部を破棄して再検証
    - `allow`: `allowedPaths` を拡張して再検証
-   - `deny`: 回復試行を打ち切って escalate
+   - `deny`: 回復試行を打ち切って上位エスカレーション
 5. それでも解決しなければ task を `blocked(needs_rework)` にする
 
-### 2.1 LLM Recovery の入力
+### 2.1 LLM recovery の入力
 
 LLM には、次の実行文脈を渡します。
 
-- task metadata（`title`, `goal`, `role`, `commands`）
+- task メタデータ（`title`, `goal`, `role`, `commands`）
 - 現在の `allowedPaths` と `deniedPaths`
-- violating paths と violation message
-- 現在の changed files
+- violating paths と violation メッセージ
+- 現在の変更ファイル（changed files）
 - queued/running task の要約（同時実行状況）
 
-### 2.2 Hard Guardrails
+### 2.2 厳格ガード（Hard Guardrails）
 
 LLM が `allow` を返しても、Worker は次を満たさない path を拒否します。
 
@@ -70,7 +70,7 @@ deterministic auto-allow の範囲は mode により異なります。
     - root-level infra path recovery
     - command-driven rule path recovery（例: make 系 rule 時の `Makefile`）
 
-### 2.4 Generated Artifact Path Auto-Learning
+### 2.4 生成物パスの自動学習（Generated Artifact Path Auto-Learning）
 
 LLM recovery 後も violation が残る場合、Worker は生成物らしい path を破棄対象として最終回復を試みます。
 
@@ -78,7 +78,7 @@ LLM recovery 後も violation が残る場合、Worker は生成物らしい pat
    - 例: `.dump`, `.log`, `.tmp`, `.trace`  
    - 例: `coverage`, `report`, `artifact`, `build`, `dist` などの path segment
 2. 抽出したファイルを discard して再検証
-3. 学習結果を `.opentiger/generated-paths.auto.txt` に保存し、次回以降の `verifyChanges` で最初から generated 扱いにする
+3. 学習結果を `.opentiger/generated-paths.auto.txt` に保存し、次回以降の `verifyChanges` で最初から生成物（generated）扱いにする
 
 `generated-paths.txt` を手動編集する必要はありません。  
 `GENERATED_PATHS` / `WORKER_EXTRA_GENERATED_PATHS` / `.opentiger/generated-paths.auto.txt` を毎回マージして検証します。
@@ -91,7 +91,7 @@ LLM recovery 後も violation が残る場合、Worker は生成物らしい pat
 - LLM policy recovery を実行しない
 - verification command は doc-safe な `check` 系（例: `pnpm run check`）に限定
 
-## 3. Shared Policy Recovery Engine（Core）
+## 3. 共有ポリシー回復エンジン（Shared Policy Recovery Engine / Core）
 
 共有ロジックは `packages/core/src/policy-recovery.ts` にあり、Worker/Cycle Manager/Planner から再利用されます。
 
@@ -100,15 +100,15 @@ LLM recovery 後も violation が残る場合、Worker は生成物らしい pat
 - 設定のロードとマージ
   - built-in default
   - `.opentiger/policy-recovery.json`
-  - env override
+  - 環境変数上書き（env override）
 - command-driven path の解決
 - violation path 抽出
-- mode 別 deterministic auto-allow candidate 解決
+- mode 別 deterministic auto-allow 候補の解決
   - `conservative`
   - `balanced`
   - `aggressive`（既定）
 
-## 4. Verification Command Format Recovery
+## 4. 検証コマンド形式の回復（Verification Command Format Recovery）
 
 verification command が unsupported format（shell operator / `$()`）や missing script で失敗した場合、  
 Cycle Manager は無限 block させず command を調整して requeue します。
@@ -120,9 +120,9 @@ Cycle Manager は無限 block させず command を調整して requeue しま�
     - allowed path 調整を試みて requeue
 
 Worker 側も、残り command がある場合や既に前段が通っている場合（doc-only/no-op など）は、  
-同 run 内で explicit command failure を skip します。
+同 run 内で明示 command failure（explicit command failure）を skip します。
 
-## 5. Rework Chain Suppression（Cycle Manager）
+## 5. リワーク連鎖の抑制（Rework Chain Suppression / Cycle Manager）
 
 Cycle Manager は policy-only failure と rework 連鎖の増幅を抑制します。
 
@@ -133,12 +133,12 @@ Cycle Manager は policy-only failure と rework 連鎖の増幅を抑制しま�
     - safe path を追加できるなら同一 task を requeue
     - できない場合は `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES` まで抑制再試行し、その後 cancel
     - `policy_violation_rework_suppressed_no_safe_path` または `policy_violation_rework_suppressed_exhausted` を emit
-  - 同一 parent に active rework child がある場合は rework split を作らない
+  - 同一 parent に有効な rework child（active）がある場合は rework split を作らない
   - `[auto-rework] parentTask=` の深さが `AUTO_REWORK_MAX_DEPTH` 以上なら cancel
 
 これにより `[Rework] ...` child の無限増殖を防止します。
 
-## 6. Planner による Self-Growth
+## 6. Planner による自己成長（Self-Growth）
 
 Planner は過去の回復結果を利用して、将来 task の `allowedPaths` を先回り拡張します。
 
@@ -155,11 +155,11 @@ hint の代表 reason:
 - `signal_match_strong`
 - `signal_match_repeated_weak`
 
-Planner は path 追加理由を次にも記録します。
+Planner は path 追加理由も記録します。
 
 - `planner.plan_created.payload.policyRecoveryHintApplications`
   - task ごとの追加 path
-  - 一致した hint metadata（role, count, reason, source text）
+  - 一致した hint メタデータ（role, count, reason, source text）
 
 ## 7. 設定
 
@@ -210,7 +210,7 @@ Worker の verification skip:
 - `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT`（既定: `true`）  
   - 残り command がある場合、missing/unsupported explicit command を skip
 
-## 8. Event Reference
+## 8. イベント参照（Event Reference）
 
 回復観測イベント:
 
