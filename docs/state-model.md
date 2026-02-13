@@ -65,6 +65,21 @@
 - どの条件で遷移するか知りたい: `docs/flow.md`
 - 起動時の判定式を知りたい: `docs/startup-patterns.md`
 
+## 6.1 実装参照（source of truth）
+
+- Task status / block reason:
+  - `packages/core/src/domain/task.ts`
+  - `packages/db/src/schema.ts`（`tasks.status`, `tasks.block_reason`）
+- Run status:
+  - `packages/core/src/domain/run.ts`
+  - `packages/db/src/schema.ts`（`runs.status`）
+- Agent status:
+  - `packages/core/src/domain/agent.ts`
+  - `packages/db/src/schema.ts`（`agents.status`）
+- Cycle status:
+  - `packages/core/src/domain/cycle.ts`
+  - `packages/db/src/schema.ts`（`cycles.status`）
+
 ## 7. 状態遷移で詰まりやすいパターン（一次診断）
 
 | 症状 | まず見る状態/値 | 主な確認 API | 先に確認する担当領域 |
