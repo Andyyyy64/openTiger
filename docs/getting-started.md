@@ -81,7 +81,24 @@ pnpm run up
 - `judgements`: Judge 評価
 - `logs`: プロセスログ集約
 
-## 8. よくある初期トラブル
+## 8. 初回起動後の最初の5分チェック
+
+起動直後に次を確認すると、初期不整合を早く検知できます。
+
+1. process が生きている
+   - `GET /system/processes` で `dispatcher` / `cycle-manager` / `worker-*` / `judge-*` を確認
+2. agent が登録されている
+   - `GET /agents` で `idle`/`busy` の agent が見えることを確認
+3. task が遷移している
+   - `queued` のまま固定されず、`running` か `blocked/done` に進むことを確認
+4. run が連続失敗していない
+   - `GET /runs` で同一エラーの連続 `failed` がないことを確認
+5. ログに初期化エラーがない
+   - `GET /logs/all` で認証・接続・設定値エラーが出ていないことを確認
+
+詳細な運用チェックは `docs/operations.md` を参照してください。
+
+## 9. よくある初期トラブル
 
 ### GitHub repo 未設定
 
