@@ -25,6 +25,7 @@ export function getPlannerOpenCodeEnv(
     // PlannerはJSON抽出が目的のため、既定では生のLLM出力を抑制してログノイズを防ぐ
     OPENCODE_ECHO_STDOUT: "false",
     CLAUDE_CODE_ECHO_STDOUT: "false",
+    CODEX_ECHO_STDOUT: "false",
   };
 
   const plannerWaitOnQuota = process.env.PLANNER_OPENCODE_WAIT_ON_QUOTA?.trim();

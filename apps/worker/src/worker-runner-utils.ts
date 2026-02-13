@@ -11,15 +11,28 @@ function isClaudeExecutorValue(value: string | undefined): boolean {
   );
 }
 
+function isCodexExecutorValue(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "codex" || normalized === "openai_codex" || normalized === "openai-codex";
+}
+
 export function getRuntimeExecutorDisplayName(): string {
-  return isClaudeExecutorValue(process.env.LLM_EXECUTOR) ? "Claude Code" : "OpenCode";
+  if (isClaudeExecutorValue(process.env.LLM_EXECUTOR)) {
+    return "Claude Code";
+  }
+  if (isCodexExecutorValue(process.env.LLM_EXECUTOR)) {
+    return "Codex";
+  }
+  return "OpenCode";
 }
 
 export function isExecutionTimeout(stderr: string, exitCode: number): boolean {
   return (
     exitCode === -1 &&
     (stderr.includes("[OpenCode] Timeout exceeded") ||
-      stderr.includes("[ClaudeCode] Timeout exceeded"))
+      stderr.includes("[ClaudeCode] Timeout exceeded") ||
+      stderr.includes("[Codex] Timeout exceeded"))
   );
 }
 

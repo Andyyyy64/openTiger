@@ -44,6 +44,25 @@ const CLAUDE_SANDBOX_CLI_MISSING_MARKERS = [
   "executable file not found in $path",
   "claude: not found",
 ];
+const CODEX_AUTH_FAILURE_MARKERS = [
+  "401 unauthorized",
+  "missing bearer or basic authentication",
+  "invalid_api_key",
+  "run `codex login`",
+];
+const CODEX_SANDBOX_RUNTIME_ERROR_MARKERS = [
+  "cannot connect to the docker daemon",
+  "permission denied while trying to connect to the docker daemon socket",
+];
+const CODEX_SANDBOX_IMAGE_ERROR_MARKERS = [
+  "unable to find image",
+  "pull access denied",
+  "manifest unknown",
+];
+const CODEX_SANDBOX_CLI_MISSING_MARKERS = [
+  "executable file not found in $path",
+  "codex: not found",
+];
 
 type ExecutionEnvironment = "host" | "sandbox";
 
@@ -117,6 +136,41 @@ function resolveClaudeAuthMountArgs(): string[] {
   return mountArgs;
 }
 
+function resolveCodexAuthMountArgs(): string[] {
+  const hostHome = process.env.HOME?.trim();
+  const codexAuthOverride = process.env.CODEX_AUTH_DIR?.trim();
+  const candidates = [
+    codexAuthOverride
+      ? {
+          hostPath: resolve(codexAuthOverride),
+          containerPath: "/home/worker/.codex",
+        }
+      : null,
+    hostHome
+      ? {
+          hostPath: join(hostHome, ".codex"),
+          containerPath: "/home/worker/.codex",
+        }
+      : null,
+  ];
+  const mountArgs: string[] = [];
+  const seenContainerPaths = new Set<string>();
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    if (seenContainerPaths.has(candidate.containerPath)) {
+      continue;
+    }
+    if (!existsSync(candidate.hostPath)) {
+      continue;
+    }
+    mountArgs.push("--volume", `${candidate.hostPath}:${candidate.containerPath}:ro`);
+    seenContainerPaths.add(candidate.containerPath);
+  }
+  return mountArgs;
+}
+
 function runClaudeAuthCheck(environment: ExecutionEnvironment) {
   if (environment === "sandbox") {
     const dockerArgs = [
@@ -143,6 +197,47 @@ function runClaudeAuthCheck(environment: ExecutionEnvironment) {
     encoding: "utf-8",
     timeout: 15000,
   });
+}
+
+function runCodexAuthCheck(environment: ExecutionEnvironment, openaiApiKey: string) {
+  const resolvedOpenAiApiKey = openaiApiKey.trim() || process.env.OPENAI_API_KEY;
+  if (environment === "sandbox") {
+    const dockerArgs = [
+      "run",
+      "--rm",
+      "--network",
+      resolveSandboxDockerNetwork(),
+      "--add-host",
+      "host.docker.internal:host-gateway",
+      ...resolveCodexAuthMountArgs(),
+      resolveSandboxDockerImage(),
+      "codex",
+      "exec",
+      "--skip-git-repo-check",
+      "Respond with exactly OK.",
+    ];
+    return spawnSync("docker", dockerArgs, {
+      encoding: "utf-8",
+      timeout: 20000,
+      env: {
+        ...process.env,
+        OPENAI_API_KEY: resolvedOpenAiApiKey,
+      },
+    });
+  }
+  return spawnSync("codex", ["exec", "--skip-git-repo-check", "Respond with exactly OK."], {
+    encoding: "utf-8",
+    timeout: 15000,
+    env: {
+      ...process.env,
+      OPENAI_API_KEY: resolvedOpenAiApiKey,
+    },
+  });
+}
+
+function isCodexAuthFailure(output: string): boolean {
+  const normalized = output.toLowerCase();
+  return CODEX_AUTH_FAILURE_MARKERS.some((marker) => normalized.includes(marker));
 }
 
 systemRoute.get("/claude/auth", async (c) => {
@@ -250,6 +345,111 @@ systemRoute.get("/claude/auth", async (c) => {
     checkedAt,
     message:
       "Claude auth check returned a non-auth error; skipping warning to avoid false positives.",
+  });
+});
+
+systemRoute.get("/codex/auth", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  const configRow = await ensureConfigRow();
+  const requestedEnvironment = normalizeExecutionEnvironment(c.req.query("environment"));
+  const executionEnvironment =
+    c.req.query("environment") !== undefined
+      ? requestedEnvironment
+      : normalizeExecutionEnvironment(
+          configRow.executionEnvironment ?? process.env.EXECUTION_ENVIRONMENT,
+        );
+  const result = runCodexAuthCheck(executionEnvironment, configRow.openaiApiKey ?? "");
+  const checkedAt = new Date().toISOString();
+  const stdout = typeof result.stdout === "string" ? result.stdout : "";
+  const stderr = typeof result.stderr === "string" ? result.stderr : "";
+  const combined = `${stdout}\n${stderr}`.trim();
+
+  if (result.error) {
+    const errorCode = (result.error as NodeJS.ErrnoException).code;
+    if (errorCode === "ENOENT") {
+      return c.json({
+        available: false,
+        authenticated: false,
+        executionEnvironment,
+        checkedAt,
+        message:
+          executionEnvironment === "sandbox"
+            ? "Docker command was not found. Install Docker and ensure the daemon is available."
+            : "Codex CLI was not found. Install `@openai/codex` and authenticate first.",
+      });
+    }
+    return c.json({
+      available: false,
+      authenticated: false,
+      executionEnvironment,
+      checkedAt,
+      message: `Failed to check Codex auth: ${result.error.message}`,
+    });
+  }
+
+  if (executionEnvironment === "sandbox") {
+    if (includesAnyMarker(combined, CODEX_SANDBOX_RUNTIME_ERROR_MARKERS)) {
+      return c.json({
+        available: false,
+        authenticated: false,
+        executionEnvironment,
+        checkedAt,
+        message: "Docker daemon is not reachable. Check Docker Desktop / dockerd status.",
+      });
+    }
+    if (includesAnyMarker(combined, CODEX_SANDBOX_IMAGE_ERROR_MARKERS)) {
+      return c.json({
+        available: false,
+        authenticated: false,
+        executionEnvironment,
+        checkedAt,
+        message:
+          "Sandbox worker image is unavailable. Build or pull SANDBOX_DOCKER_IMAGE (default: openTiger/worker:latest).",
+      });
+    }
+    if (includesAnyMarker(combined, CODEX_SANDBOX_CLI_MISSING_MARKERS)) {
+      return c.json({
+        available: false,
+        authenticated: false,
+        executionEnvironment,
+        checkedAt,
+        message: "Codex CLI is not installed in sandbox image. Rebuild worker image with @openai/codex.",
+      });
+    }
+  }
+
+  if (isCodexAuthFailure(combined)) {
+    return c.json({
+      available: true,
+      authenticated: false,
+      executionEnvironment,
+      checkedAt,
+      message:
+        executionEnvironment === "sandbox"
+          ? "Codex is not authenticated in sandbox. Run `codex login` on host and mount ~/.codex, or set OPENAI_API_KEY."
+          : "Codex is not authenticated. Run `codex login` or set OPENAI_API_KEY.",
+    });
+  }
+
+  if (result.status === 0) {
+    return c.json({
+      available: true,
+      authenticated: true,
+      executionEnvironment,
+      checkedAt,
+    });
+  }
+
+  return c.json({
+    available: true,
+    authenticated: true,
+    executionEnvironment,
+    checkedAt,
+    message: "Codex auth check returned a non-auth error; skipping warning to avoid false positives.",
   });
 });
 
