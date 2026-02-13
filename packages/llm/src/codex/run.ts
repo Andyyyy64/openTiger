@@ -1,10 +1,7 @@
 import type { OpenCodeOptions, OpenCodeResult } from "../opencode/opencode-types";
 import { calculateBackoffDelay, delay } from "../opencode/opencode-helpers";
 import { parseIntegerEnvValue, readRuntimeEnv } from "../opencode/opencode-env";
-import {
-  CODEX_DEFAULT_MAX_RETRIES,
-  CODEX_DEFAULT_RETRY_DELAY_MS,
-} from "./codex-constants";
+import { CODEX_DEFAULT_MAX_RETRIES, CODEX_DEFAULT_RETRY_DELAY_MS } from "./codex-constants";
 import { executeCodexOnce } from "./codex-executor";
 import { isRetryableCodexError } from "./codex-helpers";
 
