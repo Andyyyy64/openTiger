@@ -35,10 +35,12 @@
 
 - `docs/agent/README.md`（横断比較）
 - `docs/agent/planner.md`
+- `docs/agent/dispatcher.md`
 - `docs/agent/worker.md`
 - `docs/agent/tester.md`
 - `docs/agent/judge.md`
 - `docs/agent/docser.md`
+- `docs/agent/cycle-manager.md`
 
 ## 4. 設計思想・補助資料
 

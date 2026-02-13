@@ -130,10 +130,12 @@ Agent-level specifications:
 
 - `docs/agent/README.md` (role comparison)
 - `docs/agent/planner.md`
+- `docs/agent/dispatcher.md`
 - `docs/agent/worker.md`
 - `docs/agent/tester.md`
 - `docs/agent/judge.md`
 - `docs/agent/docser.md`
+- `docs/agent/cycle-manager.md`
 
 Design policy:
 

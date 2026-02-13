@@ -7,17 +7,20 @@
 | Agent | 主責務 | 主入力 | 主要遷移/出力 | 主な失敗時挙動 |
 | --- | --- | --- | --- | --- |
 | Planner | requirement/issue から task 計画生成 | requirement, backlog, feedback, inspection | `tasks` 作成、plan event 保存 | fallback planning、重複計画ガード |
+| Dispatcher | 実行順制御と task 配布 | queued tasks, leases, agent heartbeat | `queued -> running`、lease 付与、agent 割当 | lease reclaim、orphan 回復、再queue |
 | Worker | 実装変更 + 検証 + PR 化 | task, repo/worktree, commands | `runs/artifacts` 生成、`awaiting_judge` or `done` | `quota_wait` / `needs_rework` / `failed` |
 | Tester | テスト中心タスク実行 | tester role task | Worker と同等（テスト文脈） | Worker と同等 |
 | Docser | ドキュメント同期タスク実行 | docser role task | docs 更新 run/artifact | doc-safe command 制約、LLM policy recovery なし |
 | Judge | success run の評価と統治 | run/artifacts, CI/policy/LLM result | `done` or retry/rework/autofix | circuit breaker、autofix、awaiting_judge 復元 |
+| Cycle Manager | 収束監視・回復・replan 制御 | system state, events, anomaly/cost | cycle 更新、cleanup、replan 起動 | critical anomaly restart、cooldown 再試行 |
 
 ## 2. 役割の使い分け
 
 - **Planner** は「何を実行するか」を決める。
-- **Dispatcher** は「誰に実行させるか」を決める（本ページの対象外）。
+- **Dispatcher** は「誰に実行させるか」と「いつ実行させるか」を決める。
 - **Worker/Tester/Docser** は「実行して検証する」。
 - **Judge** は「結果を承認するか、再修正へ戻すか」を決める。
+- **Cycle Manager** は「収束し続ける運用」を維持する。
 
 ## 3. 実行対象の差分（Worker 系）
 
@@ -61,10 +64,12 @@ blocked reason:
 ## 6. 詳細仕様
 
 - `docs/agent/planner.md`
+- `docs/agent/dispatcher.md`
 - `docs/agent/worker.md`
 - `docs/agent/tester.md`
 - `docs/agent/judge.md`
 - `docs/agent/docser.md`
+- `docs/agent/cycle-manager.md`
 
 関連:
 
