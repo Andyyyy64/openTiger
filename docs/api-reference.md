@@ -81,10 +81,10 @@ API で異常を見つけたあとに、状態語彙 -> 遷移 -> 担当 -> 実�
 
 | 起点（API/症状） | 状態語彙の確認先 | 遷移の確認先（flow） | 担当 agent の確認先 | 実装の確認先 |
 | --- | --- | --- | --- | --- |
-| `GET /tasks` で `queued`/`running` が滞留 | `docs/state-model.md` 7章 | `docs/flow.md` 2章, 5章, 6章 | Dispatcher/Worker（`docs/agent/dispatcher.md`, `docs/agent/worker.md`） | `apps/dispatcher/src/`, `apps/worker/src/` |
-| `GET /tasks` で `awaiting_judge` が増加 | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章, 4章, 7章 | Judge（`docs/agent/judge.md`） | `apps/judge/src/` |
+| `GET /tasks` で `queued`/`running` が停滞 | `docs/state-model.md` 7章 | `docs/flow.md` 2章, 5章, 6章 | Dispatcher/Worker（`docs/agent/dispatcher.md`, `docs/agent/worker.md`） | `apps/dispatcher/src/`, `apps/worker/src/` |
+| `GET /tasks` で `awaiting_judge` が停滞 | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章, 4章, 7章 | Judge（`docs/agent/judge.md`） | `apps/judge/src/` |
 | `GET /tasks` で `quota_wait`/`needs_rework` が連鎖 | `docs/state-model.md` 2.2章, 7章 | `docs/flow.md` 3章, 6章, 8章 | Worker/Judge/Cycle Manager（各 agent 仕様） | 各 agent 仕様末尾の「実装参照（source of truth）」節 |
-| `GET /tasks` で `issue_linking` が継続 | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章 | Planner（`docs/agent/planner.md`） | `apps/planner/src/` |
+| `GET /tasks` で `issue_linking` が停滞 | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章 | Planner（`docs/agent/planner.md`） | `apps/planner/src/` |
 
 補足:
 

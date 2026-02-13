@@ -141,9 +141,9 @@
 
 | 起点（状態語彙/症状） | 状態語彙の確認先 | 遷移の確認先（flow） | 担当 agent の確認先 | 実装の確認先 |
 | --- | --- | --- | --- | --- |
-| `queued` / `running` 停滞 | 1章, 2章, 7章 | `docs/flow.md` の「2. 基本ライフサイクル」「5. Dispatcher の回復レイヤ」「6. Worker の失敗処理」 | `docs/agent/dispatcher.md`, `docs/agent/worker.md` | `apps/dispatcher/src/`, `apps/worker/src/` |
+| `queued`/`running` 停滞 | 1章, 2章, 7章 | `docs/flow.md` の「2. 基本ライフサイクル」「5. Dispatcher の回復レイヤ」「6. Worker の失敗処理」 | `docs/agent/dispatcher.md`, `docs/agent/worker.md` | `apps/dispatcher/src/`, `apps/worker/src/` |
 | `awaiting_judge` 停滞 | 2章, 7章 | `docs/flow.md` の「3. 回復で使われる Blocked Reason」「4. Run Lifecycle と Judge の冪等性」「7. Judge の非承認 / マージ失敗経路」 | `docs/agent/judge.md` | `apps/judge/src/` |
-| `quota_wait` / `needs_rework` 連鎖 | 2章, 2.2章, 7章 | `docs/flow.md` の「3. 回復で使われる Blocked Reason」「6. Worker の失敗処理」「8. Cycle Manager の自己回復」 | `docs/agent/worker.md`, `docs/agent/judge.md`, `docs/agent/cycle-manager.md` | `apps/worker/src/`, `apps/judge/src/`, `apps/cycle-manager/src/` |
+| `quota_wait`/`needs_rework` 連鎖 | 2章, 2.2章, 7章 | `docs/flow.md` の「3. 回復で使われる Blocked Reason」「6. Worker の失敗処理」「8. Cycle Manager の自己回復」 | `docs/agent/worker.md`, `docs/agent/judge.md`, `docs/agent/cycle-manager.md` | `apps/worker/src/`, `apps/judge/src/`, `apps/cycle-manager/src/` |
 | `issue_linking` 停滞 | 2章, 7章 | `docs/flow.md` の「3. 回復で使われる Blocked Reason」 + `docs/startup-patterns.md` | `docs/agent/planner.md` | `apps/planner/src/` |
 
 補足:
