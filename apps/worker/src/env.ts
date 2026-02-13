@@ -12,6 +12,7 @@ const STRIP_ENV_PREFIXES = [
   "WORKER_",
   "JUDGE_",
   "OPENCODE_",
+  "CODEX_",
   "CLAUDE_",
   "LLM_",
   "GEMINI_",
@@ -70,6 +71,10 @@ const OPEN_CODE_ENV_KEYS = new Set([
   "OPENCODE_QUOTA_RETRY_DELAY_MS",
   "OPENCODE_MAX_QUOTA_WAITS",
   "OPENCODE_CONFIG",
+  "CODEX_API_KEY",
+  "CODEX_MODEL",
+  "CODEX_MAX_RETRIES",
+  "CODEX_RETRY_DELAY_MS",
   "LLM_EXECUTOR",
   "CLAUDE_CODE_PERMISSION_MODE",
   "CLAUDE_CODE_MODEL",
@@ -168,6 +173,9 @@ async function loadConfigFromDb(): Promise<Record<string, string>> {
       OPENCODE_WAIT_ON_QUOTA: row.opencodeWaitOnQuota ?? "",
       OPENCODE_QUOTA_RETRY_DELAY_MS: row.opencodeQuotaRetryDelayMs ?? "",
       OPENCODE_MAX_QUOTA_WAITS: row.opencodeMaxQuotaWaits ?? "",
+      CODEX_MODEL: rowRecord.codexModel ?? "",
+      CODEX_MAX_RETRIES: rowRecord.codexMaxRetries ?? "",
+      CODEX_RETRY_DELAY_MS: rowRecord.codexRetryDelayMs ?? "",
       LLM_EXECUTOR: rowRecord.llmExecutor ?? "",
       CLAUDE_CODE_PERMISSION_MODE: rowRecord.claudeCodePermissionMode ?? "",
       CLAUDE_CODE_MODEL: rowRecord.claudeCodeModel ?? "",
@@ -205,6 +213,10 @@ export async function buildOpenCodeEnv(cwd: string): Promise<Record<string, stri
       continue;
     }
     env[key] = value;
+  }
+
+  if (!env.CODEX_API_KEY && env.OPENAI_API_KEY) {
+    env.CODEX_API_KEY = env.OPENAI_API_KEY;
   }
 
   // Use default config file even if OPENCODE_CONFIG is not explicitly set

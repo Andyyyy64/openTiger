@@ -191,6 +191,9 @@ export const config = pgTable("config", {
   opencodeWaitOnQuota: text("opencode_wait_on_quota").default("true").notNull(),
   opencodeQuotaRetryDelayMs: text("opencode_quota_retry_delay_ms").default("30000").notNull(),
   opencodeMaxQuotaWaits: text("opencode_max_quota_waits").default("-1").notNull(),
+  codexModel: text("codex_model").default("gpt-5.3-codex").notNull(),
+  codexMaxRetries: text("codex_max_retries").default("3").notNull(),
+  codexRetryDelayMs: text("codex_retry_delay_ms").default("5000").notNull(),
   claudeCodePermissionMode: text("claude_code_permission_mode")
     .default("bypassPermissions")
     .notNull(),

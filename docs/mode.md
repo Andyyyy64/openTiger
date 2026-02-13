@@ -91,6 +91,12 @@ For runtime details (Docker image/network, sandbox auth, troubleshooting), see `
 - Per-task container isolation
 - Useful when isolation requirements are strict
 
+LLM executor selection is controlled by `LLM_EXECUTOR`:
+
+- `claude_code`
+- `codex`
+- `opencode`
+
 ## 4. Scaling Rules
 
 - Planner is fixed at 1 process by API/system logic

@@ -17,6 +17,44 @@ export { runWorker, type WorkerConfig, type WorkerResult } from "./worker-runner
 
 const activeTaskIds = new Set<string>();
 
+function isClaudeExecutor(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
+  );
+}
+
+function isCodexExecutor(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === "codex" || normalized === "codex-cli" || normalized === "codex_cli";
+}
+
+function resolveExecutor(value: string | undefined): "opencode" | "claude_code" | "codex" {
+  if (isClaudeExecutor(value)) {
+    return "claude_code";
+  }
+  if (isCodexExecutor(value)) {
+    return "codex";
+  }
+  return "opencode";
+}
+
+function resolveExecutorProvider(executor: "opencode" | "claude_code" | "codex"): string {
+  if (executor === "claude_code") {
+    return "claude_code";
+  }
+  if (executor === "codex") {
+    return "codex";
+  }
+  return "opencode";
+}
+
 // Entry point: receive tasks from queue and execute
 async function main() {
   const workerIndex = process.env.WORKER_INDEX;
@@ -28,10 +66,12 @@ async function main() {
   const repoUrl = process.env.REPO_URL ?? "";
   const baseBranch = process.env.BASE_BRANCH ?? "main";
   const repoMode = getRepoMode();
-  const llmExecutor = (process.env.LLM_EXECUTOR ?? "opencode").trim().toLowerCase();
+  const llmExecutor = resolveExecutor(process.env.LLM_EXECUTOR);
   const agentModel =
     llmExecutor === "claude_code"
       ? process.env.CLAUDE_CODE_MODEL
+      : llmExecutor === "codex"
+        ? process.env.CODEX_MODEL
       : agentRole === "tester"
         ? (process.env.TESTER_MODEL ?? process.env.OPENCODE_MODEL)
         : agentRole === "docser"
@@ -39,7 +79,11 @@ async function main() {
           : (process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL);
   const effectiveModel =
     agentModel ??
-    (llmExecutor === "claude_code" ? "claude-opus-4-6" : "google/gemini-3-flash-preview");
+    (llmExecutor === "claude_code"
+      ? "claude-opus-4-6"
+      : llmExecutor === "codex"
+        ? "gpt-5.3-codex"
+        : "google/gemini-3-flash-preview");
   // Prefer env if set
   const instructionsPath =
     agentRole === "tester"
@@ -84,7 +128,7 @@ async function main() {
       lastHeartbeat: new Date(),
       metadata: {
         model: effectiveModel, // Record model per role
-        provider: "gemini",
+        provider: resolveExecutorProvider(llmExecutor),
       },
     })
     .onConflictDoUpdate({

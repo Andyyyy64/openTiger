@@ -1,6 +1,8 @@
 import type { OpenCodeOptions, OpenCodeResult } from "./opencode-types";
 import { runClaudeCode } from "../claude-code/run";
 import { isClaudeCodeProvider } from "../claude-code/claude-code-helpers";
+import { runCodex } from "../codex/run";
+import { isCodexProvider } from "../codex/codex-helpers";
 import {
   DEFAULT_FALLBACK_MODEL,
   DEFAULT_MAX_QUOTA_WAITS,
@@ -26,13 +28,22 @@ import { executeOpenCodeOnce } from "./opencode-executor";
 export { OpenCodeOptions } from "./opencode-types";
 export type { OpenCodeResult } from "./opencode-types";
 
-function resolveExecutor(options: OpenCodeOptions): "opencode" | "claude_code" {
+function resolveExecutor(options: OpenCodeOptions): "opencode" | "claude_code" | "codex" {
+  if (options.provider === "opencode") {
+    return "opencode";
+  }
   if (options.provider === "claude_code") {
     return "claude_code";
+  }
+  if (options.provider === "codex") {
+    return "codex";
   }
   const fromRuntime = readRuntimeEnv(options, "LLM_EXECUTOR");
   if (isClaudeCodeProvider(fromRuntime)) {
     return "claude_code";
+  }
+  if (isCodexProvider(fromRuntime)) {
+    return "codex";
   }
   return "opencode";
 }
@@ -53,8 +64,12 @@ function buildApiKeyFingerprint(options: OpenCodeOptions): string {
 }
 
 export async function runOpenCode(options: OpenCodeOptions): Promise<OpenCodeResult> {
-  if (resolveExecutor(options) === "claude_code") {
+  const executor = resolveExecutor(options);
+  if (executor === "claude_code") {
     return runClaudeCode(options);
+  }
+  if (executor === "codex") {
+    return runCodex(options);
   }
 
   const apiKeyFingerprint = buildApiKeyFingerprint(options);
