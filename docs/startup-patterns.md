@@ -133,7 +133,7 @@ stateDiagram-v2
 
 | Pattern                                   | What happens                                                                   |
 | ----------------------------------------- | ------------------------------------------------------------------------------ |
-| Issue exists but explicit role missing    | Issue backlog stays non-zero; planner is blocked until issue metadata is fixed |
+| Issue exists but explicit role missing    | Issue task can remain `blocked(issue_linking)`; planner stays blocked until issue metadata is fixed |
 | GitHub query failed in preflight          | Warnings are emitted; Start behavior depends on remaining local signals        |
 | Runtime issue-sync request failed         | `cycle-manager` skips replan for that cycle (fail-closed)                      |
 | Manual planner start while backlog exists | Rejected by planner prehook (`409`)                                            |
