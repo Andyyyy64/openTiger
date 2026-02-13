@@ -6,7 +6,11 @@ export const ArtifactType = z.enum([
   "commit", // commit
   "ci_result", // CI result
   "branch", // branch
+  "worktree", // local worktree path
   "base_repo_diff", // local base repo diff
+  "research_claim", // normalized research claim
+  "research_source", // external source evidence
+  "research_report", // synthesized report
 ]);
 export type ArtifactType = z.infer<typeof ArtifactType>;
 

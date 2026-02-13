@@ -8,6 +8,10 @@ export type RiskLevel = z.infer<typeof RiskLevel>;
 export const TaskRole = z.enum(["worker", "tester", "docser"]);
 export type TaskRole = z.infer<typeof TaskRole>;
 
+// Task kind
+export const TaskKind = z.enum(["code", "research"]);
+export type TaskKind = z.infer<typeof TaskKind>;
+
 // Task status
 export const TaskStatus = z.enum([
   "queued", // waiting
@@ -42,6 +46,17 @@ export const TaskContext = z.object({
       title: z.string().optional(),
     })
     .optional(), // issue linkage
+  research: z
+    .object({
+      jobId: z.string().uuid().optional(),
+      query: z.string().optional(),
+      stage: z.string().optional(),
+      profile: z.string().optional(),
+      claimId: z.string().uuid().optional(),
+      claimText: z.string().optional(),
+      claims: z.array(z.string()).optional(),
+    })
+    .optional(),
 });
 export type TaskContext = z.infer<typeof TaskContext>;
 
@@ -56,6 +71,7 @@ export const TaskSchema = z.object({
   priority: z.number().int().default(0),
   riskLevel: RiskLevel.default("low"),
   role: TaskRole.default("worker"),
+  kind: TaskKind.default("code"),
   status: TaskStatus.default("queued"),
   blockReason: z.string().optional(), // blocked reason (awaiting_judge/needs_rework)
   targetArea: z.string().optional(), // target area (for conflict control)
