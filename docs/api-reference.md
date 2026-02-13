@@ -53,7 +53,7 @@ Main targets:
 | Recovery/maintenance | `POST /system/cleanup`, `POST /logs/clear`                                                                   |
 | GitHub integration   | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github`    |
 | Requirement updates  | `GET /system/requirements`, `POST /system/requirements`                                                      |
-| TigerResearch        | `GET /research/jobs`, `GET /research/jobs/:id`, `POST /research/jobs`, `POST /research/jobs/:id/tasks`      |
+| TigerResearch        | `GET /research/jobs`, `GET /research/jobs/:id`, `POST /research/jobs`, `POST /research/jobs/:id/tasks`       |
 
 Note:
 

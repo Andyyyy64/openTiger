@@ -138,7 +138,9 @@ researchRoute.post("/jobs", zValidator("json", createResearchJobSchema), async (
   const body = c.req.valid("json");
   const jobId = randomUUID();
   const profile = body.qualityProfile ?? "high_precision";
-  const plannerPendingUntilIso = new Date(Date.now() + getResearchPlannerPendingWindowMs()).toISOString();
+  const plannerPendingUntilIso = new Date(
+    Date.now() + getResearchPlannerPendingWindowMs(),
+  ).toISOString();
 
   const [job] = await db
     .insert(researchJobs)

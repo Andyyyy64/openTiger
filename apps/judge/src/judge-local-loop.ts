@@ -8,7 +8,11 @@ import { safeSetJudgeAgentState } from "./judge-agent";
 import { recordLocalReview, recordResearchReview } from "./judge-events";
 import { judgeSingleWorktree, buildJudgeFailureMessage } from "./judge-evaluate";
 import { mergeLocalBranch } from "./judge-local-merge";
-import { requeueTaskAfterJudge, claimRunForJudgement, scheduleTaskForJudgeRetry } from "./judge-retry";
+import {
+  requeueTaskAfterJudge,
+  claimRunForJudgement,
+  scheduleTaskForJudgeRetry,
+} from "./judge-retry";
 import { evaluateResearchRun, markResearchJobAfterJudge } from "./judge-research";
 
 export async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {

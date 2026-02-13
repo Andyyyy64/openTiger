@@ -134,7 +134,9 @@ function asRecord(value: unknown): Record<string, unknown> {
   return {};
 }
 
-function normalizeResearchStage(value: string | undefined): "plan" | "collect" | "challenge" | "write" {
+function normalizeResearchStage(
+  value: string | undefined,
+): "plan" | "collect" | "challenge" | "write" {
   const normalized = value?.trim().toLowerCase();
   if (
     normalized === "plan" ||
@@ -186,7 +188,11 @@ export async function planFromResearchJob(
   console.log(`Dry run: ${config.dryRun}`);
   console.log("=".repeat(60));
 
-  const [job] = await db.select().from(researchJobs).where(eq(researchJobs.id, researchJobId)).limit(1);
+  const [job] = await db
+    .select()
+    .from(researchJobs)
+    .where(eq(researchJobs.id, researchJobId))
+    .limit(1);
   if (!job) {
     throw new Error(`Research job not found: ${researchJobId}`);
   }
@@ -292,7 +298,10 @@ export async function planFromResearchJob(
       })
       .from(tasks)
       .where(
-        and(eq(tasks.kind, "research"), sql`${tasks.context} -> 'research' ->> 'jobId' = ${researchJobId}`),
+        and(
+          eq(tasks.kind, "research"),
+          sql`${tasks.context} -> 'research' ->> 'jobId' = ${researchJobId}`,
+        ),
       );
 
     const collectClaimIds = new Set<string>();

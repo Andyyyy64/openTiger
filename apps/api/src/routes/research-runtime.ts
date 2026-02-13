@@ -120,7 +120,9 @@ export async function ensureResearchRuntimeStarted(): Promise<EnsureRuntimeResul
   return result;
 }
 
-export async function ensureResearchPlannerStarted(researchJobId: string): Promise<EnsureRuntimeResult> {
+export async function ensureResearchPlannerStarted(
+  researchJobId: string,
+): Promise<EnsureRuntimeResult> {
   const result: EnsureRuntimeResult = {
     started: [],
     skipped: [],

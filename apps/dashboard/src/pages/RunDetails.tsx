@@ -103,7 +103,8 @@ export const RunDetailsPage: React.FC = () => {
           </p>
           {stopMutation.isError && (
             <p className="text-red-400 text-xs mt-2">
-              STOP_FAILED: {stopMutation.error instanceof Error ? stopMutation.error.message : "error"}
+              STOP_FAILED:{" "}
+              {stopMutation.error instanceof Error ? stopMutation.error.message : "error"}
             </p>
           )}
         </div>

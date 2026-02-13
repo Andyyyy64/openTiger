@@ -87,7 +87,9 @@ function isResearchQueryPayload(value: unknown): value is {
   return Array.isArray(record.claims);
 }
 
-function normalizeClaims(rawClaims: Array<{ text: string; priority?: number; riskLevel?: string }>): ResearchClaimCandidate[] {
+function normalizeClaims(
+  rawClaims: Array<{ text: string; priority?: number; riskLevel?: string }>,
+): ResearchClaimCandidate[] {
   const seen = new Set<string>();
   const claims: ResearchClaimCandidate[] = [];
 

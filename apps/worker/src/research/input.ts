@@ -34,9 +34,7 @@ export function resolveResearchInput(task: Task): ResearchInput {
   const jobId = asString(research.jobId) ?? randomUUID();
 
   const query =
-    asString(research.query) ??
-    asString(research.claimText) ??
-    `${task.title}\n\n${task.goal}`;
+    asString(research.query) ?? asString(research.claimText) ?? `${task.title}\n\n${task.goal}`;
 
   return {
     jobId,
