@@ -6,7 +6,7 @@ import {
   researchReports,
   tasks,
 } from "@openTiger/db/schema";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 type ResearchStage = "plan" | "collect" | "challenge" | "write";
 
@@ -121,6 +121,17 @@ function asString(value: unknown): string | undefined {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseIsoTimestamp(value: unknown): number | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  return parsed;
 }
 
 export function normalizeResearchStage(value: string | undefined): ResearchStage {
@@ -515,6 +526,16 @@ async function orchestrateJob(job: typeof researchJobs.$inferSelect): Promise<vo
 
   if (claims.length === 0) {
     const hasPlanTask = hasAnyTaskForStage(taskRows, "plan", true);
+    const metadata = asRecord(job.metadata);
+    const orchestratorMeta = asRecord(metadata.orchestrator);
+    const plannerPendingUntilMs = parseIsoTimestamp(orchestratorMeta.plannerPendingUntil);
+    const plannerPending = plannerPendingUntilMs !== null && plannerPendingUntilMs > Date.now();
+
+    if (plannerPending) {
+      await updateJobState(job, { status: "running", stage: "planning" });
+      return;
+    }
+
     if (!hasPlanTask) {
       await queueResearchTask({
         jobId: job.id,
@@ -796,7 +817,7 @@ export async function runResearchOrchestrationTick(): Promise<void> {
     .select()
     .from(researchJobs)
     .where(inArray(researchJobs.status, ["queued", "running", "blocked"]))
-    .orderBy(desc(researchJobs.updatedAt))
+    .orderBy(asc(researchJobs.updatedAt))
     .limit(30);
 
   if (activeJobs.length === 0) {
