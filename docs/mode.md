@@ -1,8 +1,8 @@
 # Operating Modes
 
-openTiger behavior is controlled by repository mode, judge mode, and execution environment.
+openTiger の挙動は、repository mode / judge mode / execution environment の組み合わせで制御されます。
 
-Related:
+関連:
 
 - `docs/config.md`
 - `docs/startup-patterns.md`
@@ -10,107 +10,107 @@ Related:
 - `docs/agent/dispatcher.md`
 - `docs/agent/judge.md`
 
-## 1. Repository Mode (`REPO_MODE`)
+## 1. Repository Mode（`REPO_MODE`）
 
 ### `git`
 
-- clone/push/PR workflow
-- judge primarily reviews PR artifacts
+- clone/push/PR ベースの運用
+- judge は主に PR artifact を評価
 
-Required:
+必須設定:
 
 - `REPO_URL`
 - `BASE_BRANCH`
-- `GITHUB_AUTH_MODE` (`gh` or `token`, default: `gh`)
+- `GITHUB_AUTH_MODE`（`gh` または `token`、既定: `gh`）
 - `GITHUB_OWNER`
 - `GITHUB_REPO`
 
-Notes:
+補足:
 
-- If `GITHUB_AUTH_MODE=gh`, authenticate with GitHub CLI (`gh auth login`).
-- If `GITHUB_AUTH_MODE=token`, set `GITHUB_TOKEN`.
+- `GITHUB_AUTH_MODE=gh` の場合は GitHub CLI（`gh auth login`）で認証します。
+- `GITHUB_AUTH_MODE=token` の場合は `GITHUB_TOKEN` を設定します。
 
 ### `local`
 
-- local repository + worktree workflow
-- no remote PR creation required
+- ローカル repository + worktree ベースの運用
+- remote PR 作成は不要
 
-Required:
+必須設定:
 
 - `LOCAL_REPO_PATH`
 - `LOCAL_WORKTREE_ROOT`
 - `BASE_BRANCH`
 
-## 2. Judge Mode (`JUDGE_MODE`)
+## 2. Judge Mode（`JUDGE_MODE`）
 
-- `git`: force PR review path
-- `local`: force local diff path
-- `auto`: follow repository mode
+- `git`: PR review 経路を強制
+- `local`: local diff 経路を強制
+- `auto`: repository mode に追従
 
-Note:
+補足:
 
-- `JUDGE_MODE` is env-driven (runtime option), not a `system_config` DB key.
+- `JUDGE_MODE` は env 駆動（runtime option）であり、`system_config` の DB キーではありません。
 
-Important flags:
+主要フラグ:
 
 - `JUDGE_MERGE_ON_APPROVE`
 - `JUDGE_REQUEUE_ON_NON_APPROVE`
 
-## 3. Execution Environment and Launch Mode
+## 3. Execution Environment と Launch Mode
 
-User-facing key is `EXECUTION_ENVIRONMENT` (`system_config`).
+ユーザー向け設定キーは `EXECUTION_ENVIRONMENT`（`system_config`）です。
 
-Internal launch mode is derived as:
+内部 launch mode は次のように導出されます。
 
 - `host` -> `LAUNCH_MODE=process`
 - `sandbox` -> `LAUNCH_MODE=docker`
 
-For runtime details (Docker image/network, sandbox auth, and troubleshooting), see `docs/execution-mode.md`.
+runtime 詳細（Docker image/network、sandbox 認証、トラブルシュート）は `docs/execution-mode.md` を参照してください。
 
-`LAUNCH_MODE` is runtime internal and normally does not need direct manual configuration.
+`LAUNCH_MODE` は runtime 内部値のため、通常は直接設定する必要はありません。
 
-### `process` (host)
+### `process`（host）
 
-- resident agents consume queue jobs
-- fastest recovery and operational visibility
+- 常駐 agent が queue job を消化
+- 回復速度と運用可視性を優先
 
-### `docker` (sandbox)
+### `docker`（sandbox）
 
-- per-task container isolation
-- useful in stricter isolation environments
+- task 単位の container 分離
+- 分離要件が厳しい環境で有効
 
 ## 4. Scaling Rules
 
-- planner is hard-limited to one process by API/system logic
-- worker/tester/docser/judge counts are configurable
-- dispatcher slot control counts only busy executable roles (`worker/tester/docser`)
+- planner は API/system ロジックで 1 process にハード制限
+- worker/tester/docser/judge の数は設定可能
+- dispatcher の slot 制御は busy な実行 role（`worker/tester/docser`）のみを計数
 
 実装責務:
 
 - slot 制御/配布判定: `docs/agent/dispatcher.md`
 - approve/rework 判定: `docs/agent/judge.md`
 
-## 5. Startup Behavior You Should Expect
+## 5. 想定される起動時挙動
 
-`/system/preflight` can intentionally skip planner.
+`/system/preflight` は意図的に planner をスキップする場合があります。
 
-Typical:
+典型例:
 
-- issue backlog exists -> create/continue issue tasks first
-- open PR or awaiting judge backlog exists -> judge first
-- planner starts only when backlog is clear and requirement content exists
+- issue backlog がある -> issue task を先に作成/継続
+- open PR または `awaiting_judge` backlog がある -> judge を先行起動
+- planner は backlog が解消され、かつ requirement がある場合のみ起動
 
-## 6. Retry/Recovery Controls
+## 6. Retry / Recovery Controls
 
-Main knobs:
+主要ノブ:
 
 - `FAILED_TASK_RETRY_COOLDOWN_MS`
 - `BLOCKED_TASK_RETRY_COOLDOWN_MS`
-- `FAILED_TASK_MAX_RETRY_COUNT` (`-1` means unlimited global retry budget)
+- `FAILED_TASK_MAX_RETRY_COUNT`（`-1` は global retry budget 無制限）
 - `DISPATCH_RETRY_DELAY_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART*`
 
-Queue/lock recovery knobs:
+queue/lock 回復ノブ:
 
 - `TASK_QUEUE_LOCK_DURATION_MS`
 - `TASK_QUEUE_STALLED_INTERVAL_MS`
@@ -122,4 +122,4 @@ Queue/lock recovery knobs:
 - `OPENCODE_QUOTA_RETRY_DELAY_MS`
 - `OPENCODE_MAX_QUOTA_WAITS`
 
-Current task-level behavior still uses `blocked(quota_wait)` + cycle cooldown requeue for convergence.
+現在の task レベル挙動は、`blocked(quota_wait)` + cycle cooldown requeue により収束させる設計です。
