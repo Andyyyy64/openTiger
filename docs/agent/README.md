@@ -112,6 +112,13 @@ blocked 理由（reason）:
   - A. まず Planner/API の issue 連携処理を確認します。Judge は `issue_linking` 解消の主体ではありません。
   - 初動 API: `GET /tasks`, `POST /system/preflight`, `GET /logs/all`
 
+補足（共通トリアージ導線）:
+
+- 状態語彙の確認: `docs/state-model.md`
+- 状態遷移と回復経路: `docs/flow.md`
+- API 手順と運用ショートカット: `docs/operations.md`
+- 起動判定の分岐確認: `docs/startup-patterns.md`
+
 ## 9. 実装参照マップ（source of truth）
 
 - Planner: `apps/planner/src/`
