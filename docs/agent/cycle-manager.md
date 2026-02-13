@@ -13,20 +13,20 @@ Cycle Manager は長時間運用を前提に、システム全体の収束を維
 
 責務外:
 
-- individual task の実装内容を直接変更すること
-- PR 差分の approve/reject 判定
+- 個別 task の実装内容を直接変更すること
+- PR 差分の承認/差し戻し判定
 
 ## 2. ランタイムループ
 
-- monitor loop
+- 監視ループ（monitor loop）
   - cycle 終了条件判定
   - anomaly 検知
   - cost 上限監視
   - backlog 枯渇時の issue preflight / replan 判定
-- cleanup loop
+- クリーンアップループ（cleanup loop）
   - expired lease / offline agent / stuck run の回復
   - failed / blocked task の cooldown 後 requeue
-- stats loop
+- 統計更新ループ（stats loop）
   - cycle stats と system state の更新
 
 ## 3. サイクルライフサイクル

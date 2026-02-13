@@ -6,13 +6,13 @@
 
 | エージェント | 主責務 | 主入力 | 主要遷移/出力 | 主な失敗時挙動 |
 | --- | --- | --- | --- | --- |
-| Planner | requirement/issue から task 計画を生成 | requirement, backlog, feedback, inspection | `tasks` 作成、plan event 保存 | 代替 planning、重複計画ガード |
-| Dispatcher | 実行順制御と task 配布 | queued task, leases, agent heartbeat | `queued -> running`、lease 付与、agent 割当 | lease reclaim、孤立 task 回復、再 queue |
-| Worker | 実装変更 + 検証 + PR 化 | task, repo/worktree, commands | `runs/artifacts` 生成、`awaiting_judge` または `done` | `quota_wait` / `needs_rework` / `failed` |
-| Tester | テスト中心 task の実行 | tester role task | Worker と同等（テスト文脈） | Worker と同等 |
-| Docser | ドキュメント同期 task の実行 | docser role task | docs 更新 run/artifact | doc-safe command 制約、LLM policy recovery なし |
-| Judge | successful run の評価と統治 | run/artifacts, CI/policy/LLM result | `done` または retry/rework/autofix | circuit breaker、autofix、awaiting_judge 復元 |
-| Cycle Manager | 収束監視・回復・replan 制御 | system state, events, anomaly/cost | cycle 更新、cleanup、replan 起動 | critical anomaly restart、cooldown 再試行 |
+| Planner | requirement/issue から task 計画を生成 | requirement、backlog、feedback、inspection | `tasks` 作成、plan event 保存 | 代替 planning、重複計画ガード |
+| Dispatcher | 実行順制御と task 配布 | queued task、leases、agent heartbeat | `queued -> running`、lease 付与、agent 割当 | lease reclaim、孤立 task 回復、再 queue |
+| Worker | 実装変更 + 検証 + PR 化 | task、repo/worktree、コマンド | `runs/artifacts` 生成、`awaiting_judge` または `done` | `quota_wait` / `needs_rework` / `failed` |
+| Tester | テスト中心 task の実行 | tester ロール task | Worker と同等（テスト文脈） | Worker と同等 |
+| Docser | ドキュメント同期 task の実行 | docser ロール task | docs 更新 run/artifact | doc-safe command 制約、LLM policy recovery なし |
+| Judge | successful run の評価と統治 | run/artifacts、CI/policy/LLM 結果 | `done` または retry/rework/autofix | circuit breaker、autofix、awaiting_judge 復元 |
+| Cycle Manager | 収束監視・回復・replan 制御 | system state、events、anomaly/cost | cycle 更新、cleanup、replan 起動 | critical anomaly restart、cooldown 再試行 |
 
 補足:
 
@@ -65,7 +65,7 @@ Worker / Tester / Docser は同一ランタイムを共有し、`AGENT_ROLE` で
 
 ## 6. 共通の状態モデル
 
-task status（状態）:
+task 状態（status）:
 
 - `queued`
 - `running`
@@ -74,7 +74,7 @@ task status（状態）:
 - `blocked`
 - `cancelled`
 
-blocked reason（理由）:
+blocked 理由（reason）:
 
 - `awaiting_judge`
 - `quota_wait`
