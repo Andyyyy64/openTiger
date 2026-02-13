@@ -62,13 +62,13 @@
 
 ## 7. 状態遷移で詰まりやすいパターン（一次診断）
 
-| 症状 | まず見る状態/値 | 先に確認する担当領域 |
-| --- | --- | --- |
-| `queued` が長時間減らない | `agents` の idle/busy、lease、dependency/targetArea 競合 | Dispatcher |
-| `running` が長時間固定 | 対応 run の `status`, startedAt、worker ログ | Worker/Tester/Docser |
-| `awaiting_judge` が増え続ける | pending judge run、judge process 稼働 | Judge |
-| `quota_wait` が連鎖する | cooldown 待機時間、同時実行数、モデル quota | Worker + Dispatcher |
-| `needs_rework` が連鎖する | non-approve 理由、policy/verification failure の内容 | Judge + Worker + Cycle Manager |
+| 症状 | まず見る状態/値 | 主な確認 API | 先に確認する担当領域 |
+| --- | --- | --- | --- |
+| `queued` が長時間減らない | `agents` の idle/busy、lease、dependency/targetArea 競合 | `GET /agents`, `GET /tasks`, `GET /logs/all` | Dispatcher |
+| `running` が長時間固定 | 対応 run の `status`, startedAt、worker ログ | `GET /runs`, `GET /tasks`, `GET /logs/all` | Worker/Tester/Docser |
+| `awaiting_judge` が増え続ける | pending judge run、judge process 稼働 | `GET /judgements`, `GET /system/processes`, `GET /logs/all` | Judge |
+| `quota_wait` が連鎖する | cooldown 待機時間、同時実行数、モデル quota | `GET /tasks`, `GET /runs`, `GET /logs/all` | Worker + Dispatcher |
+| `needs_rework` が連鎖する | non-approve 理由、policy/verification failure の内容 | `GET /judgements`, `GET /runs`, `GET /logs/all` | Judge + Worker + Cycle Manager |
 
 補足:
 
