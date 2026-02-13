@@ -95,6 +95,9 @@ pnpm run up
    - `runs`
    - `judgements`
    - `logs`
+6. If states appear stuck:
+   - start from `docs/state-model.md` triage patterns
+   - then follow `docs/operations.md` for detailed runbook
 
 ## Startup and Runtime Behavior
 
