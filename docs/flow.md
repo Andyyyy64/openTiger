@@ -163,7 +163,8 @@ Blocked recovery behavior:
 
 System process self-recovery:
 
-- When Judge backlog is detected (`openPrCount > 0` or `pendingJudgeTaskCount > 0`), arms runtime hatch and auto-starts Judge when Judge process stops
+- Self-heal starts managed processes only while runtime hatch is armed
+- Judge backlog alone does not arm runtime hatch
 
 Policy lifecycle and self-growth details:
 

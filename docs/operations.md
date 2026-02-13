@@ -90,7 +90,7 @@ Main events:
 Used for:
 
 - Deciding whether execution processes are "continue-running target"
-- Judge auto-restart when Judge backlog is detected, etc.
+- Gating all self-heal auto-start behavior while armed
 
 CLI commands:
 

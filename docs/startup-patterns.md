@@ -86,7 +86,7 @@ The 16 combinations of `R/I/P/L` collapse into these classes in practice (same o
 Notes:
 
 - When `I=1`, planner is disabled and execution agents enabled, so Issue is effectively highest priority
-- When `L=0` and `P=1`, Judge can start without dispatcher/worker. System process self-recovery detects backlog and auto-restarts Judge when stopped
+- When `L=0` and `P=1`, Judge can start without dispatcher/worker. Auto-restart still requires runtime hatch to be armed
 - Planner can start only when `I/P/L` are all 0 and `R=1`
 
 ## Planner Startup Guard

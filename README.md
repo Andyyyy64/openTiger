@@ -124,6 +124,7 @@ pnpm run up
 
 - Planner is started only when backlog gates are clear.
 - Existing local/Issue/PR backlog is always prioritized.
+- Runtime hatch disarm keeps process self-heal from auto-starting workers/judge only because backlog exists.
 - Runtime convergence order:
   - `local backlog > 0`: continue execution
   - `local backlog == 0`: sync Issue backlog via preflight

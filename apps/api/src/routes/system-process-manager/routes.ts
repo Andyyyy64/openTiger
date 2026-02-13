@@ -204,18 +204,6 @@ function resolveExpectedManagedProcessNames(configRow: ConfigRow): string[] {
   return Array.from(processNames.values());
 }
 
-function resolveJudgeProcessNames(configRow: ConfigRow): string[] {
-  if (!parseBooleanSetting(configRow.judgeEnabled, true)) {
-    return [];
-  }
-  const processNames: string[] = [];
-  const judgeCount = parseCountSetting(configRow.judgeCount, 1);
-  for (let index = 1; index <= judgeCount; index += 1) {
-    processNames.push(index === 1 ? "judge" : `judge-${index}`);
-  }
-  return processNames;
-}
-
 function shouldSkipSelfHeal(runtime: ProcessRuntime | undefined): boolean {
   if (!runtime) {
     return false;
@@ -311,32 +299,13 @@ async function runProcessSelfHealTick(): Promise<void> {
   processSelfHealInFlight = true;
   try {
     const configRow = await ensureConfigRow();
-    const preflight = await buildPreflightSummary({
-      configRow,
-      autoCreateIssueTasks: false,
-      autoCreatePrJudgeTasks: false,
-    });
     const hasLiveAgents = await hasLiveExecutionAgents();
     if (hasLiveAgents && !runtimeHatchArmed) {
       await setRuntimeHatchArmed(true, {
         source: "system.self_heal.live_execution_agent",
       });
     }
-    const hasJudgeBacklog =
-      preflight.github.openPrCount > 0 || preflight.local.pendingJudgeTaskCount > 0;
-    if (hasJudgeBacklog && !runtimeHatchArmed) {
-      await setRuntimeHatchArmed(true, {
-        source: "system.self_heal.judge_backlog",
-        openPrCount: preflight.github.openPrCount,
-        pendingJudgeTaskCount: preflight.local.pendingJudgeTaskCount,
-      });
-    }
     const expectedSet = new Set(resolveExpectedManagedProcessNames(configRow));
-    if (hasJudgeBacklog) {
-      for (const processName of resolveJudgeProcessNames(configRow)) {
-        expectedSet.add(processName);
-      }
-    }
     const expectedProcesses = Array.from(expectedSet.values());
     for (const processName of expectedProcesses) {
       try {
