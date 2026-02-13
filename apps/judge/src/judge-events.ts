@@ -86,3 +86,61 @@ export async function recordLocalReview(
     console.error("[Judge] Failed to record local review event:", error);
   }
 }
+
+export async function recordResearchReview(
+  target: {
+    taskId: string;
+    runId: string;
+    researchJobId: string;
+    role: string;
+  },
+  result: JudgeResult,
+  summary: EvaluationSummary,
+  actionResult: {
+    approved: boolean;
+    requeued: boolean;
+    blocked: boolean;
+  },
+  metrics: {
+    claimCount: number;
+    evidenceCount: number;
+    reportCount: number;
+    latestReportConfidence: number;
+  },
+  agentId: string,
+  dryRun: boolean,
+): Promise<void> {
+  try {
+    await db.insert(events).values({
+      type: "judge.review",
+      entityType: "task",
+      entityId: target.taskId,
+      agentId,
+      payload: {
+        mode: "research",
+        taskId: target.taskId,
+        runId: target.runId,
+        researchJobId: target.researchJobId,
+        role: target.role,
+        verdict: result.verdict,
+        autoMerge: false,
+        riskLevel: result.riskLevel,
+        confidence: result.confidence,
+        reasons: result.reasons,
+        suggestions: result.suggestions,
+        summary,
+        metrics,
+        actions: {
+          commented: false,
+          approved: actionResult.approved,
+          merged: false,
+          requeued: actionResult.requeued,
+          blocked: actionResult.blocked,
+        },
+        dryRun,
+      },
+    });
+  } catch (error) {
+    console.error(`[Judge] Failed to record research review for run ${target.runId}:`, error);
+  }
+}

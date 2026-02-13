@@ -3,12 +3,13 @@ import { tasks } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
 import { createDocserTaskForLocal } from "./docser";
 import { resolveBaseRepoRecoveryRules, type JudgeConfig } from "./judge-config";
-import { getPendingWorktrees } from "./judge-pending";
+import { getPendingResearchRuns, getPendingWorktrees } from "./judge-pending";
 import { safeSetJudgeAgentState } from "./judge-agent";
-import { recordLocalReview } from "./judge-events";
+import { recordLocalReview, recordResearchReview } from "./judge-events";
 import { judgeSingleWorktree, buildJudgeFailureMessage } from "./judge-evaluate";
 import { mergeLocalBranch } from "./judge-local-merge";
 import { requeueTaskAfterJudge, claimRunForJudgement } from "./judge-retry";
+import { evaluateResearchRun, markResearchJobAfterJudge } from "./judge-research";
 
 export async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
   console.log("=".repeat(60));
@@ -136,6 +137,94 @@ export async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
             );
           } catch (error) {
             console.error(`  Error processing worktree ${target.worktreePath}:`, error);
+          } finally {
+            await safeSetJudgeAgentState(config.agentId, "busy");
+          }
+        }
+      }
+
+      const pendingResearchRuns = await getPendingResearchRuns();
+      if (pendingResearchRuns.length > 0) {
+        await safeSetJudgeAgentState(config.agentId, "busy");
+        console.log(`\nFound ${pendingResearchRuns.length} research runs to review`);
+
+        for (const pending of pendingResearchRuns) {
+          try {
+            await safeSetJudgeAgentState(config.agentId, "busy", pending.taskId);
+            if (!config.dryRun) {
+              const claimed = await claimRunForJudgement(pending.runId);
+              if (!claimed) {
+                console.log(`  Skip research run ${pending.runId}: run already judged`);
+                await safeSetJudgeAgentState(config.agentId, "busy");
+                continue;
+              }
+            }
+
+            const { result, summary, metrics } = await evaluateResearchRun(pending);
+            const actionResult = {
+              approved: false,
+              requeued: false,
+              blocked: false,
+            };
+
+            if (!config.dryRun) {
+              if (result.verdict === "approve") {
+                await db
+                  .update(tasks)
+                  .set({
+                    status: "done",
+                    blockReason: null,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(tasks.id, pending.taskId));
+                await markResearchJobAfterJudge({
+                  jobId: pending.researchJobId,
+                  verdict: "approve",
+                  runId: pending.runId,
+                  agentId: config.agentId,
+                  notes: result.reasons,
+                  statusOverride: "done",
+                });
+                actionResult.approved = true;
+                console.log(`  Research task ${pending.taskId} marked as done`);
+              } else {
+                await db
+                  .update(tasks)
+                  .set({
+                    status: "blocked",
+                    blockReason: "needs_rework",
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(tasks.id, pending.taskId));
+                await markResearchJobAfterJudge({
+                  jobId: pending.researchJobId,
+                  verdict: "request_changes",
+                  runId: pending.runId,
+                  agentId: config.agentId,
+                  notes: result.reasons,
+                  statusOverride: "blocked",
+                });
+                actionResult.blocked = true;
+                console.log(`  Research task ${pending.taskId} blocked as needs_rework`);
+              }
+            }
+
+            await recordResearchReview(
+              {
+                taskId: pending.taskId,
+                runId: pending.runId,
+                researchJobId: pending.researchJobId,
+                role: pending.role,
+              },
+              result,
+              summary,
+              actionResult,
+              metrics,
+              config.agentId,
+              config.dryRun,
+            );
+          } catch (error) {
+            console.error(`  Error processing research run ${pending.runId}:`, error);
           } finally {
             await safeSetJudgeAgentState(config.agentId, "busy");
           }
