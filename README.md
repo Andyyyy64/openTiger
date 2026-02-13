@@ -1,12 +1,14 @@
-# 🐯openTiger
+# 🐯openTiger — Never-stopping autonomous development orchestration
 
-<img src="assets/avatar.png" alt="openTiger" width="600" />
-
-**Never-stopping autonomous development orchestration.**
+<p align="center">
+  <img src="assets/avatar.png" alt="openTiger" width="500" />
+</p>
 
 openTiger continuously runs requirement-to-task generation, implementation, review, and recovery using multiple agents.
 
-<img src="assets/ui.png" alt="openTiger UI" width="720" />
+<p align="center">
+  <img src="assets/ui.png" alt="openTiger UI" width="720" />
+</p>
 
 ## What It Can Do
 
