@@ -20,6 +20,11 @@ Tester/Docser 固有差分は以下を参照してください。
 - `docs/agent/tester.md`
 - `docs/agent/docser.md`
 
+責務外:
+
+- global backlog の再計画判断
+- PR の approve/reject 判定
+
 ## 2. Standard Execution Flow
 
 1. runtime lock 取得

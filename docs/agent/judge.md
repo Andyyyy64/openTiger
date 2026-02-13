@@ -10,6 +10,11 @@
 
 Judge は successful run を評価し、task を `done` へ収束させるか、再実行/再修正へ分岐させる責務を持ちます。
 
+責務外:
+
+- queued task の配布・lease 管理
+- 実ファイル変更の実行
+
 ## 2. Mode Resolution
 
 実行モードは次で決定されます。

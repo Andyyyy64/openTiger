@@ -11,6 +11,11 @@
 Planner は requirement/issue から実行可能な task 群を生成し、重複なく永続化します。  
 重複計画を避けるため、運用上は単一インスタンス前提です。
 
+責務外:
+
+- task 実行（コード変更・検証コマンド実行）
+- run 成果物の judge 判定
+
 ## 2. Inputs
 
 - requirement content/file
