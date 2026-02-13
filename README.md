@@ -23,6 +23,7 @@ all under explicit runtime state transitions.
 - Requirement -> executable task generation
 - Role-based execution (`worker` / `tester` / `docser`)
 - PR and local-worktree judgement (`judge`)
+- Query-driven TigerResearch (`planner-first` claim/evidence convergence)
 - Recovery-first operation (`quota_wait`, `awaiting_judge`, `needs_rework`)
 - Backlog-first startup (Issue/PR backlog is processed before new planning)
 - Dashboard + API for process control, logs, and system config
@@ -39,6 +40,7 @@ all under explicit runtime state transitions.
 - **PostgreSQL + Redis**: persistent state + queueing
 
 See `docs/architecture.md` for component-level details.
+See `docs/research.md` for TigerResearch design and operation.
 
 ## Prerequisites
 
@@ -107,7 +109,10 @@ pnpm run up
    - `runs`
    - `judgements`
    - `logs`
-7. If state becomes stalled:
+7. (Optional) Run TigerResearch from the `research` page:
+   - submit query -> planner decomposition -> parallel collect/challenge/write -> report
+   - details: `docs/research.md`
+8. If state becomes stalled:
    - Start with initial diagnosis in `docs/state-model.md`
    - Check detailed runbook in `docs/operations.md`
 
@@ -157,6 +162,7 @@ Runtime behavior reference:
 - `docs/execution-mode.md`
 - `docs/policy-recovery.md`
 - `docs/verification.md`
+- `docs/research.md`
 
 Agent specification reference:
 
