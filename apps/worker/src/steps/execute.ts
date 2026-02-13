@@ -27,7 +27,7 @@ export interface ExecuteResult {
   error?: string;
 }
 
-type ExecutorKind = "opencode" | "claude_code" | "codex";
+type ExecutorKind = "opencode" | "claude_code";
 
 function isClaudeExecutorValue(value: string | undefined): boolean {
   if (!value) return false;
@@ -37,40 +37,19 @@ function isClaudeExecutorValue(value: string | undefined): boolean {
   );
 }
 
-function isCodexExecutorValue(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === "codex" || normalized === "openai_codex" || normalized === "openai-codex";
-}
-
 function resolveExecutorKindFromEnv(env: Record<string, string>): ExecutorKind {
   if (isClaudeExecutorValue(env.LLM_EXECUTOR) || isClaudeExecutorValue(process.env.LLM_EXECUTOR)) {
     return "claude_code";
-  }
-  if (isCodexExecutorValue(env.LLM_EXECUTOR) || isCodexExecutorValue(process.env.LLM_EXECUTOR)) {
-    return "codex";
   }
   return "opencode";
 }
 
 function getExecutorDisplayName(executor: ExecutorKind): string {
-  if (executor === "claude_code") {
-    return "Claude Code";
-  }
-  if (executor === "codex") {
-    return "Codex";
-  }
-  return "OpenCode";
+  return executor === "claude_code" ? "Claude Code" : "OpenCode";
 }
 
 function getExecutorLogTag(executor: ExecutorKind): string {
-  if (executor === "claude_code") {
-    return "ClaudeCode";
-  }
-  if (executor === "codex") {
-    return "Codex";
-  }
-  return "OpenCode";
+  return executor === "claude_code" ? "ClaudeCode" : "OpenCode";
 }
 
 function isConflictAutoFixTask(task: Task): boolean {

@@ -18,7 +18,6 @@ Related:
 - GitHub CLI (`gh`) recommended
 
 Claude Code executor requires the `claude` CLI.
-Codex executor requires the `codex` CLI.
 
 ## 2. Setup
 
@@ -43,14 +42,6 @@ For token mode, set `GITHUB_TOKEN` in System Config.
 ```bash
 claude /login
 ```
-
-### When Using `LLM_EXECUTOR=codex`
-
-```bash
-codex login
-```
-
-Or set `OPENAI_API_KEY` if you prefer API key based authentication.
 
 ## 4. Startup
 
