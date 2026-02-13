@@ -359,7 +359,11 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
         "Run `claude /login` on host or set CLAUDE_AUTH_DIR / CLAUDE_CONFIG_DIR.",
     );
   }
-  if (isCodexExecutor(allEnv.LLM_EXECUTOR) && codexAuthMounts.length === 0 && !allEnv.CODEX_API_KEY) {
+  if (
+    isCodexExecutor(allEnv.LLM_EXECUTOR) &&
+    codexAuthMounts.length === 0 &&
+    !allEnv.CODEX_API_KEY
+  ) {
     console.warn(
       "[Dispatcher] Codex executor is enabled for sandbox, but no host Codex auth directory was found. " +
         "Run `codex login` on host or set CODEX_AUTH_DIR / CODEX_API_KEY.",

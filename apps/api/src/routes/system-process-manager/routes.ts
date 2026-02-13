@@ -666,8 +666,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
     }
 
     const runtime = managedProcesses.get(definition.name);
-    const canTerminateManagedProcess =
-      runtime?.status === "running" && Boolean(runtime.process);
+    const canTerminateManagedProcess = runtime?.status === "running" && Boolean(runtime.process);
     const info = stopManagedProcess(definition);
     const boundAgentId = resolveBoundAgentId(name);
     if (boundAgentId && canTerminateManagedProcess) {

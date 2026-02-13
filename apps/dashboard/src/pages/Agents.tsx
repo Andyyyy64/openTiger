@@ -236,7 +236,7 @@ export const AgentsPage: React.FC = () => {
                         ? (normalizeClaudeModel(agent.metadata?.model) ?? configuredClaudeModel)
                         : useCodexLabels
                           ? (normalizeCodexModel(agent.metadata?.model) ?? configuredCodexModel)
-                        : (agent.metadata?.model ?? "--")}
+                          : (agent.metadata?.model ?? "--")}
                     </span>
                   </div>
 
