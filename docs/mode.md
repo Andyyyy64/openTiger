@@ -2,6 +2,12 @@
 
 openTiger behavior is controlled by repository mode, judge mode, and execution environment.
 
+Related:
+
+- `docs/config.md`
+- `docs/startup-patterns.md`
+- `docs/execution-mode.md`
+
 ## 1. Repository Mode (`REPO_MODE`)
 
 ### `git`
@@ -38,6 +44,10 @@ Required:
 - `git`: force PR review path
 - `local`: force local diff path
 - `auto`: follow repository mode
+
+Note:
+
+- `JUDGE_MODE` is env-driven (runtime option), not a `system_config` DB key.
 
 Important flags:
 

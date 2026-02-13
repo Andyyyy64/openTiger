@@ -2,6 +2,12 @@
 
 This document explains how `EXECUTION_ENVIRONMENT` controls runtime behavior and how to run `claude_code` safely in sandbox mode.
 
+Related:
+
+- `docs/mode.md`
+- `docs/config.md`
+- `docs/operations.md`
+
 ## 1. Overview
 
 `EXECUTION_ENVIRONMENT` is a `system_config` key with two values:
@@ -112,6 +118,10 @@ Behavior:
   - sandbox image missing
   - `claude` CLI missing in image
   - authentication required (`/login`)
+
+Access note:
+
+- This endpoint is a system-control API and requires admin-level control permission.
 
 ## 8. Troubleshooting
 
