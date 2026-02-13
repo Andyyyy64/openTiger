@@ -43,6 +43,8 @@ import { attachExistingPrArtifact } from "./worker-runner-artifacts";
 import { runVerificationPhase } from "./worker-runner-verification";
 import type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 import { recordContextDeltaFailure } from "./context/context-delta";
+import { resolveResearchInstructionsPathFromTask } from "./research/instructions";
+import { runResearchWorker } from "./research/runner";
 
 export type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 const DEFAULT_LOG_DIR = resolve(import.meta.dirname, "../../../raw-logs");
@@ -72,6 +74,10 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     : taskData.allowedPaths;
 
   const taskId = taskData.id;
+  const isResearchTask = taskData.kind === "research";
+  const effectiveInstructionsPath = isResearchTask
+    ? resolveResearchInstructionsPathFromTask(taskData)
+    : instructionsPath;
   const agentLabel = role === "tester" ? "Tester" : role === "docser" ? "Docser" : "Worker";
 
   console.log("=".repeat(60));
@@ -110,6 +116,18 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
   let worktreePath: string | undefined;
 
   try {
+    if (isResearchTask) {
+      console.log("\n[Research] Running non-git research execution path...");
+      return await runResearchWorker({
+        task: taskData,
+        runId,
+        agentId,
+        workspacePath,
+        model,
+        instructionsPath: effectiveInstructionsPath,
+      });
+    }
+
     const localBranchName = repoMode === "local" ? generateBranchName(agentId, taskId) : undefined;
 
     // Step 1: Checkout repository
@@ -221,7 +239,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     let executeResult = await executeTask({
       repoPath,
       task: taskData,
-      instructionsPath,
+      instructionsPath: effectiveInstructionsPath,
       model,
       retryHints,
       policy: effectivePolicy,
@@ -266,7 +284,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       repoMode,
       verificationAllowedPaths,
       effectivePolicy,
-      instructionsPath,
+      instructionsPath: effectiveInstructionsPath,
       model,
       retryHints,
       executeResult,

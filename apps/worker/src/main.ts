@@ -21,7 +21,9 @@ type ExecutorKind = "opencode" | "claude_code" | "codex";
 
 function isClaudeExecutor(value: string): boolean {
   const normalized = value.trim().toLowerCase();
-  return normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code";
+  return (
+    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
+  );
 }
 
 function isCodexExecutor(value: string): boolean {
