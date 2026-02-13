@@ -196,13 +196,13 @@ pnpm runtime:hatch:disarm
 
 障害対応時に、状態語彙 -> 遷移 -> 担当 -> 実装の順で追う共通導線です。
 
-| 起点（状態/症状） | 状態語彙の確認先 | 遷移の確認先（flow） | 担当と実装参照 |
-| --- | --- | --- | --- |
-| `queued` が進まない | `docs/state-model.md` 7章 | `docs/flow.md` 2章, 5章 | Dispatcher (`docs/agent/dispatcher.md` -> `apps/dispatcher/src/`) |
-| `running` が長時間固定 | `docs/state-model.md` 7章 | `docs/flow.md` 2章, 6章 | Worker/Tester/Docser (`docs/agent/worker.md` -> `apps/worker/src/`) |
-| `awaiting_judge` が滞留 | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章, 4章, 7章 | Judge (`docs/agent/judge.md` -> `apps/judge/src/`) |
-| `quota_wait` / `needs_rework` が連鎖 | `docs/state-model.md` 2章, 2.2章 | `docs/flow.md` 3章, 6章, 8章 | Worker/Judge/Cycle Manager（各 agent 仕様末尾の実装参照節） |
-| `issue_linking` が解消しない | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章 | Planner (`docs/agent/planner.md` -> `apps/planner/src/`) |
+| 起点（状態語彙/症状） | 状態語彙の確認先 | 遷移の確認先（flow） | 担当 agent の確認先 | 実装の確認先 |
+| --- | --- | --- | --- | --- |
+| `queued` が進まない | `docs/state-model.md` 7章 | `docs/flow.md` 2章, 5章 | Dispatcher（`docs/agent/dispatcher.md`） | `apps/dispatcher/src/` |
+| `running` が長時間固定 | `docs/state-model.md` 7章 | `docs/flow.md` 2章, 6章 | Worker/Tester/Docser（`docs/agent/worker.md`） | `apps/worker/src/` |
+| `awaiting_judge` が滞留 | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章, 4章, 7章 | Judge（`docs/agent/judge.md`） | `apps/judge/src/` |
+| `quota_wait` / `needs_rework` が連鎖 | `docs/state-model.md` 2章, 2.2章 | `docs/flow.md` 3章, 6章, 8章 | Worker/Judge/Cycle Manager（各 agent 仕様） | 各 agent 仕様末尾の「実装参照（source of truth）」節 |
+| `issue_linking` が解消しない | `docs/state-model.md` 2章, 7章 | `docs/flow.md` 3章 | Planner（`docs/agent/planner.md`） | `apps/planner/src/` |
 
 補足:
 
