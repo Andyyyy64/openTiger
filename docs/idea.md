@@ -2,25 +2,25 @@
 
 ## 1. Planner Fallback Layer
 
-- Add optional "degraded planning" mode when inspection repeatedly fails.
-- Generate minimal safe tasks instead of hard aborting planning.
+- inspection が連続失敗したときに使える optional な `degraded planning` mode を追加する
+- planning を hard abort せず、最小安全 task を生成する
 
 ## 2. Recovery Explainability
 
-- Add first-class timeline panel: state transition graph per task.
-- Show reason evolution (`quota_wait -> queued -> running -> awaiting_judge`).
+- task 単位の状態遷移を示す timeline panel を第一級機能として追加する
+- reason の変化（`quota_wait -> queued -> running -> awaiting_judge`）を可視化する
 
 ## 3. Judge Throughput Controls
 
-- Dynamic judge scaling based on awaiting backlog slope.
-- Prioritize PRs with oldest blocked parent task first.
+- awaiting backlog の増減傾向に応じて judge 数を動的スケーリングする
+- 最も古い blocked 親 task を持つ PR を優先評価する
 
 ## 4. Retry Policy Profiles
 
-- profile-based retry policy (`aggressive`, `balanced`, `cost-save`).
-- allow per-project overrides by config row.
+- profile ベースの retry policy（`aggressive`, `balanced`, `cost-save`）を追加する
+- config row ごとに project 単位 override を許可する
 
 ## 5. Safety Hardening
 
-- stronger permission preflight for expected external paths.
-- explicit validation before passing paths to worker instructions.
+- 想定外 external path への preflight permission check を強化する
+- worker instruction へ path を渡す前に明示的 validation を追加する

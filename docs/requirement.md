@@ -1,54 +1,56 @@
 # Goal
 
-Build a minimal but extensible RISC-V OS baseline that boots on QEMU (qmenu), provides a kernel console, and supports safe iterative development with automated verification.
+QEMU（qmenu）で起動し、kernel console を提供し、自動検証付きで安全に反復開発できる  
+最小かつ拡張可能な RISC-V OS baseline を構築する。
 
 ## Background
 
-We want to develop an OS on RISC-V with a workflow that can be continuously driven by openTiger.
-To make autonomous iteration stable, the first milestone must focus on a small, verifiable kernel baseline instead of full-featured OS scope.
+openTiger による継続的な自律開発フローで RISC-V OS を育てることを想定する。  
+自律反復の安定化のため、最初のマイルストーンはフル機能 OS ではなく、  
+小さく検証可能な kernel baseline に限定する。
 
 ## Constraints
 
-- Keep the existing language/toolchain choices already used in the repository.
-- Target RISC-V 64-bit virtual machine (`qemu-system-riscv64`, `virt` machine).
-- Keep boot and kernel behavior deterministic enough for automated verification in CI/local runs.
-- Avoid introducing heavy external runtime dependencies unless strictly needed.
-- Prioritize incremental, testable slices over large one-shot rewrites.
+- 既存リポジトリで採用済みの言語/ツールチェーン選定を維持する
+- 対象は RISC-V 64-bit 仮想環境（`qemu-system-riscv64`, `virt` machine）
+- boot/kernel 挙動は CI/ローカル自動検証で扱える程度に deterministic を保つ
+- 厳密に必要な場合を除き、重い外部 runtime dependency を追加しない
+- 一括大改修より、段階的でテスト可能な小さな slice を優先する
 
 ## Acceptance Criteria
 
-- [ ] Kernel image builds successfully with the project's standard build command.
-- [ ] Running the image on QEMU reaches kernel entry and prints a boot banner to serial console.
-- [ ] UART console input/output works for at least line-based command input.
-- [ ] Trap/exception handler is wired and logs cause information on unexpected trap.
-- [ ] Timer interrupt is enabled and at least one periodic tick is observable in logs.
-- [ ] A simple physical page allocator (4KiB pages) is implemented with basic allocation/free tests.
-- [ ] Basic kernel task execution is possible (at least two runnable tasks with round-robin scheduling).
-- [ ] A minimal kernel command interface exists with `help`, `echo`, and `meminfo`.
-- [ ] The project has at least one automated smoke test that boots in QEMU and checks expected boot log markers.
-- [ ] Core kernel changes are covered by unit/integration tests where feasible, and all required checks pass.
+- [ ] プロジェクト標準 build command で kernel image を生成できる
+- [ ] QEMU 起動で kernel entry 到達と serial console への boot banner 出力を確認できる
+- [ ] UART console 入出力が最低限 line-based command で動作する
+- [ ] trap/exception handler が配線され、unexpected trap の cause 情報を log 出力できる
+- [ ] timer interrupt が有効化され、周期 tick を log で少なくとも 1 回確認できる
+- [ ] 4KiB page 単位の simple physical page allocator があり、allocation/free の基本テストが通る
+- [ ] 基本 kernel task 実行（少なくとも 2 task の round-robin scheduling）ができる
+- [ ] 最小 kernel command interface（`help`, `echo`, `meminfo`）がある
+- [ ] QEMU boot と log marker 検証を行う自動 smoke test が少なくとも 1 本ある
+- [ ] 実現可能な範囲で kernel 主要変更に unit/integration test を付与し、必須 checks が通る
 
 ## Scope
 
 ## In Scope
 
-- Boot path and early initialization for RISC-V `virt` machine.
-- Kernel console over UART.
-- Trap/interrupt initialization and timer tick handling.
-- Basic physical memory page allocator.
-- Minimal scheduler foundation for kernel tasks.
-- Minimal command interface on serial console.
-- Build/test scripts for repeatable local and CI verification.
-- Essential documentation updates for setup and run commands.
+- RISC-V `virt` machine 向け boot path と early initialization
+- UART 経由の kernel console
+- trap/interrupt 初期化と timer tick 処理
+- 基本的な physical memory page allocator
+- kernel task 用 minimal scheduler 基盤
+- serial console 上の最小 command interface
+- ローカル/CI で再現可能な build/test script
+- setup/run command に関する必須ドキュメント更新
 
 ## Out of Scope
 
-- Full virtual memory subsystem with user-space process isolation.
-- Full POSIX compatibility.
-- File system implementation beyond minimal stubs.
-- Network stack.
-- Multi-core SMP scheduling.
-- Security hardening beyond baseline correctness.
+- user-space process 分離を含む完全な virtual memory subsystem
+- 完全な POSIX 互換
+- 最小 stub を超える file system 実装
+- network stack
+- multi-core SMP scheduling
+- baseline correctness を超える security hardening
 
 ## Allowed Paths
 
@@ -66,23 +68,24 @@ To make autonomous iteration stable, the first milestone must focus on a small, 
 
 ## Risk Assessment
 
-| Risk                                                                   | Impact | Mitigation                                                               |
-| ---------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------ |
-| Boot sequence instability causes non-deterministic failures in QEMU    | high   | Keep early boot logging explicit and add smoke tests for boot markers    |
-| Trap/interrupt misconfiguration blocks progress in later kernel stages | high   | Implement trap setup with incremental verification and isolated tests    |
-| Scheduler bugs create hidden starvation or deadlock                    | medium | Start with minimal round-robin behavior and add deterministic task tests |
-| Memory allocator corruption causes cascading failures                  | high   | Add allocator invariants and targeted allocation/free test cases         |
-| Scope expansion slows autonomous iteration                             | medium | Keep this milestone strictly baseline and defer advanced OS features     |
+| Risk | Impact | Mitigation |
+| --- | --- | --- |
+| QEMU 上で boot sequence が不安定になり非決定的失敗が起きる | high | 初期 boot log を明示的に保ち、boot marker 用 smoke test を追加する |
+| Trap/interrupt 設定ミスで後続 kernel 実装が詰まる | high | trap setup を段階的に実装し、分離テストで早期検証する |
+| Scheduler bug が starvation/deadlock を隠れ発生させる | medium | 最小 round-robin から開始し deterministic task test を追加する |
+| Memory allocator 破損で障害が連鎖する | high | allocator invariant と targeted allocation/free test を追加する |
+| Scope 拡張で自律反復速度が落ちる | medium | 本マイルストーンを baseline に固定し高度機能は後続へ送る |
 
 ## Notes
 
-Use a milestone-first strategy:
+milestone-first 戦略で進める:
 
-1. boot + console,
-2. trap/timer,
-3. allocator,
-4. scheduler,
-5. command interface,
-6. smoke tests and docs.
+1. boot + console
+2. trap/timer
+3. allocator
+4. scheduler
+5. command interface
+6. smoke tests + docs
 
-For openTiger operation, ensure there is a stable non-interactive verification command (for example a smoke test script that runs QEMU headless and validates log output).
+openTiger 運用では、非対話で安定実行できる verification command を必ず用意する。  
+（例: headless QEMU 実行 + log marker 検証の smoke test script）

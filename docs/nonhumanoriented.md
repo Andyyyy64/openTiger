@@ -1,86 +1,86 @@
 # Non-Human-Oriented Operation Principles
 
-## 1. Objective
+## 1. 目的
 
-Maintain autonomous progress without manual babysitting.
+人手の常時監視なしで、自律的に進捗し続けることを目的とします。
 
-Practical definition:
+実運用での定義:
 
-- no silent deadlock
-- no infinite same-step loop without state change
-- repeated failures are converted into a different recovery path
+- 無言の deadlock を作らない
+- 状態変化のない同一ステップ無限ループを作らない
+- 反復失敗は別の recovery 経路へ必ず変換する
 
-Completion policy:
+完了ポリシー:
 
-- Do not promise guaranteed completion in all external conditions.
-- Guarantee that the system does not intentionally stall.
-- When progress degrades, force a strategy switch through recovery state transitions.
+- 外部条件を含む全ケースでの完了保証は前提にしない
+- システムが意図的に停止し続けないことを保証する
+- 進捗が劣化したときは recovery 状態遷移で戦略を強制的に切り替える
 
-## 2. Core Principles
+## 2. コア原則
 
-- Recovery-first over perfect first-run success
-- Idempotent control points (lease, run claim, dedupe signatures)
-- Backlog-first startup (clear existing work before creating new work)
-- Explicit blocked reasons for machine recovery
+- 初回完全成功より Recovery-first
+- 冪等な制御点（lease / run claim / dedupe signature）
+- backlog-first 起動（新規生成より既存 backlog 解消を優先）
+- 機械回復可能な明示 blocked reason
 
-## 3. Anti-Stall Mechanisms
+## 3. 停滞防止メカニズム
 
-### 3.1 Lease and Runtime Lock Discipline
+### 3.1 Lease と Runtime Lock の規律
 
-- task lease prevents duplicate dispatch
-- runtime lock prevents duplicate execution
-- dangling/expired/orphaned lease paths are continuously reclaimed
+- task lease で重複 dispatch を防止
+- runtime lock で重複実行を防止
+- dangling / expired / orphaned lease を継続的に回収
 
-### 3.2 Judge Idempotency
+### 3.2 Judge の冪等性
 
-- only unjudged successful runs are eligible
-- claimed run cannot be judged twice concurrently
+- 未判定の成功 run だけを対象化
+- claim 済み run は同時二重判定できない
 
-### 3.3 Recovery States Instead of Halt States
+### 3.3 Halt State ではなく Recovery State を使う
 
 - `awaiting_judge`
 - `quota_wait`
 - `needs_rework`
 
-Additional runtime blocked state used for planner issue-link sequencing:
+planner の issue-link 順序制御に使う runtime blocked state:
 
 - `issue_linking`
 
-State is transformed rather than abandoned.
+状態を放棄せず、回復可能な状態へ変換します。
 
-### 3.4 Adaptive Escalation
+### 3.4 適応的 Escalation
 
-- repeated same failure signatures trigger rework/autofix escalation
-- merge-conflict approvals route to conflict autofix task when possible
+- 同一 failure signature の反復で rework/autofix へ昇格
+- merge-conflict 後の approve は可能なら conflict autofix task へ分岐
 
-### 3.5 Event-Driven Progress Recovery
+### 3.5 Event-Driven な進捗回復
 
-Recovery switching is event-driven, not fixed-time-trigger driven.
+回復切り替えは固定時間トリガーではなく event-driven で実行します。
 
-- repeated failure signatures -> `needs_rework` / rework split
+- 同一失敗シグネチャ反復 -> `needs_rework` / rework split
 - non-approve circuit breaker -> autofix path
-- quota failures -> `quota_wait` then cooldown requeue
-- missing judgeable runs -> restore `awaiting_judge` run context
+- quota failure -> `quota_wait` -> cooldown requeue
+- judge 可能 run 欠落 -> `awaiting_judge` run context 復元
 
-## 4. Quota Philosophy
+## 4. Quota に対する考え方
 
-Quota pressure is treated as recoverable external pressure, not terminal failure.
+quota 圧は終端失敗ではなく、回復可能な外部圧として扱います。
 
-- attempt may fail quickly
-- task is parked with explicit reason (`quota_wait`)
-- cooldown retry continues until resources recover
+- 単発 attempt は速やかに失敗してよい
+- task は明示理由（`quota_wait`）で待機させる
+- リソース回復まで cooldown retry を継続する
 
-## 5. Observability Requirements
+## 5. 可観測性要件
 
-Operators must see progress intent, not only attempt outcomes.
+運用者は試行結果だけでなく、次の進行意図を観測できる必要があります。
 
-- run-level failures
-- task-level next retry reason/time
-- backlog gating reasons from preflight
+- run レベル失敗
+- task レベルの次回 retry reason/time
+- preflight が返す backlog gate 理由
 
 ## 6. Non-Goals
 
-- maximizing first-attempt success at the cost of recoverability
-- strict sequential processing when safe parallelism is available
-- manual-only recovery flows
-- fixed-minute watchdog automation as the primary recovery trigger
+- 回復性を犠牲にした初回成功率の最大化
+- 安全な並列性があるのに厳密逐次処理へ固定
+- 手動限定の recovery フロー
+- 固定分 watchdog だけに依存した回復設計
