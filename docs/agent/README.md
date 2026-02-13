@@ -2,11 +2,11 @@
 
 このページは、openTiger の各 agent の責務と違いを横断的に確認するための索引です。
 
-## 1. Agent 比較表
+## 1. エージェント比較表
 
-| Agent | 主責務 | 主入力 | 主要遷移/出力 | 主な失敗時挙動 |
+| エージェント | 主責務 | 主入力 | 主要遷移/出力 | 主な失敗時挙動 |
 | --- | --- | --- | --- | --- |
-| Planner | requirement/issue から task 計画生成 | requirement, backlog, feedback, inspection | `tasks` 作成、plan event 保存 | fallback planning、重複計画ガード |
+| Planner | requirement/issue から task 計画生成 | requirement, backlog, feedback, inspection | `tasks` 作成、plan event 保存 | 代替 planning、重複計画ガード |
 | Dispatcher | 実行順制御と task 配布 | queued tasks, leases, agent heartbeat | `queued -> running`、lease 付与、agent 割当 | lease reclaim、orphan 回復、再queue |
 | Worker | 実装変更 + 検証 + PR 化 | task, repo/worktree, commands | `runs/artifacts` 生成、`awaiting_judge` or `done` | `quota_wait` / `needs_rework` / `failed` |
 | Tester | テスト中心タスク実行 | tester role task | Worker と同等（テスト文脈） | Worker と同等 |
@@ -27,9 +27,9 @@
 - **Judge** は「結果を承認するか、再修正へ戻すか」を決める。
 - **Cycle Manager** は「収束し続ける運用」を維持する。
 
-## 3. Agent 境界（しないこと）
+## 3. エージェント境界（しないこと）
 
-| Agent | しないこと（責務外） |
+| エージェント | しないこと（責務外） |
 | --- | --- |
 | Planner | task 実行、PR merge 判定 |
 | Dispatcher | コード変更、approve/rework 判定 |
@@ -55,13 +55,13 @@ Worker / Tester / Docser は同一 runtime を共有し、`AGENT_ROLE` で挙動
 
 ## 5. モデル/指示ファイルの解決順
 
-| Role | Model 設定（優先順） | Instructions 設定（優先順） |
+| ロール | モデル設定（優先順） | 指示ファイル設定（優先順） |
 | --- | --- | --- |
 | worker | `WORKER_MODEL` -> `OPENCODE_MODEL` | `WORKER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/base.md` |
 | tester | `TESTER_MODEL` -> `OPENCODE_MODEL` | `TESTER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/tester.md` |
 | docser | `DOCSER_MODEL` -> `OPENCODE_MODEL` | `DOCSER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/docser.md` |
 
-`LLM_EXECUTOR=claude_code` の場合は role 別 model より `CLAUDE_CODE_MODEL` が優先されます。
+`LLM_EXECUTOR=claude_code` の場合はロール別 model より `CLAUDE_CODE_MODEL` が優先されます。
 
 ## 6. 共通の状態モデル
 
@@ -103,10 +103,10 @@ blocked reason（理由）:
   - A. 実行中 task の失敗は Worker/Tester/Docser と Cycle Manager 側の再試行・回復を先に確認します。
   - 初動 API: `GET /runs`, `GET /tasks`, `GET /logs/all`
 - Q. 起動時に Planner が動かない。障害か？
-  - A. backlog-first の仕様で正常な場合があります。起動判定は preflight / startup ルールを確認します。
+  - A. backlog-first の仕様で正常な場合があります。起動判定は preflight / 起動ルールを確認します。
   - 初動 API: `POST /system/preflight`, `GET /system/processes`, `GET /tasks`
 - Q. replan が走らない。Dispatcher を見るべきか？
-  - A. replan 判定は Cycle Manager の責務です。Planner busy/backlog gate/interval/no-diff 条件を確認します。
+  - A. replan 判定は Cycle Manager の責務です。Planner の busy/backlog gate/interval/no-diff 条件を確認します。
   - 初動 API: `GET /tasks`, `GET /plans`, `GET /logs/cycle-manager`
 - Q. `issue_linking` が解消しない。Judge 側の問題か？
   - A. まず Planner/API の issue 連携処理を確認します。Judge は `issue_linking` 解消の主体ではありません。
