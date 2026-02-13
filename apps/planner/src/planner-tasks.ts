@@ -29,6 +29,7 @@ export async function saveTasks(
         title: input.title,
         goal: input.goal,
         context: input.context,
+        kind: input.kind ?? "code",
         allowedPaths: input.allowedPaths,
         commands: input.commands,
         priority: input.priority ?? 0,
