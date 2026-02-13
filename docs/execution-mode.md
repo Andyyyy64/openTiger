@@ -17,7 +17,7 @@ sandbox モードで `claude_code` を安全に運用するための前提を説
 - `host`
 - `sandbox`
 
-内部では次の launch mode に対応します。
+内部では次の起動モードに対応します。
 
 - `host` -> `LAUNCH_MODE=process`
 - `sandbox` -> `LAUNCH_MODE=docker`
@@ -25,23 +25,23 @@ sandbox モードで `claude_code` を安全に運用するための前提を説
 ## 2. 利用箇所
 
 - Dashboard の System ページ（`Execution_Environment` セレクタ）
-- process manager の start フロー（`/system/processes/:name/start`）
-- Dispatcher の worker launcher
+- process manager の起動フロー（`/system/processes/:name/start`）
+- Dispatcher の worker 起動処理
 - Claude 認証確認 API（`/system/claude/auth`）
 
 ## 3. モード別の実行挙動
 
 ### 3.1 `host`
 
-- Worker/Tester/Docser は host process として起動します。
+- Worker/Tester/Docser は host プロセスとして起動します。
 - Claude 認証確認は host 側で実行されます（`claude -p ...`）。
 - ローカル開発での高速反復に向いています。
 
 ### 3.2 `sandbox`
 
-- task 実行は Docker container 内で行われます。
+- task 実行は Docker コンテナ内で行われます。
 - host 側 Worker/Tester/Docser の起動はスキップされます。
-- Claude 認証確認は container 側で実行されます（`docker run ... claude -p ...`）。
+- Claude 認証確認はコンテナ側で実行されます（`docker run ... claude -p ...`）。
 - 分離性を高く保ちたい運用に向いています。
 
 ## 4. sandbox の前提
@@ -53,17 +53,17 @@ sandbox 用 worker image には次の CLI が必要です。
 - `opencode-ai`
 - `@anthropic-ai/claude-code`
 
-既定 image:
+既定イメージ:
 
 - `openTiger/worker:latest`
 
-別 tag を使う場合は次を設定します。
+別タグを使う場合は次を設定します。
 
 - `SANDBOX_DOCKER_IMAGE=<your-image>`
 
-### 4.2 Docker network
+### 4.2 Docker ネットワーク
 
-既定 network:
+既定ネットワーク:
 
 - `bridge`
 
@@ -73,7 +73,7 @@ sandbox 用 worker image には次の CLI が必要です。
 
 ## 5. sandbox での Claude 認証
 
-host 側の login 状態が使える場合、`ANTHROPIC_API_KEY` なしでも `claude_code` を実行できます。
+host 側のログイン状態が使える場合、`ANTHROPIC_API_KEY` なしでも `claude_code` を実行できます。
 
 マウントされる認証ディレクトリ（read-only）:
 
@@ -91,15 +91,15 @@ host 側の login 状態が使える場合、`ANTHROPIC_API_KEY` なしでも `c
 2. `EXECUTION_ENVIRONMENT=sandbox` を設定
 3. dispatcher を起動して task を実行
 
-認証マウントが見つからず `ANTHROPIC_API_KEY` も未設定の場合、dispatcher は warning を出します。
+認証マウントが見つからず `ANTHROPIC_API_KEY` も未設定の場合、dispatcher は警告を出します。
 
 ## 6. sandbox からの DB/Redis 接続
 
-dispatcher は sandbox container 起動時に loopback 宛先を次へ書き換えます。
+dispatcher は sandbox コンテナ起動時に loopback 宛先を次へ書き換えます。
 
 - `localhost` / `127.0.0.1` / `::1` -> `host.docker.internal`
 
-これにより、container 内 worker から host 側サービスへ接続できます。
+これにより、コンテナ内 worker から host 側サービスへ接続できます。
 
 ## 7. Claude Auth Check API
 
@@ -107,13 +107,13 @@ dispatcher は sandbox container 起動時に loopback 宛先を次へ書き換�
 
 - `GET /system/claude/auth`
 
-query（任意）:
+クエリ（任意）:
 
 - `environment=host|sandbox`
 
 挙動:
 
-- query 省略時は現在の `EXECUTION_ENVIRONMENT` を使います。
+- クエリ省略時は現在の `EXECUTION_ENVIRONMENT` を使います。
 - `available`, `authenticated`, `checkedAt`, `executionEnvironment` を返します。
 - sandbox では典型エラーを分類します。
   - Docker daemon unavailable
@@ -123,7 +123,7 @@ query（任意）:
 
 アクセス注意:
 
-- この endpoint は system-control API です。
+- このエンドポイントは system-control API です。
 - `api-key` / `bearer` は許可されます。
 - ローカル運用では `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL !== "false"` の間は許可されます。
 
