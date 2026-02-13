@@ -6,7 +6,7 @@
 - `docs/flow.md`
 - `docs/verification.md`
 
-## 1. Role
+## 1. 役割
 
 Planner は requirement/issue から実行可能な task 群を生成し、重複なく永続化します。  
 重複計画を避けるため、運用上は単一インスタンス前提です。
@@ -16,17 +16,17 @@ Planner は requirement/issue から実行可能な task 群を生成し、重�
 - task 実行（コード変更・検証コマンド実行）
 - run 成果物の judge 判定
 
-## 2. Inputs
+## 2. 入力
 
-- requirement content/file
+- requirement の内容/ファイル
 - 既存 backlog と dependency 情報
-- judge feedback / failure hints
-- repository inspection 結果
+- Judge の feedback / failure hints
+- repository inspection の結果
 - policy recovery ヒント（過去イベント由来）
 
-## 3. Pipeline
+## 3. 処理パイプライン
 
-1. requirement parse/validate
+1. requirement の parse/validate
 2. 既存コンテキスト（feedback/hints）読込
 3. inspection 実行（LLM）
 4. task 生成（LLM + fallback）
@@ -34,11 +34,11 @@ Planner は requirement/issue から実行可能な task 群を生成し、重�
 6. role / allowedPaths / command policy 適用
 7. verification command 補強
 8. plan 保存（dedupe lock 付き）
-9. 必要に応じて issue 連携
+9. 必要に応じて issue と連携
 
-## 4. Key Behaviors
+## 4. 主な挙動
 
-- uninitialized repository 向け init task 注入
+- uninitialized repository 向けの init task 注入
 - dependency index の循環/冗長除去
 - lockfile path の自動許可
 - command-driven allowedPaths 補完
@@ -46,15 +46,15 @@ Planner は requirement/issue から実行可能な task 群を生成し、重�
 - policy recovery hint の将来 task への反映
 - `planner.plan_created` イベントに plan summary を保存
 
-## 5. Verification Command Augmentation
+## 5. 検証コマンド補強
 
 Planner は task 生成時に検証コマンドを補強できます。
 
 - `PLANNER_VERIFY_COMMAND_MODE=off|fallback|contract|llm|hybrid`（既定: `hybrid`）
-- verify contract: `.opentiger/verify.contract.json`（パスは変更可能）
+- verify contract: `.opentiger/verify.contract.json`（パス変更可能）
 - LLM 計画失敗時は warning を残し、Worker 側の自動戦略へ委譲
 
-## 6. Start Constraints
+## 6. 起動制約
 
 以下 backlog があると Planner start はブロックされます。
 
@@ -64,13 +64,13 @@ Planner は task 生成時に検証コマンドを補強できます。
 
 これは backlog-first 運用を保証するための仕様です。
 
-## 7. Failure Model
+## 7. 失敗モデル
 
 - inspection は retry + quota-aware
 - inspection/task generation が失敗しても fallback planning を試行
-- hard failure 時は既存タスクを壊さず終了
+- hard failure 時も既存タスクを壊さず終了
 
-## 8. Important Settings
+## 8. 主な設定
 
 - `PLANNER_MODEL`
 - `PLANNER_TIMEOUT`

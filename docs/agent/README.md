@@ -1,17 +1,17 @@
 # エージェント仕様索引
 
-このページは、openTiger の各 agent の責務と違いを横断的に確認するための索引です。
+このページは、openTiger の各 agent の責務と差分を横断的に確認するための索引です。
 
 ## 1. エージェント比較表
 
 | エージェント | 主責務 | 主入力 | 主要遷移/出力 | 主な失敗時挙動 |
 | --- | --- | --- | --- | --- |
-| Planner | requirement/issue から task 計画生成 | requirement, backlog, feedback, inspection | `tasks` 作成、plan event 保存 | 代替 planning、重複計画ガード |
-| Dispatcher | 実行順制御と task 配布 | queued tasks, leases, agent heartbeat | `queued -> running`、lease 付与、agent 割当 | lease reclaim、orphan 回復、再queue |
-| Worker | 実装変更 + 検証 + PR 化 | task, repo/worktree, commands | `runs/artifacts` 生成、`awaiting_judge` or `done` | `quota_wait` / `needs_rework` / `failed` |
-| Tester | テスト中心タスク実行 | tester role task | Worker と同等（テスト文脈） | Worker と同等 |
-| Docser | ドキュメント同期タスク実行 | docser role task | docs 更新 run/artifact | doc-safe command 制約、LLM policy recovery なし |
-| Judge | success run の評価と統治 | run/artifacts, CI/policy/LLM result | `done` or retry/rework/autofix | circuit breaker、autofix、awaiting_judge 復元 |
+| Planner | requirement/issue から task 計画を生成 | requirement, backlog, feedback, inspection | `tasks` 作成、plan event 保存 | 代替 planning、重複計画ガード |
+| Dispatcher | 実行順制御と task 配布 | queued task, leases, agent heartbeat | `queued -> running`、lease 付与、agent 割当 | lease reclaim、孤立 task 回復、再 queue |
+| Worker | 実装変更 + 検証 + PR 化 | task, repo/worktree, commands | `runs/artifacts` 生成、`awaiting_judge` または `done` | `quota_wait` / `needs_rework` / `failed` |
+| Tester | テスト中心 task の実行 | tester role task | Worker と同等（テスト文脈） | Worker と同等 |
+| Docser | ドキュメント同期 task の実行 | docser role task | docs 更新 run/artifact | doc-safe command 制約、LLM policy recovery なし |
+| Judge | successful run の評価と統治 | run/artifacts, CI/policy/LLM result | `done` または retry/rework/autofix | circuit breaker、autofix、awaiting_judge 復元 |
 | Cycle Manager | 収束監視・回復・replan 制御 | system state, events, anomaly/cost | cycle 更新、cleanup、replan 起動 | critical anomaly restart、cooldown 再試行 |
 
 補足:
@@ -46,7 +46,7 @@
 | LLM policy recovery | 有効化可能 | 有効化可能 | 実行しない |
 | 典型タスク | 機能追加・不具合修正 | テスト追加・不安定検証の改善 | docs 同期・不足補完 |
 
-Worker / Tester / Docser は同一 runtime を共有し、`AGENT_ROLE` で挙動を切り替えます。
+Worker / Tester / Docser は同一ランタイムを共有し、`AGENT_ROLE` で挙動を切り替えます。
 
 重複を避ける読み方:
 

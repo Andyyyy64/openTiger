@@ -52,7 +52,7 @@ Tester/Docser 固有差分は以下を参照してください。
 
 - policy/verification failure -> `blocked(needs_rework)`
 
-## 4. State Transitions
+## 4. 状態遷移
 
 成功:
 

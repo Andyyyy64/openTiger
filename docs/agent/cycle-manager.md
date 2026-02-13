@@ -6,7 +6,7 @@
 - `docs/flow.md`
 - `docs/operations.md`
 
-## 1. Role
+## 1. 役割
 
 Cycle Manager は長時間運用を前提に、システム全体の収束を維持します。  
 監視・クリーンアップ・再計画（replan）を周期実行し、停止しにくい運用を支えます。
@@ -16,7 +16,7 @@ Cycle Manager は長時間運用を前提に、システム全体の収束を維
 - individual task の実装内容を直接変更すること
 - PR 差分の approve/reject 判定
 
-## 2. Runtime Loops
+## 2. ランタイムループ
 
 - monitor loop
   - cycle 終了条件判定
@@ -29,16 +29,16 @@ Cycle Manager は長時間運用を前提に、システム全体の収束を維
 - stats loop
   - cycle stats と system state の更新
 
-## 3. Cycle Lifecycle
+## 3. サイクルライフサイクル
 
 - 起動時に既存 `running` cycle を復元（なければ auto-start）
 - 終了条件:
   - 経過時間上限
   - 完了タスク数上限
   - failure rate 上限
-- cycle 終了時は必要に応じて cleanup 後に次 cycle を開始
+- cycle 終了時は必要に応じて cleanup の後に次 cycle を開始
 
-## 4. Anomaly / Recovery
+## 4. 異常検知と回復
 
 - 監視対象:
   - high failure rate
@@ -49,14 +49,14 @@ Cycle Manager は長時間運用を前提に、システム全体の収束を維
 - `stuck_task` など一部 critical anomaly では cycle restart を実施
 - anomaly は重複通知 cooldown を持つ
 
-## 5. Replan and Backlog Policy
+## 5. 再計画（replan）と backlog 方針
 
 - task backlog が空になった後、まず `/system/preflight` で issue backlog を同期
 - issue backlog がある間は replan を延期
 - backlog が空で、かつ planner idle など条件を満たす場合のみ replan
 - requirement hash + repo head を署名化し、設定により no-diff replan を抑止
 
-## 6. CLI Commands
+## 6. 操作コマンド（CLI）
 
 - `status`
 - `anomalies`
@@ -65,7 +65,7 @@ Cycle Manager は長時間運用を前提に、システム全体の収束を維
 - `new-cycle`
 - `cleanup`
 
-## 7. Important Settings
+## 7. 主な設定
 
 - `MONITOR_INTERVAL_MS`
 - `CLEANUP_INTERVAL_MS`

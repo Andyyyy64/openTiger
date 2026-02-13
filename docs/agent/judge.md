@@ -6,7 +6,7 @@
 - `docs/flow.md`
 - `docs/mode.md`
 
-## 1. Role
+## 1. 役割
 
 Judge は successful run を評価し、task を `done` へ収束させるか、再実行/再修正へ分岐させる責務を持ちます。
 
@@ -15,33 +15,33 @@ Judge は successful run を評価し、task を `done` へ収束させるか、
 - queued task の配布・lease 管理
 - 実ファイル変更の実行
 
-## 2. Mode Resolution
+## 2. モード解決
 
 実行モードは次で決定されます。
 
 - `JUDGE_MODE=git|local|auto`
 - `auto` の場合は `REPO_MODE` に追従
 
-## 3. Inputs
+## 3. 入力
 
 - successful run + artifacts (`pr` / `worktree`)
 - CI / policy / LLM evaluator 結果
 - task の retry context / lineage
 
-## 4. Core Decisions
+## 4. 中核判断
 
 - `approve`
 - `request_changes`
 
-legacy `needs_human` は request_changes 系の回復フローへ正規化されます。
+legacy の `needs_human` は request_changes 系の回復フローへ正規化されます。
 
-## 5. Post Decision
+## 5. 判定後の遷移
 
 - approve + merge 成功 -> `done`
-- non-approve -> retry または `needs_rework` へ昇格
+- non-approve -> retry または `needs_rework` へ移行
 - merge conflict -> `[AutoFix-Conflict]` task 作成を試行
 
-## 6. Anti-loop / Recovery
+## 6. ループ防止と回復
 
 - run claim idempotency (`judgedAt`, `judgementVersion`)
 - non-approve circuit breaker
@@ -49,7 +49,7 @@ legacy `needs_human` は request_changes 系の回復フローへ正規化され
 - awaiting_judge backlog の run 復元
 - conflict 時の autofix fallback
 
-## 7. Important Settings
+## 7. 主な設定
 
 - `JUDGE_MODE`
 - `JUDGE_MODEL`
