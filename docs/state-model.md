@@ -48,6 +48,11 @@
 - `busy`
 - `offline`
 
+補足:
+
+- この状態は `agents` テーブルに登録される role（`planner/worker/tester/docser/judge`）に適用されます。
+- Dispatcher / Cycle Manager は process として管理されるため、`GET /system/processes` で確認します。
+
 ## 5. Cycle Status
 
 - `running`

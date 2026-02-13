@@ -14,6 +14,11 @@
 | Judge | success run の評価と統治 | run/artifacts, CI/policy/LLM result | `done` or retry/rework/autofix | circuit breaker、autofix、awaiting_judge 復元 |
 | Cycle Manager | 収束監視・回復・replan 制御 | system state, events, anomaly/cost | cycle 更新、cleanup、replan 起動 | critical anomaly restart、cooldown 再試行 |
 
+補足:
+
+- この比較表は「責務単位」の整理です。
+- `GET /agents` に現れるのは `planner/worker/tester/docser/judge` で、Dispatcher / Cycle Manager は process 管理（`GET /system/processes`）で確認します。
+
 ## 2. 役割の使い分け
 
 - **Planner** は「何を実行するか」を決める。

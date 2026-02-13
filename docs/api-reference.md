@@ -122,6 +122,11 @@ system 制御系は `canControlSystem()` で許可判定されます。
 - `POST /agents/:id/heartbeat`
 - `DELETE /agents/:id`
 
+補足:
+
+- `GET /agents` は `planner/worker/tester/docser/judge` の稼働状態を返します。
+- Dispatcher / Cycle Manager は process として管理されるため、`GET /system/processes` で確認してください。
+
 ### Plans
 
 - `GET /plans`
