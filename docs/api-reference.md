@@ -52,6 +52,28 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 - task/run の状態語彙（`queued`, `blocked`, `awaiting_judge` など）は `docs/state-model.md` を参照してください。
 
+## 2.1 運用担当向け最小 API セット
+
+障害切り分けや日次運用で、まず押さえる最小セットです。
+
+| 用途 | API | 見るポイント |
+| --- | --- | --- |
+| 全体ヘルス | `GET /health/ready` | DB/Redis の疎通可否 |
+| process 状態 | `GET /system/processes` | `running/stopped` の偏り、必要 process の欠落 |
+| agent 稼働 | `GET /agents` | `offline` の偏り、role ごとの稼働数 |
+| task 滞留 | `GET /tasks` | `queued` 固着、`blocked` の急増 |
+| run 異常 | `GET /runs` | 同一エラーの連続 `failed`、`running` 長期化 |
+| judge 詰まり | `GET /judgements` | non-approve の連鎖、未処理 backlog |
+| 相関ログ | `GET /logs/all` | dispatcher/worker/judge/cycle-manager の時系列 |
+
+最小確認シーケンス（推奨）:
+
+1. `GET /health/ready`
+2. `GET /system/processes`
+3. `GET /agents`
+4. `GET /tasks` + `GET /runs`
+5. `GET /logs/all`
+
 ---
 
 ## 3. 主要エンドポイント一覧
