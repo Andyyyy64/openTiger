@@ -86,6 +86,19 @@ blocked reason:
 - `docs/agent/docser.md`
 - `docs/agent/cycle-manager.md`
 
+## 8. よくある誤解（担当 agent の切り分け）
+
+- Q. `queued` task が進まない。Worker の問題か？
+  - A. まず Dispatcher を確認します。配布・lease・agent 割当は Dispatcher の責務です。
+- Q. `awaiting_judge` が長く残る。Cycle Manager の問題か？
+  - A. まず Judge を確認します。approve/rework 判定と backlog 消化は Judge の責務です。
+- Q. 同じ失敗が続く。Planner が悪いか？
+  - A. 実行中 task の失敗は Worker/Tester/Docser と Cycle Manager 側の再試行・回復を先に確認します。
+- Q. 起動時に Planner が動かない。障害か？
+  - A. backlog-first の仕様で正常な場合があります。起動判定は preflight / startup ルールを確認します。
+- Q. replan が走らない。Dispatcher を見るべきか？
+  - A. replan 判定は Cycle Manager の責務です。Planner busy/backlog gate/interval/no-diff 条件を確認します。
+
 関連:
 
 - `docs/flow.md`

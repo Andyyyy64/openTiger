@@ -169,6 +169,10 @@ pnpm runtime:hatch:disarm
   - backlog gate（issue/pr/local task）と replan 条件を確認
   - 参照: `docs/startup-patterns.md`
 
+補足:
+
+- 担当 agent の切り分けで迷う場合は `docs/agent/README.md` の FAQ も参照してください。
+
 ## 9. sandbox 運用時の追加確認
 
 - `EXECUTION_ENVIRONMENT=sandbox` の場合、worker/tester/docser は docker 実行
