@@ -3,6 +3,18 @@
 このディレクトリは、openTiger の実装仕様を「導線」と「参照」に分けて整理しています。  
 ソースコードを真として、運用に必要な情報を段階的に読める構成です。
 
+## 0. 目的別ナビゲーション
+
+| 目的 | 最短で読むページ |
+| --- | --- |
+| まず動かしたい | `docs/getting-started.md` |
+| 全体像を掴みたい | `docs/architecture.md` |
+| 設定キーを調整したい | `docs/config.md` |
+| API 連携したい | `docs/api-reference.md` |
+| 障害対応したい | `docs/operations.md` + `docs/flow.md` |
+| 起動判定の式を確認したい | `docs/startup-patterns.md` |
+| agent の役割差分を確認したい | `docs/agent/README.md` |
+
 ## 1. 初見ユーザー向け（最短導線）
 
 1. `docs/getting-started.md`
@@ -60,3 +72,15 @@
 5. `docs/operations.md`
 6. `docs/flow.md`
 7. `docs/agent/README.md`
+
+## 変更時の逆引き
+
+- 起動条件・replan 条件を変更した場合:
+  - `docs/startup-patterns.md`
+  - `docs/flow.md`（関連する runtime 影響）
+- task 状態遷移や blocked 回復を変更した場合:
+  - `docs/flow.md`
+  - `docs/operations.md`
+- agent 実装責務を変更した場合:
+  - `docs/agent/README.md`
+  - 対象の `docs/agent/*.md`

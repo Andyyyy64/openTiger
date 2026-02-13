@@ -109,6 +109,10 @@ Details: `docs/startup-patterns.md`, `docs/flow.md`
 
 ## Documentation Map
 
+Need a purpose-based index first:
+
+- `docs/README.md`
+
 Start here:
 
 - `docs/getting-started.md`
