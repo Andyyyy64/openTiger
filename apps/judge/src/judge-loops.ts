@@ -566,6 +566,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
         console.log(`\nFound ${pendingResearchRuns.length} research runs to review`);
 
         for (const pending of pendingResearchRuns) {
+          let taskStateTransitioned = false;
           try {
             await safeSetJudgeAgentState(config.agentId, "busy", pending.taskId);
             if (!config.dryRun) {
@@ -594,6 +595,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                     updatedAt: new Date(),
                   })
                   .where(eq(tasks.id, pending.taskId));
+                taskStateTransitioned = true;
                 await markResearchJobAfterJudge({
                   jobId: pending.researchJobId,
                   verdict: "approve",
@@ -613,6 +615,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                     updatedAt: new Date(),
                   })
                   .where(eq(tasks.id, pending.taskId));
+                taskStateTransitioned = true;
                 await markResearchJobAfterJudge({
                   jobId: pending.researchJobId,
                   verdict: "request_changes",
@@ -641,6 +644,20 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
               config.dryRun,
             );
           } catch (error) {
+            if (!config.dryRun && !taskStateTransitioned) {
+              const reason =
+                error instanceof Error ? error.message : "unknown_research_review_error";
+              await scheduleTaskForJudgeRetry({
+                taskId: pending.taskId,
+                runId: pending.runId,
+                agentId: config.agentId,
+                reason: `judge_research_error:${reason}`,
+                restoreRunImmediately: true,
+              });
+              console.warn(
+                `  Research task ${pending.taskId} scheduled for judge retry due to processing error`,
+              );
+            }
             console.error(`  Error processing research run ${pending.runId}:`, error);
           } finally {
             await safeSetJudgeAgentState(config.agentId, "busy");
