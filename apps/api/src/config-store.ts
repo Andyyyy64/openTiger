@@ -128,6 +128,52 @@ async function runGit(cwd: string, args: string[]): Promise<string | undefined> 
   }
 }
 
+async function runGh(args: string[]): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFileAsync("gh", args, {
+      env: {
+        ...process.env,
+        GH_PAGER: "cat",
+      },
+      timeout: 5000,
+    });
+    const trimmed = stdout.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseGitHubLoginFromGhStatus(output: string): string | undefined {
+  const line = output
+    .split("\n")
+    .map((row) => row.trim())
+    .find((row) => row.length > 0);
+  if (!line) {
+    return undefined;
+  }
+
+  const asMatch = /logged in to [^\s]+ as ([A-Za-z0-9-]+)/i.exec(output);
+  if (asMatch?.[1]) {
+    return asMatch[1];
+  }
+
+  const accountMatch = /account ([A-Za-z0-9-]+)/i.exec(output);
+  return accountMatch?.[1];
+}
+
+async function resolveGithubOwnerFromGh(): Promise<string | undefined> {
+  const login = await runGh(["api", "user", "--jq", ".login"]);
+  if (isNonEmpty(login)) {
+    return login;
+  }
+  const authStatus = await runGh(["auth", "status", "-h", "github.com"]);
+  if (!isNonEmpty(authStatus)) {
+    return undefined;
+  }
+  return parseGitHubLoginFromGhStatus(authStatus);
+}
+
 async function resolveBaseBranch(workspaceRoot: string): Promise<string | undefined> {
   const originHead = await runGit(workspaceRoot, [
     "symbolic-ref",
@@ -188,6 +234,7 @@ async function detectBootstrapHints(): Promise<BootstrapHints> {
   const repoUrlFromEnv = process.env.REPO_URL?.trim();
   const fromRepoEnv = isNonEmpty(repoUrlFromEnv) ? parseGitRemoteUrl(repoUrlFromEnv) : {};
   const baseBranchFromGit = await resolveBaseBranch(workspaceRoot);
+  const ownerFromGh = await resolveGithubOwnerFromGh();
   const replanRequirementPath = await resolveRequirementPath(workspaceRoot, replanWorkdir);
 
   return {
@@ -198,7 +245,11 @@ async function detectBootstrapHints(): Promise<BootstrapHints> {
       (isNonEmpty(repoUrlFromEnv) ? repoUrlFromEnv : undefined) ??
       fromOrigin.repoUrl,
     githubOwner:
-      process.env.GITHUB_OWNER?.trim() || fromRepoEnv.owner || fromOrigin.owner || undefined,
+      process.env.GITHUB_OWNER?.trim() ||
+      fromRepoEnv.owner ||
+      fromOrigin.owner ||
+      ownerFromGh ||
+      undefined,
     githubRepo: process.env.GITHUB_REPO?.trim() || fromRepoEnv.repo || fromOrigin.repo || undefined,
     baseBranch: process.env.BASE_BRANCH?.trim() || baseBranchFromGit || undefined,
   };

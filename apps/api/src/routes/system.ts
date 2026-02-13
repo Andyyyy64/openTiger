@@ -19,6 +19,7 @@ import {
   syncRequirementSnapshot,
 } from "./system-requirements";
 import { registerProcessManagerRoutes } from "./system-process-manager";
+import { ensureHostSnapshot, formatNeofetchResponse } from "../system-context/host-snapshot";
 
 const systemRoute = new Hono();
 
@@ -252,48 +253,114 @@ systemRoute.get("/claude/auth", async (c) => {
   });
 });
 
-systemRoute.get("/host/neofetch", async (c) => {
+systemRoute.get("/github/auth", async (c) => {
   const auth = getAuthInfo(c);
   if (!canControlSystem(auth.method)) {
     return c.json({ error: "Admin access required" }, 403);
   }
 
+  const configRow = await ensureConfigRow();
+  const authMode = resolveGitHubAuthMode(configRow.githubAuthMode);
   const checkedAt = new Date().toISOString();
-  const result = spawnSync("neofetch", [], {
+  if (authMode !== "gh") {
+    return c.json({
+      available: true,
+      authenticated: true,
+      mode: authMode,
+      checkedAt,
+      message: "GitHub auth mode is token. `gh` readiness check is skipped.",
+    });
+  }
+
+  const result = spawnSync("gh", ["auth", "status", "-h", "github.com"], {
+    env: {
+      ...process.env,
+      GH_PAGER: "cat",
+    },
     encoding: "utf-8",
     timeout: 10000,
   });
+  const stdout = typeof result.stdout === "string" ? result.stdout.trim() : "";
+  const stderr = typeof result.stderr === "string" ? result.stderr.trim() : "";
+  const detail = [stdout, stderr].filter((value) => value.length > 0).join("\n");
 
   if (result.error) {
     const errorCode = (result.error as NodeJS.ErrnoException).code;
     if (errorCode === "ENOENT") {
       return c.json({
         available: false,
+        authenticated: false,
+        mode: authMode,
         checkedAt,
+        message: "GitHub CLI was not found. Install `gh` and run `gh auth login`.",
       });
     }
     return c.json({
       available: false,
+      authenticated: false,
+      mode: authMode,
       checkedAt,
-      message: `Failed to execute neofetch: ${result.error.message}`,
+      message: `Failed to check GitHub CLI auth: ${result.error.message}`,
     });
   }
 
-  const stdout = typeof result.stdout === "string" ? result.stdout : "";
-  const output = stdout.trimEnd();
-  if ((result.status ?? 1) !== 0 || output.length === 0) {
+  if (result.status === 0) {
     return c.json({
-      available: false,
+      available: true,
+      authenticated: true,
+      mode: authMode,
       checkedAt,
-      message: "neofetch command did not return a usable output.",
     });
   }
 
   return c.json({
     available: true,
+    authenticated: false,
+    mode: authMode,
     checkedAt,
-    output,
+    message:
+      detail.length > 0
+        ? `GitHub CLI is not authenticated. Run \`gh auth login\`. (${detail})`
+        : "GitHub CLI is not authenticated. Run `gh auth login`.",
   });
+});
+
+systemRoute.get("/host/neofetch", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  try {
+    const { snapshot } = await ensureHostSnapshot();
+    return c.json(formatNeofetchResponse(snapshot));
+  } catch (error) {
+    const checkedAt = new Date().toISOString();
+    const message = error instanceof Error ? error.message : "Failed to resolve host snapshot";
+    return c.json({
+      available: false,
+      checkedAt,
+      message,
+    });
+  }
+});
+
+systemRoute.get("/host/context", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  try {
+    const { snapshot, refreshed } = await ensureHostSnapshot();
+    return c.json({
+      refreshed,
+      snapshot,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to resolve host context";
+    return c.json({ error: message }, 500);
+  }
 });
 
 systemRoute.get("/requirements", async (c) => {
@@ -463,6 +530,9 @@ systemRoute.get("/github/repos", async (c) => {
       token,
       authMode,
     });
+    const viewer = await octokit.users.getAuthenticated();
+    const viewerLogin = viewer.data.login?.trim() ?? "";
+    const effectiveOwnerFilter = (ownerFilter || viewerLogin).toLowerCase();
     const rows = await octokit.paginate(octokit.repos.listForAuthenticatedUser, {
       affiliation: "owner,collaborator,organization_member",
       sort: "updated",
@@ -478,16 +548,21 @@ systemRoute.get("/github/repos", async (c) => {
         defaultBranch: repo.default_branch ?? "main",
         private: repo.private,
         archived: repo.archived,
+        updatedAt: repo.updated_at ?? repo.pushed_at ?? "",
       }))
       .filter((repo) => repo.owner.length > 0)
       .filter((repo) =>
-        ownerFilter
-          ? repo.owner.toLowerCase() === ownerFilter || repo.fullName.includes(ownerFilter)
+        effectiveOwnerFilter
+          ? repo.owner.toLowerCase() === effectiveOwnerFilter ||
+            repo.fullName.toLowerCase().includes(`${effectiveOwnerFilter}/`)
           : true,
       )
-      .sort((a, b) => a.fullName.localeCompare(b.fullName));
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 
-    return c.json({ repos });
+    console.info(
+      `[System] github repos resolved ownerFilter=${ownerFilter ?? "-"} viewer=${viewerLogin || "-"} effective=${effectiveOwnerFilter || "-"} count=${repos.length}`,
+    );
+    return c.json({ repos, viewerLogin });
   } catch (error) {
     const status =
       typeof error === "object" && error && "status" in error
