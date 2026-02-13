@@ -216,6 +216,16 @@ pnpm runtime:hatch:disarm
 
 設定変更や再起動後は、以下を順に確認すると反映漏れを検知しやすくなります。
 
+### 11.0 対応 API（早見表）
+
+| 確認観点 | API |
+| --- | --- |
+| process 状態 | `GET /system/processes` |
+| agent 状態 | `GET /agents` |
+| task 滞留 | `GET /tasks` |
+| run 異常 | `GET /runs` |
+| 相関ログ | `GET /logs/all` |
+
 ### 11.1 Process 状態
 
 - `GET /system/processes`

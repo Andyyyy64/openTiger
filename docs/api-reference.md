@@ -66,13 +66,8 @@ system 制御系は `canControlSystem()` で許可判定されます。
 | judge 詰まり | `GET /judgements` | non-approve の連鎖、未処理 backlog |
 | 相関ログ | `GET /logs/all` | dispatcher/worker/judge/cycle-manager の時系列 |
 
-最小確認シーケンス（推奨）:
-
-1. `GET /health/ready`
-2. `GET /system/processes`
-3. `GET /agents`
-4. `GET /tasks` + `GET /runs`
-5. `GET /logs/all`
+運用時の確認順（シーケンス）は `docs/operations.md` の  
+「変更後の確認チェックリスト」を一次参照にしてください。
 
 ---
 
