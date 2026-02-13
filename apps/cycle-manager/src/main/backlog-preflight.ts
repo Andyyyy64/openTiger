@@ -29,6 +29,8 @@ export type IssueBacklogSyncResult = {
 let issuePreflightInProgress = false;
 let lastIssuePreflightAt: number | null = null;
 let lastIssuePreflightResult: IssueBacklogSyncResult | null = null;
+const AUTO_CREATE_PR_JUDGE_TASKS_IN_CYCLE_SYNC =
+  process.env.CYCLE_SYNC_AUTO_CREATE_PR_JUDGE_TASKS === "true";
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(raw ?? "", 10);
@@ -157,7 +159,9 @@ export async function syncIssueBacklogViaPreflight(
     const endpoint = new URL("/system/preflight", config.systemApiBaseUrl).toString();
     const body = JSON.stringify({
       autoCreateIssueTasks: true,
-      autoCreatePrJudgeTasks: true,
+      // PRバックログ取り込みは Start フローからの明示操作に限定する。
+      // Cycle 同期では既定で無効にして、意図しない Judge 起動を防ぐ。
+      autoCreatePrJudgeTasks: AUTO_CREATE_PR_JUDGE_TASKS_IN_CYCLE_SYNC,
     });
     const timeoutMs = parsePositiveInt(
       process.env.ISSUE_SYNC_TIMEOUT_MS,
