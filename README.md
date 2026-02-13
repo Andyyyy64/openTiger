@@ -1,8 +1,8 @@
-# openTiger
+# 🐯openTiger — Never-stopping autonomous development orchestration
 
-<img src="assets/avatar.png" alt="openTiger" width="560" />
-
-Never-stalling autonomous development orchestration for repository-scale coding loops.
+<p align="center">
+  <img src="assets/avatar.png" alt="openTiger" width="500" />
+</p>
 
 openTiger continuously runs:
 
@@ -14,7 +14,9 @@ openTiger continuously runs:
 
 all under explicit runtime state transitions.
 
-<img src="assets/ui.png" alt="openTiger UI" width="720" />
+<p align="center">
+  <img src="assets/ui.png" alt="openTiger UI" width="720" />
+</p>
 
 ## Core Capabilities
 
@@ -49,7 +51,7 @@ See `docs/architecture.md` for component-level details.
 ### Preferred (bootstrap script)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Andyyyy64/openTiger/main/scripts/install.sh | bash
+curl -fsSL https://opentiger.dev/install.sh | bash
 ```
 
 ### Alternative (manual clone)
@@ -78,13 +80,17 @@ pnpm run up
 ## First Run Checklist
 
 1. Authenticate GitHub CLI (default auth mode):
+
    ```bash
    gh auth login
    ```
+
 2. If using Claude Code executor, authenticate on host:
+
    ```bash
    claude /login
    ```
+
 3. Open Dashboard:
    - Dashboard: `http://localhost:5190`
    - API: `http://localhost:4301`
