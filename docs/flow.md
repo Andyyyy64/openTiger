@@ -5,6 +5,16 @@
 このページは、task/run を中心とした**実行時の状態遷移**を説明します。  
 起動時の preflight 判定式や全パターン表は `docs/startup-patterns.md` を参照してください。
 
+## 0.1 状態モデルから読むときの入口
+
+状態語彙から入る場合は、まず `docs/state-model.md` で用語を確定し、その後このページで遷移と回復経路を確認します。
+
+| 状態語彙の確認先（state-model） | このページで次に読む節 | 主担当 agent |
+| --- | --- | --- |
+| 「1. Task Status」「2. Task Block Reason」 | 「2. 基本ライフサイクル」「3. 回復で使われる Blocked Reason」 | Dispatcher / Worker / Judge |
+| 「2.2 Task Retry Reason の見方（実運用）」 | 「6. Worker の失敗処理」「8. Cycle Manager の自己回復」 | Worker / Cycle Manager |
+| 「7. 状態遷移で詰まりやすいパターン」 | 「5. Dispatcher の回復レイヤ」「7. Judge の非承認 / マージ失敗経路」 | Dispatcher / Judge |
+
 ## 1. 起動 / preflight
 
 システム起動時は `/system/preflight` を呼び出し、推奨起動構成を組み立てます。

@@ -134,3 +134,18 @@
 
 - 具体的な API 確認順は `docs/operations.md` の「変更後の確認チェックリスト」を参照してください。
 - 担当 agent の切り分けに迷う場合は `docs/agent/README.md` の FAQ を参照してください。
+
+## 8. 状態語彙から実装追跡までの最短ルート
+
+状態語彙を起点に、担当 agent と実装まで最短で辿るための逆引きです。
+
+| 起点（症状/語彙） | 次に読む状態遷移説明 | 担当 agent の確認先 | 実装参照の入口 |
+| --- | --- | --- | --- |
+| `queued` / `running` 停滞 | `docs/flow.md` の「2. 基本ライフサイクル」「5. Dispatcher の回復レイヤ」「6. Worker の失敗処理」 | `docs/agent/dispatcher.md`, `docs/agent/worker.md` | `apps/dispatcher/src/`, `apps/worker/src/` |
+| `awaiting_judge` 停滞 | `docs/flow.md` の「3. 回復で使われる Blocked Reason」「4. Run Lifecycle と Judge の冪等性」「7. Judge の非承認 / マージ失敗経路」 | `docs/agent/judge.md` | `apps/judge/src/` |
+| `quota_wait` / `needs_rework` 連鎖 | `docs/flow.md` の「3. 回復で使われる Blocked Reason」「6. Worker の失敗処理」「8. Cycle Manager の自己回復」 | `docs/agent/worker.md`, `docs/agent/judge.md`, `docs/agent/cycle-manager.md` | `apps/worker/src/`, `apps/judge/src/`, `apps/cycle-manager/src/` |
+| `issue_linking` 停滞 | `docs/flow.md` の「3. 回復で使われる Blocked Reason」 + `docs/startup-patterns.md` | `docs/agent/planner.md` | `apps/planner/src/` |
+
+補足:
+
+- flow 側で責務を確認した後、各 agent 仕様ページ末尾の「実装参照（source of truth）」節へ進むと、ファイル単位で追跡しやすくなります。
