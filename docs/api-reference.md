@@ -7,6 +7,7 @@ openTiger API は Hono ベースで、Dashboard からも同じエンドポイ�
 
 - `docs/config.md`
 - `docs/operations.md`
+- `docs/state-model.md`
 - `docs/agent/dispatcher.md`
 - `docs/agent/cycle-manager.md`
 
@@ -34,7 +35,26 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 ---
 
-## 2. 主要エンドポイント一覧
+## 2. 運用目的別 API マップ
+
+| 運用目的 | 主な API |
+| --- | --- |
+| ヘルス確認 | `GET /health`, `GET /health/ready` |
+| 状態監視 | `GET /tasks`, `GET /runs`, `GET /judgements`, `GET /agents`, `GET /logs/all` |
+| 設定変更 | `GET /config`, `PATCH /config` |
+| 起動制御 | `POST /system/processes/:name/start`, `POST /system/processes/:name/stop`, `POST /system/processes/stop-all` |
+| 起動前判定 | `POST /system/preflight` |
+| 復旧・メンテナンス | `POST /system/cleanup`, `POST /logs/clear` |
+| GitHub 連携 | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github` |
+| requirement 更新 | `GET /system/requirements`, `POST /system/requirements` |
+
+補足:
+
+- task/run の状態語彙（`queued`, `blocked`, `awaiting_judge` など）は `docs/state-model.md` を参照してください。
+
+---
+
+## 3. 主要エンドポイント一覧
 
 ### Health
 
@@ -111,7 +131,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 ---
 
-## 3. System API
+## 4. System API
 
 ### 認証状態チェック
 
@@ -157,7 +177,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 ---
 
-## 4. preflight の重要挙動
+## 5. preflight の重要挙動
 
 - Planner は次をすべて満たすときのみ推奨されます:
   - requirement が空でない
@@ -168,7 +188,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
   - label: `role:worker|role:tester|role:docser`
   - または body に `Agent:` / `Role:` 記述
 
-## 5. 代表レスポンス例
+## 6. 代表レスポンス例
 
 ### `POST /system/preflight`（抜粋）
 
@@ -231,7 +251,7 @@ system 制御系は `canControlSystem()` で許可判定されます。
 
 ---
 
-## 6. 実装連携時の注意
+## 7. 実装連携時の注意
 
 - command 実行 API を外部から直接叩く設計ではなく、process manager 経由で制御します
 - `stop-all` は running run を cancel/requeue し、agent 状態も更新します
