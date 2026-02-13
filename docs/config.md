@@ -238,7 +238,7 @@ Issue 自動 task 化には明示 role が必要:
 
 ### 6.4 Verification command planning
 
-Planner:
+Planner 関連:
 
 - `PLANNER_VERIFY_COMMAND_MODE`
 - `PLANNER_VERIFY_CONTRACT_PATH`
@@ -246,7 +246,7 @@ Planner:
 - `PLANNER_VERIFY_PLAN_TIMEOUT_SECONDS`
 - `PLANNER_VERIFY_AUGMENT_NONEMPTY`
 
-Worker:
+Worker 関連:
 
 - `WORKER_AUTO_VERIFY_MODE`
 - `WORKER_VERIFY_CONTRACT_PATH`

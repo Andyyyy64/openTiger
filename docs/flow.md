@@ -5,7 +5,7 @@
 このページは、task/run を中心とした**実行時の状態遷移**を説明します。  
 起動時の preflight 判定式や全パターン表は `docs/startup-patterns.md` を参照してください。
 
-## 1. Start / Preflight
+## 1. 起動 / preflight
 
 システム起動時は `/system/preflight` を呼び出し、推奨起動構成を組み立てます。
 
@@ -32,7 +32,7 @@
 
 判定の厳密な式・全組み合わせは `docs/startup-patterns.md` に集約しています。
 
-## 2. Primary Lifecycle
+## 2. 基本ライフサイクル
 
 1. Task が `queued` に入る
 2. Dispatcher が lease を取得し task を `running` にする
@@ -82,7 +82,7 @@
 - 同一 run の二重 review を防止
 - 重複 judge loop を抑制
 
-## 5. Dispatcher Recovery Layer
+## 5. Dispatcher の回復レイヤ
 
 poll loop ごとに:
 
@@ -91,21 +91,21 @@ poll loop ごとに:
 - dead-agent lease の reclaim
 - active run がない orphaned `running` task の回復
 
-Task filtering:
+タスクのフィルタ条件:
 
 - 未解決 dependency は block
 - `targetArea` 競合は block
 - 直近の非 quota failure は cooldown block 対象
 - 最新 quota failure は dispatcher 側 cooldown block から除外
 
-## 6. Worker Failure Handling
+## 6. Worker の失敗処理
 
 task error 時:
 
 - run を `failed` に更新
 - task を次のように更新:
-  - `blocked(quota_wait)` for quota signatures
-  - `failed` otherwise
+- quota シグネチャに一致する場合は `blocked(quota_wait)`
+- それ以外は `failed`
 - failure signature に応じて context delta（`.opentiger/context/context-delta.json`）を更新する場合あり
 - lease を解放
 - agent を `idle` に戻す
@@ -115,13 +115,13 @@ Queue 重複実行防止:
 - task ごとの runtime lock
 - lock 競合時の startup-window guard（誤った即時 requeue を回避）
 
-## 7. Judge Non-Approve / Merge-Failure Path
+## 7. Judge の non-approve / merge-failure 経路
 
 - Non-approve で AutoFix task 作成、および親 task -> `blocked(needs_rework)` への遷移が起こる場合あり
 - Approve 後でも merge conflict があれば `[AutoFix-Conflict] PR #...` を生成する場合あり
 - conflict autofix の enqueue に失敗した場合は judge retry fallback を使用
 
-## 8. Cycle Manager Self-Healing
+## 8. Cycle Manager の自己回復
 
 周期ジョブの主な内容:
 
@@ -137,7 +137,7 @@ Queue 重複実行防止:
 
 起動判定・replan 判定の責務分離は `docs/startup-patterns.md` を参照してください。
 
-Blocked recovery behavior:
+blocked 回復挙動:
 
 - `awaiting_judge`
   - 必要に応じて最新の judge 可能な成功 run を復元
@@ -151,15 +151,15 @@ Blocked recovery behavior:
   - 有効な rework child が既にある場合は追加 rework を作らない
   - rework depth が `AUTO_REWORK_MAX_DEPTH` を超えた場合は cancel
 
-System process self-heal:
+system process の自己回復:
 
 - Judge backlog（`openPrCount > 0` または `pendingJudgeTaskCount > 0`）を検知すると runtime hatch を arm し、Judge process 停止時に自動起動
 
-policy lifecycle と自己成長の詳細:
+policy のライフサイクルと自己成長の詳細:
 
 - `docs/policy-recovery.md`
 
-## 9. Host Snapshot and Context Refresh
+## 9. Host snapshot と context refresh
 
 - API の host context endpoint:
   - `GET /system/host/neofetch`
@@ -167,7 +167,7 @@ policy lifecycle と自己成長の詳細:
 - snapshot の主ソースは `neofetch`。必要時は `uname -srmo` に fallback
 - snapshot は `.opentiger/context/agent-profile.json` に cache され、TTL/fingerprint で refresh
 
-## 10. Why "Failed" and "Retry" Can Coexist
+## 10. `Failed` と `Retry` が共存する理由
 
 Runs table で即時 failed を表示しつつ、task card で retry countdown を表示することがあります。
 

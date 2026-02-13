@@ -103,7 +103,7 @@ dispatcher は sandbox container 起動時に loopback 宛先を次へ書き換�
 
 ## 7. Claude Auth Check API
 
-endpoint:
+エンドポイント:
 
 - `GET /system/claude/auth`
 

@@ -65,7 +65,7 @@ Worker / Tester / Docser は同一 runtime を共有し、`AGENT_ROLE` で挙動
 
 ## 6. 共通の状態モデル
 
-task status:
+task status（状態）:
 
 - `queued`
 - `running`
@@ -74,7 +74,7 @@ task status:
 - `blocked`
 - `cancelled`
 
-blocked reason:
+blocked reason（理由）:
 
 - `awaiting_judge`
 - `quota_wait`

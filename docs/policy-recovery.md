@@ -185,13 +185,13 @@ Planner は path 追加理由を次にも記録します。
 
 ### 7.2 環境変数
 
-Core:
+Core 設定:
 
 - `POLICY_RECOVERY_CONFIG_PATH`
 - `POLICY_RECOVERY_CONFIG_JSON`
 - `POLICY_RECOVERY_MODE`
 
-Worker recovery:
+Worker 回復設定:
 
 - `WORKER_POLICY_RECOVERY_USE_LLM`
 - `WORKER_POLICY_RECOVERY_ATTEMPTS`

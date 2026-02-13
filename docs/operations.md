@@ -93,7 +93,7 @@ openTiger は runtime hatch（イベントベース）で process 自己復旧�
 - 実行系 process を「継続稼働対象」として扱うかを決定
 - judge backlog 検知時の judge 自動再起動などに利用
 
-CLI:
+CLIコマンド:
 
 ```bash
 pnpm runtime:hatch:status
