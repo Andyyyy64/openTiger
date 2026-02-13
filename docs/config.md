@@ -313,3 +313,25 @@ Worker:
 5. 回復設定（retry / cooldown / auto restart）
 
 より詳細な運用は `docs/operations.md` を参照してください。
+
+---
+
+## 9. 設定変更の影響マップ（運用目安）
+
+設定は「どのプロセスが読むか」で影響範囲が決まります。  
+特に env-only 設定は、対象プロセスの再起動まで反映されません。
+
+| 設定カテゴリ | 主なキー | 影響コンポーネント | 反映タイミングの目安 |
+| --- | --- | --- | --- |
+| Repository/GitHub | `REPO_MODE`, `REPO_URL`, `BASE_BRANCH`, `GITHUB_*` | API preflight, Planner, Dispatcher, Worker, Judge | 対象プロセス再起動後 |
+| Execution/Launch | `EXECUTION_ENVIRONMENT`, `SANDBOX_DOCKER_*` | API process manager, Dispatcher launcher, sandbox worker | Dispatcher 再起動後（新規 task から） |
+| Planner | `PLANNER_*`, `AUTO_REPLAN`, `REPLAN_*` | Planner, Cycle Manager | Planner / Cycle Manager 再起動後 |
+| Dispatcher | `MAX_CONCURRENT_WORKERS`, `POLL_INTERVAL_MS`, `DISPATCH_*` | Dispatcher | Dispatcher 再起動後 |
+| Worker runtime | `WORKER_*`, `TESTER_*`, `DOCSER_*`, `LLM_EXECUTOR`, `CLAUDE_CODE_*`, `OPENCODE_*` | Worker/Tester/Docser | 対象 agent 再起動後 |
+| Judge | `JUDGE_*`, `JUDGE_MODE` | Judge | Judge 再起動後 |
+| Retry/Cleanup | `FAILED_TASK_*`, `BLOCKED_TASK_*`, `STUCK_RUN_TIMEOUT_MS` | Cycle Manager, API tasks retry 表示 | Cycle Manager / API 再起動後 |
+
+### 補足
+
+- DB 管理キーを更新しても、すでに起動中のプロセス環境変数は自動更新されません。
+- 影響のあるプロセスだけ `start/stop` で再起動すると、全停止より安全に反映できます。
