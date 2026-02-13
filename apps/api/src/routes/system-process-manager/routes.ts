@@ -649,9 +649,12 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
       return c.json({ error: "Process cannot be stopped" }, 400);
     }
 
+    const runtime = managedProcesses.get(definition.name);
+    const canTerminateManagedProcess =
+      runtime?.status === "running" && Boolean(runtime.process);
     const info = stopManagedProcess(definition);
     const boundAgentId = resolveBoundAgentId(name);
-    if (boundAgentId) {
+    if (boundAgentId && canTerminateManagedProcess) {
       try {
         await cancelRunningWorkForAgent(boundAgentId, "Stopped via system process stop request");
       } catch (error) {
