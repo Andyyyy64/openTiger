@@ -24,3 +24,12 @@
 
 - 想定外 external path への preflight permission check を強化する
 - worker instruction へ path を渡す前に明示的 validation を追加する
+
+## 6. アイデア評価時の確認順（実務）
+
+改善案を試すときは、影響の有無を次の順で確認すると比較しやすくなります。
+
+1. `docs/state-model.md`（状態語彙がどう変わるか）
+2. `docs/flow.md`（遷移と回復経路にどんな差分が出るか）
+3. `docs/operations.md`（運用時の API 確認手順に変更が要るか）
+4. `docs/agent/README.md`（担当 agent と実装責務に影響があるか）
