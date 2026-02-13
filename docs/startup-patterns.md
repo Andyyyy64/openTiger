@@ -8,6 +8,15 @@ This document describes the code-aligned decision patterns for:
 
 Last verified against code on 2026-02-13.
 
+## Related
+
+- `docs/api-reference.md`
+- `docs/flow.md`
+- `docs/agent/planner.md`
+- `docs/agent/dispatcher.md`
+- `docs/agent/judge.md`
+- `docs/agent/cycle-manager.md`
+
 ## Decision Inputs
 
 | Symbol | Meaning                          | Source                                         |
@@ -16,6 +25,16 @@ Last verified against code on 2026-02-13.
 | `I`    | Issue task backlog exists        | `preflight.github.issueTaskBacklogCount > 0`   |
 | `P`    | PR/Judge backlog exists          | `openPrCount > 0 OR pendingJudgeTaskCount > 0` |
 | `L`    | Local task backlog exists        | `queued/running/failed/blocked > 0`            |
+
+## Decision Ownership
+
+| Decision | Primary component |
+| -------- | ----------------- |
+| preflight recommendation | API (`/system/preflight`) |
+| planner start guard | API process prehook (`/system/processes/planner/start`) |
+| queued task selection and lease assignment | Dispatcher |
+| run judgement and PR merge path | Judge |
+| backlog convergence, preflight sync, replan trigger | Cycle Manager |
 
 ## Start-Time Rules
 

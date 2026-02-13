@@ -8,6 +8,7 @@
 - `docs/config.md`
 - `docs/api-reference.md`
 - `docs/operations.md`
+- `docs/agent/README.md`
 
 ## 1. 前提
 
