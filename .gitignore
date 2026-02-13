@@ -42,6 +42,8 @@ pnpm-debug.log*
 tmp/
 temp/
 .cache/
+.tmp_gpt_researcher/
+.tmp_open_deep_research/
 .opentiger/context/*.json
 !.opentiger/context/.gitkeep
 
