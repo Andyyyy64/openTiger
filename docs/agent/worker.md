@@ -29,7 +29,7 @@ Out of scope:
 
 1. Acquire runtime lock
 2. Checkout / branch prep
-3. LLM execution (`opencode` or `claude_code`)
+3. LLM execution (`opencode`, `claude_code`, or `codex`)
 4. Expected-file verification
 5. Run verification phase
 6. Commit/push + PR creation (git mode)

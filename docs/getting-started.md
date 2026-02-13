@@ -19,6 +19,7 @@ Related:
 - GitHub CLI (`gh`) recommended
 
 Claude Code executor requires the `claude` CLI.
+Codex executor requires the `codex` CLI.
 
 ## 2. Setup
 
@@ -42,6 +43,12 @@ For token mode, set `GITHUB_TOKEN` in System Config.
 
 ```bash
 claude /login
+```
+
+### When Using `LLM_EXECUTOR=codex`
+
+```bash
+codex login
 ```
 
 ## 4. Startup
@@ -126,6 +133,11 @@ First-time users can triage by:
 
 - Host execution: rerun `claude /login`
 - Sandbox execution: confirm host auth dir is mounted
+
+### Handling Codex Auth Warning
+
+- Host execution: rerun `codex login` or set `OPENAI_API_KEY` / `CODEX_API_KEY`
+- Sandbox execution: confirm host `~/.codex` is mounted
 
 ### Planner Not Starting (Preflight)
 

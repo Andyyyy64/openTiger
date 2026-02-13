@@ -69,12 +69,15 @@ Note:
 
 ### 2.4 Executor / Model
 
-- `LLM_EXECUTOR` (`opencode` / `claude_code`)
+- `LLM_EXECUTOR` (`opencode` / `claude_code` / `codex`)
 - `OPENCODE_MODEL`
 - `OPENCODE_SMALL_MODEL`
 - `OPENCODE_WAIT_ON_QUOTA`
 - `OPENCODE_QUOTA_RETRY_DELAY_MS`
 - `OPENCODE_MAX_QUOTA_WAITS`
+- `CODEX_MODEL`
+- `CODEX_MAX_RETRIES`
+- `CODEX_RETRY_DELAY_MS`
 - `CLAUDE_CODE_PERMISSION_MODE`
 - `CLAUDE_CODE_MODEL`
 - `CLAUDE_CODE_MAX_TURNS`
@@ -110,6 +113,7 @@ Note:
 
 - `EXECUTION_ENVIRONMENT=host`
 - `LLM_EXECUTOR=claude_code`
+- `CODEX_MODEL=gpt-5.3-codex`
 - `BASE_BRANCH=main`
 - `REPO_MODE=git`
 - `WORKER_COUNT=4`
@@ -171,6 +175,7 @@ Issue auto-task requires explicit role:
 - `GET /system/github/repos`
 - `GET /system/github/auth`
 - `GET /system/claude/auth`
+- `GET /system/codex/auth`
 - `GET /system/host/neofetch`
 - `GET /system/host/context`
 
@@ -366,7 +371,7 @@ Env-only config is not reflected until the target process restarts.
 | Execution/launch  | `EXECUTION_ENVIRONMENT`, `SANDBOX_DOCKER_*`                                       | API process manager, Dispatcher launcher, sandbox worker | After Dispatcher restart (from new tasks) |
 | Planner           | `PLANNER_*`, `AUTO_REPLAN`, `REPLAN_*`                                            | Planner, Cycle Manager                                   | After Planner / Cycle Manager restart     |
 | Dispatcher        | `MAX_CONCURRENT_WORKERS`, `POLL_INTERVAL_MS`, `DISPATCH_*`                        | Dispatcher                                               | After Dispatcher restart                  |
-| Worker execution  | `WORKER_*`, `TESTER_*`, `DOCSER_*`, `LLM_EXECUTOR`, `CLAUDE_CODE_*`, `OPENCODE_*` | Worker/Tester/Docser                                     | After target agent restart                |
+| Worker execution  | `WORKER_*`, `TESTER_*`, `DOCSER_*`, `LLM_EXECUTOR`, `CLAUDE_CODE_*`, `CODEX_*`, `OPENCODE_*` | Worker/Tester/Docser                                     | After target agent restart                |
 | Judge             | `JUDGE_*`, `JUDGE_MODE`                                                           | Judge                                                    | After Judge restart                       |
 | Retry/cleanup     | `FAILED_TASK_*`, `BLOCKED_TASK_*`, `STUCK_RUN_TIMEOUT_MS`                         | Cycle Manager, API task retry display                    | After Cycle Manager / API restart         |
 
