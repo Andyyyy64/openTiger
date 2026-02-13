@@ -1,4 +1,4 @@
-# Next Ideas
+# 今後のアイデア
 
 ## 1. Planner Fallback Layer
 

@@ -1,15 +1,15 @@
-# Goal
+# ゴール
 
 QEMU（qmenu）で起動し、kernel console を提供し、自動検証付きで安全に反復開発できる  
 最小かつ拡張可能な RISC-V OS baseline を構築する。
 
-## Background
+## 背景
 
 openTiger による継続的な自律開発フローで RISC-V OS を育てることを想定する。  
 自律反復の安定化のため、最初のマイルストーンはフル機能 OS ではなく、  
 小さく検証可能な kernel baseline に限定する。
 
-## Constraints
+## 制約
 
 - 既存リポジトリで採用済みの言語/ツールチェーン選定を維持する
 - 対象は RISC-V 64-bit 仮想環境（`qemu-system-riscv64`, `virt` machine）
@@ -17,7 +17,7 @@ openTiger による継続的な自律開発フローで RISC-V OS を育てる�
 - 厳密に必要な場合を除き、重い外部 runtime dependency を追加しない
 - 一括大改修より、段階的でテスト可能な小さな slice を優先する
 
-## Acceptance Criteria
+## 受け入れ基準
 
 - [ ] プロジェクト標準 build command で kernel image を生成できる
 - [ ] QEMU 起動で kernel entry 到達と serial console への boot banner 出力を確認できる
@@ -30,9 +30,9 @@ openTiger による継続的な自律開発フローで RISC-V OS を育てる�
 - [ ] QEMU boot と log marker 検証を行う自動 smoke test が少なくとも 1 本ある
 - [ ] 実現可能な範囲で kernel 主要変更に unit/integration test を付与し、必須 checks が通る
 
-## Scope
+## スコープ
 
-## In Scope
+## 対象範囲（In Scope）
 
 - RISC-V `virt` machine 向け boot path と early initialization
 - UART 経由の kernel console
@@ -43,7 +43,7 @@ openTiger による継続的な自律開発フローで RISC-V OS を育てる�
 - ローカル/CI で再現可能な build/test script
 - setup/run command に関する必須ドキュメント更新
 
-## Out of Scope
+## 対象外（Out of Scope）
 
 - user-space process 分離を含む完全な virtual memory subsystem
 - 完全な POSIX 互換
@@ -52,7 +52,7 @@ openTiger による継続的な自律開発フローで RISC-V OS を育てる�
 - multi-core SMP scheduling
 - baseline correctness を超える security hardening
 
-## Allowed Paths
+## 許可パス（Allowed Paths）
 
 - `arch/riscv/**`
 - `boot/**`
@@ -66,7 +66,7 @@ openTiger による継続的な自律開発フローで RISC-V OS を育てる�
 - `README.md`
 - `Makefile`
 
-## Risk Assessment
+## リスク評価
 
 | Risk | Impact | Mitigation |
 | --- | --- | --- |
@@ -76,7 +76,7 @@ openTiger による継続的な自律開発フローで RISC-V OS を育てる�
 | Memory allocator 破損で障害が連鎖する | high | allocator invariant と targeted allocation/free test を追加する |
 | Scope 拡張で自律反復速度が落ちる | medium | 本マイルストーンを baseline に固定し高度機能は後続へ送る |
 
-## Notes
+## 補足
 
 milestone-first 戦略で進める:
 

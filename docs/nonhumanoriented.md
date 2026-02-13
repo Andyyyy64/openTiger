@@ -1,4 +1,4 @@
-# Non-Human-Oriented Operation Principles
+# 非人手前提の運用原則
 
 ## 1. 目的
 
