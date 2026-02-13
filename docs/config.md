@@ -97,6 +97,26 @@
 - `XAI_API_KEY`
 - `DEEPSEEK_API_KEY`
 
+## 2.7 主要デフォルト値（初期状態）
+
+- `EXECUTION_ENVIRONMENT=host`
+- `LLM_EXECUTOR=claude_code`
+- `BASE_BRANCH=main`
+- `REPO_MODE=git`
+- `WORKER_COUNT=4`
+- `TESTER_COUNT=4`
+- `DOCSER_COUNT=4`
+- `JUDGE_COUNT=4`
+- `PLANNER_COUNT=1`
+- `AUTO_REPLAN=true`
+- `REPLAN_REQUIREMENT_PATH=docs/requirement.md`
+- `REPLAN_INTERVAL_MS=60000`
+- `GITHUB_AUTH_MODE=gh`
+- `MAX_CONCURRENT_WORKERS=-1`（無制限扱い）
+- `DAILY_TOKEN_LIMIT=-1`（無制限扱い）
+- `HOURLY_TOKEN_LIMIT=-1`（無制限扱い）
+- `TASK_TOKEN_LIMIT=-1`（無制限扱い）
+
 ---
 
 ## 3. `/config` API
@@ -164,6 +184,18 @@ Issue 自動 task 化には明示 role が必要:
 3. git repository の場合、snapshot commit/push を試行
 
 このため requirement 編集は「ファイル保存」だけでなく「repository 状態更新」を伴います。
+
+## 5.1 起動時の自動補完（config-store）
+
+`ensureConfigRow()` は起動時に次の補完/正規化を行います。
+
+- 必須カラムの self-heal（`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`）
+- workspace/git 情報からの自動補完
+  - `repoUrl`, `githubOwner`, `githubRepo`, `baseBranch`
+  - requirement path 候補（`docs/requirement.md` など）
+- legacy 値の正規化
+  - 旧 `REPLAN_COMMAND` を `pnpm --filter @openTiger/planner run start:fresh` へ統一
+  - 旧 token/concurrency 固定値を `-1` 無制限へ統一
 
 ---
 

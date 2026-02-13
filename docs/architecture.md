@@ -2,6 +2,24 @@
 
 openTiger は、複数エージェントと状態管理テーブルを使って自律実行を継続するオーケストレーションシステムです。
 
+## 0. ランタイム制御ループ（概要）
+
+```mermaid
+flowchart LR
+  R[Requirement / Issues / PRs] --> P[Planner]
+  P --> T[(tasks)]
+  T --> D[Dispatcher]
+  D --> W[Worker / Tester / Docser]
+  W --> RUN[(runs/artifacts)]
+  RUN --> J[Judge]
+  J --> T
+  T --> C[Cycle Manager]
+  C --> T
+  C --> P
+```
+
+このループは「停止しない」ことを優先し、失敗時に状態遷移で回復戦略を切り替える設計です。
+
 ## 1. コンポーネント
 
 ## API (`@openTiger/api`)
