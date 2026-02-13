@@ -18,6 +18,8 @@ This folder documents openTiger behavior and operations.
   - Design principles for long-running autonomous operation.
 - `docs/idea.md`
   - Next-phase improvements.
+- `docs/policy-recovery.md`
+  - In-run policy self-recovery, generated-artifact auto-learning, and allowedPaths self-growth.
 
 ## Agent Specs
 

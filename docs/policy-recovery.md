@@ -45,13 +45,23 @@ Even when LLM suggests `allow`, Worker blocks unsafe decisions:
 - path must be one of current violating paths
 - `deniedPaths` always win over `allow`
 
-### 2.3 Docser Behavior
+### 2.4 Generated Artifact Path Auto-Learning
+
+When policy violations remain after LLM recovery, Worker attempts a final recovery by treating likely-generated artifacts (e.g., `kernel.dump`, `*.log`, build outputs) as safe to discard:
+
+1. Filter violating paths with `isLikelyGeneratedArtifactPath()` (extensions: `.dump`, `.log`, `.tmp`, `.trace`; path segments: `coverage`, `report`, `artifact`, `build`, `dist`, etc.).
+2. Discard those files and re-run verification.
+3. Persist learned paths to `.opentiger/generated-paths.auto.txt` so future runs treat them as generated from the first `verifyChanges` call.
+
+No manual edits to `generated-paths.txt` are required; learning happens at runtime. The built-in `GENERATED_PATHS` and `WORKER_EXTRA_GENERATED_PATHS` are merged with the auto-learned file.
+
+### 2.5 Docser Behavior
 
 `docser` is intentionally restricted:
 
 - deterministic policy auto-allow logic returns no extra paths for `docser`
 - Worker skips LLM policy recovery for `docser`
-- `docser` verification commands are filtered to doc-safe `check` commands
+- `docser` verification commands are filtered to doc-safe `check` commands (e.g., `pnpm run check`)
 
 ## 3. Shared Policy Recovery Engine (Core)
 
