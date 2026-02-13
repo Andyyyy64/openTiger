@@ -99,6 +99,21 @@ pnpm run up
 詳細な運用チェックは `docs/operations.md` を参照してください。
 状態遷移で詰まる場合は `docs/state-model.md` の一次診断テーブルから着手してください。
 
+### 8.1 状態詰まりを最短で追う導線（初見向け）
+
+初見ユーザーは、次の順で確認すると切り分けしやすくなります。
+
+1. 状態語彙を確認する  
+   - `docs/state-model.md`（7章）
+2. どこで詰まるかを遷移で確認する  
+   - `docs/flow.md`（該当する章）
+3. API の確認順を実行する  
+   - `docs/operations.md`（11章）
+4. 担当 agent と実装を特定する  
+   - `docs/agent/README.md`（FAQ と実装追跡ルート）
+5. API 起点で追う場合は逆引きを使う  
+   - `docs/api-reference.md`（2.2）
+
 ## 9. よくある初期トラブル
 
 ### リポジトリ未設定（GitHub）
