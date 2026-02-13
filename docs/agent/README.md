@@ -33,6 +33,11 @@
 
 Worker / Tester / Docser は同一 runtime を共有し、`AGENT_ROLE` で挙動を切り替えます。
 
+重複を避ける読み方:
+
+1. `docs/agent/worker.md` で共通 runtime を把握
+2. `docs/agent/tester.md` / `docs/agent/docser.md` で差分のみ確認
+
 ## 4. モデル/指示ファイルの解決順
 
 | Role | Model 設定（優先順） | Instructions 設定（優先順） |

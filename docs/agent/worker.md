@@ -14,6 +14,12 @@ Worker runtime は `AGENT_ROLE` に応じて実行モードを切り替えます
 - `tester`: テスト中心変更
 - `docser`: ドキュメント変更
 
+このページは Worker runtime の**共通動作**を説明します。  
+Tester/Docser 固有差分は以下を参照してください。
+
+- `docs/agent/tester.md`
+- `docs/agent/docser.md`
+
 ## 2. Standard Execution Flow
 
 1. runtime lock 取得
@@ -69,12 +75,7 @@ command は shell ではなく spawn 実行です。
 - `$()`
 - `|`, `&&`, `||`, `;`, `<`, `>`, `` ` ``
 
-## 7. Docser-specific Behavior
-
-- doc-safe command のみ許可（例: `pnpm run check`）
-- docser は LLM policy recovery を実行しない
-
-## 8. Important Settings
+## 7. Important Settings
 
 - `AGENT_ID`, `AGENT_ROLE`
 - `WORKER_MODEL`, `TESTER_MODEL`, `DOCSER_MODEL`
