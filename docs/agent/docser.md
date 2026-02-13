@@ -40,3 +40,11 @@ Docser は `AGENT_ROLE=docser` で動作する Worker ランタイムの派生�
 - `OPENTIGER_LOG_DIR`
 
 共通設定（retry/policy recovery/verify recovery など）は `docs/agent/worker.md` を参照してください。
+
+## 6. 実装参照（source of truth）
+
+- role 起動分岐: `apps/worker/src/main.ts`
+- role 固有指示: `apps/worker/instructions/docser.md`
+- doc-safe 検証制約: `apps/worker/src/worker-runner-verification.ts`
+- docser 固有補助挙動: `apps/worker/src/worker-task-helpers.ts`
+- 共通実行本体: `apps/worker/src/worker-runner.ts`

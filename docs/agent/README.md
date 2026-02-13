@@ -50,7 +50,7 @@ Worker / Tester / Docser は同一ランタイムを共有し、`AGENT_ROLE` で
 
 重複を避ける読み方:
 
-1. `docs/agent/worker.md` で共通 runtime を把握
+1. `docs/agent/worker.md` で共通ランタイムを把握
 2. `docs/agent/tester.md` / `docs/agent/docser.md` で差分のみ確認
 
 ## 5. モデル/指示ファイルの解決順
@@ -111,6 +111,16 @@ blocked 理由（reason）:
 - Q. `issue_linking` が解消しない。Judge 側の問題か？
   - A. まず Planner/API の issue 連携処理を確認します。Judge は `issue_linking` 解消の主体ではありません。
   - 初動 API: `GET /tasks`, `POST /system/preflight`, `GET /logs/all`
+
+## 9. 実装参照マップ（source of truth）
+
+- Planner: `apps/planner/src/`
+- Dispatcher: `apps/dispatcher/src/`
+- Worker/Tester/Docser: `apps/worker/src/`, `apps/worker/instructions/`
+- Judge: `apps/judge/src/`
+- Cycle Manager: `apps/cycle-manager/src/`
+
+各ページの「実装参照（source of truth）」節には、上記ディレクトリ内の主要ファイルを列挙しています。
 
 関連:
 

@@ -26,11 +26,11 @@ Planner は requirement/issue から実行可能な task 群を生成し、重�
 
 ## 3. 処理パイプライン
 
-1. requirement の parse/validate
+1. requirement の解析と妥当性確認（parse/validate）
 2. 既存コンテキスト（feedback/hints）読込
 3. inspection 実行（LLM）
 4. task 生成（LLM + fallback）
-5. dependency 正規化
+5. dependency の正規化
 6. role / allowedPaths / command policy 適用
 7. verification command 補強
 8. plan 保存（dedupe lock 付き）
@@ -38,7 +38,7 @@ Planner は requirement/issue から実行可能な task 群を生成し、重�
 
 ## 4. 主な挙動
 
-- uninitialized repository 向けの init task 注入
+- 未初期化 repository 向けの init task 注入
 - dependency index の循環/冗長除去
 - lockfile path の自動許可
 - command-driven allowedPaths 補完
@@ -70,7 +70,15 @@ Planner は task 生成時に検証コマンドを補強できます。
 - inspection/task generation が失敗しても fallback planning を試行
 - hard failure 時も既存タスクを壊さず終了
 
-## 8. 主な設定
+## 8. 実装参照（source of truth）
+
+- 起動と全体制御: `apps/planner/src/main.ts`, `apps/planner/src/planner-runner.ts`
+- task 永続化と plan event: `apps/planner/src/planner-tasks.ts`
+- task policy / allowedPaths 補正: `apps/planner/src/task-policies.ts`
+- 検証コマンド補強: `apps/planner/src/planner-verification.ts`
+- issue 起点の task 化: `apps/planner/src/strategies/from-issue.ts`
+
+## 9. 主な設定
 
 - `PLANNER_MODEL`
 - `PLANNER_TIMEOUT`

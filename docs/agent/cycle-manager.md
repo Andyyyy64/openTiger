@@ -65,7 +65,15 @@ Cycle Manager は長時間運用を前提に、システム全体の収束を維
 - `new-cycle`
 - `cleanup`
 
-## 7. 主な設定
+## 7. 実装参照（source of truth）
+
+- 起動と共通制御: `apps/cycle-manager/src/main.ts`, `apps/cycle-manager/src/cycle-controller.ts`
+- メインループ: `apps/cycle-manager/src/main/loops.ts`
+- backlog 同期と再計画: `apps/cycle-manager/src/main/backlog-preflight.ts`, `apps/cycle-manager/src/main/replan.ts`
+- 異常検知: `apps/cycle-manager/src/monitors/anomaly-detector.ts`
+- 回復クリーンアップ: `apps/cycle-manager/src/cleaners/cleanup.ts`, `apps/cycle-manager/src/cleaners/cleanup-retry.ts`
+
+## 8. 主な設定
 
 - `MONITOR_INTERVAL_MS`
 - `CLEANUP_INTERVAL_MS`

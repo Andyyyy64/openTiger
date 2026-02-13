@@ -24,7 +24,7 @@ Judge は successful run を評価し、task を `done` へ収束させるか、
 
 ## 3. 入力
 
-- successful run + artifacts (`pr` / `worktree`)
+- successful run + artifacts（`pr` / `worktree`）
 - CI / policy / LLM evaluator 結果
 - task の retry context / lineage
 
@@ -43,13 +43,21 @@ legacy の `needs_human` は request_changes 系の回復フローへ正規化�
 
 ## 6. ループ防止と回復
 
-- run claim idempotency (`judgedAt`, `judgementVersion`)
+- run claim の冪等制御（`judgedAt`, `judgementVersion`）
 - non-approve circuit breaker
 - doom loop circuit breaker
 - awaiting_judge backlog の run 復元
 - conflict 時の autofix fallback
 
-## 7. 主な設定
+## 7. 実装参照（source of truth）
+
+- 起動とループ: `apps/judge/src/main.ts`, `apps/judge/src/judge-loops.ts`
+- 判定の中核処理: `apps/judge/src/judge-agent.ts`, `apps/judge/src/judge-evaluate.ts`
+- 再試行と回復: `apps/judge/src/judge-retry.ts`, `apps/judge/src/judge-pending.ts`
+- autofix 経路: `apps/judge/src/judge-autofix.ts`
+- ローカル運用経路: `apps/judge/src/judge-local-loop.ts`, `apps/judge/src/judge-local-merge.ts`
+
+## 8. 主な設定
 
 - `JUDGE_MODE`
 - `JUDGE_MODEL`

@@ -40,3 +40,10 @@ Tester は `AGENT_ROLE=tester` で動作する Worker ランタイムの派生�
 - `WORKER_VERIFY_CONTRACT_PATH`
 
 共通設定（retry/policy recovery/verify recovery など）は `docs/agent/worker.md` を参照してください。
+
+## 6. 実装参照（source of truth）
+
+- role 起動分岐: `apps/worker/src/main.ts`
+- role 固有指示: `apps/worker/instructions/tester.md`
+- 検証コマンド自動補完: `apps/worker/src/steps/verify/repo-scripts.ts`
+- 共通実行本体: `apps/worker/src/worker-runner.ts`, `apps/worker/src/worker-runner-verification.ts`

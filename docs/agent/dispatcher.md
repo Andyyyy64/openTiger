@@ -27,7 +27,7 @@ Dispatcher は `queued` task を安全に `running` へ進め、適切な実行 
 
 1. lease 異常と孤立した running task を先に回復
 2. 利用可能スロットを計算（busy agent 数 + 上限）
-3. `queued` task を収集し、依存関係/競合でフィルタ
+3. `queued` task を収集し、依存関係/競合で絞り込み
 4. 優先度スコアで並べ替え
 5. role に一致する idle agent を選択
 6. lease 取得 + `queued -> running` を原子的に更新
@@ -36,7 +36,7 @@ Dispatcher は `queued` task を安全に `running` へ進め、適切な実行 
 ## 4. 選択ロジックとガードレール
 
 - `awaiting_judge` backlog は観測し、設定により hard block 可能
-- PR review 専用 task が `queued` に紛れた場合は `blocked(awaiting_judge)` へ戻す
+- PR レビュー専用 task が `queued` に紛れた場合は `blocked(awaiting_judge)` へ戻す
 - recent failure/cancel は cooldown 中の再配布を抑止
 - `targetArea` 衝突タスクは同時実行しない
 - `dependencies` 未解決タスクは配布しない
@@ -58,7 +58,15 @@ Dispatcher は `queued` task を安全に `running` へ進め、適切な実行 
   - task ごとに worker container を起動
   - Docker image/network とログ mount を利用
 
-## 7. 主な設定
+## 7. 実装参照（source of truth）
+
+- 起動と制御ループ: `apps/dispatcher/src/main.ts`, `apps/dispatcher/src/scheduler/index.ts`
+- lease 管理: `apps/dispatcher/src/scheduler/lease.ts`
+- agent heartbeat 回復: `apps/dispatcher/src/scheduler/heartbeat.ts`
+- 優先度計算: `apps/dispatcher/src/scheduler/priority.ts`
+- worker 起動分岐: `apps/dispatcher/src/scheduler/worker-launcher.ts`
+
+## 8. 主な設定
 
 - `POLL_INTERVAL_MS`
 - `MAX_CONCURRENT_WORKERS`

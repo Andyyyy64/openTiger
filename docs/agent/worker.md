@@ -80,7 +80,16 @@ Tester/Docser 固有差分は以下を参照してください。
 - `$()`
 - `|`, `&&`, `||`, `;`, `<`, `>`, `` ` ``
 
-## 7. 主要設定
+## 7. 実装参照（source of truth）
+
+- 起動と role 解決: `apps/worker/src/main.ts`
+- 実行本体: `apps/worker/src/worker-runner.ts`
+- 検証フェーズ: `apps/worker/src/worker-runner-verification.ts`
+- role 別補助挙動: `apps/worker/src/worker-task-helpers.ts`
+- 実行ロック: `apps/worker/src/worker-runtime-lock.ts`
+- 検証コマンド処理: `apps/worker/src/steps/verify/`
+
+## 8. 主要設定
 
 - `AGENT_ID`, `AGENT_ROLE`
 - `WORKER_MODEL`, `TESTER_MODEL`, `DOCSER_MODEL`
