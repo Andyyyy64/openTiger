@@ -102,7 +102,7 @@ pnpm run up
    - `judgements`
    - `logs`
 6. If states appear stuck:
-   - start from `docs/state-model.md` triage patterns
+   - start from `docs/state-model.md` triage patterns（状態停滞の一次診断）
    - then follow `docs/operations.md` for detailed runbook
 
 ### 共通逆引き導線（状態語彙 -> 遷移 -> 担当 -> 実装）
