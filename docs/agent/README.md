@@ -6,13 +6,13 @@
 
 | エージェント | 主責務 | 主入力 | 主要遷移/出力 | 主な失敗時挙動 |
 | --- | --- | --- | --- | --- |
-| Planner | requirement/issue から task 計画を生成 | requirement、backlog、feedback、inspection | `tasks` 作成、plan event 保存 | 代替 planning、重複計画ガード |
-| Dispatcher | 実行順制御と task 配布 | queued task、leases、agent heartbeat | `queued -> running`、lease 付与、agent 割当 | lease reclaim、孤立 task 回復、再 queue |
+| Planner | requirement/issue から task 計画を生成 | requirement、backlog、feedback、inspection | `tasks` 作成、plan event 保存 | 代替計画（fallback planning）、重複計画ガード |
+| Dispatcher | 実行順制御と task 配布 | queued task、leases、agent heartbeat | `queued -> running`、lease 付与、agent 割当 | lease 回収、孤立 task 回復、再 queue |
 | Worker | 実装変更 + 検証 + PR 化 | task、repo/worktree、コマンド | `runs/artifacts` 生成、`awaiting_judge` または `done` | `quota_wait` / `needs_rework` / `failed` |
 | Tester | テスト中心 task の実行 | tester ロール task | Worker と同等（テスト文脈） | Worker と同等 |
 | Docser | ドキュメント同期 task の実行 | docser ロール task | docs 更新 run/artifact | doc-safe command 制約、LLM policy recovery なし |
-| Judge | successful run の評価と統治 | run/artifacts、CI/policy/LLM 結果 | `done` または retry/rework/autofix | circuit breaker、autofix、awaiting_judge 復元 |
-| Cycle Manager | 収束監視・回復・replan 制御 | system state、events、anomaly/cost | cycle 更新、cleanup、replan 起動 | critical anomaly restart、cooldown 再試行 |
+| Judge | successful run の評価と統治 | run/artifacts、CI/policy/LLM 結果 | `done` または retry/rework/autofix | 回路遮断（circuit breaker）、autofix、awaiting_judge 復元 |
+| Cycle Manager | 収束監視・回復・replan 制御 | system state、events、anomaly/cost | cycle 更新、cleanup、replan 起動 | 重大異常時の再起動（critical anomaly restart）、cooldown 再試行 |
 
 補足:
 
@@ -121,6 +121,15 @@ blocked 理由（reason）:
 - Cycle Manager: `apps/cycle-manager/src/`
 
 各ページの「実装参照（source of truth）」節には、上記ディレクトリ内の主要ファイルを列挙しています。
+
+## 10. 実装追跡の最短ルート（コードを読む順番）
+
+1. `docs/agent/README.md` で担当 agent を特定する
+2. 対象の `docs/agent/*.md` を開き、「実装参照（source of truth）」節を確認する
+3. 該当ディレクトリ（`apps/*/src`）の entrypoint（`main.ts`）から読む
+4. その後にループ実装・回復実装（`*-runner.ts`, `*-loops.ts`, `scheduler/*` など）へ進む
+
+この順番にすると、仕様説明から実装までを最短で往復しやすくなります。
 
 関連:
 

@@ -187,3 +187,5 @@ Runs table で即時 failed を表示しつつ、task card で retry countdown �
 - `docs/agent/docser.md`
 - `docs/agent/judge.md`
 - `docs/agent/cycle-manager.md`
+
+実装を直接追う場合は、各ページ末尾の「実装参照（source of truth）」節から対応する `apps/*/src` を確認してください。
