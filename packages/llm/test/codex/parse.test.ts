@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  extractCodexAssistantTextFromEventLine,
-  parseCodexExecJson,
-} from "../../src/codex/parse";
+import { extractCodexAssistantTextFromEventLine, parseCodexExecJson } from "../../src/codex/parse";
 
 describe("extractCodexAssistantTextFromEventLine", () => {
   it("extracts assistant text from completed agent message", () => {
@@ -48,9 +45,6 @@ describe("parseCodexExecJson", () => {
 
     const parsed = parseCodexExecJson(output);
     expect(parsed.isError).toBe(true);
-    expect(parsed.errors).toEqual([
-      "Reconnecting... 1/5",
-      "unexpected status 401 Unauthorized",
-    ]);
+    expect(parsed.errors).toEqual(["Reconnecting... 1/5", "unexpected status 401 Unauthorized"]);
   });
 });

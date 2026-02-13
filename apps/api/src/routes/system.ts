@@ -350,8 +350,8 @@ systemRoute.get("/codex/auth", async (c) => {
   const checkedAt = new Date().toISOString();
   const hasCodexApiKey = Boolean(
     configRow.openaiApiKey?.trim() ||
-      process.env.OPENAI_API_KEY?.trim() ||
-      process.env.CODEX_API_KEY?.trim(),
+    process.env.OPENAI_API_KEY?.trim() ||
+    process.env.CODEX_API_KEY?.trim(),
   );
 
   if (hasCodexApiKey) {
@@ -418,7 +418,8 @@ systemRoute.get("/codex/auth", async (c) => {
         authenticated: false,
         executionEnvironment,
         checkedAt,
-        message: "Codex CLI is not installed in sandbox image. Rebuild worker image with @openai/codex.",
+        message:
+          "Codex CLI is not installed in sandbox image. Rebuild worker image with @openai/codex.",
       });
     }
   }
@@ -450,7 +451,8 @@ systemRoute.get("/codex/auth", async (c) => {
     authenticated: true,
     executionEnvironment,
     checkedAt,
-    message: "Codex auth check returned a non-auth error; skipping warning to avoid false positives.",
+    message:
+      "Codex auth check returned a non-auth error; skipping warning to avoid false positives.",
   });
 });
 

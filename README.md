@@ -112,7 +112,7 @@ pnpm run up
 7. (Optional) Run TigerResearch from the `research` page:
    - submit query -> planner decomposition -> parallel collect/challenge/write -> report
    - details: `docs/research.md`
-7. If state becomes stalled:
+8. If state becomes stalled:
    - Start with initial diagnosis in `docs/state-model.md`
    - Check detailed runbook in `docs/operations.md`
 

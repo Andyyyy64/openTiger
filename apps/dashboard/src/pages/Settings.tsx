@@ -15,11 +15,7 @@ const EXECUTOR_MODEL_KEYS = new Set([
   "JUDGE_MODEL",
   "PLANNER_MODEL",
 ]);
-const API_KEY_KEYS = new Set([
-  "GEMINI_API_KEY",
-  "DEEPSEEK_API_KEY",
-  "XAI_API_KEY",
-]);
+const API_KEY_KEYS = new Set(["GEMINI_API_KEY", "DEEPSEEK_API_KEY", "XAI_API_KEY"]);
 
 export const SettingsPage: React.FC = () => {
   const queryClient = useQueryClient();

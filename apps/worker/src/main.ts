@@ -72,11 +72,11 @@ async function main() {
       ? process.env.CLAUDE_CODE_MODEL
       : llmExecutor === "codex"
         ? process.env.CODEX_MODEL
-      : agentRole === "tester"
-        ? (process.env.TESTER_MODEL ?? process.env.OPENCODE_MODEL)
-        : agentRole === "docser"
-          ? (process.env.DOCSER_MODEL ?? process.env.OPENCODE_MODEL)
-          : (process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL);
+        : agentRole === "tester"
+          ? (process.env.TESTER_MODEL ?? process.env.OPENCODE_MODEL)
+          : agentRole === "docser"
+            ? (process.env.DOCSER_MODEL ?? process.env.OPENCODE_MODEL)
+            : (process.env.WORKER_MODEL ?? process.env.OPENCODE_MODEL);
   const effectiveModel =
     agentModel ??
     (llmExecutor === "claude_code"
