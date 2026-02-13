@@ -1,12 +1,19 @@
 import React from "react";
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { runsApi, judgementsApi, type JudgementEvent } from "../lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  runsApi,
+  judgementsApi,
+  systemApi,
+  type JudgementEvent,
+  resolveProcessNameFromAgentId,
+} from "../lib/api";
 import type { Artifact } from "@openTiger/core";
 import { getRunStatusColor } from "../ui/status";
 
 export const RunDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["runs", id],
@@ -28,6 +35,23 @@ export const RunDetailsPage: React.FC = () => {
     }
   }, [data?.run?.logContent]);
 
+  const processName = resolveProcessNameFromAgentId(data?.run?.agentId);
+  const canStop = data?.run?.status === "running" && Boolean(processName);
+  const stopMutation = useMutation({
+    mutationFn: async () => {
+      if (!processName) {
+        throw new Error("No controllable process is bound to this run");
+      }
+      await systemApi.stopProcess(processName);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["runs", id] });
+      await queryClient.invalidateQueries({ queryKey: ["runs"] });
+      await queryClient.invalidateQueries({ queryKey: ["agents"] });
+      await queryClient.invalidateQueries({ queryKey: ["system", "processes"] });
+    },
+  });
+
   if (isLoading)
     return (
       <div className="p-8 text-center text-zinc-500 font-mono animate-pulse">
@@ -40,6 +64,16 @@ export const RunDetailsPage: React.FC = () => {
     );
 
   const { run, artifacts } = data;
+
+  const handleStop = () => {
+    if (!canStop || stopMutation.isPending) {
+      return;
+    }
+    if (!window.confirm(`Stop ${processName} and cancel the current task?`)) {
+      return;
+    }
+    stopMutation.mutate();
+  };
 
   return (
     <div className="p-6 max-w-5xl mx-auto text-term-fg font-mono">
@@ -67,6 +101,25 @@ export const RunDetailsPage: React.FC = () => {
               {run.taskId}
             </Link>
           </p>
+          {stopMutation.isError && (
+            <p className="text-red-400 text-xs mt-2">
+              STOP_FAILED: {stopMutation.error instanceof Error ? stopMutation.error.message : "error"}
+            </p>
+          )}
+        </div>
+        <div>
+          <button
+            type="button"
+            onClick={handleStop}
+            disabled={!canStop || stopMutation.isPending}
+            className={`px-3 py-2 text-xs border uppercase tracking-widest font-bold ${
+              canStop && !stopMutation.isPending
+                ? "border-red-500 text-red-400 hover:bg-red-500/10"
+                : "border-zinc-700 text-zinc-500 cursor-not-allowed"
+            }`}
+          >
+            {stopMutation.isPending ? "STOPPING..." : "STOP"}
+          </button>
         </div>
       </div>
 
