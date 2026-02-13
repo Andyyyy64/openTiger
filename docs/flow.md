@@ -1,5 +1,10 @@
 # Operation Flow (Current)
 
+## Scope
+
+このページは、task/run を中心とした**実行時の状態遷移**を説明します。  
+起動時の preflight 判定式や全パターン表は `docs/startup-patterns.md` を参照してください。
+
 ## 1. Start / Preflight
 
 System start calls `/system/preflight` and builds a recommendation.
@@ -24,6 +29,8 @@ Meaning of common warnings:
   - backlog-first mode is active
 - `Planner is skipped for this launch`
   - expected when issue/pr backlog exists
+
+判定の厳密な式・全組み合わせは `docs/startup-patterns.md` に集約しています。
 
 ## 2. Primary Lifecycle
 
@@ -125,6 +132,8 @@ Periodic jobs include:
   - `local task backlog > 0`: keep executing tasks
   - `local task backlog == 0`: run `/system/preflight` to import/sync issue backlog
   - `issue backlog == 0`: trigger planner replan
+
+起動判定・replan 判定の責務分離は `docs/startup-patterns.md` を参照してください。
 
 Blocked recovery behavior:
 

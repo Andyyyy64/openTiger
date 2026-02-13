@@ -17,6 +17,16 @@ Last verified against code on 2026-02-13.
 - `docs/agent/judge.md`
 - `docs/agent/cycle-manager.md`
 
+## Scope
+
+このページは次だけを扱います。
+
+1. 起動時 preflight の意思決定
+2. planner 起動ガード
+3. backlog 枯渇後の replan 入口条件
+
+run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `docs/flow.md` を参照してください。
+
 ## Decision Inputs
 
 | Symbol | Meaning                          | Source                                         |
