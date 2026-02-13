@@ -42,7 +42,7 @@ No manual `.env` setup is required for first boot.
 Preferred setup (one-command bootstrap):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Andyyyy64/openTiger/main/scripts/install.sh | bash
+curl -fsSL https://opentiger.dev/install.sh | bash
 ```
 
 Alternative (pnpm, no git history):
