@@ -7,6 +7,8 @@ Related:
 - `docs/config.md`
 - `docs/startup-patterns.md`
 - `docs/execution-mode.md`
+- `docs/agent/dispatcher.md`
+- `docs/agent/judge.md`
 
 ## 1. Repository Mode (`REPO_MODE`)
 
@@ -82,6 +84,11 @@ For runtime details (Docker image/network, sandbox auth, and troubleshooting), s
 - planner is hard-limited to one process by API/system logic
 - worker/tester/docser/judge counts are configurable
 - dispatcher slot control counts only busy executable roles (`worker/tester/docser`)
+
+実装責務:
+
+- slot 制御/配布判定: `docs/agent/dispatcher.md`
+- approve/rework 判定: `docs/agent/judge.md`
 
 ## 5. Startup Behavior You Should Expect
 

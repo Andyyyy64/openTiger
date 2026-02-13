@@ -7,6 +7,7 @@ Related:
 - `docs/mode.md`
 - `docs/config.md`
 - `docs/operations.md`
+- `docs/agent/dispatcher.md`
 
 ## 1. Overview
 
