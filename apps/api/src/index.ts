@@ -62,6 +62,8 @@ const port = parseInt(process.env.OPENTIGER_API_PORT ?? process.env.API_PORT ?? 
 const RUNTIME_HATCH_ENTITY_ID = "00000000-0000-0000-0000-000000000001";
 const RUNTIME_HATCH_DISARMED_EVENT = "system.runtime_hatch_disarmed";
 let shuttingDown = false;
+const PRESERVE_MANAGED_PROCESSES_ON_DEV_SIGTERM =
+  process.env.OPENTIGER_PRESERVE_MANAGED_ON_DEV_SIGTERM !== "false";
 
 console.log(`openTiger API server starting on port ${port}`);
 
@@ -108,6 +110,18 @@ async function handleShutdown(signal: NodeJS.Signals): Promise<void> {
     return;
   }
   shuttingDown = true;
+  const inDevLifecycle = process.env.npm_lifecycle_event === "dev";
+  const preserveManaged =
+    signal === "SIGTERM" && inDevLifecycle && PRESERVE_MANAGED_PROCESSES_ON_DEV_SIGTERM;
+
+  if (preserveManaged) {
+    console.log(
+      `[System] Received ${signal} in dev lifecycle. Preserving managed processes for hot-restart.`,
+    );
+    process.exit(0);
+    return;
+  }
+
   console.log(`[System] Received ${signal}. Stopping managed processes...`);
   await stopManagedProcessesOnShutdown();
   await disarmRuntimeHatchOnShutdown(signal);

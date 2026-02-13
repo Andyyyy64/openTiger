@@ -43,6 +43,7 @@ export type ProcessRuntime = {
 export type StartPayload = {
   requirementPath?: string;
   content?: string;
+  researchJobId?: string;
 };
 
 export type StartCommand = {

@@ -786,13 +786,17 @@ systemRoute.post("/preflight", async (c) => {
     const content = typeof rawBody?.content === "string" ? rawBody.content : "";
     const autoCreateIssueTasks =
       typeof rawBody?.autoCreateIssueTasks === "boolean" ? rawBody.autoCreateIssueTasks : true;
+    const autoCreatePrJudgeTasks =
+      typeof rawBody?.autoCreatePrJudgeTasks === "boolean"
+        ? rawBody.autoCreatePrJudgeTasks
+        : true;
     const hasRequirementContent = content.trim().length > 0;
 
     const configRow = await ensureConfigRow();
     const preflight = await buildPreflightSummary({
       configRow,
       autoCreateIssueTasks,
-      autoCreatePrJudgeTasks: true,
+      autoCreatePrJudgeTasks,
     });
 
     const dispatcherEnabled = parseBooleanSetting(configRow.dispatcherEnabled, true);

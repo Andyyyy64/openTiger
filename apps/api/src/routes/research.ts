@@ -14,7 +14,7 @@ import {
   tasks,
 } from "@openTiger/db/schema";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { ensureResearchRuntimeStarted } from "./research-runtime";
+import { ensureResearchPlannerStarted, ensureResearchRuntimeStarted } from "./research-runtime";
 
 export const researchRoute = new Hono();
 
@@ -45,6 +45,14 @@ function stageLabel(stage: string): string {
     return "Write";
   }
   return "Collect";
+}
+
+function getResearchPlannerPendingWindowMs(): number {
+  const parsed = Number.parseInt(process.env.RESEARCH_PLANNER_PENDING_WINDOW_MS ?? "90000", 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 90000;
+  }
+  return parsed;
 }
 
 researchRoute.get("/jobs", async (c) => {
@@ -130,6 +138,7 @@ researchRoute.post("/jobs", zValidator("json", createResearchJobSchema), async (
   const body = c.req.valid("json");
   const jobId = randomUUID();
   const profile = body.qualityProfile ?? "high_precision";
+  const plannerPendingUntilIso = new Date(Date.now() + getResearchPlannerPendingWindowMs()).toISOString();
 
   const [job] = await db
     .insert(researchJobs)
@@ -143,6 +152,8 @@ researchRoute.post("/jobs", zValidator("json", createResearchJobSchema), async (
         orchestrator: {
           stage: "planning",
           updatedAt: new Date().toISOString(),
+          plannerRequestedAt: new Date().toISOString(),
+          plannerPendingUntil: plannerPendingUntilIso,
           notes: [],
         },
       },
@@ -153,50 +164,71 @@ researchRoute.post("/jobs", zValidator("json", createResearchJobSchema), async (
     return c.json({ error: "Failed to create research job" }, 500);
   }
 
-  const [task] = await db
-    .insert(tasks)
-    .values({
-      title: `[Research] ${truncateText(body.query, 72)}`,
-      goal: "Decompose the research query into concrete claims for parallel investigation.",
-      kind: "research",
-      role: "worker",
-      context: {
-        research: {
-          jobId,
-          query: body.query,
-          stage: "plan",
-          profile,
-        },
-        notes: "TigerResearch job created via API.",
-      },
-      allowedPaths: [],
-      commands: [],
-      targetArea: `research:${jobId}`,
-      priority: body.priority ?? 0,
-      riskLevel: body.riskLevel ?? "medium",
-      status: "queued",
-      timeboxMinutes: body.timeboxMinutes ?? 90,
-    })
-    .returning();
+  const runtime = await ensureResearchRuntimeStarted();
+  const planner = await ensureResearchPlannerStarted(jobId);
 
-  if (!task) {
-    return c.json({ error: "Failed to create initial research task" }, 500);
+  let fallbackTask: Record<string, unknown> | null = null;
+  if (planner.errors.length > 0) {
+    const [task] = await db
+      .insert(tasks)
+      .values({
+        title: `[Research/Plan] ${truncateText(body.query, 72)}`,
+        goal: "Decompose the research query into concrete claims for parallel investigation.",
+        kind: "research",
+        role: "worker",
+        context: {
+          research: {
+            jobId,
+            query: body.query,
+            stage: "plan",
+            profile,
+          },
+          notes: "Planner start failed; fallback plan task created by API.",
+        },
+        allowedPaths: [],
+        commands: [],
+        targetArea: `research:${jobId}`,
+        priority: body.priority ?? 0,
+        riskLevel: body.riskLevel ?? "medium",
+        status: "queued",
+        timeboxMinutes: body.timeboxMinutes ?? 90,
+      })
+      .returning();
+
+    if (!task) {
+      return c.json({ error: "Failed to create fallback research planning task" }, 500);
+    }
+    fallbackTask = task as Record<string, unknown>;
   }
+
+  const [latestJob] = await db
+    .select({ metadata: researchJobs.metadata })
+    .from(researchJobs)
+    .where(eq(researchJobs.id, jobId))
+    .limit(1);
 
   await db
     .update(researchJobs)
     .set({
       metadata: {
-        ...(job.metadata as Record<string, unknown> | null),
-        initialTaskId: task.id,
+        ...((latestJob?.metadata as Record<string, unknown> | null) ??
+          (job.metadata as Record<string, unknown> | null)),
+        planner: {
+          mode: "planner_first",
+          requestedAt: new Date().toISOString(),
+          started: planner.started,
+          skipped: planner.skipped,
+          errors: planner.errors,
+        },
+        ...(fallbackTask && typeof fallbackTask.id === "string"
+          ? { fallbackTaskId: fallbackTask.id }
+          : {}),
       },
       updatedAt: new Date(),
     })
     .where(eq(researchJobs.id, jobId));
 
-  const runtime = await ensureResearchRuntimeStarted();
-
-  return c.json({ job, task, runtime }, 201);
+  return c.json({ job, runtime, planner, ...(fallbackTask ? { fallbackTask } : {}) }, 201);
 });
 
 const createResearchTaskSchema = z.object({

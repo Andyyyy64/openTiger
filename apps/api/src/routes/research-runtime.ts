@@ -6,6 +6,7 @@ import { parseBooleanSetting } from "./system-preflight";
 import { resolveProcessDefinition } from "./system-process-manager/definitions";
 import { startManagedProcess } from "./system-process-manager/runtime";
 import { managedProcesses } from "./system-process-manager/state";
+import type { StartPayload } from "./system-process-manager/types";
 
 type EnsureRuntimeResult = {
   started: string[];
@@ -40,7 +41,11 @@ async function hasLiveAgentRole(role: "worker" | "judge"): Promise<boolean> {
   return Boolean(row?.id);
 }
 
-async function ensureProcessStarted(name: string, result: EnsureRuntimeResult): Promise<void> {
+async function ensureProcessStarted(
+  name: string,
+  result: EnsureRuntimeResult,
+  payload: StartPayload = {},
+): Promise<void> {
   const definition = resolveProcessDefinition(name);
   if (!definition) {
     result.errors.push(`${name}: process definition not found`);
@@ -54,7 +59,7 @@ async function ensureProcessStarted(name: string, result: EnsureRuntimeResult): 
   }
 
   try {
-    await startManagedProcess(definition, {});
+    await startManagedProcess(definition, payload);
     result.started.push(name);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -112,5 +117,15 @@ export async function ensureResearchRuntimeStarted(): Promise<EnsureRuntimeResul
     }
   }
 
+  return result;
+}
+
+export async function ensureResearchPlannerStarted(researchJobId: string): Promise<EnsureRuntimeResult> {
+  const result: EnsureRuntimeResult = {
+    started: [],
+    skipped: [],
+    errors: [],
+  };
+  await ensureProcessStarted("planner", result, { researchJobId });
   return result;
 }
