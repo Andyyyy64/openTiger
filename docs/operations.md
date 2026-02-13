@@ -174,3 +174,40 @@ pnpm runtime:hatch:disarm
 - `EXECUTION_ENVIRONMENT=sandbox` の場合、worker/tester/docser は docker 実行
 - `SANDBOX_DOCKER_IMAGE` と `SANDBOX_DOCKER_NETWORK` を確認
 - Claude executor 利用時は host 認証ディレクトリマウントを確認
+
+## 10. 設定変更時の安全な再起動手順
+
+前提:
+
+- まず `docs/config.md` の「設定変更の影響マップ」で対象コンポーネントを確認する
+- 影響範囲が狭い場合は `stop-all` ではなく、対象プロセスのみ再起動する
+
+### 10.1 部分再起動の基本順
+
+1. 影響を受ける process を `stop`
+2. 依存先から順に `start`（制御系 -> 実行系）
+3. `tasks/runs/logs` で復帰確認
+
+推奨順（一般形）:
+
+- `cycle-manager` / `dispatcher` / `judge` を先に再起動
+- 次に `worker/tester/docser` を再起動
+
+### 10.2 代表パターン
+
+- `DISPATCH_*` / `MAX_CONCURRENT_WORKERS` を変更した場合
+  - `dispatcher` を再起動
+- `WORKER_*` / `TESTER_*` / `DOCSER_*` / `LLM_EXECUTOR` を変更した場合
+  - 対象 role の agent（worker/tester/docser）を再起動
+- `JUDGE_*` / `JUDGE_MODE` を変更した場合
+  - `judge` を再起動
+- `AUTO_REPLAN` / `REPLAN_*` / `FAILED_TASK_*` を変更した場合
+  - `cycle-manager` を再起動
+- `EXECUTION_ENVIRONMENT` / `SANDBOX_DOCKER_*` を変更した場合
+  - `dispatcher` と実行系 agent を再起動
+
+### 10.3 `stop-all` を使うべきケース
+
+- 影響範囲を切り分けられない大規模設定変更
+- process 状態が不整合で、部分再起動では収束しない場合
+- 実行中 task を一度安全側に巻き戻して仕切り直したい場合
