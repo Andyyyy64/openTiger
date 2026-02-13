@@ -103,6 +103,9 @@ system 制御系は `canControlSystem()` で許可判定されます。
 補足:
 
 - failed/blocked タスクには `retry` 情報が付与されます（cooldown / reason / retryCount 等）
+- `retry.reason` の主な値:
+  - `cooldown_pending`, `retry_due`, `awaiting_judge`, `quota_wait`, `needs_rework`
+- 詳細な語彙（`retry_exhausted`, `non_retryable_failure`, `unknown`, `failureCategory`）は `docs/state-model.md` を参照してください。
 
 ### Runs
 

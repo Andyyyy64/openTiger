@@ -35,6 +35,33 @@
 - `issue_linking`
   - planner の issue 連携待ち（解決後に `queued` へ復帰）
 
+補足:
+
+- legacy 値 `needs_human` は `awaiting_judge` として扱われます。
+
+## 2.1 Task Retry Reason（`GET /tasks`）
+
+`failed` / `blocked` task には `retry` 情報が付与され、`reason` は次の値を取ります。
+
+- `cooldown_pending`
+- `retry_due`
+- `retry_exhausted`
+- `non_retryable_failure`
+- `awaiting_judge`
+- `quota_wait`
+- `needs_rework`
+- `unknown`
+
+`failureCategory` が付く場合の値:
+
+- `env`
+- `setup`
+- `policy`
+- `test`
+- `flaky`
+- `model`
+- `model_loop`
+
 ## 3. Run Status
 
 - `running`
