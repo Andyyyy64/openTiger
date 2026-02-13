@@ -26,6 +26,17 @@ Execute assigned tasks accurately and produce high-quality code.
 - Forcing type fixes with `any` or unsafe assertions
 - Running git operations such as `commit`, `push`, `checkout`, branch creation
 
+## Shared Context Strategy
+
+- Runtime host context is managed from `.opentiger/context/agent-profile.json`.
+- Failure-derived context is managed from `.opentiger/context/context-delta.json`.
+- Treat runtime context as hints for environment alignment, not as hard constraints.
+- Use only selected context keys relevant to current commands or failures.
+- Keep prompt context compact with this budget:
+  - Host context: 550 chars
+  - Failure hints: 350 chars
+  - Total: 900 chars
+
 ## Workflow
 
 1. Understand the task

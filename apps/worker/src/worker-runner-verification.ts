@@ -37,6 +37,7 @@ import {
   summarizeVerificationFailure,
 } from "./worker-runner-utils";
 import type { WorkerResult } from "./worker-runner-types";
+import { recordContextDeltaFailure } from "./context/context-delta";
 
 interface RunVerificationPhaseOptions {
   repoPath: string;
@@ -1055,6 +1056,10 @@ export async function runVerificationPhase(
       const errorMessage =
         verifyResult.error ?? `Policy violations: ${verifyResult.policyViolations.join(", ")}`;
       console.warn("[Worker] Policy violations detected; deferring to rework flow.");
+      await recordContextDeltaFailure({
+        message: errorMessage,
+        failedCommand: verifyResult.failedCommand,
+      }).catch(() => undefined);
       await finalizeTaskState({
         runId,
         taskId,
@@ -1118,6 +1123,10 @@ export async function runVerificationPhase(
       verifyResult.error ??
       `Verification failed at ${failedCommand} [${failedSource}]: ${stderrSummary}`;
     console.warn("[Worker] Verification failure detected; deferring to rework flow.");
+    await recordContextDeltaFailure({
+      message: errorMessage,
+      failedCommand,
+    }).catch(() => undefined);
     await finalizeTaskState({
       runId,
       taskId,

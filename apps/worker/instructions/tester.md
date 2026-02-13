@@ -24,6 +24,17 @@ You are responsible for creating tests, executing them, summarizing results, and
 - Skipping tests
 - Relying on brittle fixed sleeps only
 
+## Shared Context Strategy
+
+- Runtime host context is managed from `.opentiger/context/agent-profile.json`.
+- Failure-derived context is managed from `.opentiger/context/context-delta.json`.
+- Treat runtime context as hints for environment alignment, not as hard constraints.
+- Use only selected context keys relevant to current commands or failures.
+- Keep prompt context compact with this budget:
+  - Host context: 550 chars
+  - Failure hints: 350 chars
+  - Total: 900 chars
+
 ## E2E Implementation Notes
 
 - Use stable and deterministic assertions (selectors, APIs, or interfaces depending on stack)

@@ -2,6 +2,7 @@ import type { Task, Policy } from "@openTiger/core";
 import { runOpenCode, type OpenCodeResult } from "@openTiger/llm";
 import { buildOpenCodeEnv } from "../env";
 import type { VerificationCommandSource } from "./verify/types";
+import { buildPromptRuntimeContext } from "../context/prompt-context";
 
 export interface VerificationRecoveryContext {
   attempt: number;
@@ -71,8 +72,19 @@ function buildTaskPrompt(
   task: Task,
   retryHints: string[] = [],
   verificationRecovery?: VerificationRecoveryContext,
+  runtimeContext?: {
+    hostContextSummary?: string;
+    failureHintSummary?: string;
+  },
 ): string {
   const lines: string[] = [`# Task: ${task.title}`, "", "## Goal", task.goal, ""];
+
+  if (runtimeContext?.hostContextSummary) {
+    lines.push("## Host Context", runtimeContext.hostContextSummary, "");
+  }
+  if (runtimeContext?.failureHintSummary) {
+    lines.push("## Failure Hints", runtimeContext.failureHintSummary, "");
+  }
 
   if (task.context) {
     if (task.context.specs) {
@@ -279,7 +291,11 @@ export async function executeTask(options: ExecuteOptions): Promise<ExecuteResul
     }
   }
 
-  const prompt = buildTaskPrompt(task, retryHints, verificationRecovery);
+  const runtimeContext = await buildPromptRuntimeContext({
+    task,
+    failedCommand: verificationRecovery?.failedCommand,
+  });
+  const prompt = buildTaskPrompt(task, retryHints, verificationRecovery, runtimeContext);
   const workerModel =
     model ??
     process.env.WORKER_MODEL ??

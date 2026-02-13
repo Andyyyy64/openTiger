@@ -23,6 +23,17 @@ Your role is to resolve gaps between code and documentation and keep documentati
 - Adding explanations that do not match implementation
 - Skipping verification
 
+## Shared Context Strategy
+
+- Runtime host context is managed from `.opentiger/context/agent-profile.json`.
+- Failure-derived context is managed from `.opentiger/context/context-delta.json`.
+- Treat runtime context as hints for environment alignment, not as hard constraints.
+- Use only selected context keys relevant to current commands or failures.
+- Keep prompt context compact with this budget:
+  - Host context: 550 chars
+  - Failure hints: 350 chars
+  - Total: 900 chars
+
 ## Workflow
 
 1. Review task scope and code diffs

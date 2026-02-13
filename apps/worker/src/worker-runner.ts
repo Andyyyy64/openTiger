@@ -42,6 +42,7 @@ import {
 import { attachExistingPrArtifact } from "./worker-runner-artifacts";
 import { runVerificationPhase } from "./worker-runner-verification";
 import type { WorkerConfig, WorkerResult } from "./worker-runner-types";
+import { recordContextDeltaFailure } from "./context/context-delta";
 
 export type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 const DEFAULT_LOG_DIR = resolve(import.meta.dirname, "../../../raw-logs");
@@ -528,6 +529,9 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
+    await recordContextDeltaFailure({
+      message: errorMessage,
+    }).catch(() => undefined);
     const quotaFailure = isQuotaFailure(errorMessage);
     const nextTaskStatus: "failed" | "blocked" = quotaFailure ? "blocked" : "failed";
     const nextBlockReason = quotaFailure ? "quota_wait" : null;
