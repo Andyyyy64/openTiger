@@ -88,10 +88,15 @@ export function shouldAllowNoChanges(task: Task): boolean {
   const allows = allowHints.some((hint) => text.includes(hint));
   const denies = denyHints.some((hint) => text.includes(hint));
   const verificationOnly = isVerificationOnlyCommands(commands);
+  const docserNoGapHint = hasDocserNoGapHint(task);
 
   // Task with explicit target files requires diff
   if (expectedFiles.length > 0) {
     return false;
+  }
+
+  if (role === "docser" && docserNoGapHint) {
+    return true;
   }
 
   // worker usually requires diff; only verification-only roles allow no changes
@@ -118,6 +123,29 @@ function isVerificationOnlyCommands(commands: string[]): boolean {
 
   // Allow no changes if commands are verification-only
   return commands.every((command) => verificationPatterns.some((pattern) => pattern.test(command)));
+}
+
+function hasDocserNoGapHint(task: Task): boolean {
+  if ((task.role ?? "worker") !== "docser") {
+    return false;
+  }
+
+  const notes = task.context?.notes ?? "";
+  if (!notes) {
+    return false;
+  }
+
+  const match = notes.match(/docGap:\s*(\{[\s\S]*?\})/i);
+  if (!match?.[1]) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(match[1]) as { hasGap?: unknown };
+    return parsed.hasGap === false;
+  } catch {
+    return false;
+  }
 }
 
 export async function validateExpectedFiles(repoPath: string, task: Task): Promise<string[]> {
