@@ -13,7 +13,7 @@
 
 ## 1. 運用で見るべき状態
 
-### 主要 task status
+### 主要タスク状態
 
 - `queued`
 - `running`
@@ -22,7 +22,7 @@
 - `blocked`
 - `cancelled`
 
-### 主要 blocked reason
+### 主要ブロック理由
 
 - `awaiting_judge`
 - `quota_wait`
@@ -43,7 +43,7 @@ run は失敗結果、task は次回リトライ待機を示します。
 | `needs_rework` | `GET /runs`, `GET /judgements`, `GET /logs/all` |
 | `cooldown_pending` / `retry_due` | `GET /tasks` の `retryAt` / `retryInSeconds` |
 
-## 2. Process 運用
+## 2. プロセス運用
 
 ### 起動/停止
 
@@ -79,7 +79,7 @@ run は失敗結果、task は次回リトライ待機を示します。
 - `tester-1...`
 - `docser-1...`
 
-## 3. runtime hatch と self-heal
+## 3. runtime hatch と自己回復
 
 openTiger は runtime hatch（イベントベース）で process 自己復旧を制御します。
 
@@ -101,7 +101,7 @@ pnpm runtime:hatch:arm
 pnpm runtime:hatch:disarm
 ```
 
-## 4. 自動再起動・自己回復の関連 env
+## 4. 自動再起動・自己回復の関連環境変数
 
 ### プロセス自動再起動
 
@@ -133,7 +133,7 @@ pnpm runtime:hatch:disarm
 
 `POST /system/cleanup` は以下を実施します。
 
-- queue を obliterate
+- queue を完全初期化（obliterate）
 - runtime テーブル（tasks/runs/artifacts/leases/events/cycles）を初期化
 - agent 状態を `idle` へ更新
 
@@ -178,7 +178,7 @@ pnpm runtime:hatch:disarm
 - 失敗後に復帰しない
   - cycle-manager の cleanup/requeue 実行ログを確認
   - 参照: `docs/agent/cycle-manager.md`
-- verification command 失敗が繰り返される
+- 検証コマンド失敗が繰り返される
   - run の失敗内容と verification recovery の有無を確認
   - 参照: `docs/verification.md`
 - task が `issue_linking` で止まり続ける
@@ -196,7 +196,7 @@ pnpm runtime:hatch:disarm
 
 - `EXECUTION_ENVIRONMENT=sandbox` の場合、worker/tester/docser は docker 実行
 - `SANDBOX_DOCKER_IMAGE` と `SANDBOX_DOCKER_NETWORK` を確認
-- Claude executor 利用時は host 認証ディレクトリマウントを確認
+- Claude 実行器利用時は host 認証ディレクトリマウントを確認
 
 ## 10. 設定変更時の安全な再起動手順
 
