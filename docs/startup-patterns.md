@@ -4,7 +4,7 @@
 
 1. 起動時 `/system/preflight` の推奨判定
 2. `cycle-manager` の実行時収束ループ
-3. Planner 起動時の prehook ガード（`/system/processes/:name/start`）
+3. Planner 起動時の事前フック（prehook）ガード（`/system/processes/:name/start`）
 
 最終検証日: 2026-02-13
 
@@ -23,7 +23,7 @@
 
 1. 起動時 preflight の意思決定
 2. planner 起動ガード
-3. backlog 枯渇後の replan 入口条件
+3. backlog 枯渇後の再計画（replan）入口条件
 
 run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `docs/flow.md` を参照してください。
 
@@ -41,9 +41,9 @@ run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `do
 | 判定 | 主担当コンポーネント |
 | --- | --- |
 | preflight 推奨判定 | API（`/system/preflight`） |
-| planner 起動ガード | API process prehook（`/system/processes/planner/start`） |
+| planner 起動ガード | API のプロセス事前フック（`/system/processes/planner/start`） |
 | queued task の選別と lease 付与 | Dispatcher |
-| run 評価と PR merge 分岐 | Judge |
+| run 評価と PR マージ分岐 | Judge |
 | backlog 収束、preflight sync、replan 起動判定 | Cycle Manager |
 
 ## 起動時ルール
@@ -57,7 +57,7 @@ run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `do
 - `startCycleManager = cycleManagerEnabled && (startExecutionAgents || P || blockedTaskCount > 0)`
 - `worker/tester/docser count = configured count if startExecutionAgents else 0`
 
-`!startPlanner && backlogTotal == 0` の場合、Start UI は次を返します。
+`!startPlanner && backlogTotal == 0` の場合、Start UI は次のメッセージを返します。
 
 - `Requirements empty and no issue/PR backlog found`
 
@@ -77,15 +77,15 @@ run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `do
 補足:
 
 - `I=1` がある場合は planner が無効化され、実行系が有効化されるため実質的に最優先です。
-- `L=0` で `P=1` の場合は dispatcher/worker を起動しなくても Judge が起動対象になります。Judge が停止中なら system process self-heal が backlog を検知して自動再起動します。
+- `L=0` で `P=1` の場合は dispatcher/worker を起動しなくても Judge が起動対象になります。Judge が停止中なら system process 自己回復が backlog を検知して自動再起動します。
 - `R=1` 単独で planner を起動できるのは、`I/P/L` がすべて 0 のときだけです。
 
 ## プランナー（Planner）起動ガード
 
 `POST /system/processes/planner/start` を直接呼んだ場合でも、次のいずれかが真なら planner 起動は `409` で拒否されます。
 
-1. Local task backlog (`L=1`)
-2. Issue backlog (`I=1`)
+1. ローカル task backlog（`L=1`）
+2. Issue backlog（`I=1`）
 3. PR/Judge backlog (`P=1`)
 
 これにより、Start UI を経由しない起動でも同じ優先順が維持されます。
@@ -95,7 +95,7 @@ run の失敗処理、blocked 回復、judge/worker の詳細状態遷移は `do
 `cycle-manager` 稼働中は次の順で収束を進めます。
 
 1. ローカル task backlog がある場合（`L=1`）、task 実行を継続します。
-2. ローカル task backlog が空なら、`/system/preflight` を呼び issue/PR backlog を sync/import します。
+2. ローカル task backlog が空なら、`/system/preflight` を呼び issue/PR backlog を同期（sync/import）します。
 3. sync 後に issue backlog がある場合（`I=1`）、replan は行いません。
 4. `L=0` かつ `I=0` のときだけ、replan gate を評価します。
 5. さらに replan 固有ガード（planner busy / recent active / pending judge / interval / no-diff）を満たした場合のみ replan を実行します。
@@ -134,6 +134,6 @@ stateDiagram-v2
 | パターン | 何が起きるか |
 | --- | --- |
 | Issue は存在するが明示 role が不足 | Issue task が `blocked(issue_linking)` のまま残る場合があり、issue metadata が整うまで planner は進みません |
-| preflight で GitHub 問い合わせ失敗 | warning が出力され、残りのローカル信号に依存して Start 判定されます |
+| preflight で GitHub 問い合わせ失敗 | 警告（warning）が出力され、残りのローカル信号に依存して Start 判定されます |
 | 実行時の issue-sync リクエスト失敗 | その cycle では replan をスキップします（fail-closed） |
 | backlog がある状態で手動 planner start | planner prehook で `409` 拒否されます |
