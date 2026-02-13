@@ -12,6 +12,7 @@
 | 設定キーを調整したい | `docs/config.md` |
 | API 連携したい | `docs/api-reference.md` |
 | 障害対応したい | `docs/operations.md` + `docs/flow.md` |
+| 状態詰まりを最短で一次診断したい | `docs/state-model.md` |
 | 起動判定の式を確認したい | `docs/startup-patterns.md` |
 | agent の役割差分を確認したい | `docs/agent/README.md` |
 
@@ -120,6 +121,7 @@
   - `docs/startup-patterns.md`
   - `docs/flow.md`（関連する runtime 影響）
 - task 状態遷移や blocked 回復を変更した場合:
+  - `docs/state-model.md`
   - `docs/flow.md`
   - `docs/operations.md`
 - agent 実装責務を変更した場合:
