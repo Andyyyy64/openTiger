@@ -73,6 +73,9 @@ plansRoute.get("/", async (c) => {
         agentId: row.agentId,
         requirement: (payload?.requirement as Record<string, unknown>) ?? {},
         summary: (payload?.summary as Record<string, unknown>) ?? {},
+        policyRecoveryHintApplications: Array.isArray(payload?.policyRecoveryHintApplications)
+          ? payload.policyRecoveryHintApplications
+          : [],
         taskIds,
         tasks: taskRows,
       };

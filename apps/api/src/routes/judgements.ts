@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { db } from "@openTiger/db";
 import { artifacts, events, runs } from "@openTiger/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDiffBetweenRefs, getOctokit, getRepoInfo } from "@openTiger/vcs";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -221,9 +221,19 @@ judgementsRoute.get("/", async (c) => {
   const taskId = c.req.query("taskId");
   const runId = c.req.query("runId");
   const verdict = c.req.query("verdict");
+  const includeRecovery = (c.req.query("includeRecovery") ?? "false").toLowerCase() === "true";
   const limit = parseLimit(c.req.query("limit"), 50);
 
-  const conditions = [eq(events.type, "judge.review")];
+  const eventTypes = includeRecovery
+    ? [
+        "judge.review",
+        "task.policy_recovery_decided",
+        "task.policy_recovery_applied",
+        "task.policy_recovery_denied",
+      ]
+    : ["judge.review"];
+
+  const conditions = [inArray(events.type, eventTypes)];
   if (taskId) {
     conditions.push(eq(events.entityId, taskId));
   }
@@ -237,6 +247,7 @@ judgementsRoute.get("/", async (c) => {
   const rows = await db
     .select({
       id: events.id,
+      type: events.type,
       createdAt: events.createdAt,
       agentId: events.agentId,
       entityId: events.entityId,
@@ -249,11 +260,20 @@ judgementsRoute.get("/", async (c) => {
 
   // Return payload as-is so UI can build details
   const judgements = rows.map((row) => ({
+    payload:
+      isRecord(row.payload) &&
+      row.type !== "judge.review" &&
+      typeof row.payload.summary === "string"
+        ? {
+            ...row.payload,
+            recoverySummary: row.payload.summary,
+          }
+        : row.payload,
     id: row.id,
+    type: row.type,
     createdAt: row.createdAt,
     agentId: row.agentId,
     taskId: row.entityId,
-    payload: row.payload,
   }));
 
   return c.json({ judgements });
