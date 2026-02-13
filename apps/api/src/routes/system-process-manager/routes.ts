@@ -649,14 +649,21 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
       return c.json({ error: "Process cannot be stopped" }, 400);
     }
 
+    const runtimeBeforeStop = managedProcesses.get(definition.name);
+    const canSignalManagedProcess =
+      runtimeBeforeStop?.status === "running" && Boolean(runtimeBeforeStop.process);
     const info = stopManagedProcess(definition);
     const boundAgentId = resolveBoundAgentId(name);
-    if (boundAgentId) {
+    if (boundAgentId && canSignalManagedProcess) {
       try {
         await cancelRunningWorkForAgent(boundAgentId, "Stopped via system process stop request");
       } catch (error) {
         console.error(`[System] Failed to cancel running work for ${boundAgentId}:`, error);
       }
+    } else if (boundAgentId && runtimeBeforeStop?.status === "running") {
+      console.warn(
+        `[System] Skip run/task cancellation for ${boundAgentId}: process handle is not attached.`,
+      );
     }
     return c.json({ process: info });
   });
