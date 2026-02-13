@@ -148,7 +148,7 @@ Detailed policy lifecycle and growth behavior:
 
 - `docs/policy-recovery.md`
 
-## 10. Host Snapshot and Context Refresh
+## 9. Host Snapshot and Context Refresh
 
 - API host context endpoints:
   - `GET /system/host/neofetch`
@@ -156,7 +156,7 @@ Detailed policy lifecycle and growth behavior:
 - Snapshot source is `neofetch`; `uname -srmo` is used as fallback when needed.
 - Snapshot is cached in `.opentiger/context/agent-profile.json` with TTL/fingerprint refresh.
 
-## 9. Why "Failed" and "Retry" Can Coexist
+## 10. Why "Failed" and "Retry" Can Coexist
 
 Runs table can show immediate failed runs while task card shows retry countdown.
 

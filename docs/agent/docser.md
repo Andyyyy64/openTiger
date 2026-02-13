@@ -21,6 +21,8 @@ Docser uses worker runtime with `AGENT_ROLE=docser`.
 - prioritize factual implementation state over speculative design
 - respect strict allowed paths
 - keep changes reviewable and bounded
+- use doc-safe verification commands (for example `pnpm run check`)
+- skip LLM-based policy recovery and rely on deterministic policy handling
 
 ## 5. Important Settings
 

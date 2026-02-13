@@ -21,11 +21,13 @@ Uses the same worker runtime with `AGENT_ROLE=tester` and tester-specific instru
 
 - non-interactive commands only
 - avoid watch-mode commands
-- e2e command can be auto-appended when tester tasks explicitly require e2e coverage
+- planner/worker verify contract を利用可能
+- e2e command は「明示的に e2e 要求がある task」にのみ自動補完される
 
 ## 5. Important Settings
 
 - `AGENT_ROLE=tester`
 - `TESTER_MODEL`
 - `TESTER_INSTRUCTIONS_PATH`
-- project-specific e2e command in repository scripts
+- `WORKER_AUTO_VERIFY_MODE`
+- `WORKER_VERIFY_CONTRACT_PATH`

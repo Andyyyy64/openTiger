@@ -1,6 +1,6 @@
 # Operating Modes
 
-openTiger behavior is controlled by three axes.
+openTiger behavior is controlled by repository mode, judge mode, and execution environment.
 
 ## 1. Repository Mode (`REPO_MODE`)
 
@@ -44,21 +44,25 @@ Important flags:
 - `JUDGE_MERGE_ON_APPROVE`
 - `JUDGE_REQUEUE_ON_NON_APPROVE`
 
-## 3. Launch Mode (`LAUNCH_MODE`)
+## 3. Execution Environment and Launch Mode
 
-`system_config` key `EXECUTION_ENVIRONMENT` maps to launch mode:
+User-facing key is `EXECUTION_ENVIRONMENT` (`system_config`).
+
+Internal launch mode is derived as:
 
 - `host` -> `LAUNCH_MODE=process`
 - `sandbox` -> `LAUNCH_MODE=docker`
 
 For runtime details (Docker image/network, sandbox auth, and troubleshooting), see `docs/execution-mode.md`.
 
-### `process` (recommended)
+`LAUNCH_MODE` is runtime internal and normally does not need direct manual configuration.
+
+### `process` (host)
 
 - resident agents consume queue jobs
 - fastest recovery and operational visibility
 
-### `docker`
+### `docker` (sandbox)
 
 - per-task container isolation
 - useful in stricter isolation environments

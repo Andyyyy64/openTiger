@@ -1,27 +1,37 @@
-# Docs Index
+# openTiger Documentation Index
 
-This folder documents openTiger behavior and operations.
+このディレクトリは、openTiger の実装仕様を「導線」と「参照」に分けて整理しています。  
+ソースコードを真として、運用に必要な情報を段階的に読める構成です。
 
-## Architecture and Operations
+## 1. 初見ユーザー向け（最短導線）
+
+1. `docs/getting-started.md`
+   - 導入、初回起動、Start ページでの実行開始まで
+2. `docs/architecture.md`
+   - コンポーネント責務とデータフロー
+3. `docs/config.md`
+   - `system_config` と環境変数の設定参照
+4. `docs/api-reference.md`
+   - Dashboard/API 連携時の主要エンドポイント参照
+5. `docs/operations.md`
+   - 運用、障害復旧、ログ確認、runtime hatch
+
+## 2. 実行モデル・復旧戦略
 
 - `docs/flow.md`
-  - End-to-end lifecycle, state transitions, and recovery loops.
+  - エンドツーエンドの状態遷移と回復ループ
 - `docs/startup-patterns.md`
-  - Start-time decision matrix, exhaustive pattern classes, and runtime state diagram.
+  - 起動時 preflight 判定と runtime 収束条件
 - `docs/mode.md`
-  - `REPO_MODE`, `JUDGE_MODE`, `LAUNCH_MODE`, scaling, and startup behavior.
+  - `REPO_MODE` / `JUDGE_MODE` / 実行モードの運用指針
 - `docs/execution-mode.md`
-  - `EXECUTION_ENVIRONMENT` behavior, sandbox runtime details, and Claude auth in Docker.
-- `docs/config.md`
-  - `/system` APIs, `system_config` setting reference, and prompt context snapshot/delta settings.
-- `docs/nonhumanoriented.md`
-  - Design principles for long-running autonomous operation.
-- `docs/idea.md`
-  - Next-phase improvements.
+  - host/sandbox 実行差分と sandbox 認証
 - `docs/policy-recovery.md`
-  - In-run policy self-recovery, generated-artifact auto-learning, and allowedPaths self-growth.
+  - policy violation 回復、allowedPaths 自己成長
+- `docs/verification.md`
+  - Planner/Worker の検証コマンド解決戦略
 
-## Agent Specs
+## 3. Agent 仕様
 
 - `docs/agent/planner.md`
 - `docs/agent/worker.md`
@@ -29,12 +39,11 @@ This folder documents openTiger behavior and operations.
 - `docs/agent/judge.md`
 - `docs/agent/docser.md`
 
-## Recommended Reading Order
+## 4. 設計思想・補助資料
 
-1. `docs/flow.md`
-2. `docs/mode.md`
-3. `docs/execution-mode.md`
-4. `docs/config.md`
-5. `docs/agent/*.md`
-6. `docs/startup-patterns.md`
-7. `docs/idea.md`
+- `docs/nonhumanoriented.md`
+  - non-stalling を前提とした設計原則
+- `docs/requirement.md`
+  - requirement テンプレート例
+- `docs/idea.md`
+  - 改善アイデアメモ（将来計画）

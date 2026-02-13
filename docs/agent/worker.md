@@ -2,76 +2,81 @@
 
 ## 1. Role
 
-Execute task implementation and verification.
+Worker runtime は `AGENT_ROLE` に応じて実行モードを切り替えます。
 
-`AGENT_ROLE` selects behavior family:
-
-- `worker`
-- `tester`
-- `docser`
+- `worker`: 実装変更
+- `tester`: テスト中心変更
+- `docser`: ドキュメント変更
 
 ## 2. Standard Execution Flow
 
-1. Validate task and acquire runtime lock
-2. Checkout/branch preparation
-3. Task execution via selected LLM executor (`opencode` / `claude_code`)
-4. expected-file check
-5. verification command execution
-6. commit/push + PR creation (git mode)
-7. run/task/artifact updates
-8. lease release and agent idle
+1. runtime lock 取得
+2. checkout / branch 準備
+3. LLM 実行 (`opencode` or `claude_code`)
+4. expected-file 検証
+5. verification phase 実行
+6. commit/push + PR 作成（git mode）
+7. run/task/artifact 更新
+8. lease 解放 + agent idle
 
-## 3. Success Transitions
+## 3. Verification Phase
 
-- review required -> `blocked(awaiting_judge)`
-- no review required -> `done`
+verification phase は単純な command 実行だけではなく、複数の recovery を含みます。
 
-## 4. Failure Transitions
+- explicit command 実行
+- no-change failure の再試行
+- no-op 判定（検証 pass 前提）
+- policy violation の deterministic 回復
+- optional LLM policy recovery (`allow|discard|deny`)
+- generated artifact discard + 学習
+- verification recovery 実行（失敗 command を軸に再試行）
 
-- quota signature -> `blocked(quota_wait)`
-- verification/policy failure -> `blocked(needs_rework)`
-- other non-recoverable failures -> `failed`
+解決不可の場合:
 
-Both cases:
+- policy/verification failure -> `blocked(needs_rework)`
 
-- run marked `failed`
-- lease released
-- agent returned to `idle`
+## 4. State Transitions
 
-## 5. Duplicate Execution Defenses
+成功:
 
-- per-task runtime lock file
-- `activeTaskIds` in queue worker
-- startup-window lock conflict skip (avoid false immediate recovery)
+- review 必要 -> `blocked(awaiting_judge)`
+- review 不要 -> `done`
 
-## 6. Safety Rules
+失敗:
 
-- denied command checks before OpenCode and verify
-- verify avoids long-lived dev/watch flows
-- expected-file validation supports `src/` fallback path resolution
+- quota 系 -> `blocked(quota_wait)`
+- verification/policy -> `blocked(needs_rework)`
+- その他 -> `failed`
 
-## 7. Verification Commands and Smoke Tests
+## 5. Safety and Guardrails
 
-Task `commands` specify what to run for verification (e.g., `make smoke`, `pnpm run check`). Worker runs them in order. Boot smoke tests (e.g., QEMU-based tests that validate boot log markers) are treated as normal verification commands; no special handling is required.
+- denied command 事前検査
+- shell operator を含む command は実行対象外
+- runtime lock + queue guard による重複実行防止
+- expected-file mismatch 時は warning/失敗へ反映
 
-## 8. Verification Command Constraints
+## 6. Verification Command Constraints
 
-Verification commands run via `spawn` (no shell), so shell features do not work:
+command は shell ではなく spawn 実行です。  
+以下はサポートされません。
 
-- `$()` command substitution — rejected at parse; if explicit and failed, skipped when remaining commands exist
-- `|`, `&&`, `||`, `;`, `<`, `>`, backticks — rejected
+- `$()`
+- `|`, `&&`, `||`, `;`, `<`, `>`, `` ` ``
 
-When explicit command fails due to unsupported format or missing script, Worker may skip and continue with remaining commands when appropriate (doc-only, no-op, or prior command passed).
+## 7. Docser-specific Behavior
 
-## 9. Transient Failure Retry
+- doc-safe command のみ許可（例: `pnpm run check`）
+- docser は LLM policy recovery を実行しない
 
-Checkout, branch creation, stage, push, and branch restore use transient-pattern retry (timeout, connection reset, etc.) before failing. Git add ignores paths that are listed in `.gitignore` and stages the rest instead of failing.
-
-## 10. Important Settings
+## 8. Important Settings
 
 - `AGENT_ID`, `AGENT_ROLE`
-- `WORKER_MODEL` / `TESTER_MODEL` / `DOCSER_MODEL`
-- `WORKSPACE_PATH`
+- `WORKER_MODEL`, `TESTER_MODEL`, `DOCSER_MODEL`
 - `REPO_MODE`, `REPO_URL`, `BASE_BRANCH`
 - `LOCAL_REPO_PATH`, `LOCAL_WORKTREE_ROOT`
-- `OPENTIGER_TASK_LOCK_DIR`
+- `WORKER_AUTO_VERIFY_MODE`
+- `WORKER_VERIFY_CONTRACT_PATH`
+- `WORKER_VERIFY_RECOVERY_ATTEMPTS`
+- `WORKER_POLICY_RECOVERY_USE_LLM`
+- `WORKER_POLICY_RECOVERY_ATTEMPTS`
+- `WORKER_POLICY_RECOVERY_TIMEOUT_SECONDS`

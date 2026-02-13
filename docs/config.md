@@ -1,189 +1,132 @@
 # System Configuration Guide
 
-This document covers runtime settings managed by `system_config` and `/system` APIs.
+このドキュメントは、openTiger の設定を「DB 管理設定」と「env-only 設定」に分けて整理します。  
+設定の一次ソースは以下です。
 
-## 1. Where Settings Live
+- DB 管理キー: `apps/api/src/system-config.ts` (`CONFIG_FIELDS`)
+- env-only 設定: 各 runtime 実装（dispatcher/worker/judge/cycle-manager/api）
 
-- Persistent config store:
-  - DB table `config` (served by `/config` API)
-- Process control and orchestration:
-  - `/system` API routes
-- Environment-only controls:
-  - startup env vars for services (not all are in `config` table)
+## 1. 設定の保存先
 
-## 2. Recommended Setup Order (Top Priority First)
+## DB 管理（`config` テーブル）
 
-Configure these first:
+- `/config` API から参照/更新
+- Dashboard の system settings から更新
+- `scripts/export-config-to-env.ts` で `.env` へ同期可能
 
-1. Git and repository settings
-2. LLM provider API keys
-3. Model selection
-4. Agent/process counts
-5. Recovery and quota behavior
-6. Replan behavior
+## env-only
 
-## 3. Core `system_config` Keys
+- プロセス起動時にのみ参照される設定
+- `config` テーブルには保存されない
 
-### 3.1 Git / Repo
+---
 
-- `REPO_MODE` (`git` or `local`)
-- `REPO_URL`
-- `BASE_BRANCH`
-- `LOCAL_REPO_PATH`
-- `LOCAL_WORKTREE_ROOT`
-- `GITHUB_AUTH_MODE` (`gh` or `token`, default: `gh`)
-- `GITHUB_TOKEN` (required only when `GITHUB_AUTH_MODE=token`)
-- `GITHUB_OWNER`
-- `GITHUB_REPO`
+## 2. DB 管理キー一覧（`CONFIG_FIELDS` 準拠）
 
-### 3.2 LLM Provider Keys
+## 2.1 Limits
 
-- `GEMINI_API_KEY`
-- `OPENAI_API_KEY`
-- `ANTHROPIC_API_KEY`
-- `XAI_API_KEY`
-- `DEEPSEEK_API_KEY`
+- `MAX_CONCURRENT_WORKERS`
+- `DAILY_TOKEN_LIMIT`
+- `HOURLY_TOKEN_LIMIT`
+- `TASK_TOKEN_LIMIT`
 
-### 3.3 Model Selection
+## 2.2 Process Switches / Scaling
 
-- `LLM_EXECUTOR` (`opencode` / `claude_code`)
-- `OPENCODE_MODEL`
-- `OPENCODE_SMALL_MODEL`
-- `PLANNER_MODEL`
-- `JUDGE_MODEL`
-- `WORKER_MODEL`
-- `TESTER_MODEL`
-- `DOCSER_MODEL`
-- `CLAUDE_CODE_MODEL`
-
-### 3.4 Agent Scaling and Switches
-
-- `EXECUTION_ENVIRONMENT` (`host` or `sandbox`)
 - `DISPATCHER_ENABLED`
 - `JUDGE_ENABLED`
 - `CYCLE_MANAGER_ENABLED`
+- `EXECUTION_ENVIRONMENT` (`host` or `sandbox`)
 - `WORKER_COUNT`
 - `TESTER_COUNT`
 - `DOCSER_COUNT`
 - `JUDGE_COUNT`
 - `PLANNER_COUNT`
 
-Notes:
+補足:
 
-- `EXECUTION_ENVIRONMENT=host` uses host process launch (`LAUNCH_MODE=process`).
-- `EXECUTION_ENVIRONMENT=sandbox` uses docker launch (`LAUNCH_MODE=docker`).
-- Detailed sandbox operation and Claude authentication notes are in `docs/execution-mode.md`.
-- Planner is operationally capped to one process in system start logic.
-- Worker/tester/docser/judge can be scaled by count.
+- Planner は runtime 上で単一プロセス運用（重複起動ガードあり）
 
-### 3.5 Quota and Replan
+## 2.3 Repository / GitHub
 
+- `REPO_MODE` (`git` or `local`)
+- `REPO_URL`
+- `LOCAL_REPO_PATH`
+- `LOCAL_WORKTREE_ROOT`
+- `BASE_BRANCH`
+- `GITHUB_AUTH_MODE` (`gh` or `token`)
+- `GITHUB_TOKEN`
+- `GITHUB_OWNER`
+- `GITHUB_REPO`
+
+## 2.4 Executor / Model
+
+- `LLM_EXECUTOR` (`opencode` / `claude_code`)
+- `OPENCODE_MODEL`
+- `OPENCODE_SMALL_MODEL`
 - `OPENCODE_WAIT_ON_QUOTA`
 - `OPENCODE_QUOTA_RETRY_DELAY_MS`
 - `OPENCODE_MAX_QUOTA_WAITS`
+- `CLAUDE_CODE_PERMISSION_MODE`
+- `CLAUDE_CODE_MODEL`
+- `CLAUDE_CODE_MAX_TURNS`
+- `CLAUDE_CODE_ALLOWED_TOOLS`
+- `CLAUDE_CODE_DISALLOWED_TOOLS`
+- `CLAUDE_CODE_APPEND_SYSTEM_PROMPT`
+- `PLANNER_MODEL`
+- `JUDGE_MODEL`
+- `WORKER_MODEL`
+- `TESTER_MODEL`
+- `DOCSER_MODEL`
+
+## 2.5 Planner / Replan
+
+- `PLANNER_USE_REMOTE`
+- `PLANNER_REPO_URL`
 - `AUTO_REPLAN`
 - `REPLAN_REQUIREMENT_PATH`
 - `REPLAN_INTERVAL_MS`
 - `REPLAN_COMMAND`
 - `REPLAN_WORKDIR`
 - `REPLAN_REPO_URL`
-- `PLANNER_USE_REMOTE`
-- `PLANNER_REPO_URL`
 
-### 3.6 Policy Recovery and AllowedPaths Growth
+## 2.6 LLM Provider Keys
 
-Core policy recovery config:
+- `ANTHROPIC_API_KEY`
+- `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
+- `XAI_API_KEY`
+- `DEEPSEEK_API_KEY`
 
-- `POLICY_RECOVERY_CONFIG_PATH`
-- `POLICY_RECOVERY_CONFIG_JSON`
-- `POLICY_RECOVERY_MODE` (`conservative` / `balanced` / `aggressive`)
+---
 
-Worker in-run policy recovery:
-
-- `WORKER_POLICY_RECOVERY_USE_LLM`
-- `WORKER_POLICY_RECOVERY_ATTEMPTS`
-- `WORKER_POLICY_RECOVERY_TIMEOUT_SECONDS`
-- `WORKER_POLICY_RECOVERY_MODEL`
-
-Repo-level config file:
-
-- default path: `.opentiger/policy-recovery.json`
-- example: `templates/policy-recovery.example.json`
-
-Cycle Manager rework suppression (env):
-
-- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES` (default: 2)
-- `AUTO_REWORK_MAX_DEPTH` (default: 2)
-
-Verification command skip (Worker env):
-
-- `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT` (default: `true`)
-
-Operational detail:
-
-- full recovery/growth lifecycle is documented in `docs/policy-recovery.md`
-
-### 3.7 Prompt Context Snapshot and Delta
-
-openTiger keeps runtime prompt context in local files under `.opentiger/context/`:
-
-- `.opentiger/context/agent-profile.json`
-  - host snapshot generated from `neofetch`
-  - `uname -srmo` is used as a fallback for minimal host/kernel/arch context
-  - refreshed by TTL/fingerprint checks
-- `.opentiger/context/context-delta.json`
-  - failure signatures and promoted context keys
-  - updated on execution/verification failures for next-task hints
-
-Notes:
-
-- These JSON files are local runtime artifacts and are intentionally git-ignored.
-- Prompt context is injected in compact form with a fixed character budget:
-  - Host context: `550`
-  - Failure hints: `350`
-  - Total: `900`
-
-## 4. `/config` API (Backed by DB)
+## 3. `/config` API
 
 - `GET /config`
-  - returns current config snapshot
+  - 現在の設定スナップショット
 - `PATCH /config`
-  - updates selected keys via `{ updates: Record<string, string> }`
+  - body: `{ updates: Record<string, string> }`
 
-Behavior:
+挙動:
 
-- unknown keys are rejected
-- missing keys retain previous values
-- config is persisted and reflected in UI `system_config`
+- 未知キーは reject
+- 指定しないキーは保持
+- `AUTO_REPLAN=true` の場合、`REPLAN_REQUIREMENT_PATH` は必須
 
-## 5. `/system` API (Runtime Orchestration)
+---
 
-### 5.1 Startup Planning
+## 4. `/system` API と設定連動
+
+## 4.1 Preflight
 
 - `POST /system/preflight`
-  - builds launch recommendation from requirement content + issue/PR/task backlog
-  - may skip planner intentionally when issue/pr backlog exists
+- requirement 内容 + local backlog + GitHub backlog から推奨起動構成を返す
 
-Issue role assignment (required for automatic issue -> task import):
+Issue 自動 task 化には明示 role が必要:
 
-- open issue must explicitly declare agent role
-- accepted label format:
-  - `role:worker`
-  - `role:tester`
-  - `role:docser`
-- accepted body format:
-  - `Agent: worker` (or `tester`, `docser`)
-  - `Role: worker` (or `tester`, `docser`)
-  - markdown section:
-    - `## Agent`
-    - `- worker` (or `tester`, `docser`)
+- label: `role:worker|role:tester|role:docser`
+- body: `Agent: ...` / `Role: ...` / `## Agent` section
 
-If explicit role is missing:
-
-- preflight does not auto-create a task from that issue
-- warning is reported in preflight summary
-
-### 5.2 Process Control
+## 4.2 Process Manager
 
 - `GET /system/processes`
 - `GET /system/processes/:name`
@@ -191,67 +134,113 @@ If explicit role is missing:
 - `POST /system/processes/:name/stop`
 - `POST /system/processes/stop-all`
 
-Important runtime behavior:
-
-- planner duplicate start is blocked
-- live bound agent detection can return already-running without launching duplicate process
-- Judge backlog (`openPrCount > 0` or `pendingJudgeTaskCount > 0`) arms runtime hatch and auto-starts Judge process when down (self-heal tick)
-
-### 5.3 Requirement / Repo Utilities
+## 4.3 Requirement / Repository Utilities
 
 - `GET /system/requirements`
+- `POST /system/requirements`
 - `POST /system/github/repo`
+- `GET /system/github/repos`
+- `GET /system/github/auth`
+- `GET /system/claude/auth`
 - `GET /system/host/neofetch`
-  - returns normalized host info source output for dashboard display
 - `GET /system/host/context`
-  - returns current host snapshot payload and refresh status
 
-### 5.4 Maintenance
+## 4.4 Maintenance
 
 - `POST /system/cleanup`
 
-Warning:
+注意:
 
-- `/system/cleanup` truncates runtime tables and clears queue state.
-- process restart control is managed by `SYSTEM_PROCESS_AUTO_RESTART*` environment variables.
+- runtime テーブルと queue を初期化する破壊的操作です
 
-## 6. Process Names You Can Start/Stop
+---
 
-Static names:
+## 5. Requirement 同期の実装挙動
 
-- `planner`
-- `dispatcher`
-- `cycle-manager`
-- `db-up`
-- `db-down`
-- `db-push`
+`POST /system/requirements` は次を行います。
 
-Dynamic names:
+1. 入力内容を requirement ファイルへ保存
+2. canonical path `docs/requirement.md` へ同期
+3. git repository の場合、snapshot commit/push を試行
 
-- `judge`, `judge-2`, `judge-3`, ...
-- `worker-1`, `worker-2`, ...
-- `tester-1`, `tester-2`, ...
-- `docser-1`, `docser-2`, ...
+このため requirement 編集は「ファイル保存」だけでなく「repository 状態更新」を伴います。
 
-## 7. Operational Policy Alignment
+---
 
-This project policy is:
+## 6. env-only 主要設定
 
-- do not stall
-- no fixed-minute watchdog as primary trigger
-- force recovery strategy switching based on runtime events
+以下は DB ではなく env で制御される代表例です。
 
-Examples:
+## 6.1 Process restart / self-heal
 
-- repeated failures -> `needs_rework` path
-- quota failure -> `quota_wait` path
-- judge backlog inconsistencies -> run restoration / requeue path
+- `SYSTEM_PROCESS_AUTO_RESTART`
+- `SYSTEM_PROCESS_AUTO_RESTART_DELAY_MS`
+- `SYSTEM_PROCESS_AUTO_RESTART_WINDOW_MS`
+- `SYSTEM_PROCESS_AUTO_RESTART_MAX_ATTEMPTS`
+- `SYSTEM_PROCESS_SELF_HEAL`
+- `SYSTEM_PROCESS_SELF_HEAL_INTERVAL_MS`
+- `SYSTEM_PROCESS_SELF_HEAL_STARTUP_GRACE_MS`
+- `SYSTEM_AGENT_LIVENESS_WINDOW_MS`
 
-## 8. Minimal Production Baseline
+## 6.2 Task retry / cooldown
 
-- set `GITHUB_AUTH_MODE` and valid `GITHUB_OWNER`/`GITHUB_REPO`
-- if `GITHUB_AUTH_MODE=token`, set valid `GITHUB_TOKEN`
-- set at least one working LLM API key and model
-- keep `PLANNER_COUNT=1`
-- set `WORKER_COUNT>=1`, `JUDGE_COUNT>=1`
-- keep `DISPATCHER_ENABLED=true`, `JUDGE_ENABLED=true`, `CYCLE_MANAGER_ENABLED=true`
+- `FAILED_TASK_RETRY_COOLDOWN_MS`
+- `BLOCKED_TASK_RETRY_COOLDOWN_MS`
+- `FAILED_TASK_MAX_RETRY_COUNT`
+- `DISPATCH_RETRY_DELAY_MS`
+- `STUCK_RUN_TIMEOUT_MS`
+
+## 6.3 Policy recovery
+
+- `POLICY_RECOVERY_CONFIG_PATH`
+- `POLICY_RECOVERY_CONFIG_JSON`
+- `POLICY_RECOVERY_MODE`
+- `WORKER_POLICY_RECOVERY_USE_LLM`
+- `WORKER_POLICY_RECOVERY_ATTEMPTS`
+- `WORKER_POLICY_RECOVERY_TIMEOUT_SECONDS`
+- `WORKER_POLICY_RECOVERY_MODEL`
+- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`
+- `AUTO_REWORK_MAX_DEPTH`
+
+## 6.4 Verification command planning
+
+Planner:
+
+- `PLANNER_VERIFY_COMMAND_MODE`
+- `PLANNER_VERIFY_CONTRACT_PATH`
+- `PLANNER_VERIFY_MAX_COMMANDS`
+- `PLANNER_VERIFY_PLAN_TIMEOUT_SECONDS`
+- `PLANNER_VERIFY_AUGMENT_NONEMPTY`
+
+Worker:
+
+- `WORKER_AUTO_VERIFY_MODE`
+- `WORKER_VERIFY_CONTRACT_PATH`
+- `WORKER_AUTO_VERIFY_MAX_COMMANDS`
+- `WORKER_VERIFY_PLAN_TIMEOUT_SECONDS`
+- `WORKER_VERIFY_PLAN_PARSE_RETRIES`
+- `WORKER_VERIFY_RECONCILE_TIMEOUT_SECONDS`
+- `WORKER_VERIFY_RECOVERY_ATTEMPTS`
+- `WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT`
+- `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT`
+
+---
+
+## 7. 認証・アクセス制御の実務注意
+
+- system 制御系は `api-key` / `bearer` が基本
+- ローカル開発では `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL` の値で挙動が変わる
+  - 厳密運用する場合は `false` を明示
+- GitHub CLI mode (`gh`) を使う場合は `gh auth login` 済みであること
+
+---
+
+## 8. 最低限の運用セット
+
+1. Repo 設定 (`REPO_MODE`, `REPO_URL` または local path)
+2. GitHub 設定 (`GITHUB_AUTH_MODE`, owner/repo, 必要なら token)
+3. LLM 設定 (`LLM_EXECUTOR`, model, provider key)
+4. 実行数 (`WORKER_COUNT`, `JUDGE_COUNT`, `PLANNER_COUNT=1`)
+5. 回復設定（retry / cooldown / auto restart）
+
+より詳細な運用は `docs/operations.md` を参照してください。

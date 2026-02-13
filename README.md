@@ -1,57 +1,58 @@
-# 🐯openTiger
+# openTiger
 
-<img src="assets/avatar.png" alt="openTiger" width="600" />
+<img src="assets/avatar.png" alt="openTiger" width="560" />
 
-**Never-stalling autonomous development orchestration.**
+Never-stalling autonomous development orchestration for repository-scale coding loops.
 
-openTiger continuously runs requirement-to-task generation, implementation, review, and recovery using multiple agents.
+openTiger continuously runs:
+
+1. requirement/issue ingestion
+2. task planning and dispatch
+3. implementation/testing/documentation execution
+4. review/judgement
+5. recovery/retry/rework
+
+all under explicit runtime state transitions.
 
 <img src="assets/ui.png" alt="openTiger UI" width="720" />
 
-## What It Can Do
+## Core Capabilities
 
-- Generate executable tasks from requirements
-- Run implementation in parallel with Worker / Tester / Docser roles
-- Review with Judge and apply auto-merge decisions
-- Self-recover on failure (retry, rework, re-evaluate)
-- Monitor tasks, runs, and agents from one dashboard
-- Switch execution runtime between host and sandbox from dashboard `system`
+- Requirement -> executable task generation
+- Role-based execution (`worker` / `tester` / `docser`)
+- PR and local-worktree judgement (`judge`)
+- Recovery-first operation (`quota_wait`, `awaiting_judge`, `needs_rework`)
+- Backlog-first startup (Issue/PR backlog is processed before new planning)
+- Dashboard + API for process control, logs, and system config
+- Runtime switch between host process and docker sandbox execution
 
-## What Makes It Different
+## Architecture at a Glance
 
-- Prioritizes “do not stall” over first-attempt perfection
-- Does not claim guaranteed completion; it keeps running and switches recovery strategy when progress patterns degrade
-- Backlog-first startup
-  - Existing issues/PRs are processed before generating new plans
-- Strict convergence loop in runtime
-  - `local tasks -> issue backlog sync -> planner replan (only when issue backlog is empty)`
-- Explicit blocked states in runtime
-  - `awaiting_judge` / `quota_wait` / `needs_rework` / `issue_linking`
-- Duplicate-execution defenses
-  - lease, runtime lock, and judge idempotency
-- Planner is single-instance; execution agents can scale horizontally
+- **API (`@openTiger/api`)**: system/config/control endpoints and dashboard backend
+- **Planner**: generates tasks from requirements/issues
+- **Dispatcher**: leases and dispatches queued tasks
+- **Worker/Tester/Docser**: executes task changes and verification
+- **Judge**: evaluates successful runs and drives merge/rework decisions
+- **Cycle Manager**: convergence loop, cleanup, retry, and replan trigger
+- **PostgreSQL + Redis**: persistent state + queueing
 
-## Install
+See `docs/architecture.md` for component-level details.
 
-Runtime: Node `>=20`, pnpm `9.x`, Docker.
+## Requirements
 
-No manual `.env` setup is required for first boot.
+- Node.js `>=20`
+- pnpm `9.x`
+- Docker (for local DB/Redis and sandbox execution mode)
 
-Preferred setup (one-command bootstrap):
+## Installation
+
+### Preferred (bootstrap script)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Andyyyy64/openTiger/main/scripts/install.sh | bash
 ```
 
-Alternative (pnpm, no git history):
-
-```bash
-pnpm dlx degit Andyyyy64/openTiger openTiger
-cd openTiger
-pnpm run setup
-```
-
-Alternative (git clone over SSH):
+### Alternative (manual clone)
 
 ```bash
 git clone git@github.com:Andyyyy64/openTiger.git
@@ -59,42 +60,95 @@ cd openTiger
 pnpm run setup
 ```
 
-GitHub authentication defaults to `gh` mode.
-
-- Recommended: install GitHub CLI
-- Optional: set `GITHUB_AUTH_MODE=token` and provide `GITHUB_TOKEN`
-
 ## Quick Start
 
 ```bash
 pnpm run up
 ```
 
-## Access
+`pnpm run up` performs:
 
-- Dashboard: `http://localhost:5190`
-- API: `http://localhost:4301`
+- monorepo build
+- `postgres` / `redis` startup via docker compose
+- DB schema push
+- runtime hatch disarm
+- DB config export to `.env`
+- API + Dashboard dev startup
 
-## First Run Flow
+## First Run Checklist
 
-1. Complete `gh auth login` and `claude /login` on the host
-2. Run `pnpm run up` and open Dashboard `system`
-3. Start planner with your requirement content (default path: `docs/requirement.md`)
-4. Monitor progress in `tasks`, `runs`, and `judgements`
+1. Authenticate GitHub CLI (default auth mode):
+   ```bash
+   gh auth login
+   ```
+2. If using Claude Code executor, authenticate on host:
+   ```bash
+   claude /login
+   ```
+3. Open Dashboard:
+   - Dashboard: `http://localhost:5190`
+   - API: `http://localhost:4301`
+4. Open Start page and submit requirement content
+   - default canonical requirement path: `docs/requirement.md`
+5. Monitor:
+   - `tasks`
+   - `runs`
+   - `judgements`
+   - `logs`
 
-## Best For Teams That
+## Startup and Runtime Behavior
 
-- Need to keep processing even with large issue/PR backlogs
-- Want to reduce manual babysitting of autonomous coding loops
-- Prefer recovery-first workflows over stop-on-error behavior
+- Planner is started only when backlog gates are clear.
+- Existing local/Issue/PR backlog is always prioritized.
+- Runtime convergence order:
+  - `local backlog > 0`: continue execution
+  - `local backlog == 0`: sync Issue backlog via preflight
+  - `Issue backlog == 0`: evaluate planner replan
 
-## Documentation
+Details: `docs/startup-patterns.md`, `docs/flow.md`
 
-- `docs/flow.md`: end-to-end state transitions and convergence flow
-- `docs/startup-patterns.md`: startup decision matrix and pattern classes
-- `docs/mode.md`: operating modes and scaling setup
-- `docs/execution-mode.md`: host/sandbox execution behavior and sandbox auth details
-- `docs/config.md`: `/system` and `system_config` settings guide
-- `docs/policy-recovery.md`: in-run policy self-recovery and allowedPaths self-growth
-- `docs/nonhumanoriented.md`: “never stall” design principles
-- `docs/agent/*.md`: per-agent responsibilities
+## Documentation Map
+
+Start here:
+
+- `docs/getting-started.md`
+- `docs/architecture.md`
+- `docs/config.md`
+- `docs/api-reference.md`
+- `docs/operations.md`
+
+Execution behavior:
+
+- `docs/flow.md`
+- `docs/startup-patterns.md`
+- `docs/mode.md`
+- `docs/execution-mode.md`
+- `docs/policy-recovery.md`
+- `docs/verification.md`
+
+Agent-level specifications:
+
+- `docs/agent/planner.md`
+- `docs/agent/worker.md`
+- `docs/agent/tester.md`
+- `docs/agent/judge.md`
+- `docs/agent/docser.md`
+
+Design policy:
+
+- `docs/nonhumanoriented.md`
+
+## Notes on Authentication and Access
+
+- API authentication middleware supports:
+  - `X-API-Key` (`API_KEYS`)
+  - `Authorization: Bearer <token>` (`API_SECRET` or custom validator)
+- `/health` and GitHub webhook endpoint are auth-skipped.
+- System-control endpoints are intended for admin/authenticated access.
+  - For local operation, insecure fallback can be disabled explicitly with:
+    - `OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL=false`
+
+## OSS Scope
+
+openTiger is optimized for long-running autonomous repository workflows with explicit recovery paths.  
+It does **not** guarantee one-shot success under all external conditions, but it is designed to avoid silent stalls and continuously converge by switching recovery strategy.
