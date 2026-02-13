@@ -8,6 +8,7 @@ import {
   type SystemProcess,
 } from "../lib/api";
 import { NeofetchPanel } from "../components/NeofetchPanel";
+import { isClaudeExecutor, isCodexExecutor } from "../lib/llm-executor";
 
 const MAX_PLANNERS = 1;
 
@@ -61,14 +62,6 @@ function parseCount(
 
 const formatTimestamp = (value?: string) =>
   value ? new Date(value).toLocaleTimeString() : "--:--:--";
-
-function isClaudeExecutor(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return (
-    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
-  );
-}
 
 function normalizeExecutionEnvironment(value: string | undefined): ExecutionEnvironment {
   return value?.trim().toLowerCase() === "sandbox" ? "sandbox" : "host";
@@ -144,6 +137,7 @@ export const StartPage: React.FC = () => {
   });
   const currentExecutor = config?.config.LLM_EXECUTOR;
   const shouldCheckClaudeAuth = isClaudeExecutor(currentExecutor);
+  const shouldCheckCodexAuth = isCodexExecutor(currentExecutor);
   const neofetchOutput =
     neofetchQuery.data?.available && neofetchQuery.data.output
       ? neofetchQuery.data.output
@@ -153,6 +147,13 @@ export const StartPage: React.FC = () => {
     queryKey: ["system", "claude-auth", currentExecutor ?? "", claudeAuthEnvironment],
     queryFn: () => systemApi.claudeAuthStatus(claudeAuthEnvironment),
     enabled: shouldCheckClaudeAuth,
+    retry: 0,
+    refetchInterval: 120000,
+  });
+  const codexAuthQuery = useQuery({
+    queryKey: ["system", "codex-auth", currentExecutor ?? "", claudeAuthEnvironment],
+    queryFn: () => systemApi.codexAuthStatus(claudeAuthEnvironment),
+    enabled: shouldCheckCodexAuth,
     retry: 0,
     refetchInterval: 120000,
   });
@@ -557,6 +558,17 @@ export const StartPage: React.FC = () => {
       {shouldCheckClaudeAuth && claudeAuthQuery.isError && (
         <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
           &gt; WARN: Failed to check Claude Code authentication status.
+        </div>
+      )}
+      {shouldCheckCodexAuth && codexAuthQuery.data && !codexAuthQuery.data.authenticated && (
+        <div className="border border-yellow-600 bg-yellow-900/10 p-3 text-xs font-mono text-yellow-500">
+          &gt; WARN: Codex is not ready.{" "}
+          {codexAuthQuery.data.message ?? "Run `codex login` or set OPENAI_API_KEY/CODEX_API_KEY."}
+        </div>
+      )}
+      {shouldCheckCodexAuth && codexAuthQuery.isError && (
+        <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
+          &gt; WARN: Failed to check Codex authentication status.
         </div>
       )}
       {shouldCheckGithubAuth && githubAuthQuery.data && !githubAuthQuery.data.authenticated && (

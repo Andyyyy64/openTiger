@@ -171,6 +171,18 @@ export async function recordHeartbeat(agentId: string): Promise<boolean> {
 
 // Register agent
 export async function registerAgent(agentId: string, role: string = "worker"): Promise<string> {
+  const rawExecutor = process.env.LLM_EXECUTOR?.trim().toLowerCase();
+  const isClaudeExecutor =
+    rawExecutor === "claude_code" || rawExecutor === "claudecode" || rawExecutor === "claude-code";
+  const isCodexExecutor =
+    rawExecutor === "codex" || rawExecutor === "codex-cli" || rawExecutor === "codex_cli";
+  const model = isClaudeExecutor
+    ? (process.env.CLAUDE_CODE_MODEL ?? "claude-opus-4-6")
+    : isCodexExecutor
+      ? (process.env.CODEX_MODEL ?? "gpt-5.3-codex")
+      : (process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview");
+  const provider = isClaudeExecutor ? "claude_code" : isCodexExecutor ? "codex" : "opencode";
+
   const result = await db
     .insert(agents)
     .values({
@@ -179,8 +191,8 @@ export async function registerAgent(agentId: string, role: string = "worker"): P
       status: "idle",
       lastHeartbeat: new Date(),
       metadata: {
-        model: process.env.OPENCODE_MODEL ?? "google/gemini-3-flash-preview",
-        provider: "gemini",
+        model,
+        provider,
       },
     })
     .onConflictDoUpdate({

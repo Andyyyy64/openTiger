@@ -6,8 +6,7 @@ import { SystemControlPanel } from "./settings/SystemControlPanel";
 import { SettingsConfigSections } from "./settings/SettingsConfigSections";
 import { LLM_EXECUTOR_OPTIONS, type SettingField } from "./settings/constants";
 import { GROUPED_SETTINGS } from "./settings/grouping";
-
-type ExecutorMode = (typeof LLM_EXECUTOR_OPTIONS)[number];
+import { normalizeExecutor } from "../lib/llm-executor";
 
 const EXECUTOR_MODEL_KEYS = new Set([
   "WORKER_MODEL",
@@ -18,14 +17,9 @@ const EXECUTOR_MODEL_KEYS = new Set([
 ]);
 const API_KEY_KEYS = new Set([
   "GEMINI_API_KEY",
-  "OPENAI_API_KEY",
   "DEEPSEEK_API_KEY",
   "XAI_API_KEY",
 ]);
-
-function normalizeExecutor(value?: string): ExecutorMode {
-  return value === "opencode" ? "opencode" : "claude_code";
-}
 
 export const SettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -134,12 +128,17 @@ export const SettingsPage: React.FC = () => {
         if (field.key.startsWith("OPENCODE_")) {
           return selectedExecutor === "opencode";
         }
+        if (field.key.startsWith("CODEX_")) {
+          return selectedExecutor === "codex";
+        }
         if (EXECUTOR_MODEL_KEYS.has(field.key)) {
           return selectedExecutor === "opencode";
         }
-        // Always show Anthropic API key config even for Claude Code
         if (field.key === "ANTHROPIC_API_KEY") {
-          return true;
+          return selectedExecutor !== "codex";
+        }
+        if (field.key === "OPENAI_API_KEY") {
+          return selectedExecutor === "opencode" || selectedExecutor === "codex";
         }
         if (API_KEY_KEYS.has(field.key)) {
           return selectedExecutor === "opencode";

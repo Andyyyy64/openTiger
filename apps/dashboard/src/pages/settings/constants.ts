@@ -1,7 +1,7 @@
 // Settings form definitions and display order
 export const REPO_MODE_OPTIONS = ["git", "local"] as const;
 export const GITHUB_AUTH_MODE_OPTIONS = ["gh", "token"] as const;
-export const LLM_EXECUTOR_OPTIONS = ["opencode", "claude_code"] as const;
+export const LLM_EXECUTOR_OPTIONS = ["claude_code", "codex", "opencode"] as const;
 export const EXECUTION_ENVIRONMENT_OPTIONS = ["host", "sandbox"] as const;
 export const CLAUDE_PERMISSION_MODE_OPTIONS = [
   "default",
@@ -19,6 +19,17 @@ export const CLAUDE_CODE_MODEL_OPTIONS = [
   "claude-opus-4-5",
   "claude-opus-4-5-20251101",
   "claude-opus-4-20250514",
+] as const;
+export const CODEX_MODEL_OPTIONS = [
+  "gpt-5.3-codex",
+  "gpt-5.3-codex-spark",
+  "gpt-5.2-codex",
+  "gpt-5.1-codex-max",
+  "gpt-5.1-codex",
+  "gpt-5.1-codex-mini",
+  "gpt-5-codex",
+  "gpt-5-codex-mini",
+  "gpt-5",
 ] as const;
 // OpenCode supported models
 // Reference: https://opencode.ai/docs/providers
@@ -49,6 +60,7 @@ export const MODEL_OPTIONS = [
   "openai/gpt-5.1-codex-max",
   "openai/gpt-5.2-codex",
   "openai/gpt-5.3-codex",
+  "openai/gpt-5.3-codex-spark",
 ] as const;
 
 export type SettingField = {
@@ -230,7 +242,7 @@ export const SETTINGS: SettingField[] = [
   {
     key: "LLM_EXECUTOR",
     label: "LLM_Executor",
-    description: "Select backend executor (opencode or claude_code)",
+    description: "Select backend executor (claude_code, codex, or opencode)",
     group: "Models",
     type: "select",
     options: LLM_EXECUTOR_OPTIONS,
@@ -269,6 +281,28 @@ export const SETTINGS: SettingField[] = [
     key: "OPENCODE_MAX_QUOTA_WAITS",
     label: "OpenCode_MaxQuotaWaits",
     description: "-1 for unlimited; otherwise max quota wait attempts",
+    group: "Models",
+    type: "number",
+  },
+  {
+    key: "CODEX_MODEL",
+    label: "Codex_Model",
+    description: "Model for Codex executor",
+    group: "Models",
+    type: "select",
+    options: CODEX_MODEL_OPTIONS,
+  },
+  {
+    key: "CODEX_MAX_RETRIES",
+    label: "Codex_MaxRetries",
+    description: "Max retries for Codex executor",
+    group: "Models",
+    type: "number",
+  },
+  {
+    key: "CODEX_RETRY_DELAY_MS",
+    label: "Codex_RetryDelayMs",
+    description: "Retry delay in ms for Codex executor",
     group: "Models",
     type: "number",
   },
@@ -499,6 +533,9 @@ export const FIELD_DISPLAY_ORDER_BY_GROUP: Record<string, readonly string[]> = {
     "OPENCODE_WAIT_ON_QUOTA",
     "OPENCODE_QUOTA_RETRY_DELAY_MS",
     "OPENCODE_MAX_QUOTA_WAITS",
+    "CODEX_MODEL",
+    "CODEX_MAX_RETRIES",
+    "CODEX_RETRY_DELAY_MS",
     "CLAUDE_CODE_PERMISSION_MODE",
     "CLAUDE_CODE_MODEL",
     "CLAUDE_CODE_MAX_TURNS",

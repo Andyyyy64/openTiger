@@ -8,29 +8,14 @@ import {
   resolveProcessNameFromAgentId,
 } from "../lib/api";
 import { Link } from "react-router-dom";
-
-const CLAUDE_CODE_DEFAULT_MODEL = "claude-opus-4-6";
-
-function isClaudeExecutor(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return (
-    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
-  );
-}
-
-function normalizeClaudeModel(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (trimmed.startsWith("anthropic/")) {
-    return trimmed.slice("anthropic/".length);
-  }
-  if (trimmed.startsWith("claude")) {
-    return trimmed;
-  }
-  return undefined;
-}
+import {
+  CLAUDE_CODE_DEFAULT_MODEL,
+  CODEX_DEFAULT_MODEL,
+  isClaudeExecutor,
+  isCodexExecutor,
+  normalizeClaudeModel,
+  normalizeCodexModel,
+} from "../lib/llm-executor";
 
 export const AgentsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -58,8 +43,11 @@ export const AgentsPage: React.FC = () => {
 
   const llmExecutor = config?.config.LLM_EXECUTOR;
   const useClaudeLabels = isClaudeExecutor(llmExecutor);
+  const useCodexLabels = isCodexExecutor(llmExecutor);
   const configuredClaudeModel =
     normalizeClaudeModel(config?.config.CLAUDE_CODE_MODEL) ?? CLAUDE_CODE_DEFAULT_MODEL;
+  const configuredCodexModel =
+    normalizeCodexModel(config?.config.CODEX_MODEL) ?? CODEX_DEFAULT_MODEL;
   const onlineAgents = (agents ?? []).filter((agent) => agent.status !== "offline");
 
   // Detect state where dispatch is not possible due to incomplete dependencies
@@ -237,11 +225,17 @@ export const AgentsPage: React.FC = () => {
 
                   <div className="col-span-2 text-xs text-zinc-400">
                     <span>
-                      {useClaudeLabels ? "claude_code" : (agent.metadata?.provider ?? "--")}
+                      {useClaudeLabels
+                        ? "claude_code"
+                        : useCodexLabels
+                          ? "codex"
+                          : (agent.metadata?.provider ?? "--")}
                     </span>
                     <span className="text-zinc-600 block">
                       {useClaudeLabels
                         ? (normalizeClaudeModel(agent.metadata?.model) ?? configuredClaudeModel)
+                        : useCodexLabels
+                          ? (normalizeCodexModel(agent.metadata?.model) ?? configuredCodexModel)
                         : (agent.metadata?.model ?? "--")}
                     </span>
                   </div>
