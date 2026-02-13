@@ -36,7 +36,6 @@ export function resolveResearchInput(task: Task): ResearchInput {
   const query =
     asString(research.query) ??
     asString(research.claimText) ??
-    asString(research.stage) ??
     `${task.title}\n\n${task.goal}`;
 
   return {
