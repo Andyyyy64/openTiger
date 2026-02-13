@@ -1,4 +1,4 @@
-# 🐯openTiger — Never-stopping autonomous development orchestration
+# 🐯openTiger — Autonomous dev orchestration that never stops
 
 <p align="center">
   <img src="assets/avatar.png" alt="openTiger" width="500" />
