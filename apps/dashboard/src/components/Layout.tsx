@@ -1,5 +1,5 @@
-import React from "react";
-import { NavLink } from "react-router-dom";
+import React, { useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { systemApi, runsApi } from "../lib/api";
 
@@ -62,10 +62,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               <NavItem to="/start" label="start" />
               <NavItem to="/tasks" label="tasks" />
               <NavItem to="/runs" label="runs" />
-              <NavItem to="/agents" label="agents" />
-              <NavItem to="/plans" label="plans" />
-              <NavItem to="/judgements" label="judgements" />
+              <NavCollapsible
+                parentTo="/agents"
+                parentLabel="agents"
+                subItems={[
+                  { to: "/plans", label: "plans" },
+                  { to: "/judgements", label: "judgements" },
+                ]}
+              />
               <NavItem to="/logs" label="logs" />
+              <div className="mt-6">
+                <NavItem to="/research" label="research" />
+              </div>
             </div>
           </nav>
 
@@ -112,7 +120,60 @@ const NavItem = ({ to, label }: { to: string; label: string }) => (
     <div className="flex item-center">
       <span className="mr-2 opacity-50">{">"}</span>
       <span>{label}</span>
-      {/* Blinking cursor only shown when strictly simpler design or on hover used to be cool but maybe distracting */}
     </div>
   </NavLink>
 );
+
+interface NavCollapsibleProps {
+  parentTo: string;
+  parentLabel: string;
+  subItems: { to: string; label: string }[];
+}
+
+const NavCollapsible: React.FC<NavCollapsibleProps> = ({ parentTo, parentLabel, subItems }) => {
+  const location = useLocation();
+  const relatedPaths = [parentTo, ...subItems.map((s) => s.to)];
+  const isRelatedRoute = relatedPaths.some(
+    (path) => location.pathname === path || location.pathname.startsWith(`${path}/`),
+  );
+  const [expanded, setExpanded] = useState(isRelatedRoute);
+
+  React.useEffect(() => {
+    setExpanded(isRelatedRoute);
+  }, [isRelatedRoute]);
+
+  return (
+    <div className="space-y-px">
+      <div className="flex items-center">
+        <button
+          type="button"
+          className="shrink-0 w-6 h-8 flex items-center justify-center opacity-50 hover:opacity-100 cursor-pointer bg-transparent border-0 text-zinc-400 hover:text-term-tiger"
+          onClick={() => setExpanded((e) => !e)}
+          aria-expanded={expanded}
+          aria-label={expanded ? "Collapse" : "Expand"}
+        >
+          {expanded ? "\u25BC" : ">"}
+        </button>
+        <NavLink
+          to={parentTo}
+          className={({ isActive }) =>
+            `flex-1 block px-1 py-1.5 transition-colors duration-0 ${
+              isActive
+                ? "bg-term-tiger text-black font-bold"
+                : "text-zinc-400 hover:text-term-tiger hover:translate-x-1"
+            }`
+          }
+        >
+          {parentLabel}
+        </NavLink>
+      </div>
+      {expanded && (
+        <div className="pl-5">
+          {subItems.map((item) => (
+            <NavItem key={item.to} to={item.to} label={item.label} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};

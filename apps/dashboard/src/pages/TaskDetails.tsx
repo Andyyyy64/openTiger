@@ -151,14 +151,6 @@ export const TaskDetailsPage: React.FC = () => {
             &gt; Task: {task.title}
           </h1>
         </div>
-        <div className="flex gap-4">
-          <button className="text-zinc-400 hover:text-term-fg border border-zinc-700 hover:border-term-fg px-4 py-1 text-xs font-bold uppercase transition-all">
-            [ EDIT_CONFIG ]
-          </button>
-          <button className="text-term-tiger border border-term-tiger hover:bg-term-tiger hover:text-black px-4 py-1 text-xs font-bold uppercase transition-all">
-            [ EXECUTE_RUN ]
-          </button>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
