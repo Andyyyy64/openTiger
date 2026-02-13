@@ -1,5 +1,11 @@
 # Docser Agent
 
+関連:
+
+- `docs/agent/README.md`
+- `docs/verification.md`
+- `docs/policy-recovery.md`
+
 ## 1. Role
 
 Keep documentation aligned with implemented behavior.

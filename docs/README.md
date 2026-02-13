@@ -33,6 +33,7 @@
 
 ## 3. Agent 仕様
 
+- `docs/agent/README.md`（横断比較）
 - `docs/agent/planner.md`
 - `docs/agent/worker.md`
 - `docs/agent/tester.md`

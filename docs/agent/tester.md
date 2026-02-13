@@ -1,5 +1,10 @@
 # Tester Agent
 
+関連:
+
+- `docs/agent/README.md`
+- `docs/verification.md`
+
 ## 1. Role
 
 Specialized worker for test-oriented tasks.

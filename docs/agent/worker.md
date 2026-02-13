@@ -1,5 +1,11 @@
 # Worker Agent
 
+関連:
+
+- `docs/agent/README.md`
+- `docs/policy-recovery.md`
+- `docs/verification.md`
+
 ## 1. Role
 
 Worker runtime は `AGENT_ROLE` に応じて実行モードを切り替えます。

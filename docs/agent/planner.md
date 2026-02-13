@@ -1,5 +1,11 @@
 # Planner Agent
 
+関連:
+
+- `docs/agent/README.md`
+- `docs/flow.md`
+- `docs/verification.md`
+
 ## 1. Role
 
 Planner は requirement/issue から実行可能な task 群を生成し、重複なく永続化します。  

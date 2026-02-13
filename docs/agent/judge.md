@@ -1,5 +1,11 @@
 # Judge Agent
 
+関連:
+
+- `docs/agent/README.md`
+- `docs/flow.md`
+- `docs/mode.md`
+
 ## 1. Role
 
 Judge は successful run を評価し、task を `done` へ収束させるか、再実行/再修正へ分岐させる責務を持ちます。
