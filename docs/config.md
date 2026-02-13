@@ -331,15 +331,15 @@ See `docs/operations.md` for more detailed operation.
 Config impact depends on which processes read it.  
 Env-only config is not reflected until the target process restarts.
 
-| Config category   | Main keys                                                                         | Affected components                                      | When reflected                            |
-| ----------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------- |
-| Repository/GitHub | `REPO_MODE`, `REPO_URL`, `BASE_BRANCH`, `GITHUB_*`                                | API preflight, Planner, Dispatcher, Worker, Judge        | After target process restart              |
-| Execution/launch  | `EXECUTION_ENVIRONMENT`, `SANDBOX_DOCKER_*`                                       | API process manager, Dispatcher launcher, sandbox worker | After Dispatcher restart (from new tasks) |
-| Planner           | `PLANNER_*`, `AUTO_REPLAN`, `REPLAN_*`                                            | Planner, Cycle Manager                                   | After Planner / Cycle Manager restart     |
-| Dispatcher        | `MAX_CONCURRENT_WORKERS`, `POLL_INTERVAL_MS`, `DISPATCH_*`                        | Dispatcher                                               | After Dispatcher restart                  |
+| Config category   | Main keys                                                                                    | Affected components                                      | When reflected                            |
+| ----------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------- |
+| Repository/GitHub | `REPO_MODE`, `REPO_URL`, `BASE_BRANCH`, `GITHUB_*`                                           | API preflight, Planner, Dispatcher, Worker, Judge        | After target process restart              |
+| Execution/launch  | `EXECUTION_ENVIRONMENT`, `SANDBOX_DOCKER_*`                                                  | API process manager, Dispatcher launcher, sandbox worker | After Dispatcher restart (from new tasks) |
+| Planner           | `PLANNER_*`, `AUTO_REPLAN`, `REPLAN_*`                                                       | Planner, Cycle Manager                                   | After Planner / Cycle Manager restart     |
+| Dispatcher        | `MAX_CONCURRENT_WORKERS`, `POLL_INTERVAL_MS`, `DISPATCH_*`                                   | Dispatcher                                               | After Dispatcher restart                  |
 | Worker execution  | `WORKER_*`, `TESTER_*`, `DOCSER_*`, `LLM_EXECUTOR`, `CLAUDE_CODE_*`, `CODEX_*`, `OPENCODE_*` | Worker/Tester/Docser                                     | After target agent restart                |
-| Judge             | `JUDGE_*`, `JUDGE_MODE`                                                           | Judge                                                    | After Judge restart                       |
-| Retry/cleanup     | `FAILED_TASK_*`, `BLOCKED_TASK_*`, `STUCK_RUN_TIMEOUT_MS`                         | Cycle Manager, API task retry display                    | After Cycle Manager / API restart         |
+| Judge             | `JUDGE_*`, `JUDGE_MODE`                                                                      | Judge                                                    | After Judge restart                       |
+| Retry/cleanup     | `FAILED_TASK_*`, `BLOCKED_TASK_*`, `STUCK_RUN_TIMEOUT_MS`                                    | Cycle Manager, API task retry display                    | After Cycle Manager / API restart         |
 
 ### Notes
 
