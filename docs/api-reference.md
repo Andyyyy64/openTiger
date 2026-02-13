@@ -154,9 +154,70 @@ system 制御系は `canControlSystem()` で許可判定されます。
   - label: `role:worker|role:tester|role:docser`
   - または body に `Agent:` / `Role:` 記述
 
+## 5. 代表レスポンス例
+
+## `POST /system/preflight`（抜粋）
+
+```json
+{
+  "preflight": {
+    "github": {
+      "enabled": true,
+      "openIssueCount": 3,
+      "openPrCount": 1,
+      "issueTaskBacklogCount": 2,
+      "generatedTaskCount": 1,
+      "warnings": []
+    },
+    "local": {
+      "queuedTaskCount": 4,
+      "runningTaskCount": 1,
+      "failedTaskCount": 0,
+      "blockedTaskCount": 2,
+      "pendingJudgeTaskCount": 1
+    }
+  },
+  "recommendations": {
+    "startPlanner": false,
+    "startDispatcher": true,
+    "startJudge": true,
+    "startCycleManager": true,
+    "workerCount": 4,
+    "testerCount": 4,
+    "docserCount": 4,
+    "plannerCount": 0,
+    "judgeCount": 4,
+    "reasons": ["Issue backlog detected (2)"]
+  }
+}
+```
+
+## `GET /system/processes`（抜粋）
+
+```json
+{
+  "processes": [
+    {
+      "name": "dispatcher",
+      "kind": "service",
+      "status": "running",
+      "supportsStop": true,
+      "startedAt": "2026-02-13T10:00:00.000Z",
+      "pid": 12345
+    },
+    {
+      "name": "worker-1",
+      "kind": "worker",
+      "status": "running",
+      "supportsStop": true
+    }
+  ]
+}
+```
+
 ---
 
-## 5. 実装連携時の注意
+## 6. 実装連携時の注意
 
 - command 実行 API を外部から直接叩く設計ではなく、process manager 経由で制御します
 - `stop-all` は running run を cancel/requeue し、agent 状態も更新します
