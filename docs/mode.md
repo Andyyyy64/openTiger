@@ -1,6 +1,6 @@
-# 運用モード（Operating Modes）
+# 運用モード
 
-openTiger の挙動は、repository mode / judge mode / execution environment の組み合わせで制御されます。
+openTiger の挙動は、リポジトリモード / 判定モード / 実行環境 の組み合わせで制御されます。
 
 関連:
 
@@ -10,7 +10,7 @@ openTiger の挙動は、repository mode / judge mode / execution environment �
 - `docs/agent/dispatcher.md`
 - `docs/agent/judge.md`
 
-## 1. Repository Mode（`REPO_MODE`）
+## 1. リポジトリモード（`REPO_MODE`）
 
 ### `git`
 
@@ -32,7 +32,7 @@ openTiger の挙動は、repository mode / judge mode / execution environment �
 
 ### `local`
 
-- ローカル repository + worktree ベースの運用
+- ローカルリポジトリ + worktree ベースの運用
 - remote PR 作成は不要
 
 必須設定:
@@ -41,33 +41,33 @@ openTiger の挙動は、repository mode / judge mode / execution environment �
 - `LOCAL_WORKTREE_ROOT`
 - `BASE_BRANCH`
 
-## 2. Judge Mode（`JUDGE_MODE`）
+## 2. 判定モード（`JUDGE_MODE`）
 
 - `git`: PR review 経路を強制
-- `local`: local diff 経路を強制
-- `auto`: repository mode に追従
+- `local`: ローカル差分経路を強制
+- `auto`: リポジトリモードに追従
 
 補足:
 
-- `JUDGE_MODE` は env 駆動（runtime option）であり、`system_config` の DB キーではありません。
+- `JUDGE_MODE` は環境変数で決まる runtime option であり、`system_config` の DB キーではありません。
 
 主要フラグ:
 
 - `JUDGE_MERGE_ON_APPROVE`
 - `JUDGE_REQUEUE_ON_NON_APPROVE`
 
-## 3. Execution Environment と Launch Mode
+## 3. 実行環境と起動モード
 
 ユーザー向け設定キーは `EXECUTION_ENVIRONMENT`（`system_config`）です。
 
-内部 launch mode は次のように導出されます。
+内部の起動モードは次のように導出されます。
 
 - `host` -> `LAUNCH_MODE=process`
 - `sandbox` -> `LAUNCH_MODE=docker`
 
-runtime 詳細（Docker image/network、sandbox 認証、トラブルシュート）は `docs/execution-mode.md` を参照してください。
+実行時の詳細（Docker image/network、sandbox 認証、トラブルシュート）は `docs/execution-mode.md` を参照してください。
 
-`LAUNCH_MODE` は runtime 内部値のため、通常は直接設定する必要はありません。
+`LAUNCH_MODE` は runtime の内部値のため、通常は直接設定する必要はありません。
 
 ### `process`（host）
 
@@ -79,9 +79,9 @@ runtime 詳細（Docker image/network、sandbox 認証、トラブルシュー�
 - task 単位の container 分離
 - 分離要件が厳しい環境で有効
 
-## 4. Scaling Rules
+## 4. スケーリングルール
 
-- planner は API/system ロジックで 1 process にハード制限
+- planner は API/system ロジックで 1 process に固定
 - worker/tester/docser/judge の数は設定可能
 - dispatcher の slot 制御は busy な実行 role（`worker/tester/docser`）のみを計数
 
@@ -100,7 +100,7 @@ runtime 詳細（Docker image/network、sandbox 認証、トラブルシュー�
 - open PR または `awaiting_judge` backlog がある -> judge を先行起動
 - planner は backlog が解消され、かつ requirement がある場合のみ起動
 
-## 6. Retry / Recovery Controls
+## 6. リトライ / 回復制御
 
 主要ノブ:
 
@@ -110,16 +110,16 @@ runtime 詳細（Docker image/network、sandbox 認証、トラブルシュー�
 - `DISPATCH_RETRY_DELAY_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART*`
 
-queue/lock 回復ノブ:
+キュー/ロック回復ノブ:
 
 - `TASK_QUEUE_LOCK_DURATION_MS`
 - `TASK_QUEUE_STALLED_INTERVAL_MS`
 - `TASK_QUEUE_MAX_STALLED_COUNT`
 
-## 7. Quota Operation Settings
+## 7. quota 運用設定
 
 - `OPENCODE_WAIT_ON_QUOTA`
 - `OPENCODE_QUOTA_RETRY_DELAY_MS`
 - `OPENCODE_MAX_QUOTA_WAITS`
 
-現在の task レベル挙動は、`blocked(quota_wait)` + cycle cooldown requeue により収束させる設計です。
+現在の task レベル挙動は、`blocked(quota_wait)` と cycle の cooldown requeue により収束させる設計です。
