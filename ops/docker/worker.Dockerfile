@@ -16,8 +16,8 @@ RUN apk add --no-cache \
     curl \
     bash
 
-# OpenCode / Claude Code / Codex CLIをインストール
-RUN npm install -g opencode-ai @anthropic-ai/claude-code @openai/codex
+# OpenCode / Claude Code CLIをインストール
+RUN npm install -g opencode-ai @anthropic-ai/claude-code
 
 # GitHub CLIをインストール
 RUN apk add --no-cache github-cli
@@ -117,7 +117,7 @@ ENV LOG_FORMAT=json
 
 # ネットワーク制限のためのラベル（docker-compose/k8sで使用）
 LABEL opentiger.network.policy="restricted"
-LABEL opentiger.network.allowed="api.github.com,github.com,generativelanguage.googleapis.com,api.openai.com,opencode.ai"
+LABEL opentiger.network.allowed="api.github.com,github.com,generativelanguage.googleapis.com,opencode.ai"
 
 # ヘルスチェック
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
