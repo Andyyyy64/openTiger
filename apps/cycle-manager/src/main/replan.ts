@@ -27,6 +27,13 @@ const UNBORN_HEAD_SIGNATURE = "__UNBORN_HEAD__";
 let replanInProgress = false;
 let lastReplanAt: number | null = null;
 let warnedMissingRequirementPath = false;
+const JUDGE_ARTIFACT_TYPES: string[] = [
+  "pr",
+  "worktree",
+  "research_claim",
+  "research_source",
+  "research_report",
+];
 
 function isUnbornHeadError(stderr: string): boolean {
   const normalized = stderr.toLowerCase();
@@ -363,7 +370,7 @@ export async function shouldTriggerReplan(
       and(
         eq(runs.status, "success"),
         isNull(runs.judgedAt),
-        inArray(artifacts.type, ["pr", "worktree"]),
+        inArray(artifacts.type, JUDGE_ARTIFACT_TYPES),
         eq(tasks.status, "blocked"),
         eq(tasks.blockReason, "awaiting_judge"),
       ),
