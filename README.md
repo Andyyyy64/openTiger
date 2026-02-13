@@ -2,7 +2,7 @@
 
 <img src="assets/avatar.png" alt="openTiger" width="600" />
 
-**Never-stalling autonomous development orchestration.**
+**Never-stopping autonomous development orchestration.**
 
 openTiger continuously runs requirement-to-task generation, implementation, review, and recovery using multiple agents.
 
