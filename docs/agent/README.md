@@ -70,7 +70,6 @@ To avoid duplication when reading:
 | docser | `DOCSER_MODEL` -> `OPENCODE_MODEL` | `DOCSER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/docser.md` |
 
 When `LLM_EXECUTOR=claude_code`, `CLAUDE_CODE_MODEL` takes precedence over role-specific models.
-When `LLM_EXECUTOR=codex`, role-specific model or `OPENCODE_MODEL` should point to OpenAI Codex-capable model IDs.
 
 ## 6. Common State Model
 

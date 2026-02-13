@@ -1,7 +1,7 @@
 // Settings form definitions and display order
 export const REPO_MODE_OPTIONS = ["git", "local"] as const;
 export const GITHUB_AUTH_MODE_OPTIONS = ["gh", "token"] as const;
-export const LLM_EXECUTOR_OPTIONS = ["claude_code", "codex", "opencode"] as const;
+export const LLM_EXECUTOR_OPTIONS = ["opencode", "claude_code"] as const;
 export const EXECUTION_ENVIRONMENT_OPTIONS = ["host", "sandbox"] as const;
 export const CLAUDE_PERMISSION_MODE_OPTIONS = [
   "default",
@@ -230,7 +230,7 @@ export const SETTINGS: SettingField[] = [
   {
     key: "LLM_EXECUTOR",
     label: "LLM_Executor",
-    description: "Select backend executor (claude_code / codex / opencode)",
+    description: "Select backend executor (opencode or claude_code)",
     group: "Models",
     type: "select",
     options: LLM_EXECUTOR_OPTIONS,

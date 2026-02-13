@@ -10,7 +10,6 @@ import {
 import { Link } from "react-router-dom";
 
 const CLAUDE_CODE_DEFAULT_MODEL = "claude-opus-4-6";
-const CODEX_DEFAULT_MODEL = "gpt-5-codex";
 
 function isClaudeExecutor(value: string | undefined): boolean {
   if (!value) return false;
@@ -18,12 +17,6 @@ function isClaudeExecutor(value: string | undefined): boolean {
   return (
     normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
   );
-}
-
-function isCodexExecutor(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return normalized === "codex" || normalized === "openai_codex" || normalized === "openai-codex";
 }
 
 function normalizeClaudeModel(value: string | undefined): string | undefined {
@@ -37,27 +30,6 @@ function normalizeClaudeModel(value: string | undefined): string | undefined {
     return trimmed;
   }
   return undefined;
-}
-
-function normalizeCodexModel(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  if (trimmed.startsWith("openai/")) {
-    return trimmed.slice("openai/".length);
-  }
-  const lower = trimmed.toLowerCase();
-  if (
-    lower.startsWith("anthropic/") ||
-    lower.startsWith("google/") ||
-    lower.startsWith("xai/") ||
-    lower.startsWith("deepseek/") ||
-    lower.startsWith("groq/") ||
-    lower.startsWith("ollama/")
-  ) {
-    return undefined;
-  }
-  return trimmed;
 }
 
 export const AgentsPage: React.FC = () => {
@@ -86,11 +58,8 @@ export const AgentsPage: React.FC = () => {
 
   const llmExecutor = config?.config.LLM_EXECUTOR;
   const useClaudeLabels = isClaudeExecutor(llmExecutor);
-  const useCodexLabels = isCodexExecutor(llmExecutor);
   const configuredClaudeModel =
     normalizeClaudeModel(config?.config.CLAUDE_CODE_MODEL) ?? CLAUDE_CODE_DEFAULT_MODEL;
-  const configuredCodexModel =
-    normalizeCodexModel(config?.config.OPENCODE_MODEL) ?? CODEX_DEFAULT_MODEL;
   const onlineAgents = (agents ?? []).filter((agent) => agent.status !== "offline");
 
   // Detect state where dispatch is not possible due to incomplete dependencies
@@ -268,18 +237,12 @@ export const AgentsPage: React.FC = () => {
 
                   <div className="col-span-2 text-xs text-zinc-400">
                     <span>
-                      {useClaudeLabels
-                        ? "claude_code"
-                        : useCodexLabels
-                          ? "codex"
-                          : (agent.metadata?.provider ?? "--")}
+                      {useClaudeLabels ? "claude_code" : (agent.metadata?.provider ?? "--")}
                     </span>
                     <span className="text-zinc-600 block">
                       {useClaudeLabels
                         ? (normalizeClaudeModel(agent.metadata?.model) ?? configuredClaudeModel)
-                        : useCodexLabels
-                          ? (normalizeCodexModel(agent.metadata?.model) ?? configuredCodexModel)
-                          : (agent.metadata?.model ?? "--")}
+                        : (agent.metadata?.model ?? "--")}
                     </span>
                   </div>
 

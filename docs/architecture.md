@@ -74,7 +74,7 @@ After understanding the architecture, when investigating incidents, tracing in t
 
 ### Execution Layer (Worker / Tester / Docser / `@openTiger/worker`)
 
-- LLM execution (`claude_code` / `codex` / `opencode`)
+- LLM execution (`opencode` or `claude_code`)
 - Change verification (commands + policy)
 - Commit/push/PR creation (git mode)
 - Recovery branching on failure

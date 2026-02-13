@@ -93,26 +93,20 @@ pnpm run up
    claude /login
    ```
 
-3. If using Codex executor, authenticate on the host (or set `OPENAI_API_KEY`):
-
-   ```bash
-   codex login
-   ```
-
-4. Open the Dashboard:
+3. Open the Dashboard:
    - Dashboard: `http://localhost:5190`
    - API: `http://localhost:4301`
-5. Enter requirement on the Start page and run
+4. Enter requirement on the Start page and run
    - default canonical requirement path: `docs/requirement.md`
-6. Monitor progress:
+5. Monitor progress:
    - `tasks`
    - `runs`
    - `judgements`
    - `logs`
-7. (Optional) Run TigerResearch from the `research` page:
+6. (Optional) Run TigerResearch from the `research` page:
    - submit query -> planner decomposition -> parallel collect/challenge/write -> report
    - details: `docs/research.md`
-8. If state becomes stalled:
+7. If state becomes stalled:
    - Start with initial diagnosis in `docs/state-model.md`
    - Check detailed runbook in `docs/operations.md`
 
