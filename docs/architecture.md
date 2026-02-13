@@ -32,7 +32,7 @@ flowchart LR
 
 ### サービス層（API / `@openTiger/api`）
 
-- Dashboard バックエンド
+- Dashboard 向けバックエンド
 - 設定管理 (`/config`)
 - システム制御 (`/system/*`)
 - 参照系 API (`/tasks`, `/runs`, `/agents`, `/plans`, `/judgements`, `/logs`)
@@ -40,9 +40,9 @@ flowchart LR
 ### 計画層（Planner / `@openTiger/planner`）
 
 - requirement / issue からタスク計画を生成
-- dependency 正規化
-- policy 適用
-- doc gap 検知
+- 依存関係（dependency）の正規化
+- policy の適用
+- documentation gap の検知
 - 詳細: `docs/agent/planner.md`
 
 ### 配布制御層（Dispatcher / `@openTiger/dispatcher`）
@@ -50,37 +50,37 @@ flowchart LR
 - `queued` タスクの選別
 - lease 取得
 - 実行エージェント割り当て
-- process / docker 起動
+- process / Docker の起動
 - 詳細: `docs/agent/dispatcher.md`
 
 ### 実行層（Worker / Tester / Docser / `@openTiger/worker`）
 
-- LLM 実行 (`opencode` or `claude_code`)
+- LLM 実行（`opencode` または `claude_code`）
 - 変更検証（commands + policy）
-- commit/push/PR 作成（git mode）
-- 失敗時の recovery 分岐
+- commit/push/PR 作成（`git` mode）
+- 失敗時の回復分岐
 - 詳細: `docs/agent/worker.md`, `docs/agent/tester.md`, `docs/agent/docser.md`
 
 ### 判定層（Judge / `@openTiger/judge`）
 
 - 成功 run の評価（CI / policy / LLM）
-- approve / request_changes 判断
+- approve / request_changes の判断
 - merge / retry / autofix タスク生成
 - 詳細: `docs/agent/judge.md`
 
 ### 収束管理層（Cycle Manager / `@openTiger/cycle-manager`）
 
 - cleanup ループ
-- failed/blocked リカバリ
-- issue backlog 同期
+- `failed/blocked` の回復
+- issue backlog の同期
 - replan 判定
 - 詳細: `docs/agent/cycle-manager.md`
 
 ### ダッシュボード層（Dashboard / `@openTiger/dashboard`）
 
 - 起動/設定/状態監視の UI
-- process start/stop
-- task/run/judgement/log 表示
+- process の start/stop
+- task/run/judgement/log の表示
 
 ## 2. データストア
 
@@ -101,7 +101,7 @@ flowchart LR
 
 - task queue
 - dead-letter queue
-- worker concurrency/lock 制御
+- worker の concurrency/lock 制御
 
 ## 3. 実行の大まかな流れ
 
@@ -116,23 +116,23 @@ flowchart LR
 
 ## 4. 状態設計の特徴
 
-- 明示的 blocked reason
+- 明示的な blocked reason
   - `awaiting_judge`
   - `quota_wait`
   - `needs_rework`
   - `issue_linking`（Planner 内部連携用）
-- duplicate 実行防止
+- 重複実行防止
   - lease
   - runtime lock
   - judge idempotency (`judgedAt`, `judgementVersion`)
 
 ## 5. モードと実行環境
 
-- Repository mode
+- リポジトリモード（Repository mode）
   - `git` / `local`
-- Judge mode
+- 判定モード（Judge mode）
   - `git` / `local` / `auto`
-- Execution environment
+- 実行環境（Execution environment）
   - `host`（process）
   - `sandbox`（docker）
 
