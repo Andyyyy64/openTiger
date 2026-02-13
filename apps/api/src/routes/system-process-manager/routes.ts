@@ -9,6 +9,7 @@ import { canControlSystem } from "../system-auth";
 import { listProcessDefinitions, resolveProcessDefinition } from "./definitions";
 import {
   buildProcessInfo,
+  detectUnmanagedServiceProcess,
   forceTerminateUnmanagedSystemProcesses,
   startManagedProcess,
   stopManagedProcess,
@@ -340,6 +341,21 @@ async function ensureProcessHealthy(processName: string): Promise<void> {
   if (!boundAgentId) {
     // Processes without agent heartbeat (e.g. dispatcher/cycle-manager) are not restarted if running
     if (runtime?.status === "running") {
+      return;
+    }
+    const unmanagedService = await detectUnmanagedServiceProcess(processName);
+    if (unmanagedService) {
+      managedProcesses.set(definition.name, {
+        ...(runtime ?? { status: "running" as const }),
+        status: "running",
+        pid: unmanagedService.pid,
+        process: null,
+        stopRequested: false,
+        finishedAt: undefined,
+        exitCode: null,
+        signal: null,
+        message: `Detected existing unmanaged process (pid=${unmanagedService.pid})`,
+      });
       return;
     }
     await startManagedProcess(definition, {});

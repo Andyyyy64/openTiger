@@ -30,6 +30,10 @@ const SYSTEM_PROCESS_CMD_PATTERNS: RegExp[] = [
   /\bpnpm\s+--filter\s+@openTiger\/worker\s+run\s+start\b/i,
   /\bpnpm\s+--filter\s+@openTiger\/planner\s+run\s+start\b/i,
 ];
+const SYSTEM_SERVICE_CMD_PATTERNS: Record<string, RegExp> = {
+  dispatcher: /\bpnpm\s+--filter\s+@openTiger\/dispatcher\s+start\b/i,
+  "cycle-manager": /\bpnpm\s+--filter\s+@openTiger\/cycle-manager\s+run\s+start\b/i,
+};
 
 type OsProcessInfo = {
   pid: number;
@@ -122,6 +126,18 @@ async function listOsProcesses(): Promise<OsProcessInfo[]> {
       resolve([]);
     });
   });
+}
+
+export async function detectUnmanagedServiceProcess(
+  processName: string,
+): Promise<{ pid: number; command: string } | null> {
+  const pattern = SYSTEM_SERVICE_CMD_PATTERNS[processName];
+  if (!pattern) {
+    return null;
+  }
+  const currentPid = process.pid;
+  const processes = await listOsProcesses();
+  return processes.find((row) => row.pid !== currentPid && pattern.test(row.command)) ?? null;
 }
 
 export async function forceTerminateUnmanagedSystemProcesses(): Promise<ForceStopSummary> {

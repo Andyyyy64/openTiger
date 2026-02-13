@@ -523,9 +523,12 @@ async function orchestrateJob(job: typeof researchJobs.$inferSelect): Promise<vo
   const availableSlots = Math.max(0, thresholds.maxConcurrency - activePipelineTaskCount);
   const hasActivePlan = hasAnyTaskForStage(activeRows, "plan", false);
   const hasActiveWrite = hasAnyTaskForStage(activeRows, "write", false);
+  const planAttempts = taskRows.filter((row) => {
+    const stage = normalizeResearchStage(readResearchTaskContext(row.context).stage);
+    return stage === "plan";
+  }).length;
 
   if (claims.length === 0) {
-    const hasPlanTask = hasAnyTaskForStage(taskRows, "plan", true);
     const metadata = asRecord(job.metadata);
     const orchestratorMeta = asRecord(metadata.orchestrator);
     const plannerPendingUntilMs = parseIsoTimestamp(orchestratorMeta.plannerPendingUntil);
@@ -536,14 +539,28 @@ async function orchestrateJob(job: typeof researchJobs.$inferSelect): Promise<vo
       return;
     }
 
-    if (!hasPlanTask) {
-      await queueResearchTask({
-        jobId: job.id,
-        query,
-        profile,
-        stage: "plan",
-      });
+    if (hasActivePlan) {
+      await updateJobState(job, { status: "running", stage: "planning" });
+      return;
     }
+
+    if (planAttempts >= thresholds.maxDepth) {
+      await updateJobState(job, {
+        status: "blocked",
+        stage: "planning",
+        notes: [
+          `Planning produced no claims after ${planAttempts} attempt(s). Manual intervention required.`,
+        ],
+      });
+      return;
+    }
+
+    await queueResearchTask({
+      jobId: job.id,
+      query,
+      profile,
+      stage: "plan",
+    });
     await updateJobState(job, { status: "running", stage: "planning" });
     return;
   }
