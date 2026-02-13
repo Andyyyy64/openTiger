@@ -167,6 +167,9 @@ pnpm runtime:hatch:disarm
 - 失敗後に復帰しない
   - cycle-manager の cleanup/requeue 実行ログを確認
   - 参照: `docs/agent/cycle-manager.md`
+- verification command 失敗が繰り返される
+  - run の失敗内容と verification recovery の有無を確認
+  - 参照: `docs/verification.md`
 - Planner が再起動しない
   - backlog gate（issue/pr/local task）と replan 条件を確認
   - 参照: `docs/startup-patterns.md`

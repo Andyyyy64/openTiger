@@ -98,3 +98,17 @@ verification 中に policy violation が発生した場合:
 4. それでも解決しなければ `blocked(needs_rework)`
 
 詳細は `docs/policy-recovery.md` を参照してください。
+
+## 7. 運用時の観測ポイント（一次切り分け）
+
+| 症状 | まず確認する API | 見るポイント |
+| --- | --- | --- |
+| command failure が連続する | `GET /runs`, `GET /tasks`, `GET /logs/all` | 同一 command の繰り返し失敗、recovery attempt の有無 |
+| no-change failure が続く | `GET /runs/:id`, `GET /tasks/:id` | no-op success 判定まで到達しているか、retry 回数 |
+| policy violation で進まない | `GET /runs/:id`, `GET /tasks/:id`, `GET /logs/all` | `blocked(needs_rework)` への遷移理由、allowedPaths 調整ログ |
+| quota 系で待機が続く | `GET /tasks`, `GET /runs`, `GET /logs/all` | `blocked(quota_wait)` の増加、cooldown 復帰が再開しているか |
+
+補足:
+
+- 全体の運用確認順は `docs/operations.md` のチェックリストを参照してください。
+- 状態語彙（`quota_wait`, `needs_rework` など）は `docs/state-model.md` を参照してください。
