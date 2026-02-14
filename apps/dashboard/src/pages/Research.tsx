@@ -3,8 +3,6 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { researchApi, type CreateResearchJobInput } from "../lib/api";
 
-const DEFAULT_PROFILE = "high_precision";
-
 const resolveStage = (metadata: Record<string, unknown> | null | undefined): string => {
   const orchestrator =
     metadata && typeof metadata === "object"
@@ -17,7 +15,6 @@ const resolveStage = (metadata: Record<string, unknown> | null | undefined): str
 export const ResearchPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [query, setQuery] = React.useState("");
-  const [profile, setProfile] = React.useState(DEFAULT_PROFILE);
 
   const {
     data: jobs,
@@ -54,7 +51,6 @@ export const ResearchPage: React.FC = () => {
 
     createMutation.mutate({
       query: trimmed,
-      qualityProfile: profile,
       riskLevel: "medium",
       timeboxMinutes: 90,
     });
@@ -83,17 +79,6 @@ export const ResearchPage: React.FC = () => {
             className="w-full min-h-[120px] bg-black border border-term-border text-sm p-3 focus:outline-none focus:border-term-tiger"
             placeholder="What should TigerResearch investigate?"
           />
-
-          <div className="grid grid-cols-1 gap-3">
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Profile</label>
-              <input
-                value={profile}
-                onChange={(event) => setProfile(event.target.value || DEFAULT_PROFILE)}
-                className="w-full bg-black border border-term-border text-sm p-2 focus:outline-none focus:border-term-tiger"
-              />
-            </div>
-          </div>
 
           <div className="flex items-center justify-between">
             <div className="text-xs text-red-400">
@@ -139,26 +124,25 @@ export const ResearchPage: React.FC = () => {
                 <th className="px-4 py-2 font-normal border-b border-term-border">Query</th>
                 <th className="px-4 py-2 font-normal border-b border-term-border">Status</th>
                 <th className="px-4 py-2 font-normal border-b border-term-border">Stage</th>
-                <th className="px-4 py-2 font-normal border-b border-term-border">Profile</th>
                 <th className="px-4 py-2 font-normal border-b border-term-border">Updated</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-term-border">
               {isLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-zinc-500 animate-pulse">
+                  <td colSpan={4} className="px-4 py-12 text-center text-zinc-500 animate-pulse">
                     &gt; Loading research jobs...
                   </td>
                 </tr>
               ) : error ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-red-500">
+                  <td colSpan={4} className="px-4 py-12 text-center text-red-500">
                     &gt; Failed to load research jobs
                   </td>
                 </tr>
               ) : (jobs ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-zinc-500">
+                  <td colSpan={4} className="px-4 py-12 text-center text-zinc-500">
                     &gt; No research jobs found
                   </td>
                 </tr>
@@ -180,7 +164,6 @@ export const ResearchPage: React.FC = () => {
                     <td className="px-4 py-2 align-top text-zinc-400 text-xs">
                       {resolveStage(job.metadata)}
                     </td>
-                    <td className="px-4 py-2 align-top text-zinc-400">{job.qualityProfile}</td>
                     <td className="px-4 py-2 align-top text-zinc-500">
                       {new Date(job.updatedAt).toLocaleString()}
                     </td>

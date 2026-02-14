@@ -75,8 +75,7 @@ export const ResearchJobDetailsPage: React.FC = () => {
           &gt; {data.job.query}
         </h1>
         <div className="mt-2 text-xs text-zinc-400">
-          status={data.job.status} profile={data.job.qualityProfile} updated=
-          {new Date(data.job.updatedAt).toLocaleString()}
+          status={data.job.status} updated={new Date(data.job.updatedAt).toLocaleString()}
         </div>
         <div className="mt-1 text-xs text-zinc-500">orchestrator_stage={orchestratorStage}</div>
       </div>

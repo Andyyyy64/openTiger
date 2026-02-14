@@ -156,6 +156,7 @@ const NavCollapsible: React.FC<NavCollapsibleProps> = ({ parentTo, parentLabel, 
         </button>
         <NavLink
           to={parentTo}
+          end
           className={({ isActive }) =>
             `flex-1 block px-1 py-1.5 transition-colors duration-0 ${
               isActive
