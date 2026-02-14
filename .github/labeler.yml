@@ -1,0 +1,35 @@
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "**/*.md"
+
+area:api:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/api/**"
+          - "packages/**/src/**/api/**"
+
+area:dashboard:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/dashboard/**"
+
+area:worker:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "apps/worker/**"
+          - "apps/tester/**"
+          - "apps/docser/**"
+          - "apps/dispatcher/**"
+          - "apps/planner/**"
+          - "apps/judge/**"
+          - "apps/cycle-manager/**"
+
+area:infra:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "ops/**"
+          - "docker-compose*.yml"
+          - "scripts/**"
