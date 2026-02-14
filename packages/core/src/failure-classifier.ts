@@ -217,9 +217,7 @@ export function classifyFailure(
     };
   }
 
-  if (
-    /no test files found|no tests found|no files found matching/.test(message)
-  ) {
+  if (/no test files found|no tests found|no files found matching/.test(message)) {
     return {
       category: "setup",
       retryable: false,

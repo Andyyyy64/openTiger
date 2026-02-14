@@ -626,8 +626,7 @@ export async function requeueBlockedTasksWithCooldown(
             reason: "needs_rework_in_place_retry",
             failureReason: failure.reason,
             retryCount: nextRetryCount,
-            retryLimit:
-              needsReworkInPlaceRetryLimit < 0 ? null : needsReworkInPlaceRetryLimit,
+            retryLimit: needsReworkInPlaceRetryLimit < 0 ? null : needsReworkInPlaceRetryLimit,
             retryLimitUnlimited: needsReworkInPlaceRetryLimit < 0,
           },
         });

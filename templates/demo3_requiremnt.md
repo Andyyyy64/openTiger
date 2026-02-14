@@ -50,9 +50,9 @@ We need a minimal but reliable approval baseline that can be operated daily and 
 
 ## Allowed Paths
 
-- packages/db/**
-- apps/api/**
-- apps/web/**
+- packages/db/\*\*
+- apps/api/\*\*
+- apps/web/\*\*
 
 ## Risk Assessment
 
