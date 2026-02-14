@@ -47,6 +47,7 @@ type DockerMount = {
   containerPath: string;
   readonly?: boolean;
 };
+type ExecutorKind = "opencode" | "claude_code" | "codex";
 
 function resolveDockerImage(config: WorkerLaunchConfig): string {
   return config.dockerImage ?? process.env.SANDBOX_DOCKER_IMAGE ?? DEFAULT_DOCKER_IMAGE;
@@ -186,8 +187,40 @@ function isCodexExecutor(value: string | undefined): boolean {
   return normalized === "codex" || normalized === "codex-cli" || normalized === "codex_cli";
 }
 
+function normalizeExecutor(
+  value: string | undefined,
+  fallback: ExecutorKind = "claude_code",
+): ExecutorKind {
+  if (isClaudeExecutor(value)) {
+    return "claude_code";
+  }
+  if (isCodexExecutor(value)) {
+    return "codex";
+  }
+  if (value?.trim().toLowerCase() === "opencode") {
+    return "opencode";
+  }
+  return fallback;
+}
+
+function resolveExecutorForAgentRole(agentRole: string | undefined): ExecutorKind {
+  const defaultExecutor = normalizeExecutor(process.env.LLM_EXECUTOR, "claude_code");
+  const normalizedRole = agentRole?.trim().toLowerCase();
+  const roleOverride =
+    normalizedRole === "tester"
+      ? process.env.TESTER_LLM_EXECUTOR
+      : normalizedRole === "docser"
+        ? process.env.DOCSER_LLM_EXECUTOR
+        : process.env.WORKER_LLM_EXECUTOR;
+  if (!roleOverride || roleOverride.trim().toLowerCase() === "inherit") {
+    return defaultExecutor;
+  }
+  return normalizeExecutor(roleOverride, defaultExecutor);
+}
+
 // Launch Worker as process
 async function _launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResult> {
+  const resolvedExecutor = resolveExecutorForAgentRole(config.agentRole);
   const env = {
     ...process.env,
     TASK_ID: config.taskId,
@@ -209,7 +242,7 @@ async function _launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResul
     CODEX_MODEL: process.env.CODEX_MODEL,
     CODEX_MAX_RETRIES: process.env.CODEX_MAX_RETRIES,
     CODEX_RETRY_DELAY_MS: process.env.CODEX_RETRY_DELAY_MS,
-    LLM_EXECUTOR: process.env.LLM_EXECUTOR,
+    LLM_EXECUTOR: resolvedExecutor,
     CLAUDE_CODE_PERMISSION_MODE: process.env.CLAUDE_CODE_PERMISSION_MODE,
     CLAUDE_CODE_MODEL: process.env.CLAUDE_CODE_MODEL,
     CLAUDE_CODE_MAX_TURNS: process.env.CLAUDE_CODE_MAX_TURNS,
@@ -289,6 +322,7 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
   }
 
   const envArgs: string[] = [];
+  const resolvedExecutor = resolveExecutorForAgentRole(config.agentRole);
   const allEnv = {
     TASK_ID: config.taskId,
     AGENT_ID: config.agentId,
@@ -310,7 +344,7 @@ async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult>
     CODEX_MODEL: process.env.CODEX_MODEL ?? "",
     CODEX_MAX_RETRIES: process.env.CODEX_MAX_RETRIES ?? "",
     CODEX_RETRY_DELAY_MS: process.env.CODEX_RETRY_DELAY_MS ?? "",
-    LLM_EXECUTOR: process.env.LLM_EXECUTOR ?? "",
+    LLM_EXECUTOR: resolvedExecutor,
     CLAUDE_CODE_PERMISSION_MODE: process.env.CLAUDE_CODE_PERMISSION_MODE ?? "",
     CLAUDE_CODE_MODEL: process.env.CLAUDE_CODE_MODEL ?? "",
     CLAUDE_CODE_MAX_TURNS: process.env.CLAUDE_CODE_MAX_TURNS ?? "",

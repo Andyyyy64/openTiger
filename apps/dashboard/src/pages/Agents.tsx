@@ -9,13 +9,38 @@ import {
 } from "../lib/api";
 import { Link } from "react-router-dom";
 import {
+  AGENT_EXECUTOR_ROLES,
+  type AgentExecutorRole,
   CLAUDE_CODE_DEFAULT_MODEL,
   CODEX_DEFAULT_MODEL,
   isClaudeExecutor,
   isCodexExecutor,
   normalizeClaudeModel,
   normalizeCodexModel,
+  resolveRoleExecutor,
 } from "../lib/llm-executor";
+
+function resolveExecutorRole(role: string): AgentExecutorRole {
+  return AGENT_EXECUTOR_ROLES.includes(role as AgentExecutorRole)
+    ? (role as AgentExecutorRole)
+    : "worker";
+}
+
+function resolveOpenCodeModelForRole(config: Record<string, string>, role: string): string | undefined {
+  if (role === "planner") {
+    return config.PLANNER_MODEL || config.OPENCODE_MODEL;
+  }
+  if (role === "judge") {
+    return config.JUDGE_MODEL || config.OPENCODE_MODEL;
+  }
+  if (role === "tester") {
+    return config.TESTER_MODEL || config.OPENCODE_MODEL;
+  }
+  if (role === "docser") {
+    return config.DOCSER_MODEL || config.OPENCODE_MODEL;
+  }
+  return config.WORKER_MODEL || config.OPENCODE_MODEL;
+}
 
 export const AgentsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -41,13 +66,11 @@ export const AgentsPage: React.FC = () => {
     refetchInterval: 10000,
   });
 
-  const llmExecutor = config?.config.LLM_EXECUTOR;
-  const useClaudeLabels = isClaudeExecutor(llmExecutor);
-  const useCodexLabels = isCodexExecutor(llmExecutor);
+  const configValues = config?.config ?? {};
   const configuredClaudeModel =
-    normalizeClaudeModel(config?.config.CLAUDE_CODE_MODEL) ?? CLAUDE_CODE_DEFAULT_MODEL;
+    normalizeClaudeModel(configValues.CLAUDE_CODE_MODEL) ?? CLAUDE_CODE_DEFAULT_MODEL;
   const configuredCodexModel =
-    normalizeCodexModel(config?.config.CODEX_MODEL) ?? CODEX_DEFAULT_MODEL;
+    normalizeCodexModel(configValues.CODEX_MODEL) ?? CODEX_DEFAULT_MODEL;
   const onlineAgents = (agents ?? []).filter((agent) => agent.status !== "offline");
 
   // Detect state where dispatch is not possible due to incomplete dependencies
@@ -188,6 +211,25 @@ export const AgentsPage: React.FC = () => {
               const canStop = canControl && processStatus === "running";
               const canStart = canControl && processStatus !== "running";
               const isMutating = stopMutation.isPending || startMutation.isPending;
+              const executorRole = resolveExecutorRole(agent.role);
+              const configuredExecutor = resolveRoleExecutor(configValues, executorRole);
+              const metadataProvider =
+                typeof agent.metadata?.provider === "string" ? agent.metadata.provider : undefined;
+              const provider = isClaudeExecutor(metadataProvider)
+                ? "claude_code"
+                : isCodexExecutor(metadataProvider)
+                  ? "codex"
+                  : metadataProvider === "opencode"
+                    ? "opencode"
+                    : configuredExecutor;
+              const metadataModel =
+                typeof agent.metadata?.model === "string" ? agent.metadata.model : undefined;
+              const model =
+                provider === "claude_code"
+                  ? (normalizeClaudeModel(metadataModel) ?? configuredClaudeModel)
+                  : provider === "codex"
+                    ? (normalizeCodexModel(metadataModel) ?? configuredCodexModel)
+                    : (metadataModel ?? resolveOpenCodeModelForRole(configValues, agent.role) ?? "--");
               return (
                 <div
                   key={agent.id}
@@ -224,20 +266,8 @@ export const AgentsPage: React.FC = () => {
                   </div>
 
                   <div className="col-span-2 text-xs text-zinc-400">
-                    <span>
-                      {useClaudeLabels
-                        ? "claude_code"
-                        : useCodexLabels
-                          ? "codex"
-                          : (agent.metadata?.provider ?? "--")}
-                    </span>
-                    <span className="text-zinc-600 block">
-                      {useClaudeLabels
-                        ? (normalizeClaudeModel(agent.metadata?.model) ?? configuredClaudeModel)
-                        : useCodexLabels
-                          ? (normalizeCodexModel(agent.metadata?.model) ?? configuredCodexModel)
-                          : (agent.metadata?.model ?? "--")}
-                    </span>
+                    <span>{provider ?? "--"}</span>
+                    <span className="text-zinc-600 block">{model}</span>
                   </div>
 
                   <div className="col-span-2 text-xs">

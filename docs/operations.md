@@ -256,10 +256,14 @@ Recommended order (general):
 
 - When changing `DISPATCH_*` / `MAX_CONCURRENT_WORKERS`
   - Restart `dispatcher`
-- When changing `WORKER_*` / `TESTER_*` / `DOCSER_*` / `LLM_EXECUTOR`
+- When changing `WORKER_*` / `TESTER_*` / `DOCSER_*` / `WORKER_LLM_EXECUTOR` / `TESTER_LLM_EXECUTOR` / `DOCSER_LLM_EXECUTOR`
   - Restart target role agents (worker/tester/docser)
-- When changing `JUDGE_*` / `JUDGE_MODE`
+- When changing `JUDGE_*` / `JUDGE_LLM_EXECUTOR` / `JUDGE_MODE` / `LLM_EXECUTOR` (when judge uses `inherit`)
   - Restart `judge`
+- When changing `PLANNER_LLM_EXECUTOR` / `LLM_EXECUTOR` (when planner uses `inherit`)
+  - Restart `planner`
+- When changing `LLM_EXECUTOR` (worker/tester/docser use `inherit`)
+  - Restart target role agents (worker/tester/docser)
 - When changing `AUTO_REPLAN` / `REPLAN_*` / `FAILED_TASK_*`
   - Restart `cycle-manager`
 - When changing `EXECUTION_ENVIRONMENT` / `SANDBOX_DOCKER_*`

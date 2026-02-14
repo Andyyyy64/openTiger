@@ -2,6 +2,7 @@
 export const REPO_MODE_OPTIONS = ["git", "local"] as const;
 export const GITHUB_AUTH_MODE_OPTIONS = ["gh", "token"] as const;
 export const LLM_EXECUTOR_OPTIONS = ["claude_code", "codex", "opencode"] as const;
+export const AGENT_LLM_EXECUTOR_OPTIONS = ["inherit", ...LLM_EXECUTOR_OPTIONS] as const;
 export const EXECUTION_ENVIRONMENT_OPTIONS = ["host", "sandbox"] as const;
 export const CLAUDE_PERMISSION_MODE_OPTIONS = [
   "default",
@@ -241,11 +242,51 @@ export const SETTINGS: SettingField[] = [
   },
   {
     key: "LLM_EXECUTOR",
-    label: "LLM_Executor",
-    description: "Select backend executor (claude_code, codex, or opencode)",
+    label: "Default_LLM_Executor",
+    description: "Default backend executor (used when agent override is inherit)",
     group: "Models",
     type: "select",
     options: LLM_EXECUTOR_OPTIONS,
+  },
+  {
+    key: "WORKER_LLM_EXECUTOR",
+    label: "Worker_Executor",
+    description: "Worker executor override (inherit uses Default_LLM_Executor)",
+    group: "Models",
+    type: "select",
+    options: AGENT_LLM_EXECUTOR_OPTIONS,
+  },
+  {
+    key: "TESTER_LLM_EXECUTOR",
+    label: "Tester_Executor",
+    description: "Tester executor override (inherit uses Default_LLM_Executor)",
+    group: "Models",
+    type: "select",
+    options: AGENT_LLM_EXECUTOR_OPTIONS,
+  },
+  {
+    key: "DOCSER_LLM_EXECUTOR",
+    label: "Docser_Executor",
+    description: "Docser executor override (inherit uses Default_LLM_Executor)",
+    group: "Models",
+    type: "select",
+    options: AGENT_LLM_EXECUTOR_OPTIONS,
+  },
+  {
+    key: "JUDGE_LLM_EXECUTOR",
+    label: "Judge_Executor",
+    description: "Judge executor override (inherit uses Default_LLM_Executor)",
+    group: "Models",
+    type: "select",
+    options: AGENT_LLM_EXECUTOR_OPTIONS,
+  },
+  {
+    key: "PLANNER_LLM_EXECUTOR",
+    label: "Planner_Executor",
+    description: "Planner executor override (inherit uses Default_LLM_Executor)",
+    group: "Models",
+    type: "select",
+    options: AGENT_LLM_EXECUTOR_OPTIONS,
   },
   {
     key: "OPENCODE_MODEL",
@@ -528,6 +569,11 @@ export const GROUP_DISPLAY_ORDER = [
 export const FIELD_DISPLAY_ORDER_BY_GROUP: Record<string, readonly string[]> = {
   Models: [
     "LLM_EXECUTOR",
+    "WORKER_LLM_EXECUTOR",
+    "TESTER_LLM_EXECUTOR",
+    "DOCSER_LLM_EXECUTOR",
+    "JUDGE_LLM_EXECUTOR",
+    "PLANNER_LLM_EXECUTOR",
     "OPENCODE_MODEL",
     "OPENCODE_SMALL_MODEL",
     "OPENCODE_WAIT_ON_QUOTA",

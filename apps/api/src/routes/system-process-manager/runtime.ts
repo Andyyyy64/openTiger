@@ -48,6 +48,82 @@ type ForceStopSummary = {
 };
 
 type LaunchMode = "process" | "docker";
+type ExecutorKind = "opencode" | "claude_code" | "codex";
+type ManagedAgentRole = "planner" | "judge" | "worker" | "tester" | "docser";
+
+const EXECUTOR_KEY_BY_ROLE: Record<ManagedAgentRole, string> = {
+  planner: "PLANNER_LLM_EXECUTOR",
+  judge: "JUDGE_LLM_EXECUTOR",
+  worker: "WORKER_LLM_EXECUTOR",
+  tester: "TESTER_LLM_EXECUTOR",
+  docser: "DOCSER_LLM_EXECUTOR",
+};
+
+function isClaudeExecutorValue(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
+  );
+}
+
+function isCodexExecutorValue(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === "codex" || normalized === "codex-cli" || normalized === "codex_cli";
+}
+
+function normalizeExecutorValue(
+  value: string | undefined,
+  fallback: ExecutorKind = "claude_code",
+): ExecutorKind {
+  if (isClaudeExecutorValue(value)) {
+    return "claude_code";
+  }
+  if (isCodexExecutorValue(value)) {
+    return "codex";
+  }
+  if (value?.trim().toLowerCase() === "opencode") {
+    return "opencode";
+  }
+  return fallback;
+}
+
+function resolveExecutorForRole(
+  role: ManagedAgentRole,
+  env: Record<string, string | undefined>,
+): ExecutorKind {
+  const defaultExecutor = normalizeExecutorValue(env.LLM_EXECUTOR, "claude_code");
+  const roleValue = env[EXECUTOR_KEY_BY_ROLE[role]];
+  if (!roleValue || roleValue.trim().toLowerCase() === "inherit") {
+    return defaultExecutor;
+  }
+  return normalizeExecutorValue(roleValue, defaultExecutor);
+}
+
+function resolveManagedAgentRole(
+  definition: ProcessDefinition,
+  commandEnv: Record<string, string | undefined>,
+): ManagedAgentRole | null {
+  if (definition.kind === "planner" || definition.name === "planner") {
+    return "planner";
+  }
+  if (definition.name === "judge" || definition.name.startsWith("judge-")) {
+    return "judge";
+  }
+  if (definition.kind !== "worker") {
+    return null;
+  }
+  const rawRole = commandEnv.AGENT_ROLE?.trim().toLowerCase();
+  if (rawRole === "tester" || rawRole === "docser") {
+    return rawRole;
+  }
+  return "worker";
+}
 
 function resolveExecutionEnvironment(rawValue: string | undefined): "host" | "sandbox" {
   return rawValue?.trim().toLowerCase() === "sandbox" ? "sandbox" : "host";
@@ -368,23 +444,30 @@ export async function startManagedProcess(
     const executionEnvironment = resolveExecutionEnvironment(configEnv.EXECUTION_ENVIRONMENT);
     const launchMode = resolveLaunchMode(executionEnvironment);
     const command = await definition.buildStart(payload);
+    const commandEnv = command.env ?? {};
+    const managedRole = resolveManagedAgentRole(definition, commandEnv);
+    const resolvedExecutor = managedRole ? resolveExecutorForRole(managedRole, configEnv) : undefined;
     const startedAt = new Date().toISOString();
     const logDir = resolveLogDir();
     mkdirSync(logDir, { recursive: true });
     const logPath = join(logDir, `system-${definition.name}-${Date.now()}.log`);
     const logStream = createWriteStream(logPath, { flags: "a" });
+    const childEnv: NodeJS.ProcessEnv = {
+      ...process.env,
+      ...configEnv,
+      ...commandEnv,
+      // Apply current launch config at process start
+      EXECUTION_ENVIRONMENT: executionEnvironment,
+      LAUNCH_MODE: launchMode,
+      OPENTIGER_LOG_DIR: logDir,
+    };
+    if (resolvedExecutor) {
+      childEnv.LLM_EXECUTOR = resolvedExecutor;
+    }
 
     const child = spawn(command.command, command.args, {
       cwd: command.cwd ?? resolveRepoRoot(),
-      env: {
-        ...process.env,
-        ...configEnv,
-        ...command.env,
-        // Apply executor selector value to launcher config at start
-        EXECUTION_ENVIRONMENT: executionEnvironment,
-        LAUNCH_MODE: launchMode,
-        OPENTIGER_LOG_DIR: logDir,
-      },
+      env: childEnv,
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });

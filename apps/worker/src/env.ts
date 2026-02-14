@@ -83,6 +83,59 @@ const OPEN_CODE_ENV_KEYS = new Set([
   "CLAUDE_CODE_DISALLOWED_TOOLS",
   "CLAUDE_CODE_APPEND_SYSTEM_PROMPT",
 ]);
+type ExecutorKind = "opencode" | "claude_code" | "codex";
+
+function isClaudeExecutorValue(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
+  );
+}
+
+function isCodexExecutorValue(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === "codex" || normalized === "codex-cli" || normalized === "codex_cli";
+}
+
+function normalizeExecutorValue(
+  value: string | undefined,
+  fallback: ExecutorKind = "claude_code",
+): ExecutorKind {
+  if (isClaudeExecutorValue(value)) {
+    return "claude_code";
+  }
+  if (isCodexExecutorValue(value)) {
+    return "codex";
+  }
+  if (value?.trim().toLowerCase() === "opencode") {
+    return "opencode";
+  }
+  return fallback;
+}
+
+function resolveExecutorForAgentRole(
+  rowRecord: Record<string, string | undefined>,
+  rawRole: string | undefined,
+): ExecutorKind {
+  const defaultExecutor = normalizeExecutorValue(rowRecord.llmExecutor, "claude_code");
+  const role = rawRole?.trim().toLowerCase();
+  const roleOverride =
+    role === "tester"
+      ? rowRecord.testerLlmExecutor
+      : role === "docser"
+        ? rowRecord.docserLlmExecutor
+        : rowRecord.workerLlmExecutor;
+  if (!roleOverride || roleOverride.trim().toLowerCase() === "inherit") {
+    return defaultExecutor;
+  }
+  return normalizeExecutorValue(roleOverride, defaultExecutor);
+}
 
 function shouldStripEnvKey(key: string): boolean {
   if (STRIP_ENV_KEYS.has(key)) {
@@ -162,6 +215,7 @@ async function loadConfigFromDb(): Promise<Record<string, string>> {
       return {};
     }
     const rowRecord = row as unknown as Record<string, string | undefined>;
+    const resolvedExecutor = resolveExecutorForAgentRole(rowRecord, process.env.AGENT_ROLE);
     return {
       GEMINI_API_KEY: row.geminiApiKey ?? "",
       ANTHROPIC_API_KEY: row.anthropicApiKey ?? "",
@@ -176,7 +230,7 @@ async function loadConfigFromDb(): Promise<Record<string, string>> {
       CODEX_MODEL: rowRecord.codexModel ?? "",
       CODEX_MAX_RETRIES: rowRecord.codexMaxRetries ?? "",
       CODEX_RETRY_DELAY_MS: rowRecord.codexRetryDelayMs ?? "",
-      LLM_EXECUTOR: rowRecord.llmExecutor ?? "",
+      LLM_EXECUTOR: resolvedExecutor,
       CLAUDE_CODE_PERMISSION_MODE: rowRecord.claudeCodePermissionMode ?? "",
       CLAUDE_CODE_MODEL: rowRecord.claudeCodeModel ?? "",
       CLAUDE_CODE_MAX_TURNS: rowRecord.claudeCodeMaxTurns ?? "",

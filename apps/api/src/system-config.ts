@@ -28,6 +28,11 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "LOCAL_WORKTREE_ROOT", column: "localWorktreeRoot", defaultValue: "" },
   { key: "BASE_BRANCH", column: "baseBranch", defaultValue: "main" },
   { key: "LLM_EXECUTOR", column: "llmExecutor", defaultValue: "claude_code" },
+  { key: "WORKER_LLM_EXECUTOR", column: "workerLlmExecutor", defaultValue: "inherit" },
+  { key: "TESTER_LLM_EXECUTOR", column: "testerLlmExecutor", defaultValue: "inherit" },
+  { key: "DOCSER_LLM_EXECUTOR", column: "docserLlmExecutor", defaultValue: "inherit" },
+  { key: "JUDGE_LLM_EXECUTOR", column: "judgeLlmExecutor", defaultValue: "inherit" },
+  { key: "PLANNER_LLM_EXECUTOR", column: "plannerLlmExecutor", defaultValue: "inherit" },
   { key: "OPENCODE_MODEL", column: "opencodeModel", defaultValue: "google/gemini-3-flash-preview" },
   {
     key: "OPENCODE_SMALL_MODEL",

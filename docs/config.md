@@ -70,6 +70,11 @@ Note:
 ### 2.4 Executor / Model
 
 - `LLM_EXECUTOR` (`opencode` / `claude_code` / `codex`)
+- `WORKER_LLM_EXECUTOR` (`inherit` / `opencode` / `claude_code` / `codex`)
+- `TESTER_LLM_EXECUTOR` (`inherit` / `opencode` / `claude_code` / `codex`)
+- `DOCSER_LLM_EXECUTOR` (`inherit` / `opencode` / `claude_code` / `codex`)
+- `JUDGE_LLM_EXECUTOR` (`inherit` / `opencode` / `claude_code` / `codex`)
+- `PLANNER_LLM_EXECUTOR` (`inherit` / `opencode` / `claude_code` / `codex`)
 - `OPENCODE_MODEL`
 - `OPENCODE_SMALL_MODEL`
 - `OPENCODE_WAIT_ON_QUOTA`
@@ -89,6 +94,12 @@ Note:
 - `WORKER_MODEL`
 - `TESTER_MODEL`
 - `DOCSER_MODEL`
+
+Executor resolution notes:
+
+- `LLM_EXECUTOR` default is `claude_code`.
+- Role-specific `*_LLM_EXECUTOR` supports `inherit` to follow `LLM_EXECUTOR`.
+- If `LLM_EXECUTOR` is missing or unrecognized at runtime, it falls back to `claude_code`.
 
 ### 2.5 Planner / Replan
 
@@ -113,6 +124,11 @@ Note:
 
 - `EXECUTION_ENVIRONMENT=host`
 - `LLM_EXECUTOR=claude_code`
+- `WORKER_LLM_EXECUTOR=inherit`
+- `TESTER_LLM_EXECUTOR=inherit`
+- `DOCSER_LLM_EXECUTOR=inherit`
+- `JUDGE_LLM_EXECUTOR=inherit`
+- `PLANNER_LLM_EXECUTOR=inherit`
 - `CODEX_MODEL=gpt-5.3-codex`
 - `BASE_BRANCH=main`
 - `REPO_MODE=git`
@@ -360,7 +376,7 @@ Judge research thresholds:
 
 1. Repo config (`REPO_MODE`, `REPO_URL` or local path)
 2. GitHub config (`GITHUB_AUTH_MODE`, owner/repo, token if needed)
-3. LLM config (`LLM_EXECUTOR`, model, provider key)
+3. LLM config (`LLM_EXECUTOR`, `*_LLM_EXECUTOR`, model, provider key)
 4. Counts (`WORKER_COUNT`, `JUDGE_COUNT`, `PLANNER_COUNT=1`)
 5. Recovery config (retry / cooldown / auto restart)
 
@@ -377,10 +393,10 @@ Env-only config is not reflected until the target process restarts.
 | ----------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ----------------------------------------- |
 | Repository/GitHub | `REPO_MODE`, `REPO_URL`, `BASE_BRANCH`, `GITHUB_*`                                           | API preflight, Planner, Dispatcher, Worker, Judge        | After target process restart              |
 | Execution/launch  | `EXECUTION_ENVIRONMENT`, `SANDBOX_DOCKER_*`                                                  | API process manager, Dispatcher launcher, sandbox worker | After Dispatcher restart (from new tasks) |
-| Planner           | `PLANNER_*`, `AUTO_REPLAN`, `REPLAN_*`                                                       | Planner, Cycle Manager                                   | After Planner / Cycle Manager restart     |
+| Planner           | `PLANNER_*`, `PLANNER_LLM_EXECUTOR`, `LLM_EXECUTOR`, `AUTO_REPLAN`, `REPLAN_*`              | Planner, Cycle Manager                                   | After Planner / Cycle Manager restart     |
 | Dispatcher        | `MAX_CONCURRENT_WORKERS`, `POLL_INTERVAL_MS`, `DISPATCH_*`                                   | Dispatcher                                               | After Dispatcher restart                  |
-| Worker execution  | `WORKER_*`, `TESTER_*`, `DOCSER_*`, `LLM_EXECUTOR`, `CLAUDE_CODE_*`, `CODEX_*`, `OPENCODE_*` | Worker/Tester/Docser                                     | After target agent restart                |
-| Judge             | `JUDGE_*`, `JUDGE_MODE`                                                                      | Judge                                                    | After Judge restart                       |
+| Worker execution  | `WORKER_*`, `TESTER_*`, `DOCSER_*`, `WORKER_LLM_EXECUTOR`, `TESTER_LLM_EXECUTOR`, `DOCSER_LLM_EXECUTOR`, `LLM_EXECUTOR`, `CLAUDE_CODE_*`, `CODEX_*`, `OPENCODE_*` | Worker/Tester/Docser                                     | After target agent restart                |
+| Judge             | `JUDGE_*`, `JUDGE_LLM_EXECUTOR`, `LLM_EXECUTOR`, `JUDGE_MODE`                                | Judge                                                    | After Judge restart                       |
 | Retry/cleanup     | `FAILED_TASK_*`, `BLOCKED_TASK_*`, `STUCK_RUN_TIMEOUT_MS`                                    | Cycle Manager, API task retry display                    | After Cycle Manager / API restart         |
 
 ### Notes

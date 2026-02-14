@@ -63,14 +63,30 @@ To avoid duplication when reading:
 
 ## 5. Model / Instruction File Resolution Order
 
+Executor resolution order:
+
+| Role    | Executor config (priority)                    |
+| ------- | --------------------------------------------- |
+| worker  | `WORKER_LLM_EXECUTOR` -> `LLM_EXECUTOR`       |
+| tester  | `TESTER_LLM_EXECUTOR` -> `LLM_EXECUTOR`       |
+| docser  | `DOCSER_LLM_EXECUTOR` -> `LLM_EXECUTOR`       |
+| judge   | `JUDGE_LLM_EXECUTOR` -> `LLM_EXECUTOR`        |
+| planner | `PLANNER_LLM_EXECUTOR` -> `LLM_EXECUTOR`      |
+
+(`inherit` means "use `LLM_EXECUTOR`")
+
+Fallback:
+
+- If `LLM_EXECUTOR` is missing or unrecognized, the effective default executor is `claude_code`.
+
 | Role   | Model config (priority)            | Instruction file config (priority)                                 |
 | ------ | ---------------------------------- | ------------------------------------------------------------------ |
 | worker | `WORKER_MODEL` -> `OPENCODE_MODEL` | `WORKER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/base.md`   |
 | tester | `TESTER_MODEL` -> `OPENCODE_MODEL` | `TESTER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/tester.md` |
 | docser | `DOCSER_MODEL` -> `OPENCODE_MODEL` | `DOCSER_INSTRUCTIONS_PATH` -> `apps/worker/instructions/docser.md` |
 
-When `LLM_EXECUTOR=claude_code`, `CLAUDE_CODE_MODEL` takes precedence over role-specific models.
-When `LLM_EXECUTOR=codex`, `CODEX_MODEL` takes precedence over role-specific models.
+When effective executor is `claude_code`, `CLAUDE_CODE_MODEL` takes precedence over role-specific OpenCode models.
+When effective executor is `codex`, `CODEX_MODEL` takes precedence over role-specific OpenCode models.
 
 ## 6. Common State Model
 

@@ -34,6 +34,47 @@ import { startHeartbeat } from "./judge-agent";
 import { runJudgeLoop } from "./judge-loops";
 import { runLocalJudgeLoop } from "./judge-local-loop";
 
+function isClaudeExecutor(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
+  );
+}
+
+function isCodexExecutor(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === "codex" || normalized === "codex-cli" || normalized === "codex_cli";
+}
+
+function resolveJudgeExecutor(): "opencode" | "claude_code" | "codex" {
+  const roleOverride = process.env.JUDGE_LLM_EXECUTOR;
+  const fallback = process.env.LLM_EXECUTOR;
+  if (roleOverride && roleOverride.trim().toLowerCase() !== "inherit") {
+    if (isClaudeExecutor(roleOverride)) {
+      return "claude_code";
+    }
+    if (isCodexExecutor(roleOverride)) {
+      return "codex";
+    }
+    if (roleOverride.trim().toLowerCase() === "opencode") {
+      return "opencode";
+    }
+  }
+  if (isClaudeExecutor(fallback)) {
+    return "claude_code";
+  }
+  if (isCodexExecutor(fallback)) {
+    return "codex";
+  }
+  return "claude_code";
+}
+
 async function loadPolicyConfig(): Promise<Policy> {
   const policyPath =
     process.env.POLICY_PATH ??
@@ -176,6 +217,8 @@ async function main(): Promise<void> {
   }
 
   const agentId = process.env.AGENT_ID ?? "judge-1";
+  const judgeExecutor = resolveJudgeExecutor();
+  process.env.LLM_EXECUTOR = judgeExecutor;
 
   // Build config
   const config = {
@@ -198,7 +241,12 @@ async function main(): Promise<void> {
 
   // Register agent
   setupProcessLogging(agentId, { label: "Judge" });
-  const judgeModel = process.env.JUDGE_MODEL ?? "google/gemini-3-pro-preview";
+  const judgeModel =
+    judgeExecutor === "claude_code"
+      ? (process.env.CLAUDE_CODE_MODEL ?? "claude-opus-4-6")
+      : judgeExecutor === "codex"
+        ? (process.env.CODEX_MODEL ?? "gpt-5.3-codex")
+        : (process.env.JUDGE_MODEL ?? "google/gemini-3-pro-preview");
   await db.delete(agents).where(eq(agents.id, agentId));
 
   await db
@@ -210,7 +258,7 @@ async function main(): Promise<void> {
       lastHeartbeat: new Date(),
       metadata: {
         model: judgeModel, // Judge prefers high-quality model for reviews
-        provider: "gemini",
+        provider: judgeExecutor,
       },
     })
     .onConflictDoUpdate({

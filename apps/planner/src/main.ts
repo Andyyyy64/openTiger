@@ -11,6 +11,47 @@ import { startHeartbeat } from "./planner-heartbeat";
 
 export { planFromContent } from "./planner-runner";
 
+function isClaudeExecutor(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "claude_code" || normalized === "claudecode" || normalized === "claude-code"
+  );
+}
+
+function isCodexExecutor(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized === "codex" || normalized === "codex-cli" || normalized === "codex_cli";
+}
+
+function resolvePlannerExecutor(): "opencode" | "claude_code" | "codex" {
+  const roleOverride = process.env.PLANNER_LLM_EXECUTOR;
+  const fallback = process.env.LLM_EXECUTOR;
+  if (roleOverride && roleOverride.trim().toLowerCase() !== "inherit") {
+    if (isClaudeExecutor(roleOverride)) {
+      return "claude_code";
+    }
+    if (isCodexExecutor(roleOverride)) {
+      return "codex";
+    }
+    if (roleOverride.trim().toLowerCase() === "opencode") {
+      return "opencode";
+    }
+  }
+  if (isClaudeExecutor(fallback)) {
+    return "claude_code";
+  }
+  if (isCodexExecutor(fallback)) {
+    return "codex";
+  }
+  return "claude_code";
+}
+
 // ヘルプを表示
 function showHelp(): void {
   console.log(`
@@ -96,7 +137,14 @@ async function main(): Promise<void> {
   // エージェント登録
   const agentId = process.env.AGENT_ID ?? "planner-1";
   setupProcessLogging(agentId, { label: "Planner" });
-  const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
+  const plannerExecutor = resolvePlannerExecutor();
+  process.env.LLM_EXECUTOR = plannerExecutor;
+  const plannerModel =
+    plannerExecutor === "claude_code"
+      ? (process.env.CLAUDE_CODE_MODEL ?? "claude-opus-4-6")
+      : plannerExecutor === "codex"
+        ? (process.env.CODEX_MODEL ?? "gpt-5.3-codex")
+        : (process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview");
 
   await db
     .insert(agents)
@@ -108,7 +156,7 @@ async function main(): Promise<void> {
       lastHeartbeat: new Date(),
       metadata: {
         model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
-        provider: "gemini",
+        provider: plannerExecutor,
       },
     })
     .onConflictDoUpdate({

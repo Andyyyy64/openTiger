@@ -91,11 +91,26 @@ For runtime details (Docker image/network, sandbox auth, troubleshooting), see `
 - Per-task container isolation
 - Useful when isolation requirements are strict
 
-LLM executor selection is controlled by `LLM_EXECUTOR`:
+LLM executor selection is controlled by `LLM_EXECUTOR` (default) plus optional role overrides:
+
+- `WORKER_LLM_EXECUTOR`
+- `TESTER_LLM_EXECUTOR`
+- `DOCSER_LLM_EXECUTOR`
+- `JUDGE_LLM_EXECUTOR`
+- `PLANNER_LLM_EXECUTOR`
+
+Each role override supports `inherit` to follow `LLM_EXECUTOR`.
+
+Available executor values:
 
 - `claude_code`
 - `codex`
 - `opencode`
+
+Fallback behavior:
+
+- If an override is unset, empty, or `inherit`, that role follows `LLM_EXECUTOR`.
+- If `LLM_EXECUTOR` is unset or unrecognized, runtime resolution falls back to `claude_code`.
 
 ## 4. Scaling Rules
 

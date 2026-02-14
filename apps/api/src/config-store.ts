@@ -339,6 +339,21 @@ async function ensureConfigColumns(): Promise<void> {
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "llm_executor" text DEFAULT 'claude_code' NOT NULL`,
   );
   await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "worker_llm_executor" text DEFAULT 'inherit' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "tester_llm_executor" text DEFAULT 'inherit' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "docser_llm_executor" text DEFAULT 'inherit' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_llm_executor" text DEFAULT 'inherit' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_llm_executor" text DEFAULT 'inherit' NOT NULL`,
+  );
+  await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "claude_code_permission_mode" text DEFAULT 'bypassPermissions' NOT NULL`,
   );
   await db.execute(

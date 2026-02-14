@@ -8,7 +8,7 @@ import {
   type SystemProcess,
 } from "../lib/api";
 import { NeofetchPanel } from "../components/NeofetchPanel";
-import { isClaudeExecutor, isCodexExecutor } from "../lib/llm-executor";
+import { collectConfiguredExecutors } from "../lib/llm-executor";
 
 const MAX_PLANNERS = 1;
 
@@ -135,23 +135,35 @@ export const StartPage: React.FC = () => {
     retry: 0,
     refetchInterval: false,
   });
-  const currentExecutor = config?.config.LLM_EXECUTOR;
-  const shouldCheckClaudeAuth = isClaudeExecutor(currentExecutor);
-  const shouldCheckCodexAuth = isCodexExecutor(currentExecutor);
+  const configuredExecutors = useMemo(() => {
+    if (!config?.config) {
+      return new Set<"claude_code" | "codex" | "opencode">();
+    }
+    return collectConfiguredExecutors(config.config);
+  }, [config?.config]);
+  const activeExecutorSignature = useMemo(
+    () =>
+      Array.from(configuredExecutors)
+        .sort((a, b) => a.localeCompare(b))
+        .join(","),
+    [configuredExecutors],
+  );
+  const shouldCheckClaudeAuth = configuredExecutors.has("claude_code");
+  const shouldCheckCodexAuth = configuredExecutors.has("codex");
   const neofetchOutput =
     neofetchQuery.data?.available && neofetchQuery.data.output
       ? neofetchQuery.data.output
       : undefined;
   const claudeAuthEnvironment = normalizeExecutionEnvironment(config?.config.EXECUTION_ENVIRONMENT);
   const claudeAuthQuery = useQuery({
-    queryKey: ["system", "claude-auth", currentExecutor ?? "", claudeAuthEnvironment],
+    queryKey: ["system", "claude-auth", activeExecutorSignature, claudeAuthEnvironment],
     queryFn: () => systemApi.claudeAuthStatus(claudeAuthEnvironment),
     enabled: shouldCheckClaudeAuth,
     retry: 0,
     refetchInterval: 120000,
   });
   const codexAuthQuery = useQuery({
-    queryKey: ["system", "codex-auth", currentExecutor ?? "", claudeAuthEnvironment],
+    queryKey: ["system", "codex-auth", activeExecutorSignature, claudeAuthEnvironment],
     queryFn: () => systemApi.codexAuthStatus(claudeAuthEnvironment),
     enabled: shouldCheckCodexAuth,
     retry: 0,

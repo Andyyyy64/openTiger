@@ -42,7 +42,22 @@ function resolveExecutor(value: string | undefined): "opencode" | "claude_code" 
   if (isCodexExecutor(value)) {
     return "codex";
   }
-  return "opencode";
+  return "claude_code";
+}
+
+function resolveExecutorForRole(role: string): "opencode" | "claude_code" | "codex" {
+  const defaultExecutor = resolveExecutor(process.env.LLM_EXECUTOR);
+  const normalizedRole = role.trim().toLowerCase();
+  const roleOverride =
+    normalizedRole === "tester"
+      ? process.env.TESTER_LLM_EXECUTOR
+      : normalizedRole === "docser"
+        ? process.env.DOCSER_LLM_EXECUTOR
+        : process.env.WORKER_LLM_EXECUTOR;
+  if (!roleOverride || roleOverride.trim().toLowerCase() === "inherit") {
+    return defaultExecutor;
+  }
+  return resolveExecutor(roleOverride);
 }
 
 function resolveExecutorProvider(executor: "opencode" | "claude_code" | "codex"): string {
@@ -66,7 +81,8 @@ async function main() {
   const repoUrl = process.env.REPO_URL ?? "";
   const baseBranch = process.env.BASE_BRANCH ?? "main";
   const repoMode = getRepoMode();
-  const llmExecutor = resolveExecutor(process.env.LLM_EXECUTOR);
+  const llmExecutor = resolveExecutorForRole(agentRole);
+  process.env.LLM_EXECUTOR = llmExecutor;
   const agentModel =
     llmExecutor === "claude_code"
       ? process.env.CLAUDE_CODE_MODEL

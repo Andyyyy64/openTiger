@@ -6,7 +6,15 @@ import { SystemControlPanel } from "./settings/SystemControlPanel";
 import { SettingsConfigSections } from "./settings/SettingsConfigSections";
 import { LLM_EXECUTOR_OPTIONS, type SettingField } from "./settings/constants";
 import { GROUPED_SETTINGS } from "./settings/grouping";
-import { normalizeExecutor } from "../lib/llm-executor";
+import {
+  AGENT_EXECUTOR_CONFIG_KEY_BY_ROLE,
+  AGENT_EXECUTOR_ROLES,
+  INHERIT_EXECUTOR_TOKEN,
+  collectConfiguredExecutors,
+  normalizeExecutor,
+  resolveRoleExecutor,
+  type AgentExecutorRole,
+} from "../lib/llm-executor";
 
 const EXECUTOR_MODEL_KEYS = new Set([
   "WORKER_MODEL",
@@ -16,6 +24,23 @@ const EXECUTOR_MODEL_KEYS = new Set([
   "PLANNER_MODEL",
 ]);
 const API_KEY_KEYS = new Set(["GEMINI_API_KEY", "DEEPSEEK_API_KEY", "XAI_API_KEY"]);
+const AGENT_EXECUTOR_LABELS: Record<AgentExecutorRole, string> = {
+  planner: "planner",
+  judge: "judge",
+  worker: "worker",
+  tester: "tester",
+  docser: "docser",
+};
+const AGENT_EXECUTOR_SETTINGS = AGENT_EXECUTOR_ROLES.map((role) => ({
+  role,
+  key: AGENT_EXECUTOR_CONFIG_KEY_BY_ROLE[role],
+  label: AGENT_EXECUTOR_LABELS[role],
+}));
+const HIDDEN_EXECUTOR_KEYS = new Set(["LLM_EXECUTOR", ...AGENT_EXECUTOR_SETTINGS.map((item) => item.key)]);
+
+function formatExecutorLabel(value: string): string {
+  return value === "claude_code" ? "claudecode" : value;
+}
 
 export const SettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
@@ -34,6 +59,7 @@ export const SettingsPage: React.FC = () => {
   const [viewerOwnerApplied, setViewerOwnerApplied] = useState(false);
   const [latestRepoAutofilled, setLatestRepoAutofilled] = useState(false);
   const [ghDefaultsSaved, setGhDefaultsSaved] = useState(false);
+  const [isAgentOverridesOpen, setIsAgentOverridesOpen] = useState(false);
 
   useEffect(() => {
     if (data?.config) {
@@ -41,7 +67,14 @@ export const SettingsPage: React.FC = () => {
     }
   }, [data]);
 
-  const selectedExecutor = normalizeExecutor(values.LLM_EXECUTOR);
+  const defaultExecutor = normalizeExecutor(values.LLM_EXECUTOR);
+  const configuredExecutors = useMemo(
+    () => collectConfiguredExecutors(values),
+    [values],
+  );
+  const usesOpenCode = configuredExecutors.has("opencode");
+  const usesCodex = configuredExecutors.has("codex");
+  const usesClaudeCode = configuredExecutors.has("claude_code");
   const githubAuthMode = (values.GITHUB_AUTH_MODE ?? "gh").trim().toLowerCase();
   const requiresGithubToken = githubAuthMode === "token";
   const hasGithubAuth = requiresGithubToken ? Boolean(values.GITHUB_TOKEN?.trim()) : true;
@@ -112,41 +145,41 @@ export const SettingsPage: React.FC = () => {
   );
 
   const grouped = useMemo<[string, SettingField[]][]>(() => {
-    // Swap only executor-dependent items; always show common settings
+    // Swap executor-dependent items based on the active per-agent executor set
     return GROUPED_SETTINGS.map(([group, fields]) => {
       const filteredFields = fields.filter((field) => {
-        if (field.key === "LLM_EXECUTOR") {
+        if (HIDDEN_EXECUTOR_KEYS.has(field.key)) {
           return false;
         }
         if (field.key === "GITHUB_TOKEN") {
           return githubAuthMode === "token";
         }
         if (field.key.startsWith("OPENCODE_")) {
-          return selectedExecutor === "opencode";
+          return usesOpenCode;
         }
         if (field.key.startsWith("CODEX_")) {
-          return selectedExecutor === "codex";
+          return usesCodex;
         }
         if (EXECUTOR_MODEL_KEYS.has(field.key)) {
-          return selectedExecutor === "opencode";
+          return usesOpenCode;
         }
         if (field.key === "ANTHROPIC_API_KEY") {
-          return selectedExecutor !== "codex";
+          return usesOpenCode || usesClaudeCode;
         }
         if (field.key === "OPENAI_API_KEY") {
-          return selectedExecutor === "opencode" || selectedExecutor === "codex";
+          return usesOpenCode || usesCodex;
         }
         if (API_KEY_KEYS.has(field.key)) {
-          return selectedExecutor === "opencode";
+          return usesOpenCode;
         }
         if (field.key.startsWith("CLAUDE_CODE_")) {
-          return selectedExecutor === "claude_code";
+          return usesClaudeCode;
         }
         return true;
       });
       return [group, filteredFields] as [string, SettingField[]];
     }).filter(([, fields]) => fields.length > 0);
-  }, [githubAuthMode, selectedExecutor]);
+  }, [githubAuthMode, usesOpenCode, usesCodex, usesClaudeCode]);
 
   const syncGhDefaultsMutation = useMutation({
     mutationFn: (updates: Record<string, string>) => configApi.update(updates),
@@ -401,10 +434,11 @@ export const SettingsPage: React.FC = () => {
         <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">
           <h2 className="text-sm font-bold uppercase tracking-wider">Executor_Selector</h2>
         </div>
-        <div className="p-4 space-y-3 font-mono text-sm">
-          <div className="max-w-xs">
+        <div className="p-4 space-y-4 font-mono text-sm">
+          <div className="space-y-1 max-w-xs">
+            <div className="text-[10px] uppercase tracking-wide text-zinc-500">Default</div>
             <select
-              value={selectedExecutor}
+              value={defaultExecutor}
               onChange={(event) =>
                 updateValue("LLM_EXECUTOR", normalizeExecutor(event.target.value))
               }
@@ -412,13 +446,93 @@ export const SettingsPage: React.FC = () => {
             >
               {LLM_EXECUTOR_OPTIONS.map((option) => (
                 <option key={option} value={option}>
-                  {option === "claude_code" ? "claudecode" : option}
+                  {formatExecutorLabel(option)}
                 </option>
               ))}
             </select>
           </div>
+          <div
+            className={`border transition-colors ${
+              isAgentOverridesOpen
+                ? "border-term-tiger/70 bg-term-tiger/5"
+                : "border-term-border/60 hover:border-term-tiger/50"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => setIsAgentOverridesOpen((prev) => !prev)}
+              aria-expanded={isAgentOverridesOpen}
+              className="w-full px-3 py-2 text-xs text-zinc-300 flex items-center justify-between cursor-pointer"
+            >
+              <span className="flex items-center gap-2">
+                <span className="text-term-tiger font-bold">
+                  {isAgentOverridesOpen ? "[-]" : "[+]"}
+                </span>
+                <span>
+                  {isAgentOverridesOpen
+                    ? "Per_Agent_Overrides (click to close)"
+                    : "Per_Agent_Overrides (click to open)"}
+                </span>
+              </span>
+              <span className="text-[10px] text-zinc-500">{AGENT_EXECUTOR_SETTINGS.length} agents</span>
+            </button>
+            {isAgentOverridesOpen && (
+              <div className="px-3 pb-3 pt-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {AGENT_EXECUTOR_SETTINGS.map((item) => {
+                  const roleValue = values[item.key];
+                  const hasRoleValue = typeof roleValue === "string" && roleValue.trim().length > 0;
+                  const normalizedRoleValue = roleValue?.trim().toLowerCase();
+                  const selectValue =
+                    !hasRoleValue || normalizedRoleValue === INHERIT_EXECUTOR_TOKEN
+                      ? INHERIT_EXECUTOR_TOKEN
+                      : normalizeExecutor(roleValue, defaultExecutor);
+                  const effectiveExecutor = resolveRoleExecutor(values, item.role);
+                  return (
+                    <label key={item.key} className="space-y-1">
+                      <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+                        {item.label}
+                      </span>
+                      <select
+                        value={selectValue}
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          updateValue(
+                            item.key,
+                            next === INHERIT_EXECUTOR_TOKEN
+                              ? INHERIT_EXECUTOR_TOKEN
+                              : normalizeExecutor(next, defaultExecutor),
+                          );
+                        }}
+                        className="w-full bg-black border border-term-border text-sm text-term-fg px-2 py-1 font-mono focus:border-term-tiger focus:outline-none"
+                      >
+                        <option value={INHERIT_EXECUTOR_TOKEN}>
+                          {INHERIT_EXECUTOR_TOKEN} ({formatExecutorLabel(defaultExecutor)})
+                        </option>
+                        {LLM_EXECUTOR_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {formatExecutorLabel(option)}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="text-[10px] text-zinc-600">
+                        effective: {formatExecutorLabel(effectiveExecutor)}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <div className="text-[10px] text-zinc-500 flex flex-wrap gap-2">
+            <span>// Active executors:</span>
+            {LLM_EXECUTOR_OPTIONS.filter((option) => configuredExecutors.has(option)).map((option) => (
+              <span key={option} className="text-zinc-300">
+                {formatExecutorLabel(option)}
+              </span>
+            ))}
+          </div>
           <div className="text-xs text-zinc-500">
-            {" // Show only settings relevant to the selected executor."}
+            {" // Model/API key sections are filtered by the active per-agent executors."}
           </div>
         </div>
       </section>
