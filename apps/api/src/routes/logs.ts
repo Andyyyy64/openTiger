@@ -3,6 +3,7 @@ import { open, stat, readdir, readFile, writeFile, unlink, readlink } from "node
 import { basename, join, resolve, relative } from "node:path";
 import { getAuthInfo } from "../middleware/index";
 import { canControlSystem } from "./system-auth";
+import { resolveOpenTigerLogDir } from "./log-dir";
 
 export const logsRoute = new Hono();
 
@@ -29,14 +30,8 @@ function sanitizeAgentId(agentId: string): string | null {
 }
 
 function resolveLogDir(): string {
-  if (process.env.OPENTIGER_LOG_DIR) {
-    return process.env.OPENTIGER_LOG_DIR;
-  }
-  if (process.env.OPENTIGER_RAW_LOG_DIR) {
-    return process.env.OPENTIGER_RAW_LOG_DIR;
-  }
   // Use repo root, independent of API working directory
-  return join(resolve(import.meta.dirname, "../../../.."), "raw-logs");
+  return resolveOpenTigerLogDir(join(resolve(import.meta.dirname, "../../../.."), "raw-logs"));
 }
 
 async function pathExists(path: string): Promise<boolean> {
