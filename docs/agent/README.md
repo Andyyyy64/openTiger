@@ -65,13 +65,13 @@ To avoid duplication when reading:
 
 Executor resolution order:
 
-| Role    | Executor config (priority)                    |
-| ------- | --------------------------------------------- |
-| worker  | `WORKER_LLM_EXECUTOR` -> `LLM_EXECUTOR`       |
-| tester  | `TESTER_LLM_EXECUTOR` -> `LLM_EXECUTOR`       |
-| docser  | `DOCSER_LLM_EXECUTOR` -> `LLM_EXECUTOR`       |
-| judge   | `JUDGE_LLM_EXECUTOR` -> `LLM_EXECUTOR`        |
-| planner | `PLANNER_LLM_EXECUTOR` -> `LLM_EXECUTOR`      |
+| Role    | Executor config (priority)               |
+| ------- | ---------------------------------------- |
+| worker  | `WORKER_LLM_EXECUTOR` -> `LLM_EXECUTOR`  |
+| tester  | `TESTER_LLM_EXECUTOR` -> `LLM_EXECUTOR`  |
+| docser  | `DOCSER_LLM_EXECUTOR` -> `LLM_EXECUTOR`  |
+| judge   | `JUDGE_LLM_EXECUTOR` -> `LLM_EXECUTOR`   |
+| planner | `PLANNER_LLM_EXECUTOR` -> `LLM_EXECUTOR` |
 
 (`inherit` means "use `LLM_EXECUTOR`")
 

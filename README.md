@@ -50,7 +50,7 @@ See `docs/plugins.md` for plugin extension architecture.
 
 ## Prerequisites
 
-- Node.js `>=20`
+- Node.js `>=22.12`
 - pnpm `9.x`
 - Docker (for local DB/Redis and sandbox execution mode)
 

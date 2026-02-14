@@ -13,7 +13,7 @@ Related:
 
 ## 1. Prerequisites
 
-- Node.js `>=20`
+- Node.js `>=22.12`
 - pnpm `9.x`
 - Docker
 - GitHub CLI (`gh`) recommended
