@@ -131,6 +131,7 @@ Cycle Manager adjusts the command and requeues instead of infinite block.
 
 - `requeue-failed`:
   - `verification_command_unsupported_format` / `verification_command_missing_script`
+  - `verification_command_no_test_files`
   - `verification_command_missing_make_target`
     - Remove failed command from `commands` and requeue
   - `verification_command_sequence_issue`
@@ -246,10 +247,12 @@ Related queue recovery events:
   - `policy_allowed_paths_adjusted`
   - `policy_allowed_paths_adjusted_from_blocked`
   - `verification_command_missing_script_adjusted`
+  - `verification_command_no_test_files_adjusted`
   - `verification_command_missing_make_target_adjusted`
   - `verification_command_unsupported_format_adjusted`
   - `verification_command_sequence_adjusted`
   - `verification_command_missing_script_adjusted_from_blocked`
+  - `verification_command_no_test_files_adjusted_from_blocked`
   - `verification_command_missing_make_target_adjusted_from_blocked`
   - `verification_command_unsupported_format_adjusted_from_blocked`
   - `verification_command_sequence_adjusted_from_blocked`

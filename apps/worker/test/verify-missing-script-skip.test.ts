@@ -7,12 +7,18 @@ import {
 import { FAILURE_CODE } from "@openTiger/core";
 
 const originalSkipEnv = process.env.WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT;
+const originalAutoNonBlockingEnv = process.env.WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS;
 
 afterEach(() => {
   if (originalSkipEnv === undefined) {
     delete process.env.WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT;
   } else {
     process.env.WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT = originalSkipEnv;
+  }
+  if (originalAutoNonBlockingEnv === undefined) {
+    delete process.env.WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS;
+  } else {
+    process.env.WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS = originalAutoNonBlockingEnv;
   }
 });
 
@@ -205,6 +211,7 @@ describe("shouldSkipAutoCommandFailure", () => {
       output: missingMakeTargetOutput,
       hasRemainingCommands: false,
       hasPriorEffectiveCommand: true,
+      hasPriorExplicitCommandPass: false,
       isDocOnlyChange: false,
       isNoOpChange: false,
     });
@@ -219,6 +226,7 @@ describe("shouldSkipAutoCommandFailure", () => {
       output: missingScriptOutput,
       hasRemainingCommands: true,
       hasPriorEffectiveCommand: false,
+      hasPriorExplicitCommandPass: false,
       isDocOnlyChange: false,
       isNoOpChange: false,
     });
@@ -233,6 +241,7 @@ describe("shouldSkipAutoCommandFailure", () => {
       output: missingMakeTargetOutput,
       hasRemainingCommands: false,
       hasPriorEffectiveCommand: false,
+      hasPriorExplicitCommandPass: false,
       isDocOnlyChange: false,
       isNoOpChange: false,
     });
@@ -247,6 +256,7 @@ describe("shouldSkipAutoCommandFailure", () => {
       output: noTestFilesOutput,
       hasRemainingCommands: false,
       hasPriorEffectiveCommand: true,
+      hasPriorExplicitCommandPass: false,
       isDocOnlyChange: false,
       isNoOpChange: false,
     });
@@ -261,6 +271,53 @@ describe("shouldSkipAutoCommandFailure", () => {
       output: noTestFilesOutput,
       hasRemainingCommands: false,
       hasPriorEffectiveCommand: false,
+      hasPriorExplicitCommandPass: false,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(false);
+  });
+
+  it("skips unknown auto command failure when explicit verification already passed", () => {
+    const shouldSkip = shouldSkipAutoCommandFailure({
+      source: "auto",
+      command: "pnpm run test",
+      output: "Unexpected framework failure signature",
+      hasRemainingCommands: false,
+      hasPriorEffectiveCommand: true,
+      hasPriorExplicitCommandPass: true,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(true);
+  });
+
+  it("does not skip unknown auto command failure when explicit verification did not pass", () => {
+    const shouldSkip = shouldSkipAutoCommandFailure({
+      source: "auto",
+      command: "pnpm run test",
+      output: "Unexpected framework failure signature",
+      hasRemainingCommands: false,
+      hasPriorEffectiveCommand: true,
+      hasPriorExplicitCommandPass: false,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(false);
+  });
+
+  it("can disable unknown auto command non-blocking fallback", () => {
+    process.env.WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS = "false";
+    const shouldSkip = shouldSkipAutoCommandFailure({
+      source: "auto",
+      command: "pnpm run test",
+      output: "Unexpected framework failure signature",
+      hasRemainingCommands: false,
+      hasPriorEffectiveCommand: true,
+      hasPriorExplicitCommandPass: true,
       isDocOnlyChange: false,
       isNoOpChange: false,
     });

@@ -74,6 +74,7 @@ Main config:
 - `WORKER_VERIFY_PLAN_PARSE_RETRIES`
 - `WORKER_VERIFY_RECONCILE_TIMEOUT_SECONDS`
 - `WORKER_VERIFY_SKIP_INVALID_AUTO_COMMAND` (default: `true`)
+- `WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS` (default: `true`)
 
 For docser, restricted to doc-safe commands (e.g. `pnpm run check`).
 
@@ -110,6 +111,8 @@ Supported adjustment reasons:
 
 - `verification_command_missing_script`
   - Drops the failed explicit command to allow fallback verification.
+- `verification_command_no_test_files`
+  - Drops failed test command when runner reports there are no test files.
 - `verification_command_missing_make_target`
   - Drops failed `make <target>` verification command when target is unavailable.
 - `verification_command_unsupported_format`

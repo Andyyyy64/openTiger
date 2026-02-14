@@ -1047,7 +1047,6 @@ ${clippedDiff || "(diff unavailable)"}
           output,
           hasRemainingCommands,
           hasPriorEffectiveCommand: ranEffectiveCommand,
-          hasPriorExplicitCommandPass: ranExplicitEffectiveCommand,
           isDocOnlyChange,
           isNoOpChange,
         })
@@ -1071,6 +1070,7 @@ ${clippedDiff || "(diff unavailable)"}
           output,
           hasRemainingCommands,
           hasPriorEffectiveCommand: ranEffectiveCommand,
+          hasPriorExplicitCommandPass: ranExplicitEffectiveCommand,
           isDocOnlyChange,
           isNoOpChange,
         })
