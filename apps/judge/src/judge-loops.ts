@@ -34,7 +34,6 @@ import {
   isImportedPrReviewTask,
   recoverAwaitingJudgeBacklog,
   claimRunForJudgement,
-  requeueTaskAfterJudge,
 } from "./judge-retry";
 
 function hasActiveAutoFix(reason: string): boolean {
