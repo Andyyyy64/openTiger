@@ -171,8 +171,8 @@ Usage:
 
 TigerResearch-specific first triage:
 
-1. `GET /research/jobs`
-2. `GET /research/jobs/:id`
+1. `GET /plugins/tiger-research/jobs`
+2. `GET /plugins/tiger-research/jobs/:id`
 3. `GET /tasks` (filter `kind=research`)
 4. `GET /runs` + `GET /logs/all`
 

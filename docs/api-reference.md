@@ -53,7 +53,7 @@ Main targets:
 | Recovery/maintenance | `POST /system/cleanup`, `POST /logs/clear`                                                                   |
 | GitHub integration   | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github`    |
 | Requirement updates  | `GET /system/requirements`, `POST /system/requirements`                                                      |
-| TigerResearch        | `GET /research/jobs`, `GET /research/jobs/:id`, `POST /research/jobs`, `POST /research/jobs/:id/tasks`       |
+| TigerResearch plugin | `GET /plugins/tiger-research/jobs`, `GET /plugins/tiger-research/jobs/:id`, `POST /plugins/tiger-research/jobs` |
 
 Note:
 
@@ -178,20 +178,22 @@ Note:
 - `GET /logs/all`
 - `POST /logs/clear`
 
-### TigerResearch
+### TigerResearch (Plugin)
 
-- `GET /research/jobs`
+- `GET /plugins/tiger-research/jobs`
   - Query params: `status`, `limit`
-- `GET /research/jobs/:id`
+- `GET /plugins/tiger-research/jobs/:id`
   - Returns job + claims + evidence + reports + linked tasks/runs
-- `POST /research/jobs`
+- `POST /plugins/tiger-research/jobs`
   - Creates research job
   - Ensures runtime and planner startup
   - On planner startup failure, fallback `plan` task is created
-- `POST /research/jobs/:id/tasks`
+- `POST /plugins/tiger-research/jobs/:id/tasks`
   - Manual stage task injection (`plan`/`collect`/`challenge`/`write`)
-- `DELETE /research/jobs`
+- `DELETE /plugins/tiger-research/jobs`
   - Deletes all research jobs and linked runtime rows
+
+Backward-compatible aliases under `/research/*` are still available.
 
 ### Webhook / GitHub
 

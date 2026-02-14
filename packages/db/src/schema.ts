@@ -54,65 +54,6 @@ export const artifacts = pgTable("artifacts", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
-// Research jobs: top-level work units for research workflow
-export const researchJobs = pgTable("research_jobs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  query: text("query").notNull(),
-  qualityProfile: text("quality_profile").default("high_precision").notNull(),
-  status: text("status").default("queued").notNull(), // queued/running/blocked/done/failed/cancelled
-  latestReportId: uuid("latest_report_id"),
-  metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-// Research claims: atomic statements evaluated through evidence
-export const researchClaims = pgTable("research_claims", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  jobId: uuid("job_id")
-    .references(() => researchJobs.id)
-    .notNull(),
-  claimText: text("claim_text").notNull(),
-  stance: text("stance").default("provisional").notNull(), // provisional/confirmed/refuted
-  confidence: integer("confidence").default(0).notNull(), // 0..100
-  originRunId: uuid("origin_run_id").references(() => runs.id),
-  metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-// Research evidence: source records linked to claims and jobs
-export const researchEvidence = pgTable("research_evidence", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  jobId: uuid("job_id")
-    .references(() => researchJobs.id)
-    .notNull(),
-  claimId: uuid("claim_id").references(() => researchClaims.id),
-  sourceUrl: text("source_url"),
-  sourceTitle: text("source_title"),
-  snippet: text("snippet"),
-  publishedAt: timestamp("published_at", { withTimezone: true }),
-  reliability: integer("reliability").default(0).notNull(), // 0..100
-  stance: text("stance").default("supporting").notNull(), // supporting/contradicting/neutral
-  originRunId: uuid("origin_run_id").references(() => runs.id),
-  metadata: jsonb("metadata"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
-// Research reports: synthesized outputs for a research job
-export const researchReports = pgTable("research_reports", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  jobId: uuid("job_id")
-    .references(() => researchJobs.id)
-    .notNull(),
-  summary: text("summary").notNull(),
-  findings: jsonb("findings"),
-  limitations: text("limitations"),
-  confidence: integer("confidence").default(0).notNull(), // 0..100
-  originRunId: uuid("origin_run_id").references(() => runs.id),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
-
 // Leases table: temporary task ownership (lock alternative)
 export const leases = pgTable("leases", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -242,18 +183,6 @@ export type NewRunRecord = typeof runs.$inferInsert;
 export type ArtifactRecord = typeof artifacts.$inferSelect;
 export type NewArtifactRecord = typeof artifacts.$inferInsert;
 
-export type ResearchJobRecord = typeof researchJobs.$inferSelect;
-export type NewResearchJobRecord = typeof researchJobs.$inferInsert;
-
-export type ResearchClaimRecord = typeof researchClaims.$inferSelect;
-export type NewResearchClaimRecord = typeof researchClaims.$inferInsert;
-
-export type ResearchEvidenceRecord = typeof researchEvidence.$inferSelect;
-export type NewResearchEvidenceRecord = typeof researchEvidence.$inferInsert;
-
-export type ResearchReportRecord = typeof researchReports.$inferSelect;
-export type NewResearchReportRecord = typeof researchReports.$inferInsert;
-
 export type LeaseRecord = typeof leases.$inferSelect;
 export type NewLeaseRecord = typeof leases.$inferInsert;
 
@@ -268,3 +197,30 @@ export type NewCycleRecord = typeof cycles.$inferInsert;
 
 export type ConfigRecord = typeof config.$inferSelect;
 export type NewConfigRecord = typeof config.$inferInsert;
+
+export {
+  tigerResearchJobs as researchJobs,
+  tigerResearchClaims as researchClaims,
+  tigerResearchEvidence as researchEvidence,
+  tigerResearchReports as researchReports,
+  tigerResearchJobs,
+  tigerResearchClaims,
+  tigerResearchEvidence,
+  tigerResearchReports,
+  type TigerResearchJobRecord as ResearchJobRecord,
+  type NewTigerResearchJobRecord as NewResearchJobRecord,
+  type TigerResearchClaimRecord as ResearchClaimRecord,
+  type NewTigerResearchClaimRecord as NewResearchClaimRecord,
+  type TigerResearchEvidenceRecord as ResearchEvidenceRecord,
+  type NewTigerResearchEvidenceRecord as NewResearchEvidenceRecord,
+  type TigerResearchReportRecord as ResearchReportRecord,
+  type NewTigerResearchReportRecord as NewResearchReportRecord,
+  type TigerResearchJobRecord,
+  type NewTigerResearchJobRecord,
+  type TigerResearchClaimRecord,
+  type NewTigerResearchClaimRecord,
+  type TigerResearchEvidenceRecord,
+  type NewTigerResearchEvidenceRecord,
+  type TigerResearchReportRecord,
+  type NewTigerResearchReportRecord,
+} from "./plugins/tiger-research";

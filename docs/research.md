@@ -1,6 +1,6 @@
 # TigerResearch Specification
 
-TigerResearch is openTiger's query-driven research subsystem.
+TigerResearch is openTiger's query-driven research plugin.
 It runs a planner-first, claim/evidence convergence loop on top of existing orchestration (`tasks/runs/dispatcher/worker/judge/cycle-manager`).
 
 Related:
@@ -25,14 +25,14 @@ It executes:
 
 Result:
 
-- Claims, evidence, reports are persisted in research tables
+- Claims, evidence, reports are persisted in TigerResearch plugin tables
 - Runtime traceability is preserved via tasks/runs/artifacts/events
 
 ## 2. Architecture (Planner-First)
 
 ```mermaid
 flowchart LR
-  Q[User Query] --> API[POST /research/jobs]
+  Q[User Query] --> API[POST /plugins/tiger-research/jobs]
   API --> PLAN[Planner --research-job]
   PLAN --> RC[(research_claims)]
   PLAN --> T[(tasks kind=research stage=collect)]
@@ -49,7 +49,7 @@ flowchart LR
 
 Key design points:
 
-- Planner-first start (`POST /research/jobs` starts planner with `researchJobId`)
+- Planner-first start (`POST /plugins/tiger-research/jobs` starts planner with `researchJobId`)
 - Worker uses a non-git execution path for `task.kind=research`
 - Manual role selection is not required in UI; research tasks run with `role=worker`
 - Existing code-task pipeline remains unchanged
@@ -60,12 +60,16 @@ Runtime reuse:
 
 - `tasks`, `runs`, `artifacts`, `events`, `leases`, `agents`
 
-Research domain:
+Plugin domain:
 
 - `research_jobs`
 - `research_claims`
 - `research_evidence`
 - `research_reports`
+
+Schema location:
+
+- `packages/db/src/plugins/tiger-research.ts`
 
 Primary linkages:
 
@@ -108,7 +112,7 @@ Typical values:
 
 ## 5.1 Job Creation
 
-`POST /research/jobs` does:
+`POST /plugins/tiger-research/jobs` does:
 
 1. Create `research_jobs` row
 2. Ensure runtime processes for research
@@ -190,19 +194,21 @@ Judge enablement for research:
 
 ## 7. API Endpoints
 
-Research routes:
+Primary plugin routes:
 
-- `GET /research/jobs`
-- `GET /research/jobs/:id`
-- `POST /research/jobs`
-- `POST /research/jobs/:id/tasks`
-- `DELETE /research/jobs`
+- `GET /plugins/tiger-research/jobs`
+- `GET /plugins/tiger-research/jobs/:id`
+- `POST /plugins/tiger-research/jobs`
+- `POST /plugins/tiger-research/jobs/:id/tasks`
+- `DELETE /plugins/tiger-research/jobs`
+
+Backward-compatible alias routes remain available under `/research/*`.
 
 Notes:
 
-- `POST /research/jobs` response includes runtime/planner start result
-- `POST /research/jobs/:id/tasks` is an operator override for manual stage injection
-- `DELETE /research/jobs` deletes research jobs and linked runtime rows in a transaction
+- `POST /plugins/tiger-research/jobs` response includes runtime/planner start result
+- `POST /plugins/tiger-research/jobs/:id/tasks` is an operator override for manual stage injection
+- `DELETE /plugins/tiger-research/jobs` deletes research jobs and linked runtime rows in a transaction
 
 ## 8. Operational Notes
 
@@ -230,12 +236,13 @@ Current behavior:
 
 1. `GET /system/processes`
 2. `GET /agents`
-3. `GET /research/jobs`
+3. `GET /plugins/tiger-research/jobs`
 4. `GET /tasks` (research tasks only)
 5. `GET /runs` + `GET /logs/all`
 
 ## 9. Implementation Reference (Source of Truth)
 
+- API plugin registration: `apps/api/src/plugins/tiger-research.ts`
 - API routes: `apps/api/src/routes/research.ts`
 - Runtime bootstrap: `apps/api/src/routes/research-runtime.ts`
 - Planner research strategy: `apps/planner/src/strategies/from-research-query.ts`

@@ -24,6 +24,7 @@ all under explicit runtime state transitions.
 - Role-based execution (`worker` / `tester` / `docser`)
 - PR and local-worktree judgement (`judge`)
 - Query-driven TigerResearch (`planner-first` claim/evidence convergence)
+- Plugin-first feature expansion (TigerResearch as the reference plugin)
 - Recovery-first operation (`quota_wait`, `awaiting_judge`, `needs_rework`)
 - Backlog-first startup (Issue/PR backlog is processed before new planning)
 - Dashboard + API for process control, logs, and system config
@@ -41,6 +42,7 @@ all under explicit runtime state transitions.
 
 See `docs/architecture.md` for component-level details.
 See `docs/research.md` for TigerResearch design and operation.
+See `docs/plugins.md` for plugin extension architecture.
 
 ## Prerequisites
 
@@ -109,7 +111,7 @@ pnpm run up
    - `runs`
    - `judgements`
    - `logs`
-7. (Optional) Run TigerResearch from the `research` page:
+7. (Optional) Run TigerResearch from the `plugins` page:
    - submit query -> planner decomposition -> parallel collect/challenge/write -> report
    - details: `docs/research.md`
 8. If state becomes stalled:
@@ -163,6 +165,7 @@ Runtime behavior reference:
 - `docs/policy-recovery.md`
 - `docs/verification.md`
 - `docs/research.md`
+- `docs/plugins.md`
 
 Agent specification reference:
 

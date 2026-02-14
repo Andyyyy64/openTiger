@@ -63,7 +63,7 @@ export const ResearchJobDetailsPage: React.FC = () => {
   return (
     <div className="p-6 text-term-fg max-w-6xl mx-auto">
       <Link
-        to="/research"
+        to="/plugins/tiger-research"
         className="inline-block text-xs text-zinc-500 hover:text-term-tiger mb-6"
       >
         &lt; back_to_research

@@ -578,18 +578,20 @@ export const judgementsApi = {
 };
 
 // Research-related
+const TIGER_RESEARCH_API_BASE = "/plugins/tiger-research";
+
 export const researchApi = {
   listJobs: (params?: { status?: string; limit?: number }) => {
     const query = new URLSearchParams();
     if (params?.status) query.set("status", params.status);
     if (params?.limit !== undefined) query.set("limit", String(params.limit));
     const suffix = query.toString();
-    return fetchApi<{ jobs: ResearchJob[] }>(`/research/jobs${suffix ? `?${suffix}` : ""}`).then(
-      (res) => res.jobs,
-    );
+    return fetchApi<{ jobs: ResearchJob[] }>(
+      `${TIGER_RESEARCH_API_BASE}/jobs${suffix ? `?${suffix}` : ""}`,
+    ).then((res) => res.jobs);
   },
   getJob: (id: string) =>
-    fetchApi<ResearchJobDetails>(`/research/jobs/${id}`).then((res) => ({
+    fetchApi<ResearchJobDetails>(`${TIGER_RESEARCH_API_BASE}/jobs/${id}`).then((res) => ({
       ...res,
       tasks: res.tasks as TaskView[],
     })),
@@ -599,17 +601,17 @@ export const researchApi = {
       runtime: { started: string[]; skipped: string[]; errors: string[] };
       planner: { started: string[]; skipped: string[]; errors: string[] };
       fallbackTask?: TaskView;
-    }>("/research/jobs", {
+    }>(`${TIGER_RESEARCH_API_BASE}/jobs`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   createTask: (jobId: string, payload: CreateResearchTaskInput) =>
-    fetchApi<{ task: TaskView }>(`/research/jobs/${jobId}/tasks`, {
+    fetchApi<{ task: TaskView }>(`${TIGER_RESEARCH_API_BASE}/jobs/${jobId}/tasks`, {
       method: "POST",
       body: JSON.stringify(payload),
     }).then((res) => res.task),
   deleteAllJobs: () =>
-    fetchApi<{ deleted: number; jobs: number; tasks: number }>("/research/jobs", {
+    fetchApi<{ deleted: number; jobs: number; tasks: number }>(`${TIGER_RESEARCH_API_BASE}/jobs`, {
       method: "DELETE",
     }),
 };

@@ -16,9 +16,9 @@ import { judgementsRoute } from "./routes/judgements";
 import { logsRoute } from "./routes/logs";
 import { configRoute } from "./routes/config";
 import { systemRoute } from "./routes/system";
-import { researchRoute } from "./routes/research";
 import { authMiddleware, rateLimitMiddleware } from "./middleware/index";
 import { resolveProcessDefinition } from "./routes/system-process-manager/definitions";
+import { listApiPlugins, registerApiPlugins } from "./plugins";
 import {
   forceTerminateUnmanagedSystemProcesses,
   stopManagedProcess,
@@ -46,7 +46,7 @@ app.route("/judgements", judgementsRoute);
 app.route("/logs", logsRoute);
 app.route("/config", configRoute);
 app.route("/system", systemRoute);
-app.route("/research", researchRoute);
+registerApiPlugins(app);
 
 // ルートパス
 app.get("/", (c) => {
@@ -54,6 +54,12 @@ app.get("/", (c) => {
     name: "openTiger",
     version: "0.1.0",
     description: "AI Agent Orchestration System",
+  });
+});
+
+app.get("/plugins", (c) => {
+  return c.json({
+    plugins: listApiPlugins(),
   });
 });
 

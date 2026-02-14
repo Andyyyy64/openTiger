@@ -11,6 +11,7 @@ With source code as the source of truth, information necessary for operations is
 | Want to grasp the overview                                         | `docs/architecture.md`                                            |
 | Want to tune config keys                                           | `docs/config.md`                                                  |
 | Want API integration                                               | `docs/api-reference.md`                                           |
+| Want to build your own plugin                                     | `docs/plugins.md`                                                 |
 | Need incident response                                             | `docs/operations.md` + `docs/flow.md`                             |
 | Quick initial diagnosis of stalled state                           | `docs/state-model.md`                                             |
 | Immediate lookup of `retry.reason` meanings                        | `docs/state-model.md`                                             |
@@ -70,6 +71,7 @@ Goals:
 3. `docs/flow.md`
 4. `docs/api-reference.md`
 5. `docs/operations.md`
+6. `docs/plugins.md`
 
 Goals:
 
@@ -130,6 +132,8 @@ Goals:
   - Improvement idea notes (future plans)
 - `docs/research.md`
   - Query-driven research subsystem specification
+- `docs/plugins.md`
+  - Plugin registry and extension implementation guide
 
 ## Recommended Reading Order (Shortest)
 

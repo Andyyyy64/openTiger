@@ -146,10 +146,10 @@ First-time users can triage by:
 
 ## 10. First TigerResearch Run (Optional)
 
-1. Open Dashboard `research` page
+1. Open Dashboard `plugins` page and select `tiger-research`
 2. Submit a query via `CREATE_JOB`
 3. Confirm planner-first kickoff:
-   - `GET /research/jobs`
+   - `GET /plugins/tiger-research/jobs`
    - `GET /system/processes` (planner/dispatcher/cycle-manager/worker)
 4. Open job detail and confirm:
    - claims are created

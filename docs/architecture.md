@@ -12,6 +12,7 @@ Related:
 - `docs/mode.md`
 - `docs/execution-mode.md`
 - `docs/research.md`
+- `docs/plugins.md`
 
 ## 0. Runtime Control Loop (Overview)
 
@@ -31,9 +32,9 @@ flowchart LR
 
 This loop prioritizes "never stopping"; on failure, recovery strategy is switched via state transition.
 
-TigerResearch is implemented as a planner-first specialization on top of the same loop:
+TigerResearch is implemented as a planner-first plugin specialization on top of the same loop:
 
-- entry via `POST /research/jobs`
+- entry via `POST /plugins/tiger-research/jobs`
 - planner decomposition via `--research-job`
 - runtime execution via `tasks.kind=research`
 - convergence via Cycle Manager + Judge
@@ -103,11 +104,11 @@ After understanding the architecture, when investigating incidents, tracing in t
 
 ### TigerResearch Subsystem (Cross-Cutting)
 
-- Query entry and job lifecycle API (`/research/*`)
+- Query entry and job lifecycle API (`/plugins/tiger-research/*`)
 - Planner-first claim decomposition
 - Claim-level parallel collection/challenge/write tasks
 - Research quality convergence loop
-- Full UI observability in research pages
+- Full UI observability from dashboard `plugins` section
 
 ## 2. Data Stores
 
@@ -123,10 +124,7 @@ Main tables:
 - `agents`
 - `cycles`
 - `config`
-- `research_jobs`
-- `research_claims`
-- `research_evidence`
-- `research_reports`
+- TigerResearch plugin tables (`packages/db/src/plugins/tiger-research.ts`)
 
 ### Message Queue (Redis / BullMQ)
 
@@ -145,7 +143,7 @@ Main tables:
 
 TigerResearch path:
 
-1. API creates `research_jobs`
+1. API creates plugin job row (`research_jobs`)
 2. Planner decomposes query to claims
 3. Dispatcher/Worker execute research tasks in parallel
 4. Cycle Manager drives collect/challenge/write/rework

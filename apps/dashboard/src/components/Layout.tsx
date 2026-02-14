@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { systemApi, runsApi } from "../lib/api";
+import { dashboardPlugins } from "../plugins/registry";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -22,6 +23,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   });
 
   const isHealthy = health?.status === "ok" && !isHealthError;
+  const pluginSubItems = dashboardPlugins.flatMap((plugin) => plugin.navItems);
 
   return (
     <div className="flex flex-col h-screen font-pixel text-term-fg bg-term-bg overflow-hidden">
@@ -71,9 +73,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 ]}
               />
               <NavItem to="/logs" label="logs" />
-              <div className="mt-6">
-                <NavItem to="/research" label="research" />
-              </div>
+              <NavCollapsible parentTo="/plugins" parentLabel="plugins" subItems={pluginSubItems} />
             </div>
           </nav>
 

@@ -167,7 +167,7 @@ export const ResearchPage: React.FC = () => {
                   <tr key={job.id} className="hover:bg-term-tiger/5">
                     <td className="px-4 py-2 align-top">
                       <Link
-                        to={`/research/${job.id}`}
+                        to={`/plugins/tiger-research/${job.id}`}
                         className="text-term-fg hover:text-term-tiger font-bold"
                       >
                         {job.query}

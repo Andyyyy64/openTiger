@@ -205,10 +205,10 @@ To trace implementation, use the "Implementation reference (source of truth)" se
 
 ## 11. TigerResearch Lifecycle (Planner-First)
 
-1. `POST /research/jobs` creates a research job and requests planner start with `researchJobId`
+1. `POST /plugins/tiger-research/jobs` creates a research job and requests planner start with `researchJobId`
 2. Planner decomposes query into claims and enqueues claim-level `collect` tasks
 3. Dispatcher runs those tasks in parallel (`tasks.kind=research`)
-4. Worker persists claims/evidence/report artifacts in research tables
+4. Worker persists claims/evidence/report artifacts in TigerResearch plugin tables
 5. Cycle Manager orchestrates stage transitions:
    - `planning` -> `collecting` -> `challenging` -> `composing` -> `judging`/`reworking`
 6. Judge (if `RESEARCH_REQUIRE_JUDGE=true`) applies research verdict:

@@ -11,6 +11,10 @@
     "./schema": {
       "types": "./dist/schema.d.ts",
       "import": "./dist/schema.js"
+    },
+    "./plugins/tiger-research": {
+      "types": "./dist/plugins/tiger-research.d.ts",
+      "import": "./dist/plugins/tiger-research.js"
     }
   },
   "scripts": {

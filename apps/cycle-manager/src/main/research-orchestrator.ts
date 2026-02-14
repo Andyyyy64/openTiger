@@ -1,11 +1,5 @@
 import { db } from "@openTiger/db";
-import {
-  researchClaims,
-  researchEvidence,
-  researchJobs,
-  researchReports,
-  tasks,
-} from "@openTiger/db/schema";
+import { researchClaims, researchEvidence, researchJobs, researchReports, tasks } from "@openTiger/db/schema";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 type ResearchStage = "plan" | "collect" | "challenge" | "write";

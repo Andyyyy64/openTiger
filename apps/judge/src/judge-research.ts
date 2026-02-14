@@ -1,10 +1,5 @@
 import { db } from "@openTiger/db";
-import {
-  researchClaims,
-  researchEvidence,
-  researchJobs,
-  researchReports,
-} from "@openTiger/db/schema";
+import { researchClaims, researchEvidence, researchJobs, researchReports } from "@openTiger/db/schema";
 import { desc, eq } from "drizzle-orm";
 import type { EvaluationSummary, JudgeResult } from "./pr-reviewer";
 import type { PendingResearchRun } from "./judge-pending";
