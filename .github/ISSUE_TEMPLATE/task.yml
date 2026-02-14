@@ -10,9 +10,13 @@ body:
       label: Agent Role
       description: Select exactly one agent role for this task.
       options:
+        - planner
+        - dispatcher
         - worker
         - tester
         - docser
+        - judge
+        - cycle-manager
     validations:
       required: true
 
@@ -51,5 +55,5 @@ body:
     attributes:
       value: |
         Role parsing notes for automation:
-        - Add one of these labels to the issue: `role:worker`, `role:tester`, `role:docser`
-        - Or add an inline line in body: `Agent: worker` (or tester/docser)
+        - Add one of these labels to the issue: `role:planner`, `role:dispatcher`, `role:worker`, `role:tester`, `role:docser`, `role:judge`, `role:cycle-manager`
+        - Or add an inline line in body: `Agent: planner` (or dispatcher/worker/tester/docser/judge/cycle-manager)
