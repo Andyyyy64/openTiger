@@ -101,6 +101,13 @@ export function classifyFailureByCode(failureCode: string): FailureClassificatio
       reason: FAILURE_CODE.VERIFICATION_COMMAND_MISSING_SCRIPT,
     };
   }
+  if (code === FAILURE_CODE.VERIFICATION_COMMAND_NO_TEST_FILES) {
+    return {
+      category: "setup",
+      retryable: false,
+      reason: FAILURE_CODE.VERIFICATION_COMMAND_NO_TEST_FILES,
+    };
+  }
   if (code === FAILURE_CODE.VERIFICATION_COMMAND_MISSING_MAKE_TARGET) {
     return {
       category: "setup",
@@ -207,6 +214,16 @@ export function classifyFailure(
       category: "policy",
       retryable: true,
       reason: FAILURE_CODE.POLICY_VIOLATION,
+    };
+  }
+
+  if (
+    /no test files found|no tests found|no files found matching/.test(message)
+  ) {
+    return {
+      category: "setup",
+      retryable: false,
+      reason: FAILURE_CODE.VERIFICATION_COMMAND_NO_TEST_FILES,
     };
   }
 

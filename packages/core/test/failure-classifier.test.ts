@@ -33,6 +33,30 @@ describe("failure-classifier", () => {
     });
   });
 
+  it("maps structured no-test-files code", () => {
+    const failure = classifyFailure("ignored", {
+      failureCode: "verification_command_no_test_files",
+    });
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: false,
+      reason: "verification_command_no_test_files",
+    });
+  });
+
+  it("maps structured setup_or_bootstrap_issue code", () => {
+    const failure = classifyFailure("ignored", {
+      failureCode: "setup_or_bootstrap_issue",
+    });
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: true,
+      reason: "setup_or_bootstrap_issue",
+    });
+  });
+
   it("falls back to message classification for execution_failed", () => {
     const failure = classifyFailure("Permission required: external_directory", {
       failureCode: "execution_failed",
@@ -52,6 +76,16 @@ describe("failure-classifier", () => {
       category: "setup",
       retryable: false,
       reason: "verification_command_missing_script",
+    });
+  });
+
+  it("classifies no-test-files output as setup failure", () => {
+    const failure = classifyFailure("No test files found, exiting with code 1");
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: false,
+      reason: "verification_command_no_test_files",
     });
   });
 
