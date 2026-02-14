@@ -12,7 +12,7 @@ Related:
 - `docs/agent/planner.md`
 - `docs/agent/worker.md`
 
-### Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Entering from Verification Failure)
+## Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Entering from Verification Failure)
 
 When tracing from verification failure, follow: state vocabulary -> transition -> owner -> implementation.
 
@@ -73,6 +73,7 @@ Main config:
 - `WORKER_VERIFY_PLAN_TIMEOUT_SECONDS`
 - `WORKER_VERIFY_PLAN_PARSE_RETRIES`
 - `WORKER_VERIFY_RECONCILE_TIMEOUT_SECONDS`
+- `WORKER_VERIFY_SKIP_INVALID_AUTO_COMMAND` (default: `true`)
 
 For docser, restricted to doc-safe commands (e.g. `pnpm run check`).
 
@@ -100,7 +101,44 @@ Main config:
 - `WORKER_VERIFY_RECOVERY_ATTEMPTS`
 - `WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT`
 
-## 6. Relation to Policy Violation
+## 6. Verification Recovery (Cycle Manager)
+
+When a failed run is caused by verification command issues, Cycle Manager can adjust
+`task.commands` and requeue the same task without entering policy recovery.
+
+Supported adjustment reasons:
+
+- `verification_command_missing_script`
+  - Drops the failed explicit command to allow fallback verification.
+  - Includes missing make target style failures (`No rule to make target ...`).
+- `verification_command_unsupported_format`
+  - Drops unsupported explicit command syntax (e.g. shell operators / command substitution).
+- `verification_command_sequence_issue`
+  - Reorders conflicting command sequence where cleanup commands run before generated-artifact presence checks.
+
+Requeue event payload includes:
+
+- `reason` (adjustment reason)
+- `recoveryRule` (applied transformation rule)
+- `previousCommands`
+- `nextCommands`
+
+Worker also persists structured failure metadata into `runs.error_meta`:
+
+- `source` (for example: `verification`, `execution`)
+- `failureCode` (for example: `verification_command_missing_script`)
+- command context fields (`failedCommand`, `failedCommandSource`, `failedCommandStderr`) when available
+
+Cycle Manager classifies failures from structured metadata (`errorMeta.failureCode`) and does not
+use message-regex fallback for classification.
+If `failureCode` is missing or unknown, it falls back to `model_or_unknown_failure`.
+
+Retry behavior for requeue:
+
+- Setup/policy/test/model categories default to up to 3 retries.
+- Repeated-signature escalation uses `FAILED_TASK_REPEATED_SIGNATURE_THRESHOLD` (default: `4`).
+
+## 7. Relation to Policy Violation
 
 When policy violation occurs during verification:
 
@@ -111,7 +149,7 @@ When policy violation occurs during verification:
 
 See `docs/policy-recovery.md` for details.
 
-## 7. Operation Observation (Initial Triage)
+## 8. Operation Observation (Initial Triage)
 
 | Symptom                       | First APIs                                         | What to check                                                              |
 | ----------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------- |

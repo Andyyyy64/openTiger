@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { shouldSkipExplicitCommandFailure } from "../src/steps/verify/verify-changes";
+import {
+  shouldSkipAutoCommandFailure,
+  shouldSkipExplicitCommandFailure,
+} from "../src/steps/verify/verify-changes";
 
 const originalSkipEnv = process.env.WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT;
 
@@ -14,6 +17,7 @@ afterEach(() => {
 describe("shouldSkipExplicitCommandFailure", () => {
   const missingScriptOutput = 'npm error Missing script: "dev"';
   const unsupportedFormatOutput = "Unsupported command format. Shell operators are not allowed.";
+  const missingMakeTargetOutput = "make: *** No rule to make target 'test'.  Stop.";
   const missingManifestOutput =
     "npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/tmp/repo/package.json'";
 
@@ -83,6 +87,20 @@ describe("shouldSkipExplicitCommandFailure", () => {
       hasPriorEffectiveCommand: false,
       isDocOnlyChange: false,
       isNoOpChange: true,
+    });
+
+    expect(shouldSkip).toBe(true);
+  });
+
+  it("treats missing make target as skippable explicit setup failure when remaining commands exist", () => {
+    const shouldSkip = shouldSkipExplicitCommandFailure({
+      source: "explicit",
+      command: "make test",
+      output: missingMakeTargetOutput,
+      hasRemainingCommands: true,
+      hasPriorEffectiveCommand: false,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
     });
 
     expect(shouldSkip).toBe(true);
@@ -170,5 +188,52 @@ describe("shouldSkipExplicitCommandFailure", () => {
     });
 
     expect(shouldSkip).toBe(true);
+  });
+});
+
+describe("shouldSkipAutoCommandFailure", () => {
+  const missingScriptOutput = 'npm error Missing script: "verify"';
+  const missingMakeTargetOutput = "make: *** No rule to make target 'test'.  Stop.";
+
+  it("skips invalid auto command when prior effective command already passed", () => {
+    const shouldSkip = shouldSkipAutoCommandFailure({
+      source: "auto",
+      command: "make test",
+      output: missingMakeTargetOutput,
+      hasRemainingCommands: false,
+      hasPriorEffectiveCommand: true,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(true);
+  });
+
+  it("skips invalid auto command when remaining commands exist", () => {
+    const shouldSkip = shouldSkipAutoCommandFailure({
+      source: "auto",
+      command: "pnpm run verify",
+      output: missingScriptOutput,
+      hasRemainingCommands: true,
+      hasPriorEffectiveCommand: false,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(true);
+  });
+
+  it("does not skip auto command when no prior effective command and no remaining commands", () => {
+    const shouldSkip = shouldSkipAutoCommandFailure({
+      source: "auto",
+      command: "make test",
+      output: missingMakeTargetOutput,
+      hasRemainingCommands: false,
+      hasPriorEffectiveCommand: false,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(false);
   });
 });

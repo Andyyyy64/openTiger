@@ -20,6 +20,20 @@ import {
 import { isPrReviewTask } from "./task-context";
 import type { BlockReason } from "./types";
 
+const DEFAULT_REPEATED_FAILURE_SIGNATURE_THRESHOLD = 4;
+
+function resolveRepeatedFailureSignatureThreshold(): number {
+  const parsed = Number.parseInt(
+    process.env.FAILED_TASK_REPEATED_SIGNATURE_THRESHOLD ??
+      String(DEFAULT_REPEATED_FAILURE_SIGNATURE_THRESHOLD),
+    10,
+  );
+  if (!Number.isFinite(parsed) || parsed < 2) {
+    return DEFAULT_REPEATED_FAILURE_SIGNATURE_THRESHOLD;
+  }
+  return parsed;
+}
+
 function extractFailedVerificationCommand(errorMessage: string | null | undefined): string | null {
   const raw = (errorMessage ?? "").trim();
   if (!raw) {
@@ -28,6 +42,70 @@ function extractFailedVerificationCommand(errorMessage: string | null | undefine
   const match = raw.match(/verification failed at\s+(.+?)\s+\[/i);
   const command = match?.[1]?.trim();
   return command && command.length > 0 ? command : null;
+}
+
+function stripWrappingQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length < 2) {
+    return trimmed;
+  }
+  const first = trimmed[0];
+  const last = trimmed[trimmed.length - 1];
+  if ((first === '"' || first === "'") && first === last) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function parseArtifactPresenceCheckPath(command: string): string | null {
+  const trimmed = command.trim();
+  const match = trimmed.match(/^test\s+-(?:f|s)\s+(.+)$/i);
+  if (!match?.[1]) {
+    return null;
+  }
+  const target = stripWrappingQuotes(match[1]);
+  return target.length > 0 ? target : null;
+}
+
+const GENERATED_ARTIFACT_SEGMENTS = new Set([
+  "artifact",
+  "artifacts",
+  "build",
+  "debug",
+  "dist",
+  "out",
+  "release",
+  "target",
+]);
+
+function isLikelyGeneratedArtifactPath(path: string): boolean {
+  const normalized = path.replace(/\\/g, "/").replace(/^\.\//, "").toLowerCase();
+  if (!normalized || normalized.includes("..") || normalized.includes("*")) {
+    return false;
+  }
+  return normalized
+    .split("/")
+    .some((segment) => segment.length > 0 && GENERATED_ARTIFACT_SEGMENTS.has(segment));
+}
+
+function splitCommandTokens(command: string): string[] {
+  return command.trim().split(/\s+/).filter((token) => token.length > 0);
+}
+
+function isCleanLikeCommand(command: string): boolean {
+  const trimmed = command.trim();
+  const tokens = splitCommandTokens(trimmed);
+  const first = tokens[0]?.toLowerCase();
+  if (!first) {
+    return false;
+  }
+  if (first === "make") {
+    return tokens.slice(1).some((token) => /clean/i.test(token));
+  }
+  if (first === "npm" || first === "pnpm" || first === "yarn" || first === "bun") {
+    return /\b(run\s+)?(clean|distclean|clobber)\b/i.test(tokens.slice(1).join(" "));
+  }
+  return false;
 }
 
 function sanitizeCommandsForVerificationFormatIssue(
@@ -48,6 +126,110 @@ function sanitizeCommandsForVerificationFormatIssue(
     return [];
   }
   return filtered;
+}
+
+export function sanitizeCommandsForVerificationSequenceIssue(
+  commands: string[],
+  errorMessage: string | null | undefined,
+): string[] | null {
+  if (commands.length < 2) {
+    return null;
+  }
+  const failedCommand = extractFailedVerificationCommand(errorMessage);
+  if (!failedCommand) {
+    return null;
+  }
+  const normalizedFailed = failedCommand.trim();
+  const failedIndex = commands.findIndex((command) => command.trim() === normalizedFailed);
+  if (failedIndex <= 0) {
+    return null;
+  }
+  const artifactPath = parseArtifactPresenceCheckPath(normalizedFailed);
+  if (!artifactPath || !isLikelyGeneratedArtifactPath(artifactPath)) {
+    return null;
+  }
+  const previousCommand = commands[failedIndex - 1];
+  if (!previousCommand || !isCleanLikeCommand(previousCommand)) {
+    return null;
+  }
+
+  const reordered = [...commands];
+  const [failedEntry] = reordered.splice(failedIndex, 1);
+  if (!failedEntry) {
+    return null;
+  }
+  reordered.splice(failedIndex - 1, 0, failedEntry);
+  return reordered;
+}
+
+type VerificationRecoveryReason =
+  | "verification_command_missing_script"
+  | "verification_command_unsupported_format"
+  | "verification_command_sequence_issue";
+
+type VerificationRecoveryAdjustment = {
+  nextCommands: string[];
+  reasonLabel: string;
+  eventReason:
+    | "verification_command_missing_script_adjusted"
+    | "verification_command_unsupported_format_adjusted"
+    | "verification_command_sequence_adjusted";
+  recoveryRule: "drop_failed_command" | "reorder_clean_and_artifact_check";
+};
+
+function applyVerificationRecoveryAdjustment(params: {
+  reason: VerificationRecoveryReason;
+  commands: string[];
+  errorMessage: string | null | undefined;
+}): VerificationRecoveryAdjustment | null {
+  const strategies: Record<
+    VerificationRecoveryReason,
+    (commands: string[], errorMessage: string | null | undefined) => VerificationRecoveryAdjustment | null
+  > = {
+    verification_command_missing_script: (commands, errorMessage) => ({
+      nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage),
+      reasonLabel: "missing verification script",
+      eventReason: "verification_command_missing_script_adjusted",
+      recoveryRule: "drop_failed_command",
+    }),
+    verification_command_unsupported_format: (commands, errorMessage) => ({
+      nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage),
+      reasonLabel: "unsupported verification command format",
+      eventReason: "verification_command_unsupported_format_adjusted",
+      recoveryRule: "drop_failed_command",
+    }),
+    verification_command_sequence_issue: (commands, errorMessage) => {
+      const nextCommands = sanitizeCommandsForVerificationSequenceIssue(commands, errorMessage);
+      if (!nextCommands) {
+        return null;
+      }
+      return {
+        nextCommands,
+        reasonLabel: "verification command sequence issue",
+        eventReason: "verification_command_sequence_adjusted",
+        recoveryRule: "reorder_clean_and_artifact_check",
+      };
+    },
+  };
+
+  const strategy = strategies[params.reason];
+  if (!strategy) {
+    return null;
+  }
+  const adjustment = strategy(params.commands, params.errorMessage);
+  if (!adjustment) {
+    return null;
+  }
+  if (adjustment.nextCommands.length === 0 && params.commands.length > 0) {
+    return adjustment;
+  }
+  const unchanged =
+    adjustment.nextCommands.length === params.commands.length &&
+    adjustment.nextCommands.every((command, index) => command === params.commands[index]);
+  if (unchanged) {
+    return null;
+  }
+  return adjustment;
 }
 
 function resolvePolicyRecoveryRepoPath(): string {
@@ -95,6 +277,7 @@ export async function requeueFailedTasksWithCooldown(
   }
 
   const policyRecoveryConfig = await loadPolicyRecoveryConfig(resolvePolicyRecoveryRepoPath());
+  const repeatedFailureSignatureThreshold = resolveRepeatedFailureSignatureThreshold();
   let requeued = 0;
 
   for (const task of eligibleTasks) {
@@ -140,13 +323,14 @@ export async function requeueFailedTasksWithCooldown(
     const [latestRun] = await db
       .select({
         errorMessage: runs.errorMessage,
+        errorMeta: runs.errorMeta,
       })
       .from(runs)
       .where(and(eq(runs.taskId, task.id), inArray(runs.status, ["failed", "cancelled"])))
       .orderBy(desc(runs.startedAt))
       .limit(1);
 
-    const failure = classifyFailure(latestRun?.errorMessage ?? null);
+    const failure = classifyFailure(latestRun?.errorMessage ?? null, latestRun?.errorMeta);
     const categoryRetryLimit = resolveCategoryRetryLimit(failure.category);
     const currentRetry = task.retryCount ?? 0;
     const nextRetryCount = currentRetry + 1;
@@ -155,50 +339,50 @@ export async function requeueFailedTasksWithCooldown(
     const repeatedFailure = await hasRepeatedFailureSignature(
       task.id,
       latestRun?.errorMessage ?? null,
+      latestRun?.errorMeta,
+      repeatedFailureSignatureThreshold,
     );
 
     if (
       failure.reason === "verification_command_missing_script" ||
-      failure.reason === "verification_command_unsupported_format"
+      failure.reason === "verification_command_unsupported_format" ||
+      failure.reason === "verification_command_sequence_issue"
     ) {
-      const adjustedCommands = sanitizeCommandsForVerificationFormatIssue(
-        task.commands ?? [],
-        latestRun?.errorMessage ?? null,
-      );
-      const reasonLabel =
-        failure.reason === "verification_command_missing_script"
-          ? "missing verification script"
-          : "unsupported verification command format";
-      const eventReason =
-        failure.reason === "verification_command_missing_script"
-          ? "verification_command_missing_script_adjusted"
-          : "verification_command_unsupported_format_adjusted";
-      await db
-        .update(tasks)
-        .set({
-          status: "queued",
-          blockReason: null,
-          commands: adjustedCommands,
-          retryCount: nextRetryCount,
-          updatedAt: new Date(),
-        })
-        .where(eq(tasks.id, task.id));
-      await recordEvent({
-        type: "task.requeued",
-        entityType: "task",
-        entityId: task.id,
-        payload: {
-          reason: eventReason,
-          retryCount: nextRetryCount,
-          previousCommands: task.commands ?? [],
-          nextCommands: adjustedCommands,
-        },
+      const adjustment = applyVerificationRecoveryAdjustment({
+        reason: failure.reason,
+        commands: task.commands ?? [],
+        errorMessage: latestRun?.errorMessage ?? null,
       });
-      console.log(
-        `[Cleanup] Requeued failed task with adjusted commands: ${task.id} (${reasonLabel})`,
-      );
-      requeued++;
-      continue;
+
+      if (adjustment) {
+        await db
+          .update(tasks)
+          .set({
+            status: "queued",
+            blockReason: null,
+            commands: adjustment.nextCommands,
+            retryCount: nextRetryCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
+        await recordEvent({
+          type: "task.requeued",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: adjustment.eventReason,
+            recoveryRule: adjustment.recoveryRule,
+            retryCount: nextRetryCount,
+            previousCommands: task.commands ?? [],
+            nextCommands: adjustment.nextCommands,
+          },
+        });
+        console.log(
+          `[Cleanup] Requeued failed task with adjusted commands: ${task.id} (${adjustment.reasonLabel})`,
+        );
+        requeued++;
+        continue;
+      }
     }
 
     if (failure.reason === "policy_violation") {

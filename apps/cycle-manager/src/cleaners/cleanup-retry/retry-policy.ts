@@ -11,10 +11,10 @@ const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
   setup: 3,
   permission: 0,
   noop: 0,
-  policy: 2,
-  test: 2,
+  policy: 3,
+  test: 3,
   flaky: 6,
-  model: 2,
+  model: 3,
   model_loop: 1,
 };
 

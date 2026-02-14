@@ -6,16 +6,25 @@ import type { FailureClassification } from "./types";
 // Strip ANSI escapes to stabilize failure messages
 const ANSI_ESCAPE_REGEX = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
-function isCommandSubstitutionVerificationFailure(message: string): boolean {
-  return /verification failed at .*?\$\(.+?\).*?\[explicit\]:\s*stderr unavailable/.test(message);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function classifyFailure(errorMessage: string | null): FailureClassification {
-  const message = (errorMessage ?? "").toLowerCase();
+function extractFailureCode(errorMeta: unknown): string | null {
+  if (!isRecord(errorMeta)) {
+    return null;
+  }
+  const raw = errorMeta.failureCode;
+  if (typeof raw !== "string") {
+    return null;
+  }
+  const code = raw.trim();
+  return code.length > 0 ? code : null;
+}
 
-  if (
-    /external_directory permission prompt|permission required:\s*external_directory/.test(message)
-  ) {
+function classifyFailureByCode(failureCode: string): FailureClassification | null {
+  const code = failureCode.toLowerCase();
+  if (code === "external_directory_permission_prompt") {
     return {
       category: "permission",
       retryable: false,
@@ -23,8 +32,7 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
       blockReason: "needs_rework",
     };
   }
-
-  if (/no changes were made|no relevant changes were made|no commits between/.test(message)) {
+  if (code === "no_actionable_changes") {
     return {
       category: "noop",
       retryable: false,
@@ -32,8 +40,7 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
       blockReason: "needs_rework",
     };
   }
-
-  if (/policy violation|denied command|outside allowed paths|change to denied path/.test(message)) {
+  if (code === "policy_violation") {
     return {
       category: "policy",
       retryable: true,
@@ -41,12 +48,7 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
       blockReason: "needs_rework",
     };
   }
-
-  if (
-    /err_pnpm_no_script|missing script|could not read package\.json|enoent.*package\.json/.test(
-      message,
-    )
-  ) {
+  if (code === "verification_command_missing_script") {
     return {
       category: "setup",
       retryable: false,
@@ -54,13 +56,7 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
       blockReason: "needs_rework",
     };
   }
-
-  if (
-    /unsupported command format|shell operators are not allowed|verification failed at .*shell operators/.test(
-      message,
-    ) ||
-    isCommandSubstitutionVerificationFailure(message)
-  ) {
+  if (code === "verification_command_unsupported_format") {
     return {
       category: "setup",
       retryable: false,
@@ -68,12 +64,15 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
       blockReason: "needs_rework",
     };
   }
-
-  if (
-    /package\.json|pnpm-workspace\.yaml|cannot find module|enoent|command not found|repository not found|authentication failed|permission denied|no commits between|no history in common/.test(
-      message,
-    )
-  ) {
+  if (code === "verification_command_sequence_issue") {
+    return {
+      category: "setup",
+      retryable: false,
+      reason: "verification_command_sequence_issue",
+      blockReason: "needs_rework",
+    };
+  }
+  if (code === "setup_or_bootstrap_issue") {
     return {
       category: "setup",
       retryable: true,
@@ -81,8 +80,7 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
       blockReason: "needs_rework",
     };
   }
-
-  if (/database_url|redis_url|connection refused|dns|env/.test(message)) {
+  if (code === "environment_issue" || code === "quota_failure") {
     return {
       category: "env",
       retryable: true,
@@ -90,8 +88,7 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
       blockReason: "needs_rework",
     };
   }
-
-  if (/vitest|playwright|assert|expected|test failed|verification commands failed/.test(message)) {
+  if (code === "verification_command_failed" || code === "test_failure") {
     return {
       category: "test",
       retryable: true,
@@ -99,12 +96,7 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
       blockReason: "needs_rework",
     };
   }
-
-  if (
-    /rate limit|429|503|502|timeout|timed out|econnreset|eai_again|temporarily unavailable/.test(
-      message,
-    )
-  ) {
+  if (code === "transient_or_flaky_failure") {
     return {
       category: "flaky",
       retryable: true,
@@ -112,18 +104,32 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
       blockReason: "needs_rework",
     };
   }
-
-  if (
-    /doom loop detected|excessive planning chatter detected|unsupported pseudo tool call detected: todo/.test(
-      message,
-    )
-  ) {
+  if (code === "model_doom_loop") {
     return {
       category: "model_loop",
       retryable: true,
       reason: "model_doom_loop",
       blockReason: "needs_rework",
     };
+  }
+  if (code === "model_or_unknown_failure" || code === "execution_failed") {
+    return {
+      category: "model",
+      retryable: true,
+      reason: "model_or_unknown_failure",
+      blockReason: "needs_rework",
+    };
+  }
+  return null;
+}
+
+export function classifyFailure(_errorMessage: string | null, errorMeta?: unknown): FailureClassification {
+  const structuredFailureCode = extractFailureCode(errorMeta);
+  if (structuredFailureCode) {
+    const structuredClassification = classifyFailureByCode(structuredFailureCode);
+    if (structuredClassification) {
+      return structuredClassification;
+    }
   }
 
   return {
@@ -134,8 +140,9 @@ export function classifyFailure(errorMessage: string | null): FailureClassificat
   };
 }
 
-function normalizeFailureSignature(errorMessage: string | null): string {
-  return (errorMessage ?? "")
+function normalizeFailureSignature(errorMessage: string | null, errorMeta?: unknown): string {
+  const failureCodePrefix = extractFailureCode(errorMeta);
+  const normalizedMessage = (errorMessage ?? "")
     .toLowerCase()
     .replace(ANSI_ESCAPE_REGEX, "")
     .replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, "<uuid>")
@@ -144,24 +151,29 @@ function normalizeFailureSignature(errorMessage: string | null): string {
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 400);
+  if (!failureCodePrefix) {
+    return normalizedMessage;
+  }
+  return `code:${failureCodePrefix.toLowerCase()} ${normalizedMessage}`.trim();
 }
 
 export async function hasRepeatedFailureSignature(
   taskId: string,
   latestErrorMessage: string | null,
-  threshold = 3,
+  latestErrorMeta?: unknown,
+  threshold = 4,
 ): Promise<boolean> {
   if (threshold <= 1) {
     return true;
   }
 
-  const latestSignature = normalizeFailureSignature(latestErrorMessage);
+  const latestSignature = normalizeFailureSignature(latestErrorMessage, latestErrorMeta);
   if (!latestSignature) {
     return false;
   }
 
   const recentRuns = await db
-    .select({ errorMessage: runs.errorMessage })
+    .select({ errorMessage: runs.errorMessage, errorMeta: runs.errorMeta })
     .from(runs)
     .where(and(eq(runs.taskId, taskId), inArray(runs.status, ["failed", "cancelled"])))
     .orderBy(desc(runs.startedAt))
@@ -171,5 +183,7 @@ export async function hasRepeatedFailureSignature(
     return false;
   }
 
-  return recentRuns.every((run) => normalizeFailureSignature(run.errorMessage) === latestSignature);
+  return recentRuns.every(
+    (run) => normalizeFailureSignature(run.errorMessage, run.errorMeta) === latestSignature,
+  );
 }

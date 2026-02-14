@@ -11,8 +11,12 @@ function tokenizeCommand(command: string): string[] | null {
   let current = "";
   let quote: "'" | '"' | null = null;
   let escaped = false;
-
-  for (const char of command) {
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index];
+    const next = index + 1 < command.length ? command[index + 1] : "";
+    if (!char) {
+      continue;
+    }
     if (escaped) {
       current += char;
       escaped = false;
@@ -22,6 +26,13 @@ function tokenizeCommand(command: string): string[] | null {
     if (char === "\\") {
       if (quote === "'") {
         current += char;
+      } else if (quote === '"') {
+        // ダブルクオート内では ", \, $, `, 改行 だけをエスケープとして扱う
+        if (next === '"' || next === "\\" || next === "$" || next === "`" || next === "\n") {
+          escaped = true;
+        } else {
+          current += char;
+        }
       } else {
         escaped = true;
       }

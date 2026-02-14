@@ -16,7 +16,7 @@ describe("retry policy", () => {
     process.env.FAILED_TASK_MAX_RETRY_COUNT = "-1";
     const module = await import("../src/cleaners/cleanup-retry/retry-policy");
 
-    expect(module.resolveCategoryRetryLimit("model")).toBe(2);
+    expect(module.resolveCategoryRetryLimit("model")).toBe(3);
     expect(module.resolveCategoryRetryLimit("flaky")).toBe(6);
     expect(module.resolveCategoryRetryLimit("permission")).toBe(0);
   });

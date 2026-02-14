@@ -1,4 +1,4 @@
-import { access, readdir, rm } from "node:fs/promises";
+import { access, readdir, readFile, rm } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import {
   getChangedFiles,
@@ -34,8 +34,10 @@ import {
 import { checkPolicyViolations } from "./policy";
 import { resolveAutoVerificationCommands } from "./repo-scripts";
 import { ENV_EXAMPLE_PATHS } from "./constants";
+import { parseCommand } from "./command-parser";
 import type {
   CommandResult,
+  VerifyFailureCode,
   VerifyOptions,
   VerifyResult,
   VerificationCommandSource,
@@ -80,6 +82,17 @@ const WORKSPACE_ROOT_META_FILES = new Set([
   "turbo.json",
   "lerna.json",
   "nx.json",
+]);
+
+const GENERATED_ARTIFACT_SEGMENTS = new Set([
+  "artifact",
+  "artifacts",
+  "build",
+  "debug",
+  "dist",
+  "out",
+  "release",
+  "target",
 ]);
 
 async function pathExists(path: string): Promise<boolean> {
@@ -158,6 +171,204 @@ async function resolveSingleChangedPackageDir(
   return singleDir;
 }
 
+function parseMakeTargets(content: string): Set<string> {
+  const targets = new Set<string>();
+  const lines = content.split(/\r?\n/);
+  for (const line of lines) {
+    if (!line || line.startsWith("\t") || line.trimStart().startsWith("#")) {
+      continue;
+    }
+    const colonIndex = line.indexOf(":");
+    if (colonIndex <= 0) {
+      continue;
+    }
+    const left = line.slice(0, colonIndex).trim();
+    if (!left || left.includes("=")) {
+      continue;
+    }
+    for (const candidate of left.split(/\s+/)) {
+      const target = candidate.trim();
+      if (!target || target.startsWith(".")) {
+        continue;
+      }
+      if (target.includes("%")) {
+        continue;
+      }
+      targets.add(target);
+    }
+  }
+  return targets;
+}
+
+async function resolveRootMakeTargets(repoPath: string): Promise<Set<string> | null> {
+  const candidates = ["Makefile", "makefile", "GNUmakefile"];
+  for (const file of candidates) {
+    const makefilePath = join(repoPath, file);
+    if (!(await pathExists(makefilePath))) {
+      continue;
+    }
+    try {
+      const content = await readFile(makefilePath, "utf-8");
+      const targets = parseMakeTargets(content);
+      return targets.size > 0 ? targets : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function resolveRequestedMakeTarget(command: string): string | null {
+  const parsed = parseCommand(command);
+  if (!parsed || parsed.executable !== "make") {
+    return null;
+  }
+  const args = parsed.args;
+  if (args.length === 0) {
+    return "";
+  }
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) {
+      continue;
+    }
+    if (arg === "-f" || arg === "--file" || arg === "-C") {
+      return null;
+    }
+    if (arg.startsWith("-")) {
+      continue;
+    }
+    if (/^[A-Za-z_][A-Za-z0-9_]*=.*/.test(arg)) {
+      continue;
+    }
+    return arg;
+  }
+  return "";
+}
+
+export async function filterUnsupportedAutoCommands(
+  repoPath: string,
+  autoCommands: string[],
+): Promise<string[]> {
+  if (autoCommands.length === 0) {
+    return [];
+  }
+  const makeTargets = await resolveRootMakeTargets(repoPath);
+  if (!makeTargets) {
+    return autoCommands;
+  }
+  const filtered: string[] = [];
+  for (const command of autoCommands) {
+    const requestedTarget = resolveRequestedMakeTarget(command);
+    if (requestedTarget === null || requestedTarget === "" || makeTargets.has(requestedTarget)) {
+      filtered.push(command);
+      continue;
+    }
+    console.warn(
+      `[Verify] Skipping unsupported auto make target '${requestedTarget}' from command: ${command}`,
+    );
+  }
+  return filtered;
+}
+
+function stripWrappingQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length < 2) {
+    return trimmed;
+  }
+  const first = trimmed[0];
+  const last = trimmed[trimmed.length - 1];
+  if ((first === '"' || first === "'") && first === last) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function parseArtifactPresenceCheckPath(command: string): string | null {
+  const trimmed = command.trim();
+  const match = trimmed.match(/^test\s+-(?:f|s)\s+(.+)$/i);
+  if (!match?.[1]) {
+    return null;
+  }
+  const target = normalizePathForMatch(stripWrappingQuotes(match[1]));
+  return target.length > 0 ? target : null;
+}
+
+function isLikelyGeneratedArtifactPath(path: string): boolean {
+  const normalized = normalizePathForMatch(path).toLowerCase();
+  if (!normalized || normalized.includes("..") || normalized.includes("*")) {
+    return false;
+  }
+  return normalized
+    .split("/")
+    .some((segment) => segment.length > 0 && GENERATED_ARTIFACT_SEGMENTS.has(segment));
+}
+
+function splitCommandTokens(command: string): string[] {
+  return command.trim().split(/\s+/).filter((token) => token.length > 0);
+}
+
+function isCleanLikeCommand(command: string): boolean {
+  const tokens = splitCommandTokens(command);
+  const first = tokens[0]?.toLowerCase();
+  if (!first) {
+    return false;
+  }
+  if (first === "make") {
+    return tokens.slice(1).some((token) => /clean/i.test(token));
+  }
+  if (first === "npm" || first === "pnpm" || first === "yarn" || first === "bun") {
+    return /\b(run\s+)?(clean|distclean|clobber)\b/i.test(tokens.slice(1).join(" "));
+  }
+  return false;
+}
+
+function isVerificationSequenceIssue(params: {
+  verificationCommands: VerificationCommand[];
+  index: number;
+  command: string;
+  output: string;
+}): boolean {
+  const current = params.verificationCommands[params.index];
+  if (!current) {
+    return false;
+  }
+  const artifactPath = parseArtifactPresenceCheckPath(params.command);
+  if (!artifactPath || !isLikelyGeneratedArtifactPath(artifactPath)) {
+    return false;
+  }
+  if (summarizeCommandError(params.output) !== "stderr unavailable") {
+    return false;
+  }
+  const previous = params.index > 0 ? params.verificationCommands[params.index - 1] : undefined;
+  if (!previous) {
+    return false;
+  }
+  return isCleanLikeCommand(previous.command);
+}
+
+function resolveVerificationCommandFailureCode(params: {
+  verificationCommands: VerificationCommand[];
+  index: number;
+  command: string;
+  output: string;
+}): VerifyFailureCode {
+  const { missingScriptLikeFailure, unsupportedFormatFailure } = isSkippableSetupFailure(
+    params.command,
+    params.output,
+  );
+  if (missingScriptLikeFailure) {
+    return "verification_command_missing_script";
+  }
+  if (unsupportedFormatFailure) {
+    return "verification_command_unsupported_format";
+  }
+  if (isVerificationSequenceIssue(params)) {
+    return "verification_command_sequence_issue";
+  }
+  return "verification_command_failed";
+}
+
 function summarizeCommandError(stderr: string, maxChars = 300): string {
   const normalized = stderr.replace(/\s+/g, " ").trim();
   if (!normalized) {
@@ -191,6 +402,7 @@ function isMissingScriptFailure(output: string): boolean {
   return (
     normalized.includes("err_pnpm_no_script") ||
     normalized.includes("missing script") ||
+    normalized.includes("no rule to make target") ||
     (normalized.includes("command") &&
       normalized.includes("not found") &&
       normalized.includes("script"))
@@ -217,6 +429,22 @@ function usesShellCommandSubstitution(command: string): boolean {
   return /\$\(/.test(command);
 }
 
+function isSkippableSetupFailure(command: string, output: string): {
+  missingScriptLikeFailure: boolean;
+  unsupportedFormatFailure: boolean;
+  isSkippableOutput: boolean;
+} {
+  const missingScriptLikeFailure =
+    isMissingScriptFailure(output) || isMissingPackageManifestFailure(output);
+  const unsupportedFormatFailure =
+    isUnsupportedCommandFormatFailure(output) || usesShellCommandSubstitution(command);
+  return {
+    missingScriptLikeFailure,
+    unsupportedFormatFailure,
+    isSkippableOutput: missingScriptLikeFailure || unsupportedFormatFailure,
+  };
+}
+
 export function shouldSkipExplicitCommandFailure(params: {
   source: VerificationCommandSource;
   command: string;
@@ -234,12 +462,10 @@ export function shouldSkipExplicitCommandFailure(params: {
   if (!skipEnabled) {
     return false;
   }
-  const missingScriptLikeFailure =
-    isMissingScriptFailure(params.output) || isMissingPackageManifestFailure(params.output);
-  const unsupportedFormatFailure =
-    isUnsupportedCommandFormatFailure(params.output) ||
-    usesShellCommandSubstitution(params.command);
-  const isSkippableOutput = missingScriptLikeFailure || unsupportedFormatFailure;
+  const { unsupportedFormatFailure, isSkippableOutput } = isSkippableSetupFailure(
+    params.command,
+    params.output,
+  );
   if (!isSkippableOutput) {
     return false;
   }
@@ -247,6 +473,36 @@ export function shouldSkipExplicitCommandFailure(params: {
     return true;
   }
   if (unsupportedFormatFailure && params.hasPriorEffectiveCommand) {
+    return true;
+  }
+  return params.isDocOnlyChange || params.isNoOpChange;
+}
+
+export function shouldSkipAutoCommandFailure(params: {
+  source: VerificationCommandSource;
+  command: string;
+  output: string;
+  hasRemainingCommands: boolean;
+  hasPriorEffectiveCommand: boolean;
+  isDocOnlyChange: boolean;
+  isNoOpChange: boolean;
+}): boolean {
+  if (params.source !== "auto") {
+    return false;
+  }
+  const skipEnabled =
+    (process.env.WORKER_VERIFY_SKIP_INVALID_AUTO_COMMAND ?? "true").toLowerCase() !== "false";
+  if (!skipEnabled) {
+    return false;
+  }
+  const { isSkippableOutput } = isSkippableSetupFailure(params.command, params.output);
+  if (!isSkippableOutput) {
+    return false;
+  }
+  if (params.hasRemainingCommands) {
+    return true;
+  }
+  if (params.hasPriorEffectiveCommand) {
     return true;
   }
   return params.isDocOnlyChange || params.isNoOpChange;
@@ -352,6 +608,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
       policyViolations: [],
       changedFiles: [],
       stats: { additions: 0, deletions: 0 },
+      failureCode: "no_actionable_changes",
       error: "No changes were made",
     };
   }
@@ -363,6 +620,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
       policyViolations: [],
       changedFiles: [],
       stats: { additions: 0, deletions: 0 },
+      failureCode: "no_actionable_changes",
       error: "No relevant changes were made",
     };
   }
@@ -393,6 +651,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
       policyViolations,
       changedFiles: relevantFiles,
       stats,
+      failureCode: "policy_violation",
       error: `Policy violations: ${policyViolations.join(", ")}`,
     };
   }
@@ -502,15 +761,17 @@ ${clippedDiff || "(diff unavailable)"}
   const commandResults: CommandResult[] = [];
   let allPassed = true;
   let ranEffectiveCommand = false;
+  let failureCode: VerifyFailureCode | undefined;
   let failedCommand: string | undefined;
   let failedCommandSource: VerificationCommandSource | undefined;
   let failedCommandStderr: string | undefined;
-  const autoCommands = await resolveAutoVerificationCommands({
+  const rawAutoCommands = await resolveAutoVerificationCommands({
     repoPath,
     changedFiles: relevantFiles,
     explicitCommands: commands,
     deniedCommands: policy.deniedCommands ?? [],
   });
+  const autoCommands = await filterUnsupportedAutoCommands(repoPath, rawAutoCommands);
   const singleChangedPackageDir = await resolveSingleChangedPackageDir(repoPath, relevantFiles);
   const singleChangedPackageLabel = singleChangedPackageDir
     ? normalizePathForMatch(relative(repoPath, singleChangedPackageDir)) || "."
@@ -546,6 +807,7 @@ ${clippedDiff || "(diff unavailable)"}
     commandResults.push(lightCheckResult);
     allPassed = lightCheckResult.success;
     if (!allPassed) {
+      failureCode = "verification_command_failed";
       failedCommand = lightCheckResult.command;
       failedCommandSource = lightCheckResult.source ?? "light-check";
       failedCommandStderr = lightCheckResult.stderr;
@@ -556,6 +818,7 @@ ${clippedDiff || "(diff unavailable)"}
       policyViolations: [],
       changedFiles: relevantFiles,
       stats,
+      failureCode,
       failedCommand,
       failedCommandSource,
       failedCommandStderr,
@@ -591,6 +854,7 @@ ${clippedDiff || "(diff unavailable)"}
       failedCommand = command;
       failedCommandSource = source;
       failedCommandStderr = message;
+      failureCode = "policy_violation";
       allPassed = false;
       break;
     }
@@ -633,6 +897,7 @@ ${clippedDiff || "(diff unavailable)"}
       }
 
       const hasRemainingCommands = index < verificationCommands.length - 1;
+      const isNoOpChange = changedFiles.length === 0 || relevantFiles.length === 0;
       if (
         shouldSkipExplicitCommandFailure({
           source,
@@ -641,12 +906,33 @@ ${clippedDiff || "(diff unavailable)"}
           hasRemainingCommands,
           hasPriorEffectiveCommand: ranEffectiveCommand,
           isDocOnlyChange,
-          isNoOpChange: changedFiles.length === 0 || relevantFiles.length === 0,
+          isNoOpChange,
         })
       ) {
         console.warn(
           `[Verify] Skipping explicit command failure and continuing: ${normalizedCommand}`,
         );
+        commandResults[commandResults.length - 1] = {
+          ...result,
+          source,
+          success: true,
+          outcome: "skipped",
+          stderr: output,
+        };
+        continue;
+      }
+      if (
+        shouldSkipAutoCommandFailure({
+          source,
+          command: normalizedCommand,
+          output,
+          hasRemainingCommands,
+          hasPriorEffectiveCommand: ranEffectiveCommand,
+          isDocOnlyChange,
+          isNoOpChange,
+        })
+      ) {
+        console.warn(`[Verify] Skipping auto command failure and continuing: ${normalizedCommand}`);
         commandResults[commandResults.length - 1] = {
           ...result,
           source,
@@ -667,6 +953,12 @@ ${clippedDiff || "(diff unavailable)"}
       failedCommand = normalizedCommand;
       failedCommandSource = source;
       failedCommandStderr = output;
+      failureCode = resolveVerificationCommandFailureCode({
+        verificationCommands,
+        index,
+        command: normalizedCommand,
+        output,
+      });
       allPassed = false;
       break; // Stop on first failure
     }
@@ -681,6 +973,7 @@ ${clippedDiff || "(diff unavailable)"}
       commandResults.push(lightCheck);
       allPassed = lightCheck.success;
       if (!lightCheck.success) {
+        failureCode = "verification_command_failed";
         failedCommand = lightCheck.command;
         failedCommandSource = lightCheck.source ?? "light-check";
         failedCommandStderr = lightCheck.stderr;
@@ -699,6 +992,7 @@ ${clippedDiff || "(diff unavailable)"}
       failedCommand = "verify:guard";
       failedCommandSource = "guard";
       failedCommandStderr = message;
+      failureCode = "verification_command_failed";
       allPassed = false;
     }
   }
@@ -709,6 +1003,7 @@ ${clippedDiff || "(diff unavailable)"}
     policyViolations: [],
     changedFiles: relevantFiles,
     stats,
+    failureCode,
     failedCommand,
     failedCommandSource,
     failedCommandStderr,

@@ -1069,6 +1069,16 @@ export async function runVerificationPhase(
         blockReason: "needs_rework",
         costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
         errorMessage,
+        errorMeta: {
+          source: "verification",
+          failureCode: verifyResult.failureCode ?? "policy_violation",
+          failedCommand: verifyResult.failedCommand ?? null,
+          failedCommandSource: verifyResult.failedCommandSource ?? null,
+          failedCommandStderr: summarizeVerificationFailure(
+            verifyResult.failedCommandStderr ?? verifyResult.error,
+          ),
+          policyViolations: verifyResult.policyViolations,
+        },
       });
       return {
         success: false,
@@ -1136,6 +1146,13 @@ export async function runVerificationPhase(
       blockReason: "needs_rework",
       costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
       errorMessage,
+      errorMeta: {
+        source: "verification",
+        failureCode: verifyResult.failureCode ?? "verification_command_failed",
+        failedCommand,
+        failedCommandSource: failedSource,
+        failedCommandStderr: stderrSummary,
+      },
     });
     return {
       success: false,

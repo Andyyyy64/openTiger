@@ -571,6 +571,10 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       taskStatus: nextTaskStatus,
       blockReason: nextBlockReason,
       errorMessage,
+      errorMeta: {
+        source: "execution",
+        failureCode: quotaFailure ? "quota_failure" : "execution_failed",
+      },
     });
 
     return {

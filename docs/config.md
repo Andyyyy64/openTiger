@@ -236,10 +236,17 @@ Representative examples controlled only by env (not DB):
 - `FAILED_TASK_RETRY_COOLDOWN_MS`
 - `BLOCKED_TASK_RETRY_COOLDOWN_MS`
 - `FAILED_TASK_MAX_RETRY_COUNT`
+- `FAILED_TASK_REPEATED_SIGNATURE_THRESHOLD`
 - `DISPATCH_RETRY_DELAY_MS`
 - `STUCK_RUN_TIMEOUT_MS`
 - `DISPATCH_MAX_POLL_INTERVAL_MS`
 - `DISPATCH_NO_IDLE_LOG_INTERVAL_MS`
+
+Notes:
+
+- `FAILED_TASK_MAX_RETRY_COUNT=-1` keeps category-level retry limits.
+- `FAILED_TASK_REPEATED_SIGNATURE_THRESHOLD` controls when repeated identical failure signatures are escalated
+  (default: `4`).
 
 ### 6.3 Policy Recovery
 

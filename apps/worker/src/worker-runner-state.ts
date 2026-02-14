@@ -11,6 +11,7 @@ interface FinalizeTaskStateOptions {
   blockReason: string | null;
   costTokens?: number | null;
   errorMessage?: string | null;
+  errorMeta?: Record<string, unknown> | null;
 }
 
 export async function finalizeTaskState(options: FinalizeTaskStateOptions): Promise<void> {
@@ -25,6 +26,9 @@ export async function finalizeTaskState(options: FinalizeTaskStateOptions): Prom
   }
   if (options.errorMessage !== undefined) {
     runUpdate.errorMessage = options.errorMessage;
+  }
+  if (options.errorMeta !== undefined) {
+    runUpdate.errorMeta = options.errorMeta;
   }
 
   await db.transaction(async (tx) => {

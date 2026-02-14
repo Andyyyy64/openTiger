@@ -36,6 +36,7 @@ export const runs = pgTable("runs", {
   costTokens: integer("cost_tokens"), // Token usage
   logPath: text("log_path"), // Log file path
   errorMessage: text("error_message"),
+  errorMeta: jsonb("error_meta"),
   judgedAt: timestamp("judged_at", { withTimezone: true }),
   judgementVersion: integer("judgement_version").default(0).notNull(),
 });
