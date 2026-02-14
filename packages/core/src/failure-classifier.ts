@@ -170,7 +170,10 @@ export function classifyFailureByCode(failureCode: string): FailureClassificatio
   return null;
 }
 
-export function classifyFailure(errorMessage: string | null, errorMeta?: unknown): FailureClassification {
+export function classifyFailure(
+  errorMessage: string | null,
+  errorMeta?: unknown,
+): FailureClassification {
   const structuredFailureCode = extractFailureCode(errorMeta);
   if (structuredFailureCode) {
     const structuredClassification = classifyFailureByCode(structuredFailureCode);

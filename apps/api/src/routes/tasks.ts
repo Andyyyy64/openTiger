@@ -89,7 +89,10 @@ function resolveCategoryRetryLimit(category: FailureCategory, retryLimit: number
   return resolveFailureCategoryRetryLimit(category, retryLimit);
 }
 
-export function classifyFailureForRetry(errorMessage: string | null, errorMeta?: unknown): {
+export function classifyFailureForRetry(
+  errorMessage: string | null,
+  errorMeta?: unknown,
+): {
   category: FailureCategory;
   retryable: boolean;
 } {
@@ -247,7 +250,10 @@ async function enrichTasksWithRetryInfo(taskRows: (typeof tasks.$inferSelect)[])
     )
     .map((task) => task.id);
 
-  const latestFailureByTaskId = new Map<string, { errorMessage: string | null; errorMeta: unknown }>();
+  const latestFailureByTaskId = new Map<
+    string,
+    { errorMessage: string | null; errorMeta: unknown }
+  >();
   if (retryHintTaskIds.length > 0) {
     const runRows = await db
       .select({

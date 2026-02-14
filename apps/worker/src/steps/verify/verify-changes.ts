@@ -358,10 +358,7 @@ function resolveVerificationCommandFailureCode(params: {
   output: string;
 }): VerifyFailureCode {
   const { missingScriptLikeFailure, missingMakeTargetLikeFailure, unsupportedFormatFailure } =
-    isSkippableSetupFailure(
-      params.command,
-      params.output,
-    );
+    isSkippableSetupFailure(params.command, params.output);
   if (missingMakeTargetLikeFailure) {
     return FAILURE_CODE.VERIFICATION_COMMAND_MISSING_MAKE_TARGET;
   }

@@ -3,7 +3,9 @@ import { classifyFailure } from "../src/cleaners/cleanup-retry/failure-classifie
 
 describe("classifyFailure", () => {
   it("maps structured unsupported verification command format to setup non-retryable", () => {
-    const failure = classifyFailure("ignored", { failureCode: "verification_command_unsupported_format" });
+    const failure = classifyFailure("ignored", {
+      failureCode: "verification_command_unsupported_format",
+    });
 
     expect(failure).toEqual({
       category: "setup",
@@ -25,7 +27,9 @@ describe("classifyFailure", () => {
   });
 
   it("maps structured missing make target code to setup non-retryable", () => {
-    const failure = classifyFailure(null, { failureCode: "verification_command_missing_make_target" });
+    const failure = classifyFailure(null, {
+      failureCode: "verification_command_missing_make_target",
+    });
 
     expect(failure).toEqual({
       category: "setup",

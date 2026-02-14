@@ -223,13 +223,21 @@ export function applyVerificationRecoveryAdjustment(params: {
       eventReason: "verification_command_missing_script_adjusted",
       recoveryRule: "drop_failed_command",
     }),
-    [FAILURE_CODE.VERIFICATION_COMMAND_MISSING_MAKE_TARGET]: (commands, errorMessage, errorMeta) => ({
+    [FAILURE_CODE.VERIFICATION_COMMAND_MISSING_MAKE_TARGET]: (
+      commands,
+      errorMessage,
+      errorMeta,
+    ) => ({
       nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage, errorMeta),
       reasonLabel: "missing make target for verification command",
       eventReason: "verification_command_missing_make_target_adjusted",
       recoveryRule: "drop_failed_command",
     }),
-    [FAILURE_CODE.VERIFICATION_COMMAND_UNSUPPORTED_FORMAT]: (commands, errorMessage, errorMeta) => ({
+    [FAILURE_CODE.VERIFICATION_COMMAND_UNSUPPORTED_FORMAT]: (
+      commands,
+      errorMessage,
+      errorMeta,
+    ) => ({
       nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage, errorMeta),
       reasonLabel: "unsupported verification command format",
       eventReason: "verification_command_unsupported_format_adjusted",
