@@ -123,7 +123,10 @@ function classifyFailureByCode(failureCode: string): FailureClassification | nul
   return null;
 }
 
-export function classifyFailure(_errorMessage: string | null, errorMeta?: unknown): FailureClassification {
+export function classifyFailure(
+  _errorMessage: string | null,
+  errorMeta?: unknown,
+): FailureClassification {
   const structuredFailureCode = extractFailureCode(errorMeta);
   if (structuredFailureCode) {
     const structuredClassification = classifyFailureByCode(structuredFailureCode);

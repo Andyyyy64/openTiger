@@ -26,7 +26,11 @@ afterEach(async () => {
 describe("filterUnsupportedAutoCommands", () => {
   it("drops auto make commands that reference unknown targets", async () => {
     const repoPath = await createRepoWithMakefile("all:\n\t@echo ok\nlint:\n\t@echo lint\n");
-    const commands = await filterUnsupportedAutoCommands(repoPath, ["make", "make lint", "make test"]);
+    const commands = await filterUnsupportedAutoCommands(repoPath, [
+      "make",
+      "make lint",
+      "make test",
+    ]);
 
     expect(commands).toEqual(["make", "make lint"]);
   });

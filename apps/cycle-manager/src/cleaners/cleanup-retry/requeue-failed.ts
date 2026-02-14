@@ -89,7 +89,10 @@ function isLikelyGeneratedArtifactPath(path: string): boolean {
 }
 
 function splitCommandTokens(command: string): string[] {
-  return command.trim().split(/\s+/).filter((token) => token.length > 0);
+  return command
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length > 0);
 }
 
 function isCleanLikeCommand(command: string): boolean {
@@ -184,7 +187,10 @@ function applyVerificationRecoveryAdjustment(params: {
 }): VerificationRecoveryAdjustment | null {
   const strategies: Record<
     VerificationRecoveryReason,
-    (commands: string[], errorMessage: string | null | undefined) => VerificationRecoveryAdjustment | null
+    (
+      commands: string[],
+      errorMessage: string | null | undefined,
+    ) => VerificationRecoveryAdjustment | null
   > = {
     verification_command_missing_script: (commands, errorMessage) => ({
       nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage),

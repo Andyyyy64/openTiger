@@ -11,7 +11,7 @@ With source code as the source of truth, information necessary for operations is
 | Want to grasp the overview                                         | `docs/architecture.md`                                            |
 | Want to tune config keys                                           | `docs/config.md`                                                  |
 | Want API integration                                               | `docs/api-reference.md`                                           |
-| Want to build your own plugin                                     | `docs/plugins.md`                                                 |
+| Want to build your own plugin                                      | `docs/plugins.md`                                                 |
 | Need incident response                                             | `docs/operations.md` + `docs/flow.md`                             |
 | Quick initial diagnosis of stalled state                           | `docs/state-model.md`                                             |
 | Immediate lookup of `retry.reason` meanings                        | `docs/state-model.md`                                             |

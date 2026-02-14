@@ -3,7 +3,9 @@ import { classifyFailure } from "../src/cleaners/cleanup-retry/failure-classifie
 
 describe("classifyFailure", () => {
   it("maps structured unsupported verification command format to setup non-retryable", () => {
-    const failure = classifyFailure(null, { failureCode: "verification_command_unsupported_format" });
+    const failure = classifyFailure(null, {
+      failureCode: "verification_command_unsupported_format",
+    });
 
     expect(failure).toEqual({
       category: "setup",

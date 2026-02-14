@@ -43,16 +43,16 @@ Main targets:
 
 ## 2. API Map by Operation Purpose
 
-| Purpose              | Main APIs                                                                                                    |
-| -------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Health check         | `GET /health`, `GET /health/ready`                                                                           |
-| State monitoring     | `GET /tasks`, `GET /runs`, `GET /judgements`, `GET /agents`, `GET /logs/all`                                 |
-| Config changes       | `GET /config`, `PATCH /config`                                                                               |
-| Startup control      | `POST /system/processes/:name/start`, `POST /system/processes/:name/stop`, `POST /system/processes/stop-all` |
-| Pre-start validation | `POST /system/preflight`                                                                                     |
-| Recovery/maintenance | `POST /system/cleanup`, `POST /logs/clear`                                                                   |
-| GitHub integration   | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github`    |
-| Requirement updates  | `GET /system/requirements`, `POST /system/requirements`                                                      |
+| Purpose              | Main APIs                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Health check         | `GET /health`, `GET /health/ready`                                                                              |
+| State monitoring     | `GET /tasks`, `GET /runs`, `GET /judgements`, `GET /agents`, `GET /logs/all`                                    |
+| Config changes       | `GET /config`, `PATCH /config`                                                                                  |
+| Startup control      | `POST /system/processes/:name/start`, `POST /system/processes/:name/stop`, `POST /system/processes/stop-all`    |
+| Pre-start validation | `POST /system/preflight`                                                                                        |
+| Recovery/maintenance | `POST /system/cleanup`, `POST /logs/clear`                                                                      |
+| GitHub integration   | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github`       |
+| Requirement updates  | `GET /system/requirements`, `POST /system/requirements`                                                         |
 | TigerResearch plugin | `GET /plugins/tiger-research/jobs`, `GET /plugins/tiger-research/jobs/:id`, `POST /plugins/tiger-research/jobs` |
 
 Note:
