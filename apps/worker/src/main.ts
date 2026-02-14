@@ -16,6 +16,41 @@ import { runWorker } from "./worker-runner";
 export { runWorker, type WorkerConfig, type WorkerResult } from "./worker-runner";
 
 const activeTaskIds = new Set<string>();
+const REQUIRED_NODE_MAJOR = 22;
+const REQUIRED_NODE_MINOR = 12;
+
+function parseNodeVersion(version: string): { major: number; minor: number; patch: number } | null {
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(version.trim());
+  if (!match) {
+    return null;
+  }
+  const major = Number.parseInt(match[1] ?? "", 10);
+  const minor = Number.parseInt(match[2] ?? "", 10);
+  const patch = Number.parseInt(match[3] ?? "", 10);
+  if (!Number.isFinite(major) || !Number.isFinite(minor) || !Number.isFinite(patch)) {
+    return null;
+  }
+  return { major, minor, patch };
+}
+
+function ensureSupportedNodeRuntime(): void {
+  const parsed = parseNodeVersion(process.versions.node);
+  if (!parsed) {
+    console.error(`[Worker] Unable to parse Node.js version: ${process.versions.node}`);
+    process.exit(1);
+  }
+  const unsupported =
+    parsed.major < REQUIRED_NODE_MAJOR ||
+    (parsed.major === REQUIRED_NODE_MAJOR && parsed.minor < REQUIRED_NODE_MINOR);
+  if (!unsupported) {
+    return;
+  }
+  console.error(
+    `[Worker] Node.js >=${REQUIRED_NODE_MAJOR}.${REQUIRED_NODE_MINOR} is required ` +
+      `(current: ${process.version}). Please upgrade runtime and restart worker.`,
+  );
+  process.exit(1);
+}
 
 function isClaudeExecutor(value: string | undefined): boolean {
   if (!value) {
@@ -72,6 +107,8 @@ function resolveExecutorProvider(executor: "opencode" | "claude_code" | "codex")
 
 // Entry point: receive tasks from queue and execute
 async function main() {
+  ensureSupportedNodeRuntime();
+
   const workerIndex = process.env.WORKER_INDEX;
   const agentRole = process.env.AGENT_ROLE ?? "worker";
   const agentId =

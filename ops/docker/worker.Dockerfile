@@ -4,7 +4,7 @@
 # ==============================
 # ベースステージ: 依存関係のインストール
 # ==============================
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 
 # pnpmをインストール
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
