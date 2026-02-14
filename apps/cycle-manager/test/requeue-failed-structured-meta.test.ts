@@ -45,4 +45,19 @@ describe("requeue-failed structured metadata helpers", () => {
       recoveryRule: "drop_failed_command",
     });
   });
+
+  it("drops failed no-test-files command using structured metadata", () => {
+    const adjustment = applyVerificationRecoveryAdjustment({
+      reason: "verification_command_no_test_files",
+      commands: ["pnpm run test", "pnpm run typecheck"],
+      errorMessage: "legacy message",
+      errorMeta: { failedCommand: "pnpm run test" },
+    });
+
+    expect(adjustment).toMatchObject({
+      nextCommands: ["pnpm run typecheck"],
+      eventReason: "verification_command_no_test_files_adjusted",
+      recoveryRule: "drop_failed_command",
+    });
+  });
 });

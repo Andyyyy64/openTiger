@@ -22,7 +22,7 @@ import {
   isRetryAllowed,
   resolveCategoryRetryLimit,
 } from "./retry-policy";
-import { isPrReviewTask } from "./task-context";
+import { isJudgeReviewTask } from "./task-context";
 import type { BlockReason } from "./types";
 
 const DEFAULT_REPEATED_FAILURE_SIGNATURE_THRESHOLD = 4;
@@ -197,6 +197,7 @@ type VerificationRecoveryAdjustment = {
   reasonLabel: string;
   eventReason:
     | "verification_command_missing_script_adjusted"
+    | "verification_command_no_test_files_adjusted"
     | "verification_command_missing_make_target_adjusted"
     | "verification_command_unsupported_format_adjusted"
     | "verification_command_sequence_adjusted";
@@ -221,6 +222,12 @@ export function applyVerificationRecoveryAdjustment(params: {
       nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage, errorMeta),
       reasonLabel: "missing verification script",
       eventReason: "verification_command_missing_script_adjusted",
+      recoveryRule: "drop_failed_command",
+    }),
+    [FAILURE_CODE.VERIFICATION_COMMAND_NO_TEST_FILES]: (commands, errorMessage, errorMeta) => ({
+      nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage, errorMeta),
+      reasonLabel: "verification command has no test files",
+      eventReason: "verification_command_no_test_files_adjusted",
       recoveryRule: "drop_failed_command",
     }),
     [FAILURE_CODE.VERIFICATION_COMMAND_MISSING_MAKE_TARGET]: (
@@ -331,7 +338,7 @@ export async function requeueFailedTasksWithCooldown(
 
   for (const task of eligibleTasks) {
     if (
-      isPrReviewTask({
+      isJudgeReviewTask({
         title: task.title,
         goal: task.goal,
         context: task.context,
@@ -343,30 +350,36 @@ export async function requeueFailedTasksWithCooldown(
         recoveredRunId = await restoreLatestJudgeRun(task.id);
       }
 
-      await db
-        .update(tasks)
-        .set({
-          status: "blocked",
-          blockReason: "awaiting_judge",
-          retryCount: (task.retryCount ?? 0) + 1,
-          updatedAt: new Date(),
-        })
-        .where(eq(tasks.id, task.id));
+      if (!hasPendingRun && !recoveredRunId) {
+        console.warn(
+          `[Cleanup] Failed PR-review task has no pending/recoverable Judge run; falling back to standard retry flow: ${task.id}`,
+        );
+      } else {
+        await db
+          .update(tasks)
+          .set({
+            status: "blocked",
+            blockReason: "awaiting_judge",
+            retryCount: (task.retryCount ?? 0) + 1,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
 
-      await recordEvent({
-        type: "task.requeued",
-        entityType: "task",
-        entityId: task.id,
-        payload: {
-          reason: hasPendingRun
-            ? "pr_review_failed_to_awaiting_judge"
-            : "pr_review_failed_run_restored",
-          runId: recoveredRunId,
-        },
-      });
-      console.log(`[Cleanup] Routed failed PR-review task back to awaiting_judge: ${task.id}`);
-      requeued++;
-      continue;
+        await recordEvent({
+          type: "task.requeued",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: hasPendingRun
+              ? "pr_review_failed_to_awaiting_judge"
+              : "pr_review_failed_run_restored",
+            runId: recoveredRunId,
+          },
+        });
+        console.log(`[Cleanup] Routed failed PR-review task back to awaiting_judge: ${task.id}`);
+        requeued++;
+        continue;
+      }
     }
 
     const [latestRun] = await db

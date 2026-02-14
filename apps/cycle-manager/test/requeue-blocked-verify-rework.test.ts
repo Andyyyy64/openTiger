@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractVerifyReworkMeta,
   resolveOutsideAllowedViolationPaths,
+  shouldRetryBlockedSetupFailure,
   stripVerifyReworkMarkers,
 } from "../src/cleaners/cleanup-retry/requeue-blocked";
 
@@ -48,5 +49,35 @@ describe("verify rework marker helpers", () => {
     });
 
     expect(paths).toEqual(["apps/api/src/routes/tasks.ts"]);
+  });
+
+  it("retries blocked setup failures while under setup retry limit", () => {
+    const shouldRetry = shouldRetryBlockedSetupFailure({
+      failureReason: "setup_or_bootstrap_issue",
+      nextRetryCount: 2,
+      setupRetryLimit: 3,
+    });
+
+    expect(shouldRetry).toBe(true);
+  });
+
+  it("stops retrying blocked setup failures after setup retry limit", () => {
+    const shouldRetry = shouldRetryBlockedSetupFailure({
+      failureReason: "setup_or_bootstrap_issue",
+      nextRetryCount: 4,
+      setupRetryLimit: 3,
+    });
+
+    expect(shouldRetry).toBe(false);
+  });
+
+  it("does not apply setup retry policy to other failure reasons", () => {
+    const shouldRetry = shouldRetryBlockedSetupFailure({
+      failureReason: "verification_command_failed",
+      nextRetryCount: 1,
+      setupRetryLimit: 3,
+    });
+
+    expect(shouldRetry).toBe(false);
   });
 });

@@ -34,3 +34,32 @@ export function isPrReviewTask(params: { title: string; goal: string; context: u
   }
   return context.notes?.includes("Imported from open GitHub PR backlog") === true;
 }
+
+function isAutoFixTaskTitle(title: string): boolean {
+  const normalized = title.trim().toLowerCase();
+  return (
+    normalized.startsWith("[autofix] pr #") || normalized.startsWith("[autofix-conflict] pr #")
+  );
+}
+
+function hasSourceTaskInPrContext(context: NormalizedContext): boolean {
+  return typeof context.pr?.sourceTaskId === "string" && context.pr.sourceTaskId.trim().length > 0;
+}
+
+export function isJudgeReviewTask(params: {
+  title: string;
+  goal: string;
+  context: unknown;
+}): boolean {
+  if (!isPrReviewTask(params)) {
+    return false;
+  }
+  if (isAutoFixTaskTitle(params.title)) {
+    return false;
+  }
+  const context = normalizeContext(params.context);
+  if (hasSourceTaskInPrContext(context)) {
+    return false;
+  }
+  return true;
+}

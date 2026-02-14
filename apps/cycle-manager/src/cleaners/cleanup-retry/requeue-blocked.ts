@@ -1,6 +1,7 @@
 import { db } from "@openTiger/db";
 import { tasks, runs } from "@openTiger/db/schema";
 import {
+  FAILURE_CODE,
   computeQuotaBackoff,
   extractOutsideAllowedViolationPaths,
   extractPolicyViolationsFromErrorMeta,
@@ -16,7 +17,13 @@ import { recordEvent } from "../../monitors/event-logger";
 import { classifyFailure } from "./failure-classifier";
 import { hasPendingJudgeRun, restoreLatestJudgeRun } from "./judge-recovery";
 import { applyVerificationRecoveryAdjustment } from "./requeue-failed";
-import { isPrReviewTask, normalizeBlockReason, normalizeContext } from "./task-context";
+import { resolveCategoryRetryLimit } from "./retry-policy";
+import {
+  isJudgeReviewTask,
+  isPrReviewTask,
+  normalizeBlockReason,
+  normalizeContext,
+} from "./task-context";
 
 const DEFAULT_QUOTA_BASE_DELAY_MS = 30_000;
 const DEFAULT_QUOTA_MAX_DELAY_MS = 30 * 60 * 1000;
@@ -195,6 +202,20 @@ export function resolveOutsideAllowedViolationPaths(
   return extractOutsideAllowedViolationPaths(errorMessage);
 }
 
+export function shouldRetryBlockedSetupFailure(params: {
+  failureReason: string;
+  nextRetryCount: number;
+  setupRetryLimit: number;
+}): boolean {
+  if (params.failureReason !== FAILURE_CODE.SETUP_OR_BOOTSTRAP_ISSUE) {
+    return false;
+  }
+  if (params.setupRetryLimit < 0) {
+    return true;
+  }
+  return params.nextRetryCount <= params.setupRetryLimit;
+}
+
 async function hasActiveReworkChild(parentTaskId: string, currentTaskId: string): Promise<boolean> {
   const statusFilter = inArray(tasks.status, ["queued", "running", "blocked"]);
   const markerPattern = `%${escapeSqlLikePattern(`${AUTO_REWORK_PARENT_MARKER_PREFIX}${parentTaskId}`)}%`;
@@ -283,6 +304,7 @@ export async function requeueBlockedTasksWithCooldown(
     DEFAULT_POLICY_SUPPRESSION_MAX_RETRIES,
   );
   const autoReworkMaxDepth = parseEnvInt("AUTO_REWORK_MAX_DEPTH", DEFAULT_AUTO_REWORK_MAX_DEPTH);
+  const setupRetryLimit = resolveCategoryRetryLimit("setup");
   const quotaBlockedIds = blockedTasks
     .filter((task) => normalizeBlockReason(task.blockReason) === "quota_wait")
     .map((task) => task.id);
@@ -337,7 +359,7 @@ export async function requeueBlockedTasksWithCooldown(
 
     if (reason === "needs_rework") {
       if (
-        isPrReviewTask({
+        isJudgeReviewTask({
           title: task.title,
           goal: task.goal,
           context: task.context,
@@ -354,29 +376,53 @@ export async function requeueBlockedTasksWithCooldown(
           recoveredRunId = await restoreLatestJudgeRun(task.id);
         }
 
-        await db
-          .update(tasks)
-          .set({
-            status: "blocked",
-            blockReason: "awaiting_judge",
-            retryCount: nextRetryCount,
-            updatedAt: new Date(),
-          })
-          .where(eq(tasks.id, task.id));
+        if (hasPendingRun || recoveredRunId) {
+          await db
+            .update(tasks)
+            .set({
+              status: "blocked",
+              blockReason: "awaiting_judge",
+              retryCount: nextRetryCount,
+              updatedAt: new Date(),
+            })
+            .where(eq(tasks.id, task.id));
 
-        await recordEvent({
-          type: "task.requeued",
-          entityType: "task",
-          entityId: task.id,
-          payload: {
-            reason: hasPendingRun
-              ? "pr_review_needs_rework_to_awaiting_judge"
-              : "pr_review_needs_rework_run_restored",
-            runId: recoveredRunId,
-            retryCount: nextRetryCount,
-          },
-        });
-        console.log(`[Cleanup] Routed blocked PR-review task back to awaiting_judge: ${task.id}`);
+          await recordEvent({
+            type: "task.requeued",
+            entityType: "task",
+            entityId: task.id,
+            payload: {
+              reason: hasPendingRun
+                ? "pr_review_needs_rework_to_awaiting_judge"
+                : "pr_review_needs_rework_run_restored",
+              runId: recoveredRunId,
+              retryCount: nextRetryCount,
+            },
+          });
+          console.log(`[Cleanup] Routed blocked PR-review task back to awaiting_judge: ${task.id}`);
+        } else {
+          await db
+            .update(tasks)
+            .set({
+              status: "queued",
+              blockReason: null,
+              retryCount: nextRetryCount,
+              updatedAt: new Date(),
+            })
+            .where(eq(tasks.id, task.id));
+          await recordEvent({
+            type: "task.requeued",
+            entityType: "task",
+            entityId: task.id,
+            payload: {
+              reason: "pr_review_needs_rework_missing_run_retry",
+              retryCount: nextRetryCount,
+            },
+          });
+          console.warn(
+            `[Cleanup] Requeued blocked PR-review task due to missing Judge run: ${task.id}`,
+          );
+        }
         handled++;
         continue;
       }
@@ -461,6 +507,39 @@ export async function requeueBlockedTasksWithCooldown(
         .limit(1);
 
       const failure = classifyFailure(latestRun?.errorMessage ?? null, latestRun?.errorMeta);
+      if (
+        shouldRetryBlockedSetupFailure({
+          failureReason: failure.reason,
+          nextRetryCount,
+          setupRetryLimit,
+        })
+      ) {
+        await db
+          .update(tasks)
+          .set({
+            status: "queued",
+            blockReason: null,
+            retryCount: nextRetryCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
+        await recordEvent({
+          type: "task.requeued",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: "setup_or_bootstrap_retry_from_blocked",
+            retryCount: nextRetryCount,
+            retryLimit: setupRetryLimit < 0 ? null : setupRetryLimit,
+            retryLimitUnlimited: setupRetryLimit < 0,
+          },
+        });
+        console.warn(
+          `[Cleanup] Requeued blocked setup/bootstrap failure: ${task.id} (retry=${nextRetryCount}/${setupRetryLimit < 0 ? "inf" : setupRetryLimit})`,
+        );
+        handled++;
+        continue;
+      }
       if (isVerificationRecoveryFailureCode(failure.reason)) {
         const adjustment = applyVerificationRecoveryAdjustment({
           reason: failure.reason,
@@ -773,7 +852,7 @@ export async function requeueBlockedTasksWithCooldown(
       }
 
       if (
-        isPrReviewTask({
+        isJudgeReviewTask({
           title: task.title,
           goal: task.goal,
           context: task.context,
@@ -782,21 +861,26 @@ export async function requeueBlockedTasksWithCooldown(
         await db
           .update(tasks)
           .set({
-            status: "blocked",
-            blockReason: "awaiting_judge",
+            status: "queued",
+            blockReason: null,
             retryCount: nextRetryCount,
             updatedAt: new Date(),
           })
           .where(eq(tasks.id, task.id));
         await recordEvent({
-          type: "task.recovery_escalated",
+          type: "task.requeued",
           entityType: "task",
           entityId: task.id,
           payload: {
-            reason: "awaiting_judge_waiting_judge_process",
+            reason: "awaiting_judge_missing_run_retry",
+            cooldownMs: requiredCooldownMs,
+            retryAt: new Date(retryAtMs).toISOString(),
             retryCount: nextRetryCount,
           },
         });
+        console.warn(
+          `[Cleanup] Requeued awaiting_judge PR-review task due to missing Judge run: ${task.id}`,
+        );
         handled++;
         continue;
       }

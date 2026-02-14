@@ -39,6 +39,19 @@ describe("classifyFailure", () => {
     });
   });
 
+  it("maps structured no-test-files code to setup non-retryable", () => {
+    const failure = classifyFailure(null, {
+      failureCode: "verification_command_no_test_files",
+    });
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: false,
+      reason: "verification_command_no_test_files",
+      blockReason: "needs_rework",
+    });
+  });
+
   it("maps structured sequence issue code to setup non-retryable", () => {
     const failure = classifyFailure(null, { failureCode: "verification_command_sequence_issue" });
 
@@ -57,6 +70,17 @@ describe("classifyFailure", () => {
       category: "test",
       retryable: true,
       reason: "test_failure",
+      blockReason: "needs_rework",
+    });
+  });
+
+  it("maps structured setup_or_bootstrap_issue code to setup retryable", () => {
+    const failure = classifyFailure(null, { failureCode: "setup_or_bootstrap_issue" });
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: true,
+      reason: "setup_or_bootstrap_issue",
       blockReason: "needs_rework",
     });
   });
@@ -107,6 +131,17 @@ describe("classifyFailure", () => {
       category: "setup",
       retryable: false,
       reason: "verification_command_sequence_issue",
+      blockReason: "needs_rework",
+    });
+  });
+
+  it("classifies message-only no-test-files failures", () => {
+    const failure = classifyFailure("No test files found, exiting with code 1");
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: false,
+      reason: "verification_command_no_test_files",
       blockReason: "needs_rework",
     });
   });
