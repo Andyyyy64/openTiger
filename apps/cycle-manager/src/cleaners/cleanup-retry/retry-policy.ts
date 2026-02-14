@@ -1,3 +1,4 @@
+import { resolveFailureCategoryRetryLimit } from "@openTiger/core";
 import type { FailureCategory } from "./types";
 
 // Max retry count (-1 = rely on category limits)
@@ -5,18 +6,6 @@ const MAX_RETRY_COUNT = (() => {
   const parsed = Number.parseInt(process.env.FAILED_TASK_MAX_RETRY_COUNT ?? "-1", 10);
   return Number.isFinite(parsed) ? parsed : -1;
 })();
-
-const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
-  env: 5,
-  setup: 3,
-  permission: 0,
-  noop: 0,
-  policy: 3,
-  test: 3,
-  flaky: 6,
-  model: 3,
-  model_loop: 1,
-};
 
 function isUnlimitedRetry(): boolean {
   return MAX_RETRY_COUNT < 0;
@@ -27,12 +16,7 @@ export function isRetryAllowed(retryCount: number): boolean {
 }
 
 export function resolveCategoryRetryLimit(category: FailureCategory): number {
-  const categoryLimit = CATEGORY_RETRY_LIMIT[category];
-  if (isUnlimitedRetry()) {
-    // Keep category guardrails even when global limit is disabled.
-    return categoryLimit;
-  }
-  return Math.min(categoryLimit, MAX_RETRY_COUNT);
+  return resolveFailureCategoryRetryLimit(category, MAX_RETRY_COUNT);
 }
 
 export function isCategoryRetryAllowed(retryCount: number, categoryRetryLimit: number): boolean {

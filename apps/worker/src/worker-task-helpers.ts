@@ -37,8 +37,18 @@ const QUOTA_FAILURE_PATTERNS = [
   /retryinfo/i,
 ];
 
+const EXTERNAL_DIRECTORY_PERMISSION_PROMPT_PATTERNS = [
+  /external_directory permission prompt/i,
+  /permission required:\s*external_directory/i,
+  /external_directory\(<path>\)/i,
+];
+
 export function isQuotaFailure(message: string): boolean {
   return QUOTA_FAILURE_PATTERNS.some((pattern) => pattern.test(message));
+}
+
+export function isExternalDirectoryPermissionPromptFailure(message: string): boolean {
+  return EXTERNAL_DIRECTORY_PERMISSION_PROMPT_PATTERNS.some((pattern) => pattern.test(message));
 }
 
 export function isNoCommitsBetweenError(message: string): boolean {

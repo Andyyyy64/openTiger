@@ -5,3 +5,6 @@ export * from "./policy-overrides";
 export * from "./system";
 export * from "./quota-retry";
 export * from "./policy-recovery";
+export * from "./failure-classifier";
+export * from "./failure-codes";
+export * from "./failure-retry-policy";

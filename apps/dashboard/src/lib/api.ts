@@ -351,7 +351,16 @@ export interface TaskRetryInfo {
   cooldownMs: number | null;
   retryCount: number;
   retryLimit: number;
-  failureCategory?: "env" | "setup" | "policy" | "test" | "flaky" | "model" | "model_loop";
+  failureCategory?:
+    | "env"
+    | "setup"
+    | "permission"
+    | "noop"
+    | "policy"
+    | "test"
+    | "flaky"
+    | "model"
+    | "model_loop";
 }
 
 export type TaskView = Task & { retry?: TaskRetryInfo | null };

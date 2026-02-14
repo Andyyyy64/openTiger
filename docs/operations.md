@@ -128,6 +128,11 @@ pnpm runtime:hatch:disarm
 - `FAILED_TASK_REPEATED_SIGNATURE_THRESHOLD`
 - `DISPATCH_RETRY_DELAY_MS`
 
+Behavior note:
+
+- Failure classification is structured-first from `runs.error_meta.failureCode`.
+- For old runs without `error_meta`, message fallback classification remains active.
+
 ### Policy / Rework Suppression
 
 - `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`

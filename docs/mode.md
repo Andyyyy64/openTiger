@@ -129,6 +129,11 @@ Main knobs:
 - `DISPATCH_RETRY_DELAY_MS`
 - `SYSTEM_PROCESS_AUTO_RESTART*`
 
+Classification note:
+
+- Retry and recovery classification prefers `runs.error_meta.failureCode`.
+- Legacy runs without `error_meta` still use message fallback to keep compatibility.
+
 Queue/lock recovery knobs:
 
 - `TASK_QUEUE_LOCK_DURATION_MS`

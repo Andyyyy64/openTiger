@@ -3,9 +3,7 @@ import { classifyFailure } from "../src/cleaners/cleanup-retry/failure-classifie
 
 describe("classifyFailure", () => {
   it("maps structured unsupported verification command format to setup non-retryable", () => {
-    const failure = classifyFailure(null, {
-      failureCode: "verification_command_unsupported_format",
-    });
+    const failure = classifyFailure("ignored", { failureCode: "verification_command_unsupported_format" });
 
     expect(failure).toEqual({
       category: "setup",
@@ -22,6 +20,17 @@ describe("classifyFailure", () => {
       category: "setup",
       retryable: false,
       reason: "verification_command_missing_script",
+      blockReason: "needs_rework",
+    });
+  });
+
+  it("maps structured missing make target code to setup non-retryable", () => {
+    const failure = classifyFailure(null, { failureCode: "verification_command_missing_make_target" });
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: false,
+      reason: "verification_command_missing_make_target",
       blockReason: "needs_rework",
     });
   });
@@ -48,19 +57,58 @@ describe("classifyFailure", () => {
     });
   });
 
-  it("falls back to model_or_unknown when failure code is unknown", () => {
-    const failure = classifyFailure("any message", { failureCode: "unknown_code" });
+  it("falls back to message parsing when failure code is unknown", () => {
+    const failure = classifyFailure("Policy violation: change outside allowed paths", {
+      failureCode: "unknown_code",
+    });
 
     expect(failure).toEqual({
-      category: "model",
+      category: "policy",
       retryable: true,
-      reason: "model_or_unknown_failure",
+      reason: "policy_violation",
       blockReason: "needs_rework",
     });
   });
 
-  it("does not classify message-only failures without structured failure code", () => {
+  it("falls back to message parsing when failure code is execution_failed", () => {
+    const failure = classifyFailure("Permission required: external_directory", {
+      failureCode: "execution_failed",
+    });
+
+    expect(failure).toEqual({
+      category: "permission",
+      retryable: false,
+      reason: "external_directory_permission_prompt",
+      blockReason: "needs_rework",
+    });
+  });
+
+  it("classifies message-only missing script failures", () => {
     const failure = classifyFailure("ERR_PNPM_NO_SCRIPT Missing script: verify");
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: false,
+      reason: "verification_command_missing_script",
+      blockReason: "needs_rework",
+    });
+  });
+
+  it("classifies message-only sequence issue failures", () => {
+    const failure = classifyFailure(
+      "Verification failed at test -f build/kernel.elf [explicit]: stderr unavailable",
+    );
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: false,
+      reason: "verification_command_sequence_issue",
+      blockReason: "needs_rework",
+    });
+  });
+
+  it("falls back to model_or_unknown when both structured and message classification are unavailable", () => {
+    const failure = classifyFailure("something unknown", { failureCode: "unknown_code" });
 
     expect(failure).toEqual({
       category: "model",

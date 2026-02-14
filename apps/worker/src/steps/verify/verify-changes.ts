@@ -13,6 +13,7 @@ import {
   getDiffStatsFromRoot,
   getWorkingTreeDiff,
 } from "@openTiger/vcs";
+import { FAILURE_CODE } from "@openTiger/core";
 import { runOpenCode } from "@openTiger/llm";
 import {
   expandVerificationCommand,
@@ -356,20 +357,24 @@ function resolveVerificationCommandFailureCode(params: {
   command: string;
   output: string;
 }): VerifyFailureCode {
-  const { missingScriptLikeFailure, unsupportedFormatFailure } = isSkippableSetupFailure(
-    params.command,
-    params.output,
-  );
+  const { missingScriptLikeFailure, missingMakeTargetLikeFailure, unsupportedFormatFailure } =
+    isSkippableSetupFailure(
+      params.command,
+      params.output,
+    );
+  if (missingMakeTargetLikeFailure) {
+    return FAILURE_CODE.VERIFICATION_COMMAND_MISSING_MAKE_TARGET;
+  }
   if (missingScriptLikeFailure) {
-    return "verification_command_missing_script";
+    return FAILURE_CODE.VERIFICATION_COMMAND_MISSING_SCRIPT;
   }
   if (unsupportedFormatFailure) {
-    return "verification_command_unsupported_format";
+    return FAILURE_CODE.VERIFICATION_COMMAND_UNSUPPORTED_FORMAT;
   }
   if (isVerificationSequenceIssue(params)) {
-    return "verification_command_sequence_issue";
+    return FAILURE_CODE.VERIFICATION_COMMAND_SEQUENCE_ISSUE;
   }
-  return "verification_command_failed";
+  return FAILURE_CODE.VERIFICATION_COMMAND_FAILED;
 }
 
 function summarizeCommandError(stderr: string, maxChars = 300): string {
@@ -400,12 +405,15 @@ function resolveCommandOutput(stderr: string, stdout: string): string {
   return stderr.trim().length > 0 ? stderr : stdout;
 }
 
+function isMissingMakeTargetFailure(output: string): boolean {
+  return output.toLowerCase().includes("no rule to make target");
+}
+
 function isMissingScriptFailure(output: string): boolean {
   const normalized = output.toLowerCase();
   return (
     normalized.includes("err_pnpm_no_script") ||
     normalized.includes("missing script") ||
-    normalized.includes("no rule to make target") ||
     (normalized.includes("command") &&
       normalized.includes("not found") &&
       normalized.includes("script"))
@@ -437,15 +445,20 @@ function isSkippableSetupFailure(
   output: string,
 ): {
   missingScriptLikeFailure: boolean;
+  missingMakeTargetLikeFailure: boolean;
   unsupportedFormatFailure: boolean;
   isSkippableOutput: boolean;
 } {
+  const missingMakeTargetLikeFailure = isMissingMakeTargetFailure(output);
   const missingScriptLikeFailure =
-    isMissingScriptFailure(output) || isMissingPackageManifestFailure(output);
+    isMissingScriptFailure(output) ||
+    isMissingPackageManifestFailure(output) ||
+    missingMakeTargetLikeFailure;
   const unsupportedFormatFailure =
     isUnsupportedCommandFormatFailure(output) || usesShellCommandSubstitution(command);
   return {
     missingScriptLikeFailure,
+    missingMakeTargetLikeFailure,
     unsupportedFormatFailure,
     isSkippableOutput: missingScriptLikeFailure || unsupportedFormatFailure,
   };
@@ -614,7 +627,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
       policyViolations: [],
       changedFiles: [],
       stats: { additions: 0, deletions: 0 },
-      failureCode: "no_actionable_changes",
+      failureCode: FAILURE_CODE.NO_ACTIONABLE_CHANGES,
       error: "No changes were made",
     };
   }
@@ -626,7 +639,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
       policyViolations: [],
       changedFiles: [],
       stats: { additions: 0, deletions: 0 },
-      failureCode: "no_actionable_changes",
+      failureCode: FAILURE_CODE.NO_ACTIONABLE_CHANGES,
       error: "No relevant changes were made",
     };
   }
@@ -657,7 +670,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
       policyViolations,
       changedFiles: relevantFiles,
       stats,
-      failureCode: "policy_violation",
+      failureCode: FAILURE_CODE.POLICY_VIOLATION,
       error: `Policy violations: ${policyViolations.join(", ")}`,
     };
   }
@@ -813,7 +826,7 @@ ${clippedDiff || "(diff unavailable)"}
     commandResults.push(lightCheckResult);
     allPassed = lightCheckResult.success;
     if (!allPassed) {
-      failureCode = "verification_command_failed";
+      failureCode = FAILURE_CODE.VERIFICATION_COMMAND_FAILED;
       failedCommand = lightCheckResult.command;
       failedCommandSource = lightCheckResult.source ?? "light-check";
       failedCommandStderr = lightCheckResult.stderr;
@@ -860,7 +873,7 @@ ${clippedDiff || "(diff unavailable)"}
       failedCommand = command;
       failedCommandSource = source;
       failedCommandStderr = message;
-      failureCode = "policy_violation";
+      failureCode = FAILURE_CODE.POLICY_VIOLATION;
       allPassed = false;
       break;
     }
@@ -979,7 +992,7 @@ ${clippedDiff || "(diff unavailable)"}
       commandResults.push(lightCheck);
       allPassed = lightCheck.success;
       if (!lightCheck.success) {
-        failureCode = "verification_command_failed";
+        failureCode = FAILURE_CODE.VERIFICATION_COMMAND_FAILED;
         failedCommand = lightCheck.command;
         failedCommandSource = lightCheck.source ?? "light-check";
         failedCommandStderr = lightCheck.stderr;
@@ -998,7 +1011,7 @@ ${clippedDiff || "(diff unavailable)"}
       failedCommand = "verify:guard";
       failedCommandSource = "guard";
       failedCommandStderr = message;
-      failureCode = "verification_command_failed";
+      failureCode = FAILURE_CODE.VERIFICATION_COMMAND_FAILED;
       allPassed = false;
     }
   }

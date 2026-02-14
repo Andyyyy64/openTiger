@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { Task } from "@openTiger/core";
 import { resolve } from "node:path";
 import {
+  FAILURE_CODE,
   DEFAULT_POLICY,
   getRepoMode,
   getLocalRepoPath,
@@ -26,6 +27,7 @@ import {
   resolveTaskPrContext,
 } from "./worker-task-context";
 import {
+  isExternalDirectoryPermissionPromptFailure,
   isNoCommitsBetweenError,
   isQuotaFailure,
   sanitizeRetryHint,
@@ -550,6 +552,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       message: errorMessage,
     }).catch(() => undefined);
     const quotaFailure = isQuotaFailure(errorMessage);
+    const permissionPromptFailure = isExternalDirectoryPermissionPromptFailure(errorMessage);
     const nextTaskStatus: "failed" | "blocked" = quotaFailure ? "blocked" : "failed";
     const nextBlockReason = quotaFailure ? "quota_wait" : null;
 
@@ -572,7 +575,11 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       errorMessage,
       errorMeta: {
         source: "execution",
-        failureCode: quotaFailure ? "quota_failure" : "execution_failed",
+        failureCode: quotaFailure
+          ? FAILURE_CODE.QUOTA_FAILURE
+          : permissionPromptFailure
+            ? FAILURE_CODE.EXTERNAL_DIRECTORY_PERMISSION_PROMPT
+            : FAILURE_CODE.EXECUTION_FAILED,
       },
     });
 

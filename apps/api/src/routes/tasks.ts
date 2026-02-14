@@ -1,15 +1,18 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { computeQuotaBackoff } from "@openTiger/core";
+import {
+  classifyFailure as classifyFailureCore,
+  computeQuotaBackoff,
+  resolveFailureCategoryRetryLimit,
+  type FailureCategory,
+} from "@openTiger/core";
 import { db } from "@openTiger/db";
 import { tasks, runs } from "@openTiger/db/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { ensureResearchRuntimeStarted } from "./research-runtime";
 
 export const tasksRoute = new Hono();
-
-type FailureCategory = "env" | "setup" | "policy" | "test" | "flaky" | "model" | "model_loop";
 
 type RetryInfo = {
   autoRetry: boolean;
@@ -68,16 +71,6 @@ const DEFAULT_QUOTA_MAX_DELAY_MS = 30 * 60 * 1000;
 const DEFAULT_QUOTA_BACKOFF_FACTOR = 2;
 const DEFAULT_QUOTA_JITTER_RATIO = 0.2;
 
-const CATEGORY_RETRY_LIMIT: Record<FailureCategory, number> = {
-  env: 10,
-  setup: 10,
-  policy: 10,
-  test: 10,
-  flaky: 10,
-  model: 6,
-  model_loop: 2,
-};
-
 function normalizeRetryLimit(limit: number): number {
   if (!Number.isFinite(limit)) {
     return -1;
@@ -93,55 +86,18 @@ function isRetryExhausted(retryCount: number, retryLimit: number): boolean {
 }
 
 function resolveCategoryRetryLimit(category: FailureCategory, retryLimit: number): number {
-  if (retryLimit < 0) {
-    return Number.MAX_SAFE_INTEGER;
-  }
-  return Math.min(CATEGORY_RETRY_LIMIT[category], retryLimit);
+  return resolveFailureCategoryRetryLimit(category, retryLimit);
 }
 
-function classifyFailure(errorMessage: string | null): {
+export function classifyFailureForRetry(errorMessage: string | null, errorMeta?: unknown): {
   category: FailureCategory;
   retryable: boolean;
 } {
-  const message = (errorMessage ?? "").toLowerCase();
-
-  if (/policy violation|denied command|outside allowed paths|change to denied path/.test(message)) {
-    return { category: "policy", retryable: true };
-  }
-
-  if (
-    /package\.json|pnpm-workspace\.yaml|cannot find module|enoent|command not found|repository not found|authentication failed|permission denied|no commits between|no history in common/.test(
-      message,
-    )
-  ) {
-    return { category: "setup", retryable: true };
-  }
-
-  if (/database_url|redis_url|connection refused|dns|env/.test(message)) {
-    return { category: "env", retryable: true };
-  }
-
-  if (/vitest|playwright|assert|expected|test failed|verification commands failed/.test(message)) {
-    return { category: "test", retryable: true };
-  }
-
-  if (
-    /rate limit|429|503|502|timeout|timed out|econnreset|eai_again|temporarily unavailable/.test(
-      message,
-    )
-  ) {
-    return { category: "flaky", retryable: true };
-  }
-
-  if (
-    /doom loop detected|excessive planning chatter detected|unsupported pseudo tool call detected: todo/.test(
-      message,
-    )
-  ) {
-    return { category: "model_loop", retryable: true };
-  }
-
-  return { category: "model", retryable: true };
+  const failure = classifyFailureCore(errorMessage, errorMeta);
+  return {
+    category: failure.category,
+    retryable: failure.retryable,
+  };
 }
 
 function parseEnvInt(name: string, fallback: number): number {
@@ -185,6 +141,7 @@ function resolveQuotaBackoffConfig(fallbackBaseDelayMs: number): {
 function buildRetryInfo(
   task: typeof tasks.$inferSelect,
   latestFailureMessage?: string | null,
+  latestFailureMeta?: unknown,
 ): RetryInfo | null {
   if (task.status !== "failed" && task.status !== "blocked") {
     return null;
@@ -248,7 +205,7 @@ function buildRetryInfo(
     };
   }
 
-  const failure = classifyFailure(latestFailureMessage ?? null);
+  const failure = classifyFailureForRetry(latestFailureMessage ?? null, latestFailureMeta);
   const categoryRetryLimit = resolveCategoryRetryLimit(failure.category, retryLimit);
 
   // Switch to rework for non-retry too; continue recovery
@@ -262,7 +219,7 @@ function buildRetryInfo(
       retryInSeconds,
       cooldownMs: FAILED_TASK_RETRY_COOLDOWN_MS,
       retryCount,
-      retryLimit: retryLimit < 0 ? -1 : categoryRetryLimit,
+      retryLimit: categoryRetryLimit,
       failureCategory: failure.category,
     };
   }
@@ -276,7 +233,7 @@ function buildRetryInfo(
     retryInSeconds,
     cooldownMs: FAILED_TASK_RETRY_COOLDOWN_MS,
     retryCount,
-    retryLimit: retryLimit < 0 ? -1 : categoryRetryLimit,
+    retryLimit: categoryRetryLimit,
     failureCategory: failure.category,
   };
 }
@@ -290,12 +247,13 @@ async function enrichTasksWithRetryInfo(taskRows: (typeof tasks.$inferSelect)[])
     )
     .map((task) => task.id);
 
-  const latestFailureByTaskId = new Map<string, string | null>();
+  const latestFailureByTaskId = new Map<string, { errorMessage: string | null; errorMeta: unknown }>();
   if (retryHintTaskIds.length > 0) {
     const runRows = await db
       .select({
         taskId: runs.taskId,
         errorMessage: runs.errorMessage,
+        errorMeta: runs.errorMeta,
       })
       .from(runs)
       .where(
@@ -305,14 +263,21 @@ async function enrichTasksWithRetryInfo(taskRows: (typeof tasks.$inferSelect)[])
 
     for (const row of runRows) {
       if (!latestFailureByTaskId.has(row.taskId)) {
-        latestFailureByTaskId.set(row.taskId, row.errorMessage);
+        latestFailureByTaskId.set(row.taskId, {
+          errorMessage: row.errorMessage,
+          errorMeta: row.errorMeta,
+        });
       }
     }
   }
 
   return taskRows.map((task) => ({
     ...task,
-    retry: buildRetryInfo(task, latestFailureByTaskId.get(task.id)),
+    retry: buildRetryInfo(
+      task,
+      latestFailureByTaskId.get(task.id)?.errorMessage,
+      latestFailureByTaskId.get(task.id)?.errorMeta,
+    ),
   }));
 }
 

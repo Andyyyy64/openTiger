@@ -247,6 +247,7 @@ Notes:
 - `FAILED_TASK_MAX_RETRY_COUNT=-1` keeps category-level retry limits.
 - `FAILED_TASK_REPEATED_SIGNATURE_THRESHOLD` controls when repeated identical failure signatures are escalated
   (default: `4`).
+- Failure classification is structured-first (`runs.error_meta.failureCode`) with legacy message fallback.
 
 ### 6.3 Policy Recovery
 

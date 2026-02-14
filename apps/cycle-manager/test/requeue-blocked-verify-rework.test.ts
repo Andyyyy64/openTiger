@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractVerifyReworkMeta,
+  resolveOutsideAllowedViolationPaths,
   stripVerifyReworkMarkers,
 } from "../src/cleaners/cleanup-retry/requeue-blocked";
 
@@ -39,5 +40,13 @@ describe("verify rework marker helpers", () => {
     const notes = `line-1\n[verify-rework-json]${payload}\nline-2`;
 
     expect(stripVerifyReworkMarkers(notes)).toBe("line-1\nline-2");
+  });
+
+  it("prefers structured policy violations from errorMeta", () => {
+    const paths = resolveOutsideAllowedViolationPaths("legacy message", {
+      policyViolations: ["change outside allowed paths: apps/api/src/routes/tasks.ts"],
+    });
+
+    expect(paths).toEqual(["apps/api/src/routes/tasks.ts"]);
   });
 });

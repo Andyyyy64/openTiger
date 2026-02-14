@@ -1,11 +1,16 @@
 import { db } from "@openTiger/db";
 import { tasks, runs } from "@openTiger/db/schema";
 import {
+  FAILURE_CODE,
+  extractFailedCommandFromErrorMeta,
   extractOutsideAllowedViolationPaths,
+  extractPolicyViolationsFromErrorMeta,
+  isVerificationRecoveryFailureCode,
   loadPolicyRecoveryConfig,
   mergeUniquePaths,
   resolveCommandDrivenAllowedPaths,
   resolvePolicyViolationAutoAllowPaths,
+  type VerificationRecoveryFailureCode,
 } from "@openTiger/core";
 import { eq, inArray, and, desc } from "drizzle-orm";
 import { recordEvent } from "../../monitors/event-logger";
@@ -34,7 +39,14 @@ function resolveRepeatedFailureSignatureThreshold(): number {
   return parsed;
 }
 
-function extractFailedVerificationCommand(errorMessage: string | null | undefined): string | null {
+export function extractFailedVerificationCommand(
+  errorMessage: string | null | undefined,
+  errorMeta?: unknown,
+): string | null {
+  const fromMeta = extractFailedCommandFromErrorMeta(errorMeta);
+  if (fromMeta) {
+    return fromMeta;
+  }
   const raw = (errorMessage ?? "").trim();
   if (!raw) {
     return null;
@@ -42,6 +54,17 @@ function extractFailedVerificationCommand(errorMessage: string | null | undefine
   const match = raw.match(/verification failed at\s+(.+?)\s+\[/i);
   const command = match?.[1]?.trim();
   return command && command.length > 0 ? command : null;
+}
+
+export function resolveOutsideAllowedViolationPaths(
+  errorMessage: string | null | undefined,
+  errorMeta?: unknown,
+): string[] {
+  const structuredViolations = extractPolicyViolationsFromErrorMeta(errorMeta);
+  if (structuredViolations.length > 0) {
+    return extractOutsideAllowedViolationPaths(structuredViolations);
+  }
+  return extractOutsideAllowedViolationPaths(errorMessage);
 }
 
 function stripWrappingQuotes(value: string): string {
@@ -114,11 +137,12 @@ function isCleanLikeCommand(command: string): boolean {
 function sanitizeCommandsForVerificationFormatIssue(
   commands: string[],
   errorMessage: string | null | undefined,
+  errorMeta?: unknown,
 ): string[] {
   if (commands.length === 0) {
     return [];
   }
-  const failedCommand = extractFailedVerificationCommand(errorMessage);
+  const failedCommand = extractFailedVerificationCommand(errorMessage, errorMeta);
   if (!failedCommand) {
     // If failed command unknown, clear explicit command for auto-verify fallback
     return [];
@@ -134,11 +158,12 @@ function sanitizeCommandsForVerificationFormatIssue(
 export function sanitizeCommandsForVerificationSequenceIssue(
   commands: string[],
   errorMessage: string | null | undefined,
+  errorMeta?: unknown,
 ): string[] | null {
   if (commands.length < 2) {
     return null;
   }
-  const failedCommand = extractFailedVerificationCommand(errorMessage);
+  const failedCommand = extractFailedVerificationCommand(errorMessage, errorMeta);
   if (!failedCommand) {
     return null;
   }
@@ -165,47 +190,57 @@ export function sanitizeCommandsForVerificationSequenceIssue(
   return reordered;
 }
 
-type VerificationRecoveryReason =
-  | "verification_command_missing_script"
-  | "verification_command_unsupported_format"
-  | "verification_command_sequence_issue";
+type VerificationRecoveryReason = VerificationRecoveryFailureCode;
 
 type VerificationRecoveryAdjustment = {
   nextCommands: string[];
   reasonLabel: string;
   eventReason:
     | "verification_command_missing_script_adjusted"
+    | "verification_command_missing_make_target_adjusted"
     | "verification_command_unsupported_format_adjusted"
     | "verification_command_sequence_adjusted";
   recoveryRule: "drop_failed_command" | "reorder_clean_and_artifact_check";
 };
 
-function applyVerificationRecoveryAdjustment(params: {
+export function applyVerificationRecoveryAdjustment(params: {
   reason: VerificationRecoveryReason;
   commands: string[];
   errorMessage: string | null | undefined;
+  errorMeta?: unknown;
 }): VerificationRecoveryAdjustment | null {
   const strategies: Record<
     VerificationRecoveryReason,
     (
       commands: string[],
       errorMessage: string | null | undefined,
+      errorMeta?: unknown,
     ) => VerificationRecoveryAdjustment | null
   > = {
-    verification_command_missing_script: (commands, errorMessage) => ({
-      nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage),
+    [FAILURE_CODE.VERIFICATION_COMMAND_MISSING_SCRIPT]: (commands, errorMessage, errorMeta) => ({
+      nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage, errorMeta),
       reasonLabel: "missing verification script",
       eventReason: "verification_command_missing_script_adjusted",
       recoveryRule: "drop_failed_command",
     }),
-    verification_command_unsupported_format: (commands, errorMessage) => ({
-      nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage),
+    [FAILURE_CODE.VERIFICATION_COMMAND_MISSING_MAKE_TARGET]: (commands, errorMessage, errorMeta) => ({
+      nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage, errorMeta),
+      reasonLabel: "missing make target for verification command",
+      eventReason: "verification_command_missing_make_target_adjusted",
+      recoveryRule: "drop_failed_command",
+    }),
+    [FAILURE_CODE.VERIFICATION_COMMAND_UNSUPPORTED_FORMAT]: (commands, errorMessage, errorMeta) => ({
+      nextCommands: sanitizeCommandsForVerificationFormatIssue(commands, errorMessage, errorMeta),
       reasonLabel: "unsupported verification command format",
       eventReason: "verification_command_unsupported_format_adjusted",
       recoveryRule: "drop_failed_command",
     }),
-    verification_command_sequence_issue: (commands, errorMessage) => {
-      const nextCommands = sanitizeCommandsForVerificationSequenceIssue(commands, errorMessage);
+    [FAILURE_CODE.VERIFICATION_COMMAND_SEQUENCE_ISSUE]: (commands, errorMessage, errorMeta) => {
+      const nextCommands = sanitizeCommandsForVerificationSequenceIssue(
+        commands,
+        errorMessage,
+        errorMeta,
+      );
       if (!nextCommands) {
         return null;
       }
@@ -222,7 +257,7 @@ function applyVerificationRecoveryAdjustment(params: {
   if (!strategy) {
     return null;
   }
-  const adjustment = strategy(params.commands, params.errorMessage);
+  const adjustment = strategy(params.commands, params.errorMessage, params.errorMeta);
   if (!adjustment) {
     return null;
   }
@@ -349,15 +384,12 @@ export async function requeueFailedTasksWithCooldown(
       repeatedFailureSignatureThreshold,
     );
 
-    if (
-      failure.reason === "verification_command_missing_script" ||
-      failure.reason === "verification_command_unsupported_format" ||
-      failure.reason === "verification_command_sequence_issue"
-    ) {
+    if (isVerificationRecoveryFailureCode(failure.reason)) {
       const adjustment = applyVerificationRecoveryAdjustment({
         reason: failure.reason,
         commands: task.commands ?? [],
         errorMessage: latestRun?.errorMessage ?? null,
+        errorMeta: latestRun?.errorMeta,
       });
 
       if (adjustment) {
@@ -391,8 +423,11 @@ export async function requeueFailedTasksWithCooldown(
       }
     }
 
-    if (failure.reason === "policy_violation") {
-      const outsideAllowedPaths = extractOutsideAllowedViolationPaths(latestRun?.errorMessage);
+    if (failure.reason === FAILURE_CODE.POLICY_VIOLATION) {
+      const outsideAllowedPaths = resolveOutsideAllowedViolationPaths(
+        latestRun?.errorMessage,
+        latestRun?.errorMeta,
+      );
       const autoAllowPaths = resolvePolicyViolationAutoAllowPaths(
         task,
         outsideAllowedPaths,

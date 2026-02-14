@@ -1,20 +1,13 @@
+import type {
+  FailureCategory as SharedFailureCategory,
+  FailureClassification as SharedFailureClassification,
+} from "@openTiger/core";
+
 export type BlockReason = "awaiting_judge" | "needs_rework" | "quota_wait";
 
-export type FailureCategory =
-  | "env"
-  | "setup"
-  | "permission"
-  | "noop"
-  | "policy"
-  | "test"
-  | "flaky"
-  | "model"
-  | "model_loop";
+export type FailureCategory = SharedFailureCategory;
 
-export type FailureClassification = {
-  category: FailureCategory;
-  retryable: boolean;
-  reason: string;
+export type FailureClassification = SharedFailureClassification & {
   blockReason: Extract<BlockReason, "needs_rework">;
 };
 

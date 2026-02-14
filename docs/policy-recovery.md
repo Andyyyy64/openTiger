@@ -131,11 +131,13 @@ Cycle Manager adjusts the command and requeues instead of infinite block.
 
 - `requeue-failed`:
   - `verification_command_unsupported_format` / `verification_command_missing_script`
+  - `verification_command_missing_make_target`
     - Remove failed command from `commands` and requeue
   - `verification_command_sequence_issue`
     - Reorder clean-like command and generated-artifact check (`test -f/-s ...`) to avoid invalid order
   - `policy_violation`
     - Try allowed path adjustment and requeue
+- For policy path extraction, Cycle Manager prefers `errorMeta.policyViolations` and falls back to legacy message parsing.
 
 Worker may skip explicit command failure within the same run when remaining commands exist or earlier steps already passed (e.g. doc-only/no-op).
 
@@ -244,8 +246,13 @@ Related queue recovery events:
   - `policy_allowed_paths_adjusted`
   - `policy_allowed_paths_adjusted_from_blocked`
   - `verification_command_missing_script_adjusted`
+  - `verification_command_missing_make_target_adjusted`
   - `verification_command_unsupported_format_adjusted`
   - `verification_command_sequence_adjusted`
+  - `verification_command_missing_script_adjusted_from_blocked`
+  - `verification_command_missing_make_target_adjusted_from_blocked`
+  - `verification_command_unsupported_format_adjusted_from_blocked`
+  - `verification_command_sequence_adjusted_from_blocked`
   - `cooldown_retry`
 - `task.recovery_escalated` (reason)
   - `policy_violation_rework_suppressed_no_safe_path`

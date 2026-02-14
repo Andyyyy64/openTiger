@@ -110,11 +110,19 @@ Supported adjustment reasons:
 
 - `verification_command_missing_script`
   - Drops the failed explicit command to allow fallback verification.
-  - Includes missing make target style failures (`No rule to make target ...`).
+- `verification_command_missing_make_target`
+  - Drops failed `make <target>` verification command when target is unavailable.
 - `verification_command_unsupported_format`
   - Drops unsupported explicit command syntax (e.g. shell operators / command substitution).
 - `verification_command_sequence_issue`
   - Reorders conflicting command sequence where cleanup commands run before generated-artifact presence checks.
+  - Scope is intentionally narrow: this applies only to explicit artifact checks (`test -f/-s ...`) on likely generated paths.
+  - `grep`-style verification failures are not treated as sequence issues.
+
+`grep` bracket-literal handling (`grep -q "\[...\]"`) is handled in Worker command parsing:
+
+- The parser preserves non-special backslashes inside double quotes (for example `\[`).
+- This prevents shell/direct-spawn interpretation drift and is separate from sequence recovery.
 
 Requeue event payload includes:
 
@@ -123,15 +131,23 @@ Requeue event payload includes:
 - `previousCommands`
 - `nextCommands`
 
-Worker also persists structured failure metadata into `runs.error_meta`:
+Worker persists structured failure metadata into `runs.error_meta`:
 
 - `source` (for example: `verification`, `execution`)
 - `failureCode` (for example: `verification_command_missing_script`)
 - command context fields (`failedCommand`, `failedCommandSource`, `failedCommandStderr`) when available
 
-Cycle Manager classifies failures from structured metadata (`errorMeta.failureCode`) and does not
-use message-regex fallback for classification.
-If `failureCode` is missing or unknown, it falls back to `model_or_unknown_failure`.
+Failure code vocabulary is defined centrally in `packages/core/src/failure-codes.ts`.
+
+Cycle Manager and API both use shared classifier logic from `@openTiger/core`.
+They prefer structured metadata (`errorMeta.failureCode`) and use message-regex fallback for
+legacy runs without `error_meta` or for unknown codes.
+
+Important classification behavior:
+
+- `execution_failed` is not mapped to a fixed category by code alone.
+- The classifier intentionally falls back to message-based signals so it can still classify into
+  `permission`, `noop`, `setup`, and other concrete categories when possible.
 
 Retry behavior for requeue:
 

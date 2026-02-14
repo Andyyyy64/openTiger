@@ -5,6 +5,7 @@ import { db } from "@openTiger/db";
 import { events, tasks } from "@openTiger/db/schema";
 import { runOpenCode } from "@openTiger/llm";
 import {
+  FAILURE_CODE,
   extractOutsideAllowedViolationPaths,
   extractPolicyViolationPaths,
   loadPolicyRecoveryConfig,
@@ -627,6 +628,9 @@ export async function runVerificationPhase(
   });
 
   const isNoChangeFailure = (message: string | undefined): boolean => {
+    if (verifyResult.failureCode === FAILURE_CODE.NO_ACTIONABLE_CHANGES) {
+      return true;
+    }
     const normalized = (message ?? "").toLowerCase();
     return (
       normalized.includes("no changes were made") ||
@@ -1071,7 +1075,7 @@ export async function runVerificationPhase(
         errorMessage,
         errorMeta: {
           source: "verification",
-          failureCode: verifyResult.failureCode ?? "policy_violation",
+          failureCode: verifyResult.failureCode ?? FAILURE_CODE.POLICY_VIOLATION,
           failedCommand: verifyResult.failedCommand ?? null,
           failedCommandSource: verifyResult.failedCommandSource ?? null,
           failedCommandStderr: summarizeVerificationFailure(
@@ -1091,7 +1095,39 @@ export async function runVerificationPhase(
       };
     }
     if (!verifyResult.failedCommand?.trim()) {
-      throw new Error(verifyResult.error ?? "Verification commands failed");
+      const fallbackFailureCode =
+        verifyResult.failureCode ?? FAILURE_CODE.VERIFICATION_COMMAND_FAILED;
+      const errorMessage = verifyResult.error ?? "Verification commands failed";
+      console.warn("[Worker] Verification failed without failed command metadata.");
+      await finalizeTaskState({
+        runId,
+        taskId,
+        agentId,
+        runStatus: "failed",
+        taskStatus: "blocked",
+        blockReason: "needs_rework",
+        costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+        errorMessage,
+        errorMeta: {
+          source: "verification",
+          failureCode: fallbackFailureCode,
+          failedCommand: null,
+          failedCommandSource: verifyResult.failedCommandSource ?? null,
+          failedCommandStderr: summarizeVerificationFailure(
+            verifyResult.failedCommandStderr ?? verifyResult.error,
+          ),
+          policyViolations: verifyResult.policyViolations,
+        },
+      });
+      return {
+        success: false,
+        result: {
+          success: false,
+          taskId,
+          runId,
+          error: errorMessage,
+        },
+      };
     }
     const failedCommand = verifyResult.failedCommand ?? "(unknown command)";
     const failedSource = verifyResult.failedCommandSource ?? "explicit";
@@ -1148,7 +1184,7 @@ export async function runVerificationPhase(
       errorMessage,
       errorMeta: {
         source: "verification",
-        failureCode: verifyResult.failureCode ?? "verification_command_failed",
+        failureCode: verifyResult.failureCode ?? FAILURE_CODE.VERIFICATION_COMMAND_FAILED,
         failedCommand,
         failedCommandSource: failedSource,
         failedCommandStderr: stderrSummary,

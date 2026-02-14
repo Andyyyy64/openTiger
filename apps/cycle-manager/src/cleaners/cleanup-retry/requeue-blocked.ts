@@ -3,6 +3,8 @@ import { tasks, runs } from "@openTiger/db/schema";
 import {
   computeQuotaBackoff,
   extractOutsideAllowedViolationPaths,
+  extractPolicyViolationsFromErrorMeta,
+  isVerificationRecoveryFailureCode,
   loadPolicyRecoveryConfig,
   mergeUniquePaths,
   resolveCommandDrivenAllowedPaths,
@@ -11,7 +13,9 @@ import {
 } from "@openTiger/core";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { recordEvent } from "../../monitors/event-logger";
+import { classifyFailure } from "./failure-classifier";
 import { hasPendingJudgeRun, restoreLatestJudgeRun } from "./judge-recovery";
+import { applyVerificationRecoveryAdjustment } from "./requeue-failed";
 import { isPrReviewTask, normalizeBlockReason, normalizeContext } from "./task-context";
 
 const DEFAULT_QUOTA_BASE_DELAY_MS = 30_000;
@@ -178,6 +182,17 @@ function extractAutoReworkParents(notes: string | undefined): string[] {
 
 function resolveAutoReworkDepth(notes: string | undefined): number {
   return extractAutoReworkParents(notes).length;
+}
+
+export function resolveOutsideAllowedViolationPaths(
+  errorMessage: string | null | undefined,
+  errorMeta?: unknown,
+): string[] {
+  const structuredViolations = extractPolicyViolationsFromErrorMeta(errorMeta);
+  if (structuredViolations.length > 0) {
+    return extractOutsideAllowedViolationPaths(structuredViolations);
+  }
+  return extractOutsideAllowedViolationPaths(errorMessage);
 }
 
 async function hasActiveReworkChild(parentTaskId: string, currentTaskId: string): Promise<boolean> {
@@ -438,13 +453,56 @@ export async function requeueBlockedTasksWithCooldown(
       const [latestRun] = await db
         .select({
           errorMessage: runs.errorMessage,
+          errorMeta: runs.errorMeta,
         })
         .from(runs)
         .where(and(eq(runs.taskId, task.id), inArray(runs.status, ["failed", "cancelled"])))
         .orderBy(desc(runs.startedAt))
         .limit(1);
 
-      const outsideAllowedPaths = extractOutsideAllowedViolationPaths(latestRun?.errorMessage);
+      const failure = classifyFailure(latestRun?.errorMessage ?? null, latestRun?.errorMeta);
+      if (isVerificationRecoveryFailureCode(failure.reason)) {
+        const adjustment = applyVerificationRecoveryAdjustment({
+          reason: failure.reason,
+          commands: task.commands ?? [],
+          errorMessage: latestRun?.errorMessage ?? null,
+          errorMeta: latestRun?.errorMeta,
+        });
+        if (adjustment) {
+          await db
+            .update(tasks)
+            .set({
+              status: "queued",
+              blockReason: null,
+              commands: adjustment.nextCommands,
+              retryCount: nextRetryCount,
+              updatedAt: new Date(),
+            })
+            .where(eq(tasks.id, task.id));
+          await recordEvent({
+            type: "task.requeued",
+            entityType: "task",
+            entityId: task.id,
+            payload: {
+              reason: `${adjustment.eventReason}_from_blocked`,
+              recoveryRule: adjustment.recoveryRule,
+              retryCount: nextRetryCount,
+              previousCommands: task.commands ?? [],
+              nextCommands: adjustment.nextCommands,
+            },
+          });
+          console.log(
+            `[Cleanup] Requeued blocked task with adjusted commands: ${task.id} (${adjustment.reasonLabel})`,
+          );
+          handled++;
+          continue;
+        }
+      }
+
+      const outsideAllowedPaths = resolveOutsideAllowedViolationPaths(
+        latestRun?.errorMessage,
+        latestRun?.errorMeta,
+      );
       if (outsideAllowedPaths.length > 0) {
         const autoAllowPaths = resolvePolicyViolationAutoAllowPaths(
           {

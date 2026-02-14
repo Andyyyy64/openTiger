@@ -47,6 +47,16 @@ describe("sanitizeCommandsForVerificationSequenceIssue", () => {
     expect(adjusted).toBeNull();
   });
 
+  it("adjusts using structured failedCommand metadata even when message format differs", () => {
+    const adjusted = sanitizeCommandsForVerificationSequenceIssue(
+      ["make clean", "test -f build/kernel.elf"],
+      "unexpected verification failure message",
+      { failedCommand: "test -f build/kernel.elf" },
+    );
+
+    expect(adjusted).toEqual(["test -f build/kernel.elf", "make clean"]);
+  });
+
   it("does not adjust for paths containing wildcard", () => {
     const adjusted = sanitizeCommandsForVerificationSequenceIssue(
       ["make clean", "test -f build/*.elf"],
