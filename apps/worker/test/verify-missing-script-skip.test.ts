@@ -294,13 +294,28 @@ describe("shouldSkipAutoCommandFailure", () => {
     expect(shouldSkip).toBe(true);
   });
 
-  it("does not skip unknown auto command failure when explicit verification did not pass", () => {
+  it("skips unknown auto command failure when any prior effective verification passed", () => {
     const shouldSkip = shouldSkipAutoCommandFailure({
       source: "auto",
       command: "pnpm run test",
       output: "Unexpected framework failure signature",
       hasRemainingCommands: false,
       hasPriorEffectiveCommand: true,
+      hasPriorExplicitCommandPass: false,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(true);
+  });
+
+  it("does not skip unknown auto command failure when no prior effective verification passed", () => {
+    const shouldSkip = shouldSkipAutoCommandFailure({
+      source: "auto",
+      command: "pnpm run test",
+      output: "Unexpected framework failure signature",
+      hasRemainingCommands: false,
+      hasPriorEffectiveCommand: false,
       hasPriorExplicitCommandPass: false,
       isDocOnlyChange: false,
       isNoOpChange: false,

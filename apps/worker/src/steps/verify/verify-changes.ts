@@ -630,7 +630,7 @@ export function shouldSkipAutoCommandFailure(params: {
       "false";
     if (
       allowNonBlockingAfterExplicitPass &&
-      params.hasPriorExplicitCommandPass &&
+      (params.hasPriorExplicitCommandPass || params.hasPriorEffectiveCommand) &&
       !params.hasRemainingCommands
     ) {
       return true;
