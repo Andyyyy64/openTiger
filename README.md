@@ -23,12 +23,16 @@ all under explicit runtime state transitions.
 - Requirement -> executable task generation
 - Role-based execution (`worker` / `tester` / `docser`)
 - PR and local-worktree judgement (`judge`)
-- Query-driven TigerResearch (`planner-first` claim/evidence convergence)
-- Plugin-first feature expansion (TigerResearch as the reference plugin)
 - Recovery-first operation (`quota_wait`, `awaiting_judge`, `needs_rework`)
 - Backlog-first startup (Issue/PR backlog is processed before new planning)
 - Dashboard + API for process control, logs, and system config
 - Runtime switch between host process and docker sandbox execution
+
+## Plugins
+
+- Plugin-first feature expansion
+- TigerResearch plugin (`planner-first` claim/evidence convergence) as the reference implementation
+- See `docs/plugins.md` for plugin architecture and implementation guide
 
 ## Architecture Overview
 
