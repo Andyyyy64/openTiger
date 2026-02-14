@@ -1,0 +1,74 @@
+---
+description: Concrete TypeScript and TSX implementation conventions for apps
+globs: apps/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Code Conventions
+
+## State transition discipline
+
+- Keep task/run/lease/agent transitions atomic when completing or failing a run.
+- Follow the centralized finalization pattern used by `finalizeTaskState` in `apps/worker/src/worker-runner-state.ts`.
+- When task status changes, always update `status`, `blockReason`, and `updatedAt` together.
+- Increment retry counters explicitly with `(task.retryCount ?? 0) + 1`.
+
+## Failure and retry modeling
+
+- Represent wait states with explicit block reasons, not ad-hoc flags.
+- Quota failures should map to `blocked` + `quota_wait` and use cooldown-based requeue.
+- Judge wait should remain in or return to `awaiting_judge` when a pending/restorable run exists.
+- Repeated failure signatures should switch strategy (`needs_rework`, autofix, or split rework), not repeat the same attempt forever.
+- Keep suppression and depth guards for rework chains (`BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES`, `AUTO_REWORK_MAX_DEPTH`).
+
+## Error classification and metadata
+
+- Use `FAILURE_CODE` constants from `@openTiger/core` for machine-readable failure reasons.
+- Classify failures with both message and structured metadata (pattern in `classifyFailure(errorMessage, errorMeta)`).
+- Prefer explicit helper names such as `classify*`, `resolve*`, `normalize*`, `extract*`, `parse*`.
+- Keep classifier logic deterministic and side-effect free.
+
+## Verification and policy handling
+
+- Implement command adjustment as dedicated transformation helpers returning structured results.
+- Preserve the adjustment pattern used in `applyVerificationRecoveryAdjustment` and related sanitize helpers in `apps/cycle-manager/src/cleaners/cleanup-retry/requeue-failed.ts`.
+- For policy violations, adjust `allowedPaths` via merge logic and record the exact delta.
+- Keep verify command handling spawn-safe; avoid relying on shell-only operators in command definitions.
+
+## Observability requirements
+
+- Emit structured events for important transitions using `recordEvent({ type, entityType, entityId, payload })`.
+- Keep event payload keys stable and machine-consumable.
+- Use component-prefixed logs (for example `[Worker]`, `[Judge]`, `[Cleanup]`) for operational traceability.
+
+## Mode-aware implementation
+
+- Branch repository behavior via `getRepoMode()` (`git` vs `local`) in worker and judge flows.
+- Keep execution environment differences (`host` vs `sandbox`) explicit and isolated.
+- Handle no-diff and no-commit outcomes as explicit no-op success paths with clear state transitions.
+
+## Loop and function boundaries
+
+- Keep polling loops in `run*Loop`-style functions with explicit interval waits.
+- Separate pure decision helpers from DB updates and side effects.
+- In long branching logic, prefer guard clauses and early `continue`/`return` over deep nesting.
+- Extract narrow helper functions when a branch has reusable parsing or policy logic.
+
+## API and dashboard TypeScript conventions
+
+- Keep API route helpers typed and composable; build command strings with dedicated helper functions.
+- In dashboard, use a typed API client (`fetchApi<T>`) and expose domain-specific API wrappers.
+- Derive display-only state with `useMemo` and clean up timers in `useEffect`.
+
+## Testing expectations
+
+- Add or update tests in each app's `test/` directory when changing retry, classification, parser, or branching logic.
+- For each new failure branch, include a success path and a guard/fallback path test.
+
+## Anti-patterns to avoid
+
+- Scattered status updates without a shared transition helper or transaction boundary.
+- String-only failure handling when structured `errorMeta` exists.
+- Silent retries without event emission.
+- Unbounded loops without cooldown or strategy switching.
+- Hardcoded specialization in core loops when plugin extension points already exist.

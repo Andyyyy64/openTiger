@@ -1,0 +1,66 @@
+---
+description: System-wide architecture and execution principles
+alwaysApply: true
+---
+
+# Core Principles
+
+## Mission
+
+- Keep the system making progress autonomously.
+- Prefer recoverability over first-attempt success.
+
+## Required vocabulary
+
+- Task status: `queued`, `running`, `done`, `failed`, `blocked`, `cancelled`.
+- Block reasons: `awaiting_judge`, `quota_wait`, `needs_rework`, `issue_linking`.
+- Agent roles: `planner`, `dispatcher`, `worker`, `tester`, `docser`, `judge`, `cycle-manager`.
+- Modes: `REPO_MODE` (`git`/`local`), `JUDGE_MODE` (`git`/`local`/`auto`), `EXECUTION_ENVIRONMENT` (`host`/`sandbox`).
+
+## Startup and backlog priority
+
+- Keep backlog-first startup behavior.
+- Use `startPlanner = R && !I && !P && !L`.
+- Replan only when local backlog and issue backlog are both empty.
+- If issue/PR/local backlog exists, consume it before generating new tasks.
+
+## Failure and retry design
+
+- Do not leave work in implicit halt states.
+- Convert failure into explicit next states.
+- Use event-driven strategy switching, not fixed watchdog-only behavior.
+- Quota pressure should map to `blocked(quota_wait)` with cooldown retry.
+- Repeated same failure signatures should escalate to a different path (`needs_rework`, autofix, or rework split).
+- For missing judgeable runs, try run restoration before fallback retry.
+
+## Idempotency and anti-duplication
+
+- Preserve lease + runtime lock + run-claim idempotency semantics.
+- Keep judge idempotency behavior (`judgedAt`, `judgementVersion`) for double-review prevention.
+- Continuously reclaim dangling, expired, and orphaned leases.
+
+## Ownership boundaries
+
+- Planner plans.
+- Dispatcher assigns and leases.
+- Worker/Tester/Docser execute and verify.
+- Judge evaluates and decides.
+- Cycle Manager converges and stabilizes.
+- Do not move cross-layer orchestration decisions into execution-layer code.
+
+## Plugin and extension policy
+
+- Prefer plugin/registry extension over hardcoded feature branching in core loops.
+- Keep generic orchestration logic stable; isolate specialization in plugin paths.
+
+## Documentation and traceability
+
+- Source code is the final source of truth.
+- When changing state/flow/startup/failure behavior, update related docs in `docs/`.
+- Use the tracing order: state vocabulary -> transition -> owner -> implementation.
+
+## Non-goals
+
+- Do not optimize only for first-attempt success at the cost of reliability.
+- Do not create unbounded rework chains.
+- Do not rely only on fixed-interval polling for strategy decisions.
