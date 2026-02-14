@@ -347,89 +347,133 @@ export async function stageChanges(cwd: string, paths: string[] = ["."]): Promis
     new Set(paths.map((path) => path.trim()).filter((path) => path.length > 0)),
   );
   const stagePaths = normalizedPaths.length > 0 ? normalizedPaths : ["."];
+  const stdoutParts: string[] = [];
+  const stderrParts: string[] = [];
+  const skippedIgnoredPaths = new Set<string>();
+  const skippedMissingPaths = new Set<string>();
+  let pendingPaths = stagePaths;
+  let useAddAll = false;
+  let lastExitCode = 1;
 
-  const initialResult = await execGit(["add", "--", ...stagePaths], cwd);
-  if (initialResult.success) {
-    return initialResult;
-  }
+  const attemptLimit = Math.max(2, stagePaths.length + 2);
 
-  const ignoredPaths = extractIgnoredPathsFromAddError(initialResult.stderr);
-  const missingPaths = extractMissingPathspecsFromAddError(initialResult.stderr);
-  if (ignoredPaths.length === 0 && missingPaths.length === 0) {
-    return initialResult;
-  }
-
-  if (stagePaths.includes(".") && ignoredPaths.length > 0) {
-    return initialResult;
-  }
-
-  const ignoredSet = new Set(ignoredPaths);
-  const missingSet = new Set(missingPaths);
-  const safePaths = stagePaths.filter((path) => !ignoredSet.has(path) && !missingSet.has(path));
-  const trackedMissingPaths =
-    missingPaths.length > 0 ? await resolveTrackedMissingPaths(cwd, missingPaths) : [];
-  const retryPaths = Array.from(new Set([...safePaths, ...trackedMissingPaths]));
-  const skippedMissingPaths = missingPaths.filter((path) => !trackedMissingPaths.includes(path));
-
-  if (retryPaths.length === 0) {
-    const messages: string[] = [];
-    if (ignoredPaths.length > 0) {
-      messages.push(`[git] Skipped ignored paths during staging: ${ignoredPaths.join(", ")}`);
-    }
-    if (skippedMissingPaths.length > 0) {
-      messages.push(
-        `[git] Skipped missing untracked paths during staging: ${skippedMissingPaths.join(", ")}`,
-      );
-    }
-    messages.push(initialResult.stderr);
-    return {
-      success: true,
-      stdout: initialResult.stdout,
-      stderr: messages
-        .filter((line) => line.length > 0)
-        .join("\n")
-        .trim(),
-      exitCode: 0,
-    };
-  }
-
-  const safeResult = await execGit(["add", "-A", "--", ...retryPaths], cwd);
-  if (!safeResult.success) {
-    return {
-      success: false,
-      stdout: [initialResult.stdout, safeResult.stdout]
-        .filter((line) => line.length > 0)
-        .join("\n")
-        .trim(),
-      stderr: [initialResult.stderr, safeResult.stderr]
-        .filter((line) => line.length > 0)
-        .join("\n")
-        .trim(),
-      exitCode: safeResult.exitCode,
-    };
-  }
-
-  const warnings: string[] = [];
-  if (ignoredPaths.length > 0) {
-    warnings.push(`[git] Skipped ignored paths during staging: ${ignoredPaths.join(", ")}`);
-  }
-  if (skippedMissingPaths.length > 0) {
-    warnings.push(
-      `[git] Skipped missing untracked paths during staging: ${skippedMissingPaths.join(", ")}`,
+  for (let attempt = 0; attempt < attemptLimit; attempt += 1) {
+    const result = await execGit(
+      useAddAll ? ["add", "-A", "--", ...pendingPaths] : ["add", "--", ...pendingPaths],
+      cwd,
     );
+    if (result.stdout.length > 0) {
+      stdoutParts.push(result.stdout);
+    }
+    if (result.stderr.length > 0) {
+      stderrParts.push(result.stderr);
+    }
+    lastExitCode = result.exitCode;
+
+    if (result.success) {
+      const warnings: string[] = [];
+      if (skippedIgnoredPaths.size > 0) {
+        warnings.push(
+          `[git] Skipped ignored paths during staging: ${Array.from(skippedIgnoredPaths).join(", ")}`,
+        );
+      }
+      if (skippedMissingPaths.size > 0) {
+        warnings.push(
+          `[git] Skipped missing untracked paths during staging: ${Array.from(skippedMissingPaths).join(", ")}`,
+        );
+      }
+      return {
+        success: true,
+        stdout: stdoutParts.join("\n").trim(),
+        stderr: [...warnings, ...stderrParts]
+          .filter((line) => line.length > 0)
+          .join("\n")
+          .trim(),
+        exitCode: 0,
+      };
+    }
+
+    const ignoredPaths = extractIgnoredPathsFromAddError(result.stderr);
+    const missingPaths = extractMissingPathspecsFromAddError(result.stderr);
+    if (ignoredPaths.length === 0 && missingPaths.length === 0) {
+      return {
+        success: false,
+        stdout: stdoutParts.join("\n").trim(),
+        stderr: stderrParts.join("\n").trim(),
+        exitCode: lastExitCode,
+      };
+    }
+
+    if (pendingPaths.includes(".") && ignoredPaths.length > 0) {
+      return {
+        success: false,
+        stdout: stdoutParts.join("\n").trim(),
+        stderr: stderrParts.join("\n").trim(),
+        exitCode: lastExitCode,
+      };
+    }
+
+    const ignoredSet = new Set(ignoredPaths);
+    const missingSet = new Set(missingPaths);
+    const safePaths = pendingPaths.filter((path) => !ignoredSet.has(path) && !missingSet.has(path));
+    const trackedMissingPaths =
+      missingPaths.length > 0 ? await resolveTrackedMissingPaths(cwd, missingPaths) : [];
+    const trackedMissingSet = new Set(trackedMissingPaths);
+    for (const ignoredPath of ignoredPaths) {
+      skippedIgnoredPaths.add(ignoredPath);
+    }
+    for (const missingPath of missingPaths) {
+      if (!trackedMissingSet.has(missingPath)) {
+        skippedMissingPaths.add(missingPath);
+      }
+    }
+
+    const retryPaths = Array.from(new Set([...safePaths, ...trackedMissingPaths]));
+    if (retryPaths.length === 0) {
+      return {
+        success: true,
+        stdout: stdoutParts.join("\n").trim(),
+        stderr: [
+          skippedIgnoredPaths.size > 0
+            ? `[git] Skipped ignored paths during staging: ${Array.from(skippedIgnoredPaths).join(", ")}`
+            : "",
+          skippedMissingPaths.size > 0
+            ? `[git] Skipped missing untracked paths during staging: ${Array.from(skippedMissingPaths).join(", ")}`
+            : "",
+          ...stderrParts,
+        ]
+          .filter((line) => line.length > 0)
+          .join("\n")
+          .trim(),
+        exitCode: 0,
+      };
+    }
+
+    const samePathset =
+      retryPaths.length === pendingPaths.length &&
+      retryPaths.every((path, index) => path === pendingPaths[index]);
+    // 同じ pathset でも、まだ -A を試していない段階では一度だけフォールバックを許可する。
+    if (samePathset && useAddAll) {
+      return {
+        success: false,
+        stdout: stdoutParts.join("\n").trim(),
+        stderr: stderrParts.join("\n").trim(),
+        exitCode: lastExitCode,
+      };
+    }
+
+    pendingPaths = retryPaths;
+    useAddAll = true;
   }
 
   return {
-    success: true,
-    stdout: [initialResult.stdout, safeResult.stdout]
+    success: false,
+    stdout: stdoutParts.join("\n").trim(),
+    stderr: [...stderrParts, "[git] stageChanges retry limit exceeded"]
       .filter((line) => line.length > 0)
       .join("\n")
       .trim(),
-    stderr: [...warnings, initialResult.stderr, safeResult.stderr]
-      .filter((line) => line.length > 0)
-      .join("\n")
-      .trim(),
-    exitCode: 0,
+    exitCode: lastExitCode,
   };
 }
 
