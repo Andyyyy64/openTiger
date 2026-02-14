@@ -446,7 +446,9 @@ export async function startManagedProcess(
     const command = await definition.buildStart(payload);
     const commandEnv = command.env ?? {};
     const managedRole = resolveManagedAgentRole(definition, commandEnv);
-    const resolvedExecutor = managedRole ? resolveExecutorForRole(managedRole, configEnv) : undefined;
+    const resolvedExecutor = managedRole
+      ? resolveExecutorForRole(managedRole, configEnv)
+      : undefined;
     const startedAt = new Date().toISOString();
     const logDir = resolveLogDir();
     mkdirSync(logDir, { recursive: true });

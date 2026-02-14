@@ -34,7 +34,10 @@ export function isCodexExecutor(value: string | undefined): boolean {
   return normalized === "codex" || normalized === "codex-cli" || normalized === "codex_cli";
 }
 
-export function normalizeExecutor(value?: string, fallback: ExecutorMode = DEFAULT_EXECUTOR): ExecutorMode {
+export function normalizeExecutor(
+  value?: string,
+  fallback: ExecutorMode = DEFAULT_EXECUTOR,
+): ExecutorMode {
   const normalized = value?.trim().toLowerCase();
   if (normalized === "opencode") {
     return "opencode";

@@ -36,7 +36,10 @@ const AGENT_EXECUTOR_SETTINGS = AGENT_EXECUTOR_ROLES.map((role) => ({
   key: AGENT_EXECUTOR_CONFIG_KEY_BY_ROLE[role],
   label: AGENT_EXECUTOR_LABELS[role],
 }));
-const HIDDEN_EXECUTOR_KEYS = new Set(["LLM_EXECUTOR", ...AGENT_EXECUTOR_SETTINGS.map((item) => item.key)]);
+const HIDDEN_EXECUTOR_KEYS = new Set([
+  "LLM_EXECUTOR",
+  ...AGENT_EXECUTOR_SETTINGS.map((item) => item.key),
+]);
 
 function formatExecutorLabel(value: string): string {
   return value === "claude_code" ? "claudecode" : value;
@@ -68,10 +71,7 @@ export const SettingsPage: React.FC = () => {
   }, [data]);
 
   const defaultExecutor = normalizeExecutor(values.LLM_EXECUTOR);
-  const configuredExecutors = useMemo(
-    () => collectConfiguredExecutors(values),
-    [values],
-  );
+  const configuredExecutors = useMemo(() => collectConfiguredExecutors(values), [values]);
   const usesOpenCode = configuredExecutors.has("opencode");
   const usesCodex = configuredExecutors.has("codex");
   const usesClaudeCode = configuredExecutors.has("claude_code");
@@ -474,7 +474,9 @@ export const SettingsPage: React.FC = () => {
                     : "Per_Agent_Overrides (click to open)"}
                 </span>
               </span>
-              <span className="text-[10px] text-zinc-500">{AGENT_EXECUTOR_SETTINGS.length} agents</span>
+              <span className="text-[10px] text-zinc-500">
+                {AGENT_EXECUTOR_SETTINGS.length} agents
+              </span>
             </button>
             {isAgentOverridesOpen && (
               <div className="px-3 pb-3 pt-1 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -525,11 +527,13 @@ export const SettingsPage: React.FC = () => {
           </div>
           <div className="text-[10px] text-zinc-500 flex flex-wrap gap-2">
             <span>// Active executors:</span>
-            {LLM_EXECUTOR_OPTIONS.filter((option) => configuredExecutors.has(option)).map((option) => (
-              <span key={option} className="text-zinc-300">
-                {formatExecutorLabel(option)}
-              </span>
-            ))}
+            {LLM_EXECUTOR_OPTIONS.filter((option) => configuredExecutors.has(option)).map(
+              (option) => (
+                <span key={option} className="text-zinc-300">
+                  {formatExecutorLabel(option)}
+                </span>
+              ),
+            )}
           </div>
           <div className="text-xs text-zinc-500">
             {" // Model/API key sections are filtered by the active per-agent executors."}

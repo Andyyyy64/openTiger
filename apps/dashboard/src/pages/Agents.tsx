@@ -26,7 +26,10 @@ function resolveExecutorRole(role: string): AgentExecutorRole {
     : "worker";
 }
 
-function resolveOpenCodeModelForRole(config: Record<string, string>, role: string): string | undefined {
+function resolveOpenCodeModelForRole(
+  config: Record<string, string>,
+  role: string,
+): string | undefined {
   if (role === "planner") {
     return config.PLANNER_MODEL || config.OPENCODE_MODEL;
   }
@@ -69,8 +72,7 @@ export const AgentsPage: React.FC = () => {
   const configValues = config?.config ?? {};
   const configuredClaudeModel =
     normalizeClaudeModel(configValues.CLAUDE_CODE_MODEL) ?? CLAUDE_CODE_DEFAULT_MODEL;
-  const configuredCodexModel =
-    normalizeCodexModel(configValues.CODEX_MODEL) ?? CODEX_DEFAULT_MODEL;
+  const configuredCodexModel = normalizeCodexModel(configValues.CODEX_MODEL) ?? CODEX_DEFAULT_MODEL;
   const onlineAgents = (agents ?? []).filter((agent) => agent.status !== "offline");
 
   // Detect state where dispatch is not possible due to incomplete dependencies
@@ -229,7 +231,9 @@ export const AgentsPage: React.FC = () => {
                   ? (normalizeClaudeModel(metadataModel) ?? configuredClaudeModel)
                   : provider === "codex"
                     ? (normalizeCodexModel(metadataModel) ?? configuredCodexModel)
-                    : (metadataModel ?? resolveOpenCodeModelForRole(configValues, agent.role) ?? "--");
+                    : (metadataModel ??
+                      resolveOpenCodeModelForRole(configValues, agent.role) ??
+                      "--");
               return (
                 <div
                   key={agent.id}
