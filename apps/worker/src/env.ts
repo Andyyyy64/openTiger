@@ -1,5 +1,5 @@
 import { access, readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { parse } from "dotenv";
 import { db } from "@openTiger/db";
 import { config as configTable } from "@openTiger/db/schema";
@@ -144,6 +144,15 @@ function shouldStripEnvKey(key: string): boolean {
   return STRIP_ENV_PREFIXES.some((prefix) => key.startsWith(prefix));
 }
 
+function ensureRuntimeNodeBinFirst(pathValue: string | undefined): string {
+  const runtimeNodeBin = dirname(process.execPath);
+  const entries = (pathValue ?? "")
+    .split(delimiter)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0 && entry !== runtimeNodeBin);
+  return [runtimeNodeBin, ...entries].join(delimiter);
+}
+
 async function loadProjectEnv(cwd: string): Promise<Record<string, string>> {
   try {
     const content = await readFile(join(cwd, ".env"), "utf-8");
@@ -202,6 +211,9 @@ export async function buildTaskEnv(cwd: string): Promise<Record<string, string>>
     }
     baseEnv[key] = value;
   }
+
+  // Keep child processes on the same Node.js runtime as the current worker process.
+  baseEnv.PATH = ensureRuntimeNodeBinFirst(baseEnv.PATH);
 
   return baseEnv;
 }

@@ -1,9 +1,46 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:net";
+import { join, resolve } from "node:path";
 import { buildTaskEnv } from "../../env";
 import { DEV_COMMAND_WARMUP_MS, DEV_PORT_IN_USE_PATTERNS } from "./constants";
 import { parseCommand } from "./command-parser";
 import type { CommandResult } from "./types";
+
+function isInsidePath(basePath: string, candidatePath: string): boolean {
+  const normalizedBase = resolve(basePath);
+  const normalizedCandidate = resolve(candidatePath);
+  return (
+    normalizedCandidate === normalizedBase ||
+    normalizedCandidate.startsWith(`${normalizedBase}/`) ||
+    normalizedCandidate.startsWith(`${normalizedBase}\\`)
+  );
+}
+
+function normalizePathEntry(entry: string): string {
+  return entry.replace(/\\/g, "/");
+}
+
+function isNodeModulesBinPath(entry: string): boolean {
+  const normalized = normalizePathEntry(entry).replace(/\/+$/, "");
+  return normalized.endsWith("/node_modules/.bin");
+}
+
+export function buildCommandPath(cwd: string, currentPath: string | undefined): string {
+  const delimiter = process.platform === "win32" ? ";" : ":";
+  const preferredEntry = join(cwd, "node_modules", ".bin");
+  const rawEntries = (currentPath ?? "")
+    .split(delimiter)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  const filteredEntries = rawEntries.filter((entry) => {
+    if (!isNodeModulesBinPath(entry)) {
+      return true;
+    }
+    return isInsidePath(cwd, entry);
+  });
+  const uniqueEntries = Array.from(new Set([preferredEntry, ...filteredEntries]));
+  return uniqueEntries.join(delimiter);
+}
 
 // Execute command
 export async function runCommand(
@@ -28,6 +65,7 @@ export async function runCommand(
     ...baseEnv,
     ...parsed.env,
   };
+  env.PATH = buildCommandPath(cwd, env.PATH);
 
   return new Promise((resolve) => {
     const process = spawn(parsed.executable, parsed.args, {
@@ -131,6 +169,7 @@ async function runDevCommandOnce(
     ...baseEnv,
     ...parsed.env,
   };
+  env.PATH = buildCommandPath(cwd, env.PATH);
 
   return new Promise((resolve) => {
     const child = spawn(parsed.executable, parsed.args, {

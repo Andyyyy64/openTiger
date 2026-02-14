@@ -351,22 +351,38 @@ function isVerificationSequenceIssue(params: {
   return isCleanLikeCommand(previous.command);
 }
 
-function resolveVerificationCommandFailureCode(params: {
+export function resolveVerificationCommandFailureCode(params: {
   verificationCommands: VerificationCommand[];
   index: number;
   command: string;
   output: string;
 }): VerifyFailureCode {
-  const { missingScriptLikeFailure, missingMakeTargetLikeFailure, unsupportedFormatFailure } =
-    isSkippableSetupFailure(params.command, params.output);
+  const {
+    missingScriptLikeFailure,
+    noTestFilesLikeFailure,
+    missingMakeTargetLikeFailure,
+    unsupportedFormatFailure,
+  } = isSkippableSetupFailure(params.command, params.output);
   if (missingMakeTargetLikeFailure) {
     return FAILURE_CODE.VERIFICATION_COMMAND_MISSING_MAKE_TARGET;
+  }
+  if (noTestFilesLikeFailure) {
+    return FAILURE_CODE.VERIFICATION_COMMAND_NO_TEST_FILES;
   }
   if (missingScriptLikeFailure) {
     return FAILURE_CODE.VERIFICATION_COMMAND_MISSING_SCRIPT;
   }
   if (unsupportedFormatFailure) {
     return FAILURE_CODE.VERIFICATION_COMMAND_UNSUPPORTED_FORMAT;
+  }
+  if (isMissingDependencyOrCommandNotFoundFailure(params.output)) {
+    return FAILURE_CODE.SETUP_OR_BOOTSTRAP_ISSUE;
+  }
+  if (isRuntimeCompatibilityFailure(params.output)) {
+    return FAILURE_CODE.SETUP_OR_BOOTSTRAP_ISSUE;
+  }
+  if (isSetupOrBootstrapVerificationFailure(params.output)) {
+    return FAILURE_CODE.SETUP_OR_BOOTSTRAP_ISSUE;
   }
   if (isVerificationSequenceIssue(params)) {
     return FAILURE_CODE.VERIFICATION_COMMAND_SEQUENCE_ISSUE;
@@ -407,6 +423,7 @@ function isMissingMakeTargetFailure(output: string): boolean {
 }
 
 function isMissingScriptFailure(output: string): boolean {
+  // Heuristic fallback for script lookup failures across npm/pnpm/yarn output variants.
   const normalized = output.toLowerCase();
   return (
     normalized.includes("err_pnpm_no_script") ||
@@ -414,6 +431,15 @@ function isMissingScriptFailure(output: string): boolean {
     (normalized.includes("command") &&
       normalized.includes("not found") &&
       normalized.includes("script"))
+  );
+}
+
+function isNoTestFilesFailure(output: string): boolean {
+  const normalized = output.toLowerCase();
+  return (
+    normalized.includes("no test files found") ||
+    normalized.includes("no tests found") ||
+    normalized.includes("no files found matching")
   );
 }
 
@@ -433,6 +459,87 @@ function isUnsupportedCommandFormatFailure(output: string): boolean {
   );
 }
 
+function extractMissingModuleSpecifier(output: string): string | null {
+  const packageMatch = output.match(/cannot find package ['"]([^'"]+)['"]/i);
+  if (packageMatch?.[1]) {
+    return packageMatch[1];
+  }
+  const moduleMatch = output.match(/cannot find module ['"]([^'"]+)['"]/i);
+  if (moduleMatch?.[1]) {
+    return moduleMatch[1];
+  }
+  const modulePathMatch = output.match(/module path ['"]([^'"]+)['"] to exist/i);
+  if (modulePathMatch?.[1]) {
+    return modulePathMatch[1];
+  }
+  return null;
+}
+
+function isLikelyLocalModuleSpecifier(specifier: string): boolean {
+  const normalized = specifier.trim();
+  return (
+    normalized.startsWith(".") ||
+    normalized.startsWith("/") ||
+    normalized.startsWith("..") ||
+    /^[A-Za-z]:[\\/]/.test(normalized)
+  );
+}
+
+function isSetupOrBootstrapVerificationFailure(output: string): boolean {
+  const normalized = output.toLowerCase();
+  if (normalized.includes("cannot find package")) {
+    return true;
+  }
+  if (
+    normalized.includes("module path") &&
+    normalized.includes("to exist, but none could be found")
+  ) {
+    return true;
+  }
+  const missingSpecifier = extractMissingModuleSpecifier(output);
+  if (!missingSpecifier) {
+    return false;
+  }
+  if (isLikelyLocalModuleSpecifier(missingSpecifier)) {
+    return false;
+  }
+  if (normalized.includes("failed to load config from") && normalized.includes("node_modules")) {
+    return true;
+  }
+  return normalized.includes("imported from") && normalized.includes("node_modules");
+}
+
+function isMissingDependencyOrCommandNotFoundFailure(output: string): boolean {
+  const normalized = output.toLowerCase();
+  return (
+    normalized.includes("missing dependency") ||
+    normalized.includes("cannot find dependency") ||
+    normalized.includes("command not found") ||
+    normalized.includes("spawn enoent") ||
+    (normalized.includes("sh:") && normalized.includes("not found"))
+  );
+}
+
+function isRuntimeCompatibilityFailure(output: string): boolean {
+  const normalized = output.toLowerCase();
+  if (normalized.includes("unsupported engine") && normalized.includes('"node"')) {
+    return true;
+  }
+  if (normalized.includes("requires node") || normalized.includes("expected node version")) {
+    return true;
+  }
+  if (
+    normalized.includes("err_require_esm") &&
+    (normalized.includes("node_modules") || normalized.includes("/.pnpm/"))
+  ) {
+    return true;
+  }
+  if (normalized.includes("not supported") && normalized.includes("node")) {
+    return true;
+  }
+  return false;
+}
+
 function usesShellCommandSubstitution(command: string): boolean {
   return /\$\(/.test(command);
 }
@@ -442,11 +549,13 @@ function isSkippableSetupFailure(
   output: string,
 ): {
   missingScriptLikeFailure: boolean;
+  noTestFilesLikeFailure: boolean;
   missingMakeTargetLikeFailure: boolean;
   unsupportedFormatFailure: boolean;
   isSkippableOutput: boolean;
 } {
   const missingMakeTargetLikeFailure = isMissingMakeTargetFailure(output);
+  const noTestFilesLikeFailure = isNoTestFilesFailure(output);
   const missingScriptLikeFailure =
     isMissingScriptFailure(output) ||
     isMissingPackageManifestFailure(output) ||
@@ -455,9 +564,11 @@ function isSkippableSetupFailure(
     isUnsupportedCommandFormatFailure(output) || usesShellCommandSubstitution(command);
   return {
     missingScriptLikeFailure,
+    noTestFilesLikeFailure,
     missingMakeTargetLikeFailure,
     unsupportedFormatFailure,
-    isSkippableOutput: missingScriptLikeFailure || unsupportedFormatFailure,
+    isSkippableOutput:
+      missingScriptLikeFailure || noTestFilesLikeFailure || unsupportedFormatFailure,
   };
 }
 
@@ -500,6 +611,7 @@ export function shouldSkipAutoCommandFailure(params: {
   output: string;
   hasRemainingCommands: boolean;
   hasPriorEffectiveCommand: boolean;
+  hasPriorExplicitCommandPass: boolean;
   isDocOnlyChange: boolean;
   isNoOpChange: boolean;
 }): boolean {
@@ -513,6 +625,16 @@ export function shouldSkipAutoCommandFailure(params: {
   }
   const { isSkippableOutput } = isSkippableSetupFailure(params.command, params.output);
   if (!isSkippableOutput) {
+    const allowNonBlockingAfterExplicitPass =
+      (process.env.WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS ?? "true").toLowerCase() !==
+      "false";
+    if (
+      allowNonBlockingAfterExplicitPass &&
+      params.hasPriorExplicitCommandPass &&
+      !params.hasRemainingCommands
+    ) {
+      return true;
+    }
     return false;
   }
   if (params.hasRemainingCommands) {
@@ -777,6 +899,7 @@ ${clippedDiff || "(diff unavailable)"}
   const commandResults: CommandResult[] = [];
   let allPassed = true;
   let ranEffectiveCommand = false;
+  let ranExplicitEffectiveCommand = false;
   let failureCode: VerifyFailureCode | undefined;
   let failedCommand: string | undefined;
   let failedCommandSource: VerificationCommandSource | undefined;
@@ -889,6 +1012,9 @@ ${clippedDiff || "(diff unavailable)"}
 
     if (result.success && result.outcome === "passed") {
       ranEffectiveCommand = true;
+      if (source === "explicit") {
+        ranExplicitEffectiveCommand = true;
+      }
       console.log(`  ✓ Passed (${Math.round(result.durationMs / 1000)}s)`);
     } else {
       let output = resolveCommandOutput(result.stderr, result.stdout);
@@ -921,6 +1047,7 @@ ${clippedDiff || "(diff unavailable)"}
           output,
           hasRemainingCommands,
           hasPriorEffectiveCommand: ranEffectiveCommand,
+          hasPriorExplicitCommandPass: ranExplicitEffectiveCommand,
           isDocOnlyChange,
           isNoOpChange,
         })

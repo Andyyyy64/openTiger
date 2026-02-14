@@ -1,4 +1,5 @@
 import { checkoutBranch, getCurrentBranch } from "@openTiger/vcs";
+import { FAILURE_CODE } from "@openTiger/core";
 import type { VerifyResult } from "./steps/index";
 import type { VerificationCommandSource } from "./steps/verify/types";
 import { sanitizeRetryHint } from "./worker-task-helpers";
@@ -60,6 +61,9 @@ export function shouldAttemptVerifyRecovery(
   allowExplicitRecovery: boolean,
 ): boolean {
   if (verifyResult.success || verifyResult.policyViolations.length > 0) {
+    return false;
+  }
+  if (verifyResult.failureCode === FAILURE_CODE.SETUP_OR_BOOTSTRAP_ISSUE) {
     return false;
   }
   const failedCommand = verifyResult.failedCommand?.trim();
