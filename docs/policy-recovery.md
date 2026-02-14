@@ -217,7 +217,7 @@ Cycle Manager rework suppression:
   - Max suppression retries when no safe path found
 - `AUTO_REWORK_MAX_DEPTH` (default: 2)
   - Max rework chain depth; cancel when exceeded
-- `BLOCKED_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT` (default: 2)
+- `BLOCKED_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT` (default: 5)
   - Retry same `needs_rework` task as queued before splitting into a new rework child
 
 ## 8. Event Reference

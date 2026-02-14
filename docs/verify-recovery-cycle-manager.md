@@ -99,8 +99,23 @@ Blocked/judge/setup routing reasons:
 - `BLOCKED_TASK_RETRY_COOLDOWN_MS`
 - `FAILED_TASK_MAX_RETRY_COUNT`
 - `FAILED_TASK_REPEATED_SIGNATURE_THRESHOLD`
+- `BLOCKED_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT` (default: `5`)
+- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES` (default: `2`)
+- `AUTO_REWORK_MAX_DEPTH` (default: `2`)
 
-## 6. Implementation Reference (Source of Truth)
+## 6. Remaining Escalation Cases (Expected)
+
+These are the main "still escalates" cases after in-run and in-place retries:
+
+- non-retryable failures
+  - e.g. permission/auth failures that classifier marks `retryable=false`
+- repeated identical failure signature
+  - after repeated same-signature failures, task is escalated with `reason=repeated_same_failure_signature`
+- policy violation with no safe recovery path
+  - when no safe `allowedPaths` expansion candidate exists and suppression is exhausted,
+    policy rework split is suppressed and task is cancelled
+
+## 7. Implementation Reference (Source of Truth)
 
 - `apps/cycle-manager/src/cleaners/cleanup-retry/requeue-failed.ts`
 - `apps/cycle-manager/src/cleaners/cleanup-retry/requeue-blocked.ts`

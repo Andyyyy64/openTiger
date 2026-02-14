@@ -114,6 +114,8 @@ Default recovery attempts:
 Verification recovery now has a dedicated spec:
 
 - `docs/verify-recovery.md`
+- `docs/verify-recovery-worker.md`
+- `docs/verify-recovery-cycle-manager.md`
 
 This includes:
 

@@ -31,6 +31,7 @@ const DEFAULT_QUOTA_BACKOFF_FACTOR = 2;
 const DEFAULT_QUOTA_JITTER_RATIO = 0.2;
 const DEFAULT_POLICY_SUPPRESSION_MAX_RETRIES = 2;
 const DEFAULT_AUTO_REWORK_MAX_DEPTH = 2;
+const DEFAULT_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT = 5;
 const VERIFY_REWORK_MARKER_PREFIX = "[verify-rework-json]";
 const CONFLICT_AUTOFIX_PREFIX = "[AutoFix-Conflict] PR #";
 const AUTOFIX_PREFIX = "[AutoFix] PR #";
@@ -216,6 +217,24 @@ export function shouldRetryBlockedSetupFailure(params: {
   return params.nextRetryCount <= params.setupRetryLimit;
 }
 
+export function shouldRetryBlockedNeedsReworkInPlace(params: {
+  failureReason: string;
+  failureRetryable: boolean;
+  nextRetryCount: number;
+  inPlaceRetryLimit: number;
+}): boolean {
+  if (!params.failureRetryable) {
+    return false;
+  }
+  if (params.failureReason === FAILURE_CODE.POLICY_VIOLATION) {
+    return false;
+  }
+  if (params.inPlaceRetryLimit < 0) {
+    return true;
+  }
+  return params.nextRetryCount <= params.inPlaceRetryLimit;
+}
+
 async function hasActiveReworkChild(parentTaskId: string, currentTaskId: string): Promise<boolean> {
   const statusFilter = inArray(tasks.status, ["queued", "running", "blocked"]);
   const markerPattern = `%${escapeSqlLikePattern(`${AUTO_REWORK_PARENT_MARKER_PREFIX}${parentTaskId}`)}%`;
@@ -305,6 +324,10 @@ export async function requeueBlockedTasksWithCooldown(
   );
   const autoReworkMaxDepth = parseEnvInt("AUTO_REWORK_MAX_DEPTH", DEFAULT_AUTO_REWORK_MAX_DEPTH);
   const setupRetryLimit = resolveCategoryRetryLimit("setup");
+  const needsReworkInPlaceRetryLimit = parseEnvInt(
+    "BLOCKED_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT",
+    DEFAULT_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT,
+  );
   const quotaBlockedIds = blockedTasks
     .filter((task) => normalizeBlockReason(task.blockReason) === "quota_wait")
     .map((task) => task.id);
@@ -576,6 +599,43 @@ export async function requeueBlockedTasksWithCooldown(
           handled++;
           continue;
         }
+      }
+
+      if (
+        shouldRetryBlockedNeedsReworkInPlace({
+          failureReason: failure.reason,
+          failureRetryable: failure.retryable,
+          nextRetryCount,
+          inPlaceRetryLimit: needsReworkInPlaceRetryLimit,
+        })
+      ) {
+        await db
+          .update(tasks)
+          .set({
+            status: "queued",
+            blockReason: null,
+            retryCount: nextRetryCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(tasks.id, task.id));
+        await recordEvent({
+          type: "task.requeued",
+          entityType: "task",
+          entityId: task.id,
+          payload: {
+            reason: "needs_rework_in_place_retry",
+            failureReason: failure.reason,
+            retryCount: nextRetryCount,
+            retryLimit:
+              needsReworkInPlaceRetryLimit < 0 ? null : needsReworkInPlaceRetryLimit,
+            retryLimitUnlimited: needsReworkInPlaceRetryLimit < 0,
+          },
+        });
+        console.warn(
+          `[Cleanup] Requeued blocked needs_rework task in place: ${task.id} (failure=${failure.reason}, retry=${nextRetryCount}/${needsReworkInPlaceRetryLimit < 0 ? "inf" : needsReworkInPlaceRetryLimit})`,
+        );
+        handled++;
+        continue;
       }
 
       const outsideAllowedPaths = resolveOutsideAllowedViolationPaths(

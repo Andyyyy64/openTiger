@@ -640,7 +640,7 @@ export async function runVerificationPhase(
 
   // Attempt self-repair within same process even when failing with no changes
   if (!verifyResult.success && isNoChangeFailure(verifyResult.error)) {
-    const rawAttempts = Number.parseInt(process.env.WORKER_NO_CHANGE_RECOVERY_ATTEMPTS ?? "1", 10);
+    const rawAttempts = Number.parseInt(process.env.WORKER_NO_CHANGE_RECOVERY_ATTEMPTS ?? "2", 10);
     const noChangeRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
     for (let attempt = 1; attempt <= noChangeRecoveryAttempts; attempt += 1) {
       const recoveryHint = "No changes detected. Make changes required to meet the task goal.";
@@ -739,7 +739,7 @@ export async function runVerificationPhase(
     }
 
     if (!verifyResult.success && verifyResult.policyViolations.length > 0) {
-      const rawAttempts = Number.parseInt(process.env.WORKER_POLICY_RECOVERY_ATTEMPTS ?? "1", 10);
+      const rawAttempts = Number.parseInt(process.env.WORKER_POLICY_RECOVERY_ATTEMPTS ?? "2", 10);
       const policyRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
       let llmDeniedRecovery = false;
       for (let attempt = 1; attempt <= policyRecoveryAttempts; attempt += 1) {
@@ -986,7 +986,7 @@ export async function runVerificationPhase(
     }
   }
 
-  const verifyRecoveryAttempts = parseRecoveryAttempts("WORKER_VERIFY_RECOVERY_ATTEMPTS", 1);
+  const verifyRecoveryAttempts = parseRecoveryAttempts("WORKER_VERIFY_RECOVERY_ATTEMPTS", 2);
   const allowExplicitVerifyRecovery =
     (process.env.WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT ?? "true").toLowerCase() !== "false";
 

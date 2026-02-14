@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractVerifyReworkMeta,
   resolveOutsideAllowedViolationPaths,
+  shouldRetryBlockedNeedsReworkInPlace,
   shouldRetryBlockedSetupFailure,
   stripVerifyReworkMarkers,
 } from "../src/cleaners/cleanup-retry/requeue-blocked";
@@ -76,6 +77,50 @@ describe("verify rework marker helpers", () => {
       failureReason: "verification_command_failed",
       nextRetryCount: 1,
       setupRetryLimit: 3,
+    });
+
+    expect(shouldRetry).toBe(false);
+  });
+
+  it("retries blocked needs_rework in place for retryable non-policy failures", () => {
+    const shouldRetry = shouldRetryBlockedNeedsReworkInPlace({
+      failureReason: "verification_command_failed",
+      failureRetryable: true,
+      nextRetryCount: 2,
+      inPlaceRetryLimit: 3,
+    });
+
+    expect(shouldRetry).toBe(true);
+  });
+
+  it("does not retry blocked needs_rework in place for policy violations", () => {
+    const shouldRetry = shouldRetryBlockedNeedsReworkInPlace({
+      failureReason: "policy_violation",
+      failureRetryable: true,
+      nextRetryCount: 1,
+      inPlaceRetryLimit: 3,
+    });
+
+    expect(shouldRetry).toBe(false);
+  });
+
+  it("does not retry blocked needs_rework in place for non-retryable failures", () => {
+    const shouldRetry = shouldRetryBlockedNeedsReworkInPlace({
+      failureReason: "verification_command_no_test_files",
+      failureRetryable: false,
+      nextRetryCount: 1,
+      inPlaceRetryLimit: 3,
+    });
+
+    expect(shouldRetry).toBe(false);
+  });
+
+  it("stops blocked needs_rework in-place retry after limit", () => {
+    const shouldRetry = shouldRetryBlockedNeedsReworkInPlace({
+      failureReason: "verification_command_failed",
+      failureRetryable: true,
+      nextRetryCount: 4,
+      inPlaceRetryLimit: 3,
     });
 
     expect(shouldRetry).toBe(false);
