@@ -43,7 +43,7 @@ For shared settings (retry/policy recovery/verify recovery, etc.), see `docs/age
 
 ## 6. Implementation Reference (Source of Truth)
 
-- Role startup branching: `apps/worker/src/main.ts`
+- Role startup branching: `apps/worker/src/start.ts`, `apps/worker/src/main.ts`
 - Role-specific instructions: `apps/worker/instructions/tester.md`
 - Verification command auto-completion: `apps/worker/src/steps/verify/repo-scripts.ts`
 - Shared execution body: `apps/worker/src/worker-runner.ts`, `apps/worker/src/worker-runner-verification.ts`

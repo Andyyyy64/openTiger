@@ -6,6 +6,7 @@ This document summarizes the implementation spec for generation, execution, and 
 Related:
 
 - `docs/policy-recovery.md`
+- `docs/verify-recovery.md`
 - `docs/state-model.md`
 - `docs/flow.md`
 - `docs/operations.md`
@@ -102,60 +103,29 @@ Main config:
 - `WORKER_VERIFY_RECOVERY_ATTEMPTS`
 - `WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT`
 
-## 6. Verification Recovery (Cycle Manager)
+Default recovery attempts:
 
-When a failed run is caused by verification command issues, Cycle Manager can adjust
-`task.commands` and requeue the same task without entering policy recovery.
+- `WORKER_NO_CHANGE_RECOVERY_ATTEMPTS=2`
+- `WORKER_POLICY_RECOVERY_ATTEMPTS=2`
+- `WORKER_VERIFY_RECOVERY_ATTEMPTS=2`
 
-Supported adjustment reasons:
+## 6. Verification Recovery (Overview)
 
-- `verification_command_missing_script`
-  - Drops the failed explicit command to allow fallback verification.
-- `verification_command_no_test_files`
-  - Drops failed test command when runner reports there are no test files.
-- `verification_command_missing_make_target`
-  - Drops failed `make <target>` verification command when target is unavailable.
-- `verification_command_unsupported_format`
-  - Drops unsupported explicit command syntax (e.g. shell operators / command substitution).
-- `verification_command_sequence_issue`
-  - Reorders conflicting command sequence where cleanup commands run before generated-artifact presence checks.
-  - Scope is intentionally narrow: this applies only to explicit artifact checks (`test -f/-s ...`) on likely generated paths.
-  - `grep`-style verification failures are not treated as sequence issues.
+Verification recovery now has a dedicated spec:
 
-`grep` bracket-literal handling (`grep -q "\[...\]"`) is handled in Worker command parsing:
+- `docs/verify-recovery.md`
+
+This includes:
+
+- Worker-side failure code resolution and skip/continue rules
+- Cycle Manager command adjustment for verification failures
+- Setup/bootstrap retry handling and judge-missing-run fallback behavior
+- Structured failure metadata (`runs.error_meta`) and queue requeue reasons
+
+`grep` bracket-literal handling (`grep -q "\[...\]"`) remains a Worker command parser behavior:
 
 - The parser preserves non-special backslashes inside double quotes (for example `\[`).
-- This prevents shell/direct-spawn interpretation drift and is separate from sequence recovery.
-
-Requeue event payload includes:
-
-- `reason` (adjustment reason)
-- `recoveryRule` (applied transformation rule)
-- `previousCommands`
-- `nextCommands`
-
-Worker persists structured failure metadata into `runs.error_meta`:
-
-- `source` (for example: `verification`, `execution`)
-- `failureCode` (for example: `verification_command_missing_script`)
-- command context fields (`failedCommand`, `failedCommandSource`, `failedCommandStderr`) when available
-
-Failure code vocabulary is defined centrally in `packages/core/src/failure-codes.ts`.
-
-Cycle Manager and API both use shared classifier logic from `@openTiger/core`.
-They prefer structured metadata (`errorMeta.failureCode`) and use message-regex fallback for
-legacy runs without `error_meta` or for unknown codes.
-
-Important classification behavior:
-
-- `execution_failed` is not mapped to a fixed category by code alone.
-- The classifier intentionally falls back to message-based signals so it can still classify into
-  `permission`, `noop`, `setup`, and other concrete categories when possible.
-
-Retry behavior for requeue:
-
-- Setup/policy/test/model categories default to up to 3 retries.
-- Repeated-signature escalation uses `FAILED_TASK_REPEATED_SIGNATURE_THRESHOLD` (default: `4`).
+- This avoids shell/direct-spawn interpretation drift.
 
 ## 7. Relation to Policy Violation
 

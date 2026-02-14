@@ -96,7 +96,7 @@ Commands are executed via spawn, not shell. The following are not supported:
 
 ## 7. Implementation Reference (Source of Truth)
 
-- Startup and role resolution: `apps/worker/src/main.ts`
+- Startup entrypoint and role resolution: `apps/worker/src/start.ts`, `apps/worker/src/main.ts`
 - Execution body: `apps/worker/src/worker-runner.ts`
 - Verification phase: `apps/worker/src/worker-runner-verification.ts`
 - Role-specific helper behavior: `apps/worker/src/worker-task-helpers.ts`

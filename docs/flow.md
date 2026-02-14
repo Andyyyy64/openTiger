@@ -152,12 +152,18 @@ For startup vs replan responsibility split, see `docs/startup-patterns.md`.
 Blocked recovery behavior:
 
 - `awaiting_judge`
-  - Restore latest judgable successful run when needed
-  - Otherwise timeout-requeue (PR review tasks keep `awaiting_judge` to avoid ping-pong)
+  - If pending judge run exists, keep `blocked(awaiting_judge)`
+  - If no pending run, try restoring latest judgable successful run
+  - If no run can be restored:
+    - Judge-review task: requeue to `queued` (`awaiting_judge_missing_run_retry`)
+    - Other task: timeout requeue to `queued` (`awaiting_judge_timeout_retry`)
 - `quota_wait`
   - Requeue after cooldown
 - `needs_rework`
-  - PR review task: return to `awaiting_judge`
+  - Judge-review task:
+    - Pending/restorable judge run exists -> `blocked(awaiting_judge)`
+    - Missing judge run -> requeue to `queued` (`pr_review_needs_rework_missing_run_retry`)
+  - `setup_or_bootstrap_issue`: in-place requeue from blocked with setup retry limit
   - Normal task: create `[Rework] ...` task, move parent to failed lineage
   - Policy-only violation: may in-place requeue after `allowedPaths` adjustment. If no safe path, suppress rework split (cancel after retry limit)
   - Do not create additional rework if valid rework child already exists
@@ -171,6 +177,7 @@ System process self-recovery:
 Policy lifecycle and self-growth details:
 
 - `docs/policy-recovery.md`
+- `docs/verify-recovery.md`
 
 ## 9. Host Snapshot and Context Update
 

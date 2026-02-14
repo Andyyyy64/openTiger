@@ -43,7 +43,7 @@ For shared settings (retry/policy recovery/verify recovery, etc.), see `docs/age
 
 ## 6. Implementation Reference (Source of Truth)
 
-- Role startup branching: `apps/worker/src/main.ts`
+- Role startup branching: `apps/worker/src/start.ts`, `apps/worker/src/main.ts`
 - Role-specific instructions: `apps/worker/instructions/docser.md`
 - Doc-safe verification constraints: `apps/worker/src/worker-runner-verification.ts`
 - Docser-specific helper behavior: `apps/worker/src/worker-task-helpers.ts`

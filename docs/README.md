@@ -108,6 +108,12 @@ Goals:
   - Policy violation recovery, allowedPaths self-growth
 - `docs/verification.md`
   - Planner/Worker verification command resolution strategy
+- `docs/verify-recovery.md`
+  - Verification recovery index (Worker/Cycle Manager split docs)
+- `docs/verify-recovery-worker.md`
+  - Worker-side failure code resolution and skip/retry guard behavior
+- `docs/verify-recovery-cycle-manager.md`
+  - Cycle Manager-side command adjustment and blocked/failed requeue behavior
 - `docs/research.md`
   - TigerResearch planner-first lifecycle and quality gates
 

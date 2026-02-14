@@ -7,6 +7,7 @@ Related:
 
 - `docs/agent/worker.md`
 - `docs/agent/planner.md`
+- `docs/verify-recovery.md`
 - `docs/flow.md`
 - `docs/state-model.md`
 - `docs/operations.md`
@@ -28,7 +29,7 @@ it first attempts in-run recovery.
 Scope note:
 
 - This document covers policy/path recovery (`allowedPaths`, `deniedPaths`).
-- Verification command failures (format/order/missing-script) are handled by verification recovery flow in `docs/verification.md`.
+- Verification command failures (format/order/missing-script/no-test-files) are handled by verification recovery flow in `docs/verify-recovery.md`.
 
 Design goals:
 
@@ -123,24 +124,16 @@ Main responsibilities:
   - `balanced`
   - `aggressive` (default)
 
-## 4. Verification Command Format Recovery
+## 4. Boundary with Verification Recovery
 
-When verification command fails due to unsupported format (shell operator / `$()`),
-missing script, or command-sequence issue,
-Cycle Manager adjusts the command and requeues instead of infinite block.
+Verification-command recovery (command adjustment/requeue, setup/bootstrap retry, judge-missing-run fallback)
+is documented in `docs/verify-recovery.md`.
 
-- `requeue-failed`:
-  - `verification_command_unsupported_format` / `verification_command_missing_script`
-  - `verification_command_no_test_files`
-  - `verification_command_missing_make_target`
-    - Remove failed command from `commands` and requeue
-  - `verification_command_sequence_issue`
-    - Reorder clean-like command and generated-artifact check (`test -f/-s ...`) to avoid invalid order
-  - `policy_violation`
-    - Try allowed path adjustment and requeue
-- For policy path extraction, Cycle Manager prefers `errorMeta.policyViolations` and falls back to legacy message parsing.
+This page focuses on policy/path recovery:
 
-Worker may skip explicit command failure within the same run when remaining commands exist or earlier steps already passed (e.g. doc-only/no-op).
+- deterministic and LLM-based `allowedPaths` recovery
+- blocked `needs_rework` suppression for policy-only paths
+- planner-side policy hint self-growth
 
 ## 5. Rework Chain Suppression (Cycle Manager)
 
@@ -224,11 +217,8 @@ Cycle Manager rework suppression:
   - Max suppression retries when no safe path found
 - `AUTO_REWORK_MAX_DEPTH` (default: 2)
   - Max rework chain depth; cancel when exceeded
-
-Worker verification skip:
-
-- `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT` (default: `true`)
-  - Skip missing/unsupported explicit command when remaining commands exist
+- `BLOCKED_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT` (default: 2)
+  - Retry same `needs_rework` task as queued before splitting into a new rework child
 
 ## 8. Event Reference
 
@@ -246,22 +236,14 @@ Related queue recovery events:
 - `task.requeued` (reason)
   - `policy_allowed_paths_adjusted`
   - `policy_allowed_paths_adjusted_from_blocked`
-  - `verification_command_missing_script_adjusted`
-  - `verification_command_no_test_files_adjusted`
-  - `verification_command_missing_make_target_adjusted`
-  - `verification_command_unsupported_format_adjusted`
-  - `verification_command_sequence_adjusted`
-  - `verification_command_missing_script_adjusted_from_blocked`
-  - `verification_command_no_test_files_adjusted_from_blocked`
-  - `verification_command_missing_make_target_adjusted_from_blocked`
-  - `verification_command_unsupported_format_adjusted_from_blocked`
-  - `verification_command_sequence_adjusted_from_blocked`
   - `cooldown_retry`
 - `task.recovery_escalated` (reason)
   - `policy_violation_rework_suppressed_no_safe_path`
   - `policy_violation_rework_suppressed_exhausted`
   - `rework_child_already_exists`
   - `rework_chain_max_depth_reached`
+
+Verification-related requeue reasons are documented in `docs/verify-recovery.md`.
 
 Planner observation:
 
