@@ -30,9 +30,7 @@ describe("worker-task-helpers", () => {
     ).toBe(true);
     expect(isQuotaFailure("HTTP 429 Too Many Requests")).toBe(true);
     expect(
-      isQuotaFailure(
-        "Executor throttled this API request. Please wait 5 minutes, then retry.",
-      ),
+      isQuotaFailure("Executor throttled this API request. Please wait 5 minutes, then retry."),
     ).toBe(true);
     expect(isQuotaFailure("Request rate-limited. Reset at 00:00 UTC.")).toBe(true);
   });
