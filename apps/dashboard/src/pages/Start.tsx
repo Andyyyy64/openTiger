@@ -70,6 +70,7 @@ function normalizeExecutionEnvironment(value: string | undefined): ExecutionEnvi
 export const StartPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [content, setContent] = useState("");
+  const [hasEditedRequirement, setHasEditedRequirement] = useState(false);
   const [clearLogMessage, setClearLogMessage] = useState("");
   const [startResult, setStartResult] = useState<StartResult | null>(null);
   const [repoOwner, setRepoOwner] = useState("");
@@ -121,6 +122,14 @@ export const StartPage: React.FC = () => {
     queryKey: ["system", "health"],
     queryFn: () => systemApi.health(),
     refetchInterval: 30000,
+    retry: 1,
+  });
+  const requirementQuery = useQuery({
+    queryKey: ["system", "requirement", configValues.REPLAN_REQUIREMENT_PATH ?? ""],
+    queryFn: () => {
+      const requirementPath = configValues.REPLAN_REQUIREMENT_PATH?.trim();
+      return systemApi.requirement(requirementPath || undefined);
+    },
     retry: 1,
   });
 
@@ -276,6 +285,16 @@ export const StartPage: React.FC = () => {
       setIsRepoManagerOpen(true);
     }
   }, [isRepoMissing]);
+  useEffect(() => {
+    if (hasEditedRequirement) {
+      return;
+    }
+    const requirementContent = requirementQuery.data?.content;
+    if (!requirementContent || requirementContent.trim().length === 0) {
+      return;
+    }
+    setContent((current) => (current.trim().length > 0 ? current : requirementContent));
+  }, [hasEditedRequirement, requirementQuery.data?.content]);
 
   const clearLogsMutation = useMutation({
     mutationFn: () => logsApi.clear(),
@@ -322,8 +341,13 @@ export const StartPage: React.FC = () => {
         plannerCount.warning,
       ].filter((value): value is string => typeof value === "string");
 
-      const hasRequirementContent = content.trim().length > 0;
-      if (hasRequirementContent) {
+      const trimmedContent = content.trim();
+      const fallbackRequirementContent = requirementQuery.data?.content ?? "";
+      const effectiveContent =
+        trimmedContent.length > 0 ? content : fallbackRequirementContent;
+      const hasRequirementContent = effectiveContent.trim().length > 0;
+
+      if (trimmedContent.length > 0) {
         const syncResult = await systemApi.syncRequirement({
           content,
         });
@@ -334,7 +358,7 @@ export const StartPage: React.FC = () => {
         }
       }
       const preflight = await systemApi.preflight({
-        content,
+        content: effectiveContent,
         autoCreateIssueTasks: true,
       });
       const recommendations = preflight.recommendations;
@@ -388,7 +412,7 @@ export const StartPage: React.FC = () => {
       );
       for (let i = 1; i <= plannerStartCount; i += 1) {
         const plannerName = i === 1 ? "planner" : `planner-${i}`;
-        await startProcess(plannerName, { content });
+        await startProcess(plannerName, { content: effectiveContent });
       }
       if (recommendations.startDispatcher) {
         await startProcess("dispatcher");
@@ -790,7 +814,10 @@ export const StartPage: React.FC = () => {
             <textarea
               className="flex-1 bg-black border border-term-border p-3 text-xs font-mono text-zinc-300 focus:border-term-tiger focus:outline-none resize-none min-h-[150px]"
               value={content}
-              onChange={(event) => setContent(event.target.value)}
+              onChange={(event) => {
+                setHasEditedRequirement(true);
+                setContent(event.target.value);
+              }}
               placeholder="> Waiting for content..."
             />
 
