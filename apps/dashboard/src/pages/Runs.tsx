@@ -62,9 +62,10 @@ export const RunsPage: React.FC = () => {
         ) : (
           groupedRuns.map((group) => {
             const latestRun = group.runs[0];
-            const primaryTaskId = latestRun.taskId;
+            // Prefer canonical/source task for display (avoids showing docser title when latest run is docser)
             const displayTask =
-              taskById.get(primaryTaskId) ??
+              taskById.get(group.groupKey) ??
+              taskById.get(latestRun.taskId) ??
               group.taskIds.map((id) => taskById.get(id)).find(Boolean);
             const tasksInGroup = group.taskIds
               .map((id) => taskById.get(id))
