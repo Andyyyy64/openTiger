@@ -1,5 +1,7 @@
 # 🐯openTiger — Autonomous dev orchestration that never stops
 
+**Website**: [opentiger.dev](https://opentiger.dev) | **Docs**: [opentiger.dev/docs](https://opentiger.dev/docs/)
+
 <p align="center">
   <img src="assets/avatar.png" alt="openTiger" width="500" />
 </p>
@@ -146,6 +148,8 @@ pnpm run up
 Details: [docs/startup-patterns.md](docs/startup-patterns.md), [docs/flow.md](docs/flow.md)
 
 ## Documentation Map
+
+**Online**: [opentiger.dev](https://opentiger.dev) | [Docs](https://opentiger.dev/docs/)
 
 First check the index by use case:
 
