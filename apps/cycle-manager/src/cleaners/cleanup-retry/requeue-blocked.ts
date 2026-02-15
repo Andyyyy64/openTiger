@@ -86,6 +86,14 @@ function parseEnvInt(name: string, fallback: number): number {
   return raw;
 }
 
+function parseEnvRetryLimit(name: string, fallback: number): number {
+  const raw = Number.parseInt(process.env[name] ?? "", 10);
+  if (!Number.isFinite(raw)) {
+    return fallback;
+  }
+  return raw;
+}
+
 function parseEnvFloat(name: string, fallback: number): number {
   const raw = Number.parseFloat(process.env[name] ?? "");
   if (!Number.isFinite(raw)) {
@@ -324,7 +332,7 @@ export async function requeueBlockedTasksWithCooldown(
   );
   const autoReworkMaxDepth = parseEnvInt("AUTO_REWORK_MAX_DEPTH", DEFAULT_AUTO_REWORK_MAX_DEPTH);
   const setupRetryLimit = resolveCategoryRetryLimit("setup");
-  const needsReworkInPlaceRetryLimit = parseEnvInt(
+  const needsReworkInPlaceRetryLimit = parseEnvRetryLimit(
     "BLOCKED_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT",
     DEFAULT_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT,
   );
