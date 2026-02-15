@@ -112,6 +112,10 @@ Executor resolution notes:
 - `REPLAN_WORKDIR`
 - `REPLAN_REPO_URL`
 
+Resolution note:
+
+- When `REPLAN_REQUIREMENT_PATH` is relative (for example `docs/requirement.md`) and the file is not found under `REPLAN_WORKDIR`, Cycle Manager also resolves it against the managed git repository cache (`~/.opentiger/repos/<owner>/<repo>`), derived from `REPO_URL` / `REPLAN_REPO_URL`.
+
 ### 2.6 LLM Provider Keys
 
 - `ANTHROPIC_API_KEY`
@@ -299,6 +303,8 @@ Worker:
 - `WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT`
 - `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT`
 - `WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS`
+- `WORKER_VERIFY_INLINE_COMMAND_RECOVERY`
+- `WORKER_VERIFY_INLINE_COMMAND_RECOVERY_CANDIDATES`
 
 ### 6.5 Dispatcher / Lease / Agent Liveness
 

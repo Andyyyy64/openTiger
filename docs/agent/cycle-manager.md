@@ -94,6 +94,8 @@ Research-specific backlog note:
 - `REPLAN_INTERVAL_MS`
 - `REPLAN_REQUIREMENT_PATH`
 - `REPLAN_COMMAND`
+- `REPLAN_WORKDIR`
+- `REPLAN_REPO_URL`
 - `SYSTEM_API_BASE_URL`
 - `ISSUE_SYNC_INTERVAL_MS`
 - `ISSUE_SYNC_TIMEOUT_MS`
@@ -112,3 +114,8 @@ Research-specific backlog note:
 - `RESEARCH_REQUIRE_COUNTER_EVIDENCE`
 - `RESEARCH_MIN_REPORT_CONFIDENCE`
 - `RESEARCH_MIN_VERIFIABLE_RATIO`
+
+Replan requirement path note:
+
+- Relative `REPLAN_REQUIREMENT_PATH` (for example `docs/requirement.md`) is resolved under `REPLAN_WORKDIR`.
+- If not found and git-mode remote is configured, Cycle Manager falls back to managed repo cache (`~/.opentiger/repos/<owner>/<repo>`).

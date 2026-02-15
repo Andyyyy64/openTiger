@@ -1,5 +1,6 @@
 import type { CycleConfig } from "@openTiger/core";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, resolve } from "node:path";
 
 // Cycle Manager config
@@ -24,9 +25,71 @@ export interface CycleManagerConfig {
   stuckRunTimeoutMs: number; // Stuck run threshold
 }
 
+function sanitizePathSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function parseRepoOwnerAndName(repoUrl: string): { owner?: string; repo?: string } {
+  const trimmed = repoUrl.trim();
+  if (!trimmed) {
+    return {};
+  }
+  if (trimmed.startsWith("git@")) {
+    const sshMatch = /^git@[^:]+:(.+)$/u.exec(trimmed);
+    if (!sshMatch?.[1]) {
+      return {};
+    }
+    const [owner, repo] = sshMatch[1].replace(/\.git$/u, "").split("/");
+    return {
+      owner: owner?.trim(),
+      repo: repo?.trim(),
+    };
+  }
+  try {
+    const parsed = new URL(trimmed);
+    const [owner, repo] = parsed.pathname
+      .replace(/^\/+/u, "")
+      .replace(/\.git$/u, "")
+      .split("/");
+    return {
+      owner: owner?.trim(),
+      repo: repo?.trim(),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function resolveManagedRequirementPath(
+  requirementPath: string,
+  repoUrl: string,
+): string | undefined {
+  if (isAbsolute(requirementPath)) {
+    return undefined;
+  }
+  const parsed = parseRepoOwnerAndName(repoUrl);
+  if (!parsed.owner || !parsed.repo) {
+    return undefined;
+  }
+  const cacheRoot = resolve(
+    process.env.OPENTIGER_REQUIREMENT_REPO_ROOT?.trim() || `${homedir()}/.opentiger/repos`,
+  );
+  const repoRoot = resolve(
+    cacheRoot,
+    sanitizePathSegment(parsed.owner),
+    sanitizePathSegment(parsed.repo),
+  );
+  const candidate = resolve(repoRoot, requirementPath);
+  if (existsSync(candidate)) {
+    return candidate;
+  }
+  return undefined;
+}
+
 function resolveRequirementPath(
   requirementPath: string | undefined,
   workdir: string,
+  repoUrl: string | undefined,
 ): string | undefined {
   if (!requirementPath) {
     return undefined;
@@ -49,14 +112,23 @@ function resolveRequirementPath(
     currentDir = parentDir;
   }
 
+  if (repoUrl) {
+    const managedCandidate = resolveManagedRequirementPath(requirementPath, repoUrl);
+    if (managedCandidate) {
+      return managedCandidate;
+    }
+  }
+
   // Return deterministic path; error explicitly later if not found
   return resolve(workdir, requirementPath);
 }
 
 const defaultReplanWorkdir = process.env.REPLAN_WORKDIR ?? process.cwd();
+const defaultReplanRepoUrl = process.env.REPLAN_REPO_URL ?? process.env.REPO_URL;
 const defaultReplanRequirementPath = resolveRequirementPath(
   process.env.REPLAN_REQUIREMENT_PATH ?? process.env.REQUIREMENT_PATH,
   defaultReplanWorkdir,
+  defaultReplanRepoUrl,
 );
 
 // Default config

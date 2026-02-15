@@ -7,18 +7,18 @@ With source code as the source of truth, information necessary for operations is
 
 | Purpose                                                            | Shortest Page to Read                                             |
 | ------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| Want to get it running first                                       | `docs/getting-started.md`                                         |
-| Want to grasp the overview                                         | `docs/architecture.md`                                            |
-| Want to tune config keys                                           | `docs/config.md`                                                  |
-| Want API integration                                               | `docs/api-reference.md`                                           |
-| Want to build your own plugin                                      | `docs/plugins.md`                                                 |
-| Need incident response                                             | `docs/operations.md` + `docs/flow.md`                             |
-| Quick initial diagnosis of stalled state                           | `docs/state-model.md`                                             |
-| Immediate lookup of `retry.reason` meanings                        | `docs/state-model.md`                                             |
-| Trace by state vocabulary -> transition -> owner -> implementation | `docs/state-model.md` -> `docs/flow.md` -> `docs/agent/README.md` |
-| Confirm startup condition formulas                                 | `docs/startup-patterns.md`                                        |
-| Compare agent role differences                                     | `docs/agent/README.md`                                            |
-| Build/run TigerResearch (query -> evidence-backed report)          | `docs/research.md`                                                |
+| Want to get it running first                                       | [docs/getting-started.md](docs/getting-started.md)                                         |
+| Want to grasp the overview                                         | [docs/architecture.md](docs/architecture.md)                                            |
+| Want to tune config keys                                           | [docs/config.md](docs/config.md)                                                  |
+| Want API integration                                               | [docs/api-reference.md](docs/api-reference.md)                                           |
+| Want to build your own plugin                                      | [docs/plugins.md](docs/plugins.md)                                                 |
+| Need incident response                                             | [docs/operations.md](docs/operations.md) + [docs/flow.md](docs/flow.md)                             |
+| Quick initial diagnosis of stalled state                           | [docs/state-model.md](docs/state-model.md)                                             |
+| Immediate lookup of `retry.reason` meanings                        | [docs/state-model.md](docs/state-model.md)                                             |
+| Trace by state vocabulary -> transition -> owner -> implementation | [docs/state-model.md](docs/state-model.md) -> [docs/flow.md](docs/flow.md) -> [docs/agent/README.md](docs/agent/README.md) |
+| Confirm startup condition formulas                                 | [docs/startup-patterns.md](docs/startup-patterns.md)                                        |
+| Compare agent role differences                                     | [docs/agent/README.md](docs/agent/README.md)                                            |
+| Build/run TigerResearch (query -> evidence-backed report)          | [docs/research.md](docs/research.md)                                                |
 
 ## 0.1 Recommended Lanes by Reader Type
 

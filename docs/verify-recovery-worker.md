@@ -58,12 +58,16 @@ Config:
 
 - `WORKER_VERIFY_SKIP_INVALID_AUTO_COMMAND` (default: `true`)
 - `WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS` (default: `true`)
+- `WORKER_VERIFY_INLINE_COMMAND_RECOVERY` (default: `true`)
+- `WORKER_VERIFY_INLINE_COMMAND_RECOVERY_CANDIDATES` (default: `3`)
 
 Behavior:
 
 - Skip setup-like auto-command failures when later commands remain
 - Allow non-blocking continuation after explicit-pass (last auto command failure case)
   when `WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS=true`
+- For final setup/format failures, attempt inline replacement verification commands derived from package scripts
+  before promoting to rework.
 
 ## 4. Verify-Recovery Attempt Guard
 

@@ -6,6 +6,50 @@ import { DEV_COMMAND_WARMUP_MS, DEV_PORT_IN_USE_PATTERNS } from "./constants";
 import { parseCommand } from "./command-parser";
 import type { CommandResult } from "./types";
 
+const UNSUPPORTED_SHELL_BUILTINS = new Set([
+  ".",
+  "alias",
+  "bg",
+  "bind",
+  "builtin",
+  "caller",
+  "cd",
+  "declare",
+  "dirs",
+  "disown",
+  "enable",
+  "export",
+  "fc",
+  "fg",
+  "getopts",
+  "help",
+  "jobs",
+  "let",
+  "local",
+  "logout",
+  "mapfile",
+  "popd",
+  "pushd",
+  "readarray",
+  "readonly",
+  "set",
+  "setopt",
+  "shopt",
+  "source",
+  "suspend",
+  "times",
+  "trap",
+  "typeset",
+  "ulimit",
+  "umask",
+  "unalias",
+  "unset",
+]);
+
+function isUnsupportedShellBuiltin(command: string): boolean {
+  return UNSUPPORTED_SHELL_BUILTINS.has(command.toLowerCase());
+}
+
 function isInsidePath(basePath: string, candidatePath: string): boolean {
   const normalizedBase = resolve(basePath);
   const normalizedCandidate = resolve(candidatePath);
@@ -58,6 +102,16 @@ export async function runCommand(
       outcome: "failed",
       stdout: "",
       stderr: "Unsupported command format. Shell operators are not allowed.",
+      durationMs: Date.now() - startTime,
+    };
+  }
+  if (isUnsupportedShellBuiltin(parsed.executable)) {
+    return {
+      command,
+      success: false,
+      outcome: "failed",
+      stdout: "",
+      stderr: `Unsupported shell builtin in verification command: ${parsed.executable}`,
       durationMs: Date.now() - startTime,
     };
   }
@@ -162,6 +216,16 @@ async function runDevCommandOnce(
       outcome: "failed",
       stdout,
       stderr: "Unsupported command format. Shell operators are not allowed.",
+      durationMs: Date.now() - startTime,
+    };
+  }
+  if (isUnsupportedShellBuiltin(parsed.executable)) {
+    return {
+      command,
+      success: false,
+      outcome: "failed",
+      stdout,
+      stderr: `Unsupported shell builtin in verification command: ${parsed.executable}`,
       durationMs: Date.now() - startTime,
     };
   }

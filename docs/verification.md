@@ -76,6 +76,8 @@ Main config:
 - `WORKER_VERIFY_RECONCILE_TIMEOUT_SECONDS`
 - `WORKER_VERIFY_SKIP_INVALID_AUTO_COMMAND` (default: `true`)
 - `WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS` (default: `true`)
+- `WORKER_VERIFY_INLINE_COMMAND_RECOVERY` (default: `true`)
+- `WORKER_VERIFY_INLINE_COMMAND_RECOVERY_CANDIDATES` (default: `3`)
 
 For docser, restricted to doc-safe commands (e.g. `pnpm run check`).
 
@@ -84,9 +86,19 @@ For docser, restricted to doc-safe commands (e.g. `pnpm run check`).
 Verification commands run via direct spawn, not shell; the following are not supported:
 
 - Command substitution: `$()`
-- Shell operators: `|`, `&&`, `||`, `;`, `<`, `>`, `` ` ``
+- Shell operators: `|`, `||`, `;`, `<`, `>`, `` ` ``
+
+Notes:
+
+- `&&` is supported only as a verification-command chain splitter.
+- `cd <path> && <command>` is interpreted as directory switch + subsequent command execution (inside repo).
+- Shell builtins (for example `source`, `export`) are not executable via spawn and are treated as setup/format failure.
 
 Explicit commands that are missing script or unsupported format may be skipped depending on conditions.
+
+For last-command setup/format failures, worker also tries in-place inline recovery by deriving valid commands
+from available `package.json` scripts (for example `pnpm run test`, `pnpm run typecheck`, `pnpm run check`)
+before escalating to rework.
 
 ## 5. No-Change and Recovery
 
