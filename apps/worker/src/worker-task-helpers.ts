@@ -35,6 +35,41 @@ const QUOTA_FAILURE_PATTERNS = [
   /generate_requests_per_model_per_day/i,
   /generate_content_paid_tier_input_token_count/i,
   /retryinfo/i,
+  /too many requests/i,
+  /\b429\b/i,
+  /you(?:'|’)?ve hit your limit/i,
+  /\bhit your limit\b/i,
+  /resets?\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i,
+  /daily limit/i,
+  /monthly limit/i,
+];
+
+const QUOTA_SIGNAL_PATTERNS = [
+  /\bquota\b/i,
+  /\brate[_\s-]?limit(?:ed|ing)?\b/i,
+  /\btoo many requests\b/i,
+  /\bthrottl(?:e|ed|ing|ling)\b/i,
+  /\b429\b/i,
+  /\binsufficient[_\s-]?quota\b/i,
+  /\bresource(?:\s+has\s+been)?[_\s-]?exhausted\b/i,
+];
+
+const QUOTA_COOLDOWN_PATTERNS = [
+  /\bwait(?:ing)?\b/i,
+  /\bretry(?:ing)?\b/i,
+  /\btry again\b/i,
+  /\breset(?:s|ting)?\b/i,
+  /\b(?:daily|monthly|per[_\s-]?(?:minute|hour|day|month))\b/i,
+  /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/i,
+  /\b(?:utc|jst|tokyo|pst|est|cst|gmt)\b/i,
+];
+
+const QUOTA_SCOPE_PATTERNS = [
+  /\btoken(?:s)?\b/i,
+  /\bcredit(?:s)?\b/i,
+  /\bapi\b/i,
+  /\brpm\b/i,
+  /\btpm\b/i,
 ];
 
 const EXTERNAL_DIRECTORY_PERMISSION_PROMPT_PATTERNS = [
@@ -44,7 +79,18 @@ const EXTERNAL_DIRECTORY_PERMISSION_PROMPT_PATTERNS = [
 ];
 
 export function isQuotaFailure(message: string): boolean {
-  return QUOTA_FAILURE_PATTERNS.some((pattern) => pattern.test(message));
+  if (QUOTA_FAILURE_PATTERNS.some((pattern) => pattern.test(message))) {
+    return true;
+  }
+
+  const hasQuotaSignal = QUOTA_SIGNAL_PATTERNS.some((pattern) => pattern.test(message));
+  if (!hasQuotaSignal) {
+    return false;
+  }
+
+  const hasCooldownSignal = QUOTA_COOLDOWN_PATTERNS.some((pattern) => pattern.test(message));
+  const hasScopeSignal = QUOTA_SCOPE_PATTERNS.some((pattern) => pattern.test(message));
+  return hasCooldownSignal || hasScopeSignal;
 }
 
 export function isExternalDirectoryPermissionPromptFailure(message: string): boolean {
