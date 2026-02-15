@@ -122,6 +122,19 @@ export const config = pgTable("config", {
   docserCount: text("docser_count").default("4").notNull(),
   judgeCount: text("judge_count").default("4").notNull(),
   plannerCount: text("planner_count").default("1").notNull(),
+  workerNoChangeRecoveryAttempts: text("worker_no_change_recovery_attempts").default("5").notNull(),
+  workerPolicyRecoveryAttempts: text("worker_policy_recovery_attempts").default("5").notNull(),
+  workerVerifyRecoveryAttempts: text("worker_verify_recovery_attempts").default("5").notNull(),
+  blockedNeedsReworkInPlaceRetryLimit: text("blocked_needs_rework_in_place_retry_limit")
+    .default("5")
+    .notNull(),
+  workerSetupInProcessRecovery: text("worker_setup_in_process_recovery").default("true").notNull(),
+  workerVerifyLlmInlineRecovery: text("worker_verify_llm_inline_recovery")
+    .default("true")
+    .notNull(),
+  workerVerifyLlmInlineRecoveryAttempts: text("worker_verify_llm_inline_recovery_attempts")
+    .default("3")
+    .notNull(),
   repoMode: text("repo_mode").default("git").notNull(),
   repoUrl: text("repo_url").default("").notNull(),
   localRepoPath: text("local_repo_path").default("").notNull(),
