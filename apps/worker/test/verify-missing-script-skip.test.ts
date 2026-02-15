@@ -25,6 +25,8 @@ afterEach(() => {
 describe("shouldSkipExplicitCommandFailure", () => {
   const missingScriptOutput = 'npm error Missing script: "dev"';
   const unsupportedFormatOutput = "Unsupported command format. Shell operators are not allowed.";
+  const unsupportedShellBuiltinOutput =
+    "Unsupported shell builtin in verification command: source";
   const missingMakeTargetOutput = "make: *** No rule to make target 'test'.  Stop.";
   const missingManifestOutput =
     "npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/tmp/repo/package.json'";
@@ -119,6 +121,20 @@ describe("shouldSkipExplicitCommandFailure", () => {
       source: "explicit",
       command: "file kernel/kernel.elf | grep -q riscv",
       output: unsupportedFormatOutput,
+      hasRemainingCommands: true,
+      hasPriorEffectiveCommand: false,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(true);
+  });
+
+  it("skips explicit unsupported shell builtin when remaining commands exist", () => {
+    const shouldSkip = shouldSkipExplicitCommandFailure({
+      source: "explicit",
+      command: "source .env",
+      output: unsupportedShellBuiltinOutput,
       hasRemainingCommands: true,
       hasPriorEffectiveCommand: false,
       isDocOnlyChange: false,
@@ -406,6 +422,23 @@ describe("resolveVerificationCommandFailureCode", () => {
     });
 
     expect(code).toBe(FAILURE_CODE.SETUP_OR_BOOTSTRAP_ISSUE);
+  });
+
+  it("maps unsupported shell builtin output to verification_command_unsupported_format", () => {
+    const code = resolveVerificationCommandFailureCode({
+      verificationCommands: [
+        {
+          command: "source .env",
+          source: "explicit",
+          cwd: "/tmp/repo",
+        },
+      ],
+      index: 0,
+      command: "source .env",
+      output: "Unsupported shell builtin in verification command: source",
+    });
+
+    expect(code).toBe(FAILURE_CODE.VERIFICATION_COMMAND_UNSUPPORTED_FORMAT);
   });
 
   it("maps no-test-files verification output to dedicated failure code", () => {

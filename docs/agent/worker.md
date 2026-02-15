@@ -92,7 +92,13 @@ Research-specific notes:
 Commands are executed via spawn, not shell. The following are not supported:
 
 - `$()`
-- `|`, `&&`, `||`, `;`, `<`, `>`, `` ` ``
+- `|`, `||`, `;`, `<`, `>`, `` ` ``
+
+Notes:
+
+- `&&` is supported only as a verification-chain splitter.
+- `cd <path> && <command>` is handled as cwd transition plus command execution.
+- Shell builtins such as `source` / `export` are not directly executable and are treated as verification format/setup failure.
 
 ## 7. Implementation Reference (Source of Truth)
 
@@ -114,6 +120,12 @@ Commands are executed via spawn, not shell. The following are not supported:
 - `WORKER_AUTO_VERIFY_MODE`
 - `WORKER_VERIFY_CONTRACT_PATH`
 - `WORKER_VERIFY_RECOVERY_ATTEMPTS`
+- `WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT`
+- `WORKER_VERIFY_SKIP_MISSING_EXPLICIT_SCRIPT`
+- `WORKER_VERIFY_SKIP_INVALID_AUTO_COMMAND`
+- `WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS`
+- `WORKER_VERIFY_INLINE_COMMAND_RECOVERY`
+- `WORKER_VERIFY_INLINE_COMMAND_RECOVERY_CANDIDATES`
 - `WORKER_POLICY_RECOVERY_USE_LLM`
 - `WORKER_POLICY_RECOVERY_ATTEMPTS`
 - `WORKER_POLICY_RECOVERY_TIMEOUT_SECONDS`

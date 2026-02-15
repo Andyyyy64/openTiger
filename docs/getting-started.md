@@ -2,14 +2,20 @@
 
 This guide provides the shortest path from first run to starting autonomous execution.
 
+Quick install (recommended):
+
+```bash
+curl -fsSL https://opentiger.dev/install.sh | bash
+```
+
 Related:
 
-- `docs/architecture.md`
-- `docs/config.md`
-- `docs/api-reference.md`
-- `docs/operations.md`
-- `docs/agent/README.md`
-- `docs/research.md`
+- [docs/architecture.md](docs/architecture.md)
+- [docs/config.md](docs/config.md)
+- [docs/api-reference.md](docs/api-reference.md)
+- [docs/operations.md](docs/operations.md)
+- [docs/agent/README.md](docs/agent/README.md)
+- [docs/research.md](docs/research.md)
 
 ## 1. Prerequisites
 

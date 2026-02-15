@@ -70,7 +70,15 @@ function isDocumentationFile(path: string): boolean {
 
 type VerificationCommand = {
   command: string;
-  source: VerificationCommandSource;
+  source: VerificationExecutionSource;
+  cwd: string;
+};
+
+type VerificationExecutionSource = Extract<VerificationCommandSource, "explicit" | "auto">;
+
+type InlineRecoveryCandidate = {
+  command: string;
+  cwd: string;
 };
 
 const WORKSPACE_ROOT_META_FILES = new Set([
@@ -113,6 +121,67 @@ function isInsideRepo(repoPath: string, candidatePath: string): boolean {
     normalizedCandidate.startsWith(`${normalizedRoot}/`) ||
     normalizedCandidate.startsWith(`${normalizedRoot}\\`)
   );
+}
+
+function resolveChainedCommandCwd(
+  command: string,
+  currentCwd: string,
+  repoPath: string,
+): string | null {
+  const parsed = parseCommand(command);
+  if (!parsed || parsed.executable !== "cd") {
+    return null;
+  }
+  if (parsed.args.length > 1) {
+    return null;
+  }
+  const target = parsed.args[0] ?? ".";
+  const nextCwd = resolve(currentCwd, target);
+  if (!isInsideRepo(repoPath, nextCwd)) {
+    return null;
+  }
+  return nextCwd;
+}
+
+type VerificationCommandInput = {
+  command: string;
+  source: VerificationExecutionSource;
+};
+
+export function expandVerificationCommandsWithCwd(
+  baseCommands: VerificationCommandInput[],
+  repoPath: string,
+): VerificationCommand[] {
+  const expandedCommands: VerificationCommand[] = [];
+  const sourceCwd: Record<VerificationExecutionSource, string> = {
+    explicit: repoPath,
+    auto: repoPath,
+  };
+  for (const baseCommand of baseCommands) {
+    const expanded = expandVerificationCommand(baseCommand.command);
+    if (expanded.length > 1) {
+      console.log(
+        `[Verify] Expanded chained command: ${baseCommand.command} -> ${expanded.join(" | ")}`,
+      );
+    }
+    let commandCwd = sourceCwd[baseCommand.source];
+    for (const command of expanded) {
+      const chainedCwd = resolveChainedCommandCwd(command, commandCwd, repoPath);
+      if (chainedCwd) {
+        const cwdLabel = normalizePathForMatch(relative(repoPath, chainedCwd)) || ".";
+        console.log(`[Verify] Applied chained directory change: ${command} -> ${cwdLabel}`);
+        commandCwd = chainedCwd;
+        sourceCwd[baseCommand.source] = commandCwd;
+        continue;
+      }
+      expandedCommands.push({
+        command,
+        source: baseCommand.source,
+        cwd: commandCwd,
+      });
+    }
+  }
+  return expandedCommands;
 }
 
 function isWorkspaceRootMetaFile(file: string): boolean {
@@ -170,6 +239,108 @@ async function resolveSingleChangedPackageDir(
   }
 
   return singleDir;
+}
+
+function uniquePathList(paths: Array<string | null | undefined>): string[] {
+  const deduped = new Set<string>();
+  for (const candidate of paths) {
+    if (!candidate) {
+      continue;
+    }
+    deduped.add(resolve(candidate));
+  }
+  return Array.from(deduped);
+}
+
+function inferInlineRecoveryScriptPriority(command: string, output: string): string[] {
+  const normalized = `${command}\n${output}`.toLowerCase();
+  if (
+    normalized.includes("vitest") ||
+    normalized.includes("jest") ||
+    normalized.includes("playwright") ||
+    normalized.includes("cypress") ||
+    normalized.includes(" test")
+  ) {
+    return ["test", "check", "typecheck", "build", "lint"];
+  }
+  if (normalized.includes("typecheck") || normalized.includes("tsc")) {
+    return ["typecheck", "check", "build", "test", "lint"];
+  }
+  if (normalized.includes("lint") || normalized.includes("eslint") || normalized.includes("oxlint")) {
+    return ["lint", "check", "typecheck", "test", "build"];
+  }
+  if (normalized.includes("build")) {
+    return ["build", "typecheck", "check", "test", "lint"];
+  }
+  if (normalized.includes("check")) {
+    return ["check", "typecheck", "test", "build", "lint"];
+  }
+  return ["check", "typecheck", "test", "build", "lint"];
+}
+
+async function readPackageScriptNames(packageDir: string): Promise<Set<string>> {
+  const packageJsonPath = join(packageDir, "package.json");
+  if (!(await pathExists(packageJsonPath))) {
+    return new Set();
+  }
+  try {
+    const raw = await readFile(packageJsonPath, "utf-8");
+    const parsed = JSON.parse(raw) as { scripts?: unknown };
+    if (!parsed || typeof parsed !== "object" || !parsed.scripts || typeof parsed.scripts !== "object") {
+      return new Set();
+    }
+    return new Set(Object.keys(parsed.scripts as Record<string, unknown>).filter((name) => name.length > 0));
+  } catch {
+    return new Set();
+  }
+}
+
+export async function resolveInlineRecoveryCommandCandidates(params: {
+  repoPath: string;
+  failedCommand: string;
+  output: string;
+  failedCommandCwd: string;
+  singleChangedPackageDir: string | null;
+  maxCandidates?: number;
+}): Promise<InlineRecoveryCandidate[]> {
+  const maxCandidatesRaw = params.maxCandidates ?? 3;
+  const maxCandidates = Math.min(8, Math.max(1, maxCandidatesRaw));
+  const priorityScripts = inferInlineRecoveryScriptPriority(params.failedCommand, params.output);
+  const candidateDirs = uniquePathList([
+    params.failedCommandCwd,
+    params.singleChangedPackageDir,
+    params.repoPath,
+  ]).filter((candidate) => isInsideRepo(params.repoPath, candidate));
+  const candidates: InlineRecoveryCandidate[] = [];
+  const seen = new Set<string>();
+  for (const candidateDir of candidateDirs) {
+    const scripts = await readPackageScriptNames(candidateDir);
+    if (scripts.size === 0) {
+      continue;
+    }
+    for (const script of priorityScripts) {
+      if (!scripts.has(script)) {
+        continue;
+      }
+      const candidateCommand = `pnpm run ${script}`;
+      if (candidateCommand === normalizeVerificationCommand(params.failedCommand)) {
+        continue;
+      }
+      const dedupeKey = `${candidateDir}::${candidateCommand}`;
+      if (seen.has(dedupeKey)) {
+        continue;
+      }
+      seen.add(dedupeKey);
+      candidates.push({
+        command: candidateCommand,
+        cwd: candidateDir,
+      });
+      if (candidates.length >= maxCandidates) {
+        return candidates;
+      }
+    }
+  }
+  return candidates;
 }
 
 function parseMakeTargets(content: string): Set<string> {
@@ -455,7 +626,8 @@ function isUnsupportedCommandFormatFailure(output: string): boolean {
   const normalized = output.toLowerCase();
   return (
     normalized.includes("unsupported command format") ||
-    (normalized.includes("shell operators") && normalized.includes("not allowed"))
+    (normalized.includes("shell operators") && normalized.includes("not allowed")) ||
+    normalized.includes("unsupported shell builtin in verification command")
   );
 }
 
@@ -569,6 +741,118 @@ function isSkippableSetupFailure(
     unsupportedFormatFailure,
     isSkippableOutput:
       missingScriptLikeFailure || noTestFilesLikeFailure || unsupportedFormatFailure,
+  };
+}
+
+export function shouldAttemptInlineCommandRecovery(params: {
+  source: VerificationCommandSource;
+  command: string;
+  output: string;
+  hasRemainingCommands: boolean;
+}): boolean {
+  if (params.source !== "explicit" && params.source !== "auto") {
+    return false;
+  }
+  const enabled =
+    (process.env.WORKER_VERIFY_INLINE_COMMAND_RECOVERY ?? "true").toLowerCase() !== "false";
+  if (!enabled) {
+    return false;
+  }
+  if (params.hasRemainingCommands) {
+    return false;
+  }
+  const { isSkippableOutput } = isSkippableSetupFailure(params.command, params.output);
+  return isSkippableOutput;
+}
+
+type InlineRecoveryAttemptResult = {
+  command: string;
+  source: VerificationExecutionSource;
+  success: boolean;
+  outcome: "passed" | "failed" | "skipped";
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+};
+
+type InlineRecoveryOutcome = {
+  recovered: boolean;
+  attempted: boolean;
+  attemptResults: InlineRecoveryAttemptResult[];
+  summary: string;
+};
+
+async function attemptInlineCommandRecovery(params: {
+  repoPath: string;
+  source: VerificationExecutionSource;
+  failedCommand: string;
+  output: string;
+  failedCommandCwd: string;
+  singleChangedPackageDir: string | null;
+  deniedCommands: string[];
+}): Promise<InlineRecoveryOutcome> {
+  const maxCandidates = Number.parseInt(
+    process.env.WORKER_VERIFY_INLINE_COMMAND_RECOVERY_CANDIDATES ?? "3",
+    10,
+  );
+  const candidates = await resolveInlineRecoveryCommandCandidates({
+    repoPath: params.repoPath,
+    failedCommand: params.failedCommand,
+    output: params.output,
+    failedCommandCwd: params.failedCommandCwd,
+    singleChangedPackageDir: params.singleChangedPackageDir,
+    maxCandidates: Number.isFinite(maxCandidates) ? maxCandidates : 3,
+  });
+  if (candidates.length === 0) {
+    return {
+      recovered: false,
+      attempted: false,
+      attemptResults: [],
+      summary: "No inline recovery candidate commands could be derived from package scripts.",
+    };
+  }
+
+  const attemptResults: InlineRecoveryAttemptResult[] = [];
+  const deniedAttempts: string[] = [];
+  for (const candidate of candidates) {
+    const deniedMatch = matchDeniedCommand(candidate.command, params.deniedCommands);
+    if (deniedMatch) {
+      deniedAttempts.push(`${candidate.command} (matched: ${deniedMatch})`);
+      continue;
+    }
+    const cwdLabel = normalizePathForMatch(relative(params.repoPath, candidate.cwd)) || ".";
+    console.warn(
+      cwdLabel === "."
+        ? `[Verify] Inline recovery candidate: ${candidate.command}`
+        : `[Verify] Inline recovery candidate: ${candidate.command} (cwd: ${cwdLabel})`,
+    );
+    const result = await runCommand(candidate.command, candidate.cwd);
+    const attemptResult: InlineRecoveryAttemptResult = {
+      ...result,
+      source: params.source,
+    };
+    attemptResults.push(attemptResult);
+    if (result.success) {
+      return {
+        recovered: true,
+        attempted: true,
+        attemptResults,
+        summary: `Recovered with inline command: ${candidate.command}${
+          cwdLabel === "." ? "" : ` (cwd: ${cwdLabel})`
+        }`,
+      };
+    }
+  }
+
+  const deniedSummary =
+    deniedAttempts.length > 0
+      ? ` Denied candidates: ${deniedAttempts.join("; ")}`
+      : "";
+  return {
+    recovered: false,
+    attempted: attemptResults.length > 0 || deniedAttempts.length > 0,
+    attemptResults,
+    summary: `Inline recovery candidates failed.${deniedSummary}`.trim(),
   };
 }
 
@@ -921,25 +1205,11 @@ ${clippedDiff || "(diff unavailable)"}
   if (autoCommands.length > 0) {
     console.log(`[Verify] Auto verification commands added: ${autoCommands.join(", ")}`);
   }
-  const baseVerificationCommands: VerificationCommand[] = [
+  const baseVerificationCommands: VerificationCommandInput[] = [
     ...commands.map((command) => ({ command, source: "explicit" as const })),
     ...autoCommands.map((command) => ({ command, source: "auto" as const })),
   ];
-  const verificationCommands: VerificationCommand[] = [];
-  for (const verificationCommand of baseVerificationCommands) {
-    const expandedCommands = expandVerificationCommand(verificationCommand.command);
-    if (expandedCommands.length > 1) {
-      console.log(
-        `[Verify] Expanded chained command: ${verificationCommand.command} -> ${expandedCommands.join(" | ")}`,
-      );
-    }
-    for (const expanded of expandedCommands) {
-      verificationCommands.push({
-        ...verificationCommand,
-        command: expanded,
-      });
-    }
-  }
+  const verificationCommands = expandVerificationCommandsWithCwd(baseVerificationCommands, repoPath);
 
   if (verificationCommands.length === 0) {
     const lightCheckResult = await runLightCheck();
@@ -976,7 +1246,7 @@ ${clippedDiff || "(diff unavailable)"}
     if (!verificationCommand) {
       continue;
     }
-    const { command, source } = verificationCommand;
+    const { command, source, cwd } = verificationCommand;
     const deniedMatch = matchDeniedCommand(command, policy.deniedCommands ?? []);
     if (deniedMatch) {
       const message = `Denied command detected: ${command} (matched: ${deniedMatch})`;
@@ -1003,8 +1273,11 @@ ${clippedDiff || "(diff unavailable)"}
       console.log(`Normalized verification command: ${command} -> ${normalizedCommand}`);
     }
 
-    console.log(`Running: ${normalizedCommand}`);
-    const result = await runCommand(normalizedCommand, repoPath);
+    const cwdLabel = normalizePathForMatch(relative(repoPath, cwd)) || ".";
+    console.log(
+      cwdLabel === "." ? `Running: ${normalizedCommand}` : `Running: ${normalizedCommand} (cwd: ${cwdLabel})`,
+    );
+    const result = await runCommand(normalizedCommand, cwd);
     commandResults.push({
       ...result,
       source,
@@ -1084,6 +1357,44 @@ ${clippedDiff || "(diff unavailable)"}
           stderr: output,
         };
         continue;
+      }
+
+      if (
+        shouldAttemptInlineCommandRecovery({
+          source,
+          command: normalizedCommand,
+          output,
+          hasRemainingCommands,
+        })
+      ) {
+        const inlineRecovery = await attemptInlineCommandRecovery({
+          repoPath,
+          source,
+          failedCommand: normalizedCommand,
+          output,
+          failedCommandCwd: cwd,
+          singleChangedPackageDir,
+          deniedCommands: policy.deniedCommands ?? [],
+        });
+        if (inlineRecovery.attempted) {
+          commandResults.push(...inlineRecovery.attemptResults);
+          output = `${output}\n[inline-recovery] ${inlineRecovery.summary}`.trim();
+        }
+        if (inlineRecovery.recovered) {
+          console.warn(`[Verify] ${inlineRecovery.summary}`);
+          commandResults[commandResults.length - (inlineRecovery.attemptResults.length + 1)] = {
+            ...result,
+            source,
+            success: true,
+            outcome: "skipped",
+            stderr: output,
+          };
+          ranEffectiveCommand = true;
+          if (source === "explicit") {
+            ranExplicitEffectiveCommand = true;
+          }
+          continue;
+        }
       }
 
       if (result.outcome === "skipped") {

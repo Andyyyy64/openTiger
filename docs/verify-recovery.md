@@ -31,6 +31,9 @@ When tracing verification failures:
 Verification recovery (command adjustment/requeue, setup/bootstrap retry routing)
 is separate from policy/path recovery (`allowedPaths`/`deniedPaths`).
 
+Worker-side verification now includes in-place inline command recovery for final setup/format
+failures by deriving executable alternatives from `package.json` scripts before escalating to rework.
+
 Policy/path recovery details:
 
 - `docs/policy-recovery.md`
