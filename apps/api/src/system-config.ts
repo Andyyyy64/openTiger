@@ -22,6 +22,41 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "DOCSER_COUNT", column: "docserCount", defaultValue: "4" },
   { key: "JUDGE_COUNT", column: "judgeCount", defaultValue: "4" },
   { key: "PLANNER_COUNT", column: "plannerCount", defaultValue: "1" },
+  {
+    key: "WORKER_NO_CHANGE_RECOVERY_ATTEMPTS",
+    column: "workerNoChangeRecoveryAttempts",
+    defaultValue: "5",
+  },
+  {
+    key: "WORKER_POLICY_RECOVERY_ATTEMPTS",
+    column: "workerPolicyRecoveryAttempts",
+    defaultValue: "5",
+  },
+  {
+    key: "WORKER_VERIFY_RECOVERY_ATTEMPTS",
+    column: "workerVerifyRecoveryAttempts",
+    defaultValue: "5",
+  },
+  {
+    key: "BLOCKED_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT",
+    column: "blockedNeedsReworkInPlaceRetryLimit",
+    defaultValue: "5",
+  },
+  {
+    key: "WORKER_SETUP_IN_PROCESS_RECOVERY",
+    column: "workerSetupInProcessRecovery",
+    defaultValue: "true",
+  },
+  {
+    key: "WORKER_VERIFY_LLM_INLINE_RECOVERY",
+    column: "workerVerifyLlmInlineRecovery",
+    defaultValue: "true",
+  },
+  {
+    key: "WORKER_VERIFY_LLM_INLINE_RECOVERY_ATTEMPTS",
+    column: "workerVerifyLlmInlineRecoveryAttempts",
+    defaultValue: "3",
+  },
   { key: "REPO_MODE", column: "repoMode", defaultValue: "git" },
   { key: "REPO_URL", column: "repoUrl", defaultValue: "" },
   { key: "LOCAL_REPO_PATH", column: "localRepoPath", defaultValue: "" },
