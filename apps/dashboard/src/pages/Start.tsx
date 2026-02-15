@@ -343,8 +343,7 @@ export const StartPage: React.FC = () => {
 
       const trimmedContent = content.trim();
       const fallbackRequirementContent = requirementQuery.data?.content ?? "";
-      const effectiveContent =
-        trimmedContent.length > 0 ? content : fallbackRequirementContent;
+      const effectiveContent = trimmedContent.length > 0 ? content : fallbackRequirementContent;
       const hasRequirementContent = effectiveContent.trim().length > 0;
 
       if (trimmedContent.length > 0) {

@@ -25,8 +25,7 @@ afterEach(() => {
 describe("shouldSkipExplicitCommandFailure", () => {
   const missingScriptOutput = 'npm error Missing script: "dev"';
   const unsupportedFormatOutput = "Unsupported command format. Shell operators are not allowed.";
-  const unsupportedShellBuiltinOutput =
-    "Unsupported shell builtin in verification command: source";
+  const unsupportedShellBuiltinOutput = "Unsupported shell builtin in verification command: source";
   const missingMakeTargetOutput = "make: *** No rule to make target 'test'.  Stop.";
   const missingManifestOutput =
     "npm error enoent Could not read package.json: Error: ENOENT: no such file or directory, open '/tmp/repo/package.json'";

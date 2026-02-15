@@ -260,7 +260,12 @@ function resolvePackageManagerFromCommand(command: string): PackageManager | nul
     return null;
   }
   const executable = parsed.executable.trim().toLowerCase();
-  if (executable === "pnpm" || executable === "npm" || executable === "yarn" || executable === "bun") {
+  if (
+    executable === "pnpm" ||
+    executable === "npm" ||
+    executable === "yarn" ||
+    executable === "bun"
+  ) {
     return executable;
   }
   return null;
@@ -330,7 +335,11 @@ function inferInlineRecoveryScriptPriority(command: string, output: string): str
   if (normalized.includes("typecheck") || normalized.includes("tsc")) {
     return ["typecheck", "check", "build", "test", "lint"];
   }
-  if (normalized.includes("lint") || normalized.includes("eslint") || normalized.includes("oxlint")) {
+  if (
+    normalized.includes("lint") ||
+    normalized.includes("eslint") ||
+    normalized.includes("oxlint")
+  ) {
     return ["lint", "check", "typecheck", "test", "build"];
   }
   if (normalized.includes("build")) {
@@ -350,10 +359,17 @@ async function readPackageScriptNames(packageDir: string): Promise<Set<string>> 
   try {
     const raw = await readFile(packageJsonPath, "utf-8");
     const parsed = JSON.parse(raw) as { scripts?: unknown };
-    if (!parsed || typeof parsed !== "object" || !parsed.scripts || typeof parsed.scripts !== "object") {
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !parsed.scripts ||
+      typeof parsed.scripts !== "object"
+    ) {
       return new Set();
     }
-    return new Set(Object.keys(parsed.scripts as Record<string, unknown>).filter((name) => name.length > 0));
+    return new Set(
+      Object.keys(parsed.scripts as Record<string, unknown>).filter((name) => name.length > 0),
+    );
   } catch {
     return new Set();
   }
@@ -929,9 +945,7 @@ async function attemptInlineCommandRecovery(params: {
   }
 
   const deniedSummary =
-    deniedAttempts.length > 0
-      ? ` Denied candidates: ${deniedAttempts.join("; ")}`
-      : "";
+    deniedAttempts.length > 0 ? ` Denied candidates: ${deniedAttempts.join("; ")}` : "";
   return {
     recovered: false,
     attempted: attemptResults.length > 0 || deniedAttempts.length > 0,
@@ -1293,7 +1307,10 @@ ${clippedDiff || "(diff unavailable)"}
     ...commands.map((command) => ({ command, source: "explicit" as const })),
     ...autoCommands.map((command) => ({ command, source: "auto" as const })),
   ];
-  const verificationCommands = expandVerificationCommandsWithCwd(baseVerificationCommands, repoPath);
+  const verificationCommands = expandVerificationCommandsWithCwd(
+    baseVerificationCommands,
+    repoPath,
+  );
 
   if (verificationCommands.length === 0) {
     const lightCheckResult = await runLightCheck();
@@ -1359,7 +1376,9 @@ ${clippedDiff || "(diff unavailable)"}
 
     const cwdLabel = normalizePathForMatch(relative(repoPath, cwd)) || ".";
     console.log(
-      cwdLabel === "." ? `Running: ${normalizedCommand}` : `Running: ${normalizedCommand} (cwd: ${cwdLabel})`,
+      cwdLabel === "."
+        ? `Running: ${normalizedCommand}`
+        : `Running: ${normalizedCommand} (cwd: ${cwdLabel})`,
     );
     const result = await runCommand(normalizedCommand, cwd);
     commandResults.push({

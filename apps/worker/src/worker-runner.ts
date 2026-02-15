@@ -52,14 +52,11 @@ const DEFAULT_LOG_DIR = resolve(import.meta.dirname, "../../../raw-logs");
 const LEGACY_LOG_DIR_PLACEHOLDER_MARKER = "/absolute/path/to/opentiger";
 
 function resolveLogDir(fallbackDir: string): string {
-  const candidate = process.env.OPENTIGER_LOG_DIR?.trim() || process.env.OPENTIGER_RAW_LOG_DIR?.trim();
+  const candidate =
+    process.env.OPENTIGER_LOG_DIR?.trim() || process.env.OPENTIGER_RAW_LOG_DIR?.trim();
   if (
     candidate &&
-    !candidate
-      .trim()
-      .replace(/\\/gu, "/")
-      .toLowerCase()
-      .includes(LEGACY_LOG_DIR_PLACEHOLDER_MARKER)
+    !candidate.trim().replace(/\\/gu, "/").toLowerCase().includes(LEGACY_LOG_DIR_PLACEHOLDER_MARKER)
   ) {
     return resolve(candidate);
   }
