@@ -16,20 +16,20 @@ With source code as the source of truth, information necessary for operations is
 
 ## 0. Purpose-Based Navigation
 
-| Purpose                                                            | Shortest Page to Read                                                                                                      |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Want to get it running first                                       | [getting-started](getting-started.md)                                                                                      |
-| Want to grasp the overview                                         | [architecture](architecture.md)                                                                                            |
-| Want to tune config keys                                           | [config](config.md)                                                                                                       |
-| Want API integration                                               | [api-reference](api-reference.md)                                                                                         |
-| Want to build your own plugin                                      | [plugins](plugins.md)                                                                                                     |
-| Need incident response                                             | [operations](operations.md) + [flow](flow.md)                                                                             |
-| Quick initial diagnosis of stalled state                           | [state-model](state-model.md)                                                                                             |
-| Immediate lookup of `retry.reason` meanings                        | [state-model](state-model.md)                                                                                             |
-| Trace by state vocabulary -> transition -> owner -> implementation | [state-model](state-model.md) -> [flow](flow.md) -> [agent/README](agent/README.md)                                        |
-| Confirm startup condition formulas                                 | [startup-patterns](startup-patterns.md)                                                                                   |
-| Compare agent role differences                                     | [agent/README](agent/README.md)                                                                                           |
-| Build/run TigerResearch (query -> evidence-backed report)          | [research](research.md)                                                                                                   |
+| Purpose                                                            | Shortest Page to Read                                                               |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| Want to get it running first                                       | [getting-started](getting-started.md)                                               |
+| Want to grasp the overview                                         | [architecture](architecture.md)                                                     |
+| Want to tune config keys                                           | [config](config.md)                                                                 |
+| Want API integration                                               | [api-reference](api-reference.md)                                                   |
+| Want to build your own plugin                                      | [plugins](plugins.md)                                                               |
+| Need incident response                                             | [operations](operations.md) + [flow](flow.md)                                       |
+| Quick initial diagnosis of stalled state                           | [state-model](state-model.md)                                                       |
+| Immediate lookup of `retry.reason` meanings                        | [state-model](state-model.md)                                                       |
+| Trace by state vocabulary -> transition -> owner -> implementation | [state-model](state-model.md) -> [flow](flow.md) -> [agent/README](agent/README.md) |
+| Confirm startup condition formulas                                 | [startup-patterns](startup-patterns.md)                                             |
+| Compare agent role differences                                     | [agent/README](agent/README.md)                                                     |
+| Build/run TigerResearch (query -> evidence-backed report)          | [research](research.md)                                                             |
 
 ## 0.1 Recommended Lanes by Reader Type
 

@@ -624,322 +624,325 @@ export const StartPage: React.FC = () => {
   return (
     <>
       <div className="p-6 max-w-6xl mx-auto space-y-6 text-term-fg">
-      <div>
-        <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
-          &gt; System_Bootstrap
-        </h1>
-        <p className="text-xs text-zinc-500 mt-1 font-mono">
-          // Initialize planner from requirements.md and spawn subprocesses.
-        </p>
-      </div>
-      {shouldCheckClaudeAuth && claudeAuthQuery.data && !claudeAuthQuery.data.authenticated && (
-        <div className="border border-yellow-600 bg-yellow-900/10 p-3 text-xs font-mono text-yellow-500">
-          &gt; WARN: Claude Code is not ready.{" "}
-          {claudeAuthQuery.data.message ??
-            "Run `claude` and complete `/login` before starting execution."}
+        <div>
+          <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
+            &gt; System_Bootstrap
+          </h1>
+          <p className="text-xs text-zinc-500 mt-1 font-mono">
+            // Initialize planner from requirements.md and spawn subprocesses.
+          </p>
         </div>
-      )}
-      {shouldCheckClaudeAuth && claudeAuthQuery.isError && (
-        <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
-          &gt; WARN: Failed to check Claude Code authentication status.
-        </div>
-      )}
-      {shouldCheckCodexAuth && codexAuthQuery.data && !codexAuthQuery.data.authenticated && (
-        <div className="border border-yellow-600 bg-yellow-900/10 p-3 text-xs font-mono text-yellow-500">
-          &gt; WARN: Codex is not ready.{" "}
-          {codexAuthQuery.data.message ?? "Run `codex login` or set OPENAI_API_KEY/CODEX_API_KEY."}
-        </div>
-      )}
-      {shouldCheckCodexAuth && codexAuthQuery.isError && (
-        <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
-          &gt; WARN: Failed to check Codex authentication status.
-        </div>
-      )}
-      {shouldCheckGithubAuth && githubAuthQuery.data && !githubAuthQuery.data.authenticated && (
-        <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
-          &gt; WARN: GitHub CLI (gh) is not ready.{" "}
-          {githubAuthQuery.data.message ?? "Install `gh` and complete `gh auth login` first."}
-        </div>
-      )}
-      {shouldCheckGithubAuth && githubAuthQuery.isError && (
-        <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
-          &gt; WARN: Failed to check GitHub CLI authentication status.
-        </div>
-      )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* System Status Panel */}
-        <section className="border border-term-border p-0 h-full">
-          <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between items-center">
-            <h2 className="text-sm font-bold uppercase tracking-wider">Status_Monitor</h2>
-            <span className="text-xs text-zinc-500">
-              {isHealthy ? "[API: ONLINE]" : "[API: OFFLINE]"}
-            </span>
+        {shouldCheckClaudeAuth && claudeAuthQuery.data && !claudeAuthQuery.data.authenticated && (
+          <div className="border border-yellow-600 bg-yellow-900/10 p-3 text-xs font-mono text-yellow-500">
+            &gt; WARN: Claude Code is not ready.{" "}
+            {claudeAuthQuery.data.message ??
+              "Run `claude` and complete `/login` before starting execution."}
           </div>
-
-          <div className="p-4 space-y-4 font-mono text-sm">
-            <div className="grid grid-cols-2 gap-y-2">
-              <div className="text-zinc-500">Dispatcher</div>
-              <div className={STATUS_COLORS[dispatcherStatus]}>
-                {STATUS_LABELS[dispatcherStatus]}
-              </div>
-
-              <div className="text-zinc-500">Planner</div>
-              <div className={STATUS_COLORS[runningPlanners > 0 ? "running" : "idle"]}>
-                {runningPlanners > 0 ? "RUNNING" : "IDLE"} ({runningPlanners}/{plannerCount})
-              </div>
-
-              <div className="text-zinc-500">Judge</div>
-              <div className={STATUS_COLORS[judgeStatus]}>
-                {STATUS_LABELS[judgeStatus]} ({runningJudges}/{judgeCount})
-              </div>
-
-              <div className="text-zinc-500">CycleManager</div>
-              <div className={STATUS_COLORS[cycleStatus]}>{STATUS_LABELS[cycleStatus]}</div>
+        )}
+        {shouldCheckClaudeAuth && claudeAuthQuery.isError && (
+          <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
+            &gt; WARN: Failed to check Claude Code authentication status.
+          </div>
+        )}
+        {shouldCheckCodexAuth && codexAuthQuery.data && !codexAuthQuery.data.authenticated && (
+          <div className="border border-yellow-600 bg-yellow-900/10 p-3 text-xs font-mono text-yellow-500">
+            &gt; WARN: Codex is not ready.{" "}
+            {codexAuthQuery.data.message ??
+              "Run `codex login` or set OPENAI_API_KEY/CODEX_API_KEY."}
+          </div>
+        )}
+        {shouldCheckCodexAuth && codexAuthQuery.isError && (
+          <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
+            &gt; WARN: Failed to check Codex authentication status.
+          </div>
+        )}
+        {shouldCheckGithubAuth && githubAuthQuery.data && !githubAuthQuery.data.authenticated && (
+          <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
+            &gt; WARN: GitHub CLI (gh) is not ready.{" "}
+            {githubAuthQuery.data.message ?? "Install `gh` and complete `gh auth login` first."}
+          </div>
+        )}
+        {shouldCheckGithubAuth && githubAuthQuery.isError && (
+          <div className="border border-red-600 bg-red-900/10 p-3 text-xs font-mono text-red-500">
+            &gt; WARN: Failed to check GitHub CLI authentication status.
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* System Status Panel */}
+          <section className="border border-term-border p-0 h-full">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between items-center">
+              <h2 className="text-sm font-bold uppercase tracking-wider">Status_Monitor</h2>
+              <span className="text-xs text-zinc-500">
+                {isHealthy ? "[API: ONLINE]" : "[API: OFFLINE]"}
+              </span>
             </div>
 
-            <div className="border-t border-term-border pt-4 mt-2">
-              <div className="flex justify-between mb-1">
-                <span className="text-zinc-500">Active Workers</span>
-                <span>
-                  {runningWorkers} / {workerCount}
-                </span>
-              </div>
-              <div className="w-full bg-zinc-900 h-1 mb-3">
-                <div
-                  className="h-full bg-term-tiger"
-                  style={{
-                    width: `${workerCount > 0 ? (runningWorkers / workerCount) * 100 : 0}%`,
-                  }}
-                ></div>
+            <div className="p-4 space-y-4 font-mono text-sm">
+              <div className="grid grid-cols-2 gap-y-2">
+                <div className="text-zinc-500">Dispatcher</div>
+                <div className={STATUS_COLORS[dispatcherStatus]}>
+                  {STATUS_LABELS[dispatcherStatus]}
+                </div>
+
+                <div className="text-zinc-500">Planner</div>
+                <div className={STATUS_COLORS[runningPlanners > 0 ? "running" : "idle"]}>
+                  {runningPlanners > 0 ? "RUNNING" : "IDLE"} ({runningPlanners}/{plannerCount})
+                </div>
+
+                <div className="text-zinc-500">Judge</div>
+                <div className={STATUS_COLORS[judgeStatus]}>
+                  {STATUS_LABELS[judgeStatus]} ({runningJudges}/{judgeCount})
+                </div>
+
+                <div className="text-zinc-500">CycleManager</div>
+                <div className={STATUS_COLORS[cycleStatus]}>{STATUS_LABELS[cycleStatus]}</div>
               </div>
 
-              <div className="flex justify-between mb-1">
-                <span className="text-zinc-500">Active Testers</span>
-                <span>
-                  {runningTesters} / {testerCount}
-                </span>
-              </div>
-              <div className="w-full bg-zinc-900 h-1 mb-3">
-                <div
-                  className="h-full bg-term-tiger"
-                  style={{
-                    width: `${testerCount > 0 ? (runningTesters / testerCount) * 100 : 0}%`,
-                  }}
-                ></div>
-              </div>
+              <div className="border-t border-term-border pt-4 mt-2">
+                <div className="flex justify-between mb-1">
+                  <span className="text-zinc-500">Active Workers</span>
+                  <span>
+                    {runningWorkers} / {workerCount}
+                  </span>
+                </div>
+                <div className="w-full bg-zinc-900 h-1 mb-3">
+                  <div
+                    className="h-full bg-term-tiger"
+                    style={{
+                      width: `${workerCount > 0 ? (runningWorkers / workerCount) * 100 : 0}%`,
+                    }}
+                  ></div>
+                </div>
 
-              <div className="flex justify-between mb-1">
-                <span className="text-zinc-500">Docs</span>
-                <span>
-                  {runningDocsers} / {docserCount}
-                </span>
+                <div className="flex justify-between mb-1">
+                  <span className="text-zinc-500">Active Testers</span>
+                  <span>
+                    {runningTesters} / {testerCount}
+                  </span>
+                </div>
+                <div className="w-full bg-zinc-900 h-1 mb-3">
+                  <div
+                    className="h-full bg-term-tiger"
+                    style={{
+                      width: `${testerCount > 0 ? (runningTesters / testerCount) * 100 : 0}%`,
+                    }}
+                  ></div>
+                </div>
+
+                <div className="flex justify-between mb-1">
+                  <span className="text-zinc-500">Docs</span>
+                  <span>
+                    {runningDocsers} / {docserCount}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* Start Control Panel */}
-        <section className="border border-term-border p-0 h-full flex flex-col">
-          <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
-            <h2 className="text-sm font-bold uppercase tracking-wider">Boot_Sequence</h2>
-          </div>
+          {/* Start Control Panel */}
+          <section className="border border-term-border p-0 h-full flex flex-col">
+            <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
+              <h2 className="text-sm font-bold uppercase tracking-wider">Boot_Sequence</h2>
+            </div>
 
-          <div className="p-4 flex-1 flex flex-col gap-4">
-            <div className="border border-term-border p-3 text-xs font-mono space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-zinc-400">Current Git Repository</div>
+            <div className="p-4 flex-1 flex flex-col gap-4">
+              <div className="border border-term-border p-3 text-xs font-mono space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-zinc-400">Current Git Repository</div>
+                  <button
+                    onClick={() => setIsRepoManagerOpen((prev) => !prev)}
+                    className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors"
+                  >
+                    {isRepoManagerOpen ? "[ CLOSE_REPO ]" : "[ CHANGE_REPO ]"}
+                  </button>
+                </div>
+                <div className="space-y-1 text-[11px]">
+                  <div className="text-zinc-300">{currentRepoName}</div>
+                  {repoUrl ? (
+                    <a
+                      href={repoUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-block text-term-tiger hover:underline break-all"
+                    >
+                      {repoUrl}
+                    </a>
+                  ) : (
+                    <div className="text-yellow-500">Repo URL is not configured</div>
+                  )}
+                </div>
+              </div>
+              {isRepoManagerOpen && (
+                <div className="border border-term-border p-3 text-xs font-mono space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2">
+                    <select
+                      value={selectedRepoFullName}
+                      onChange={(event) => setSelectedRepoFullName(event.target.value)}
+                      disabled={
+                        !hasGithubAuth || githubReposQuery.isLoading || githubRepos.length === 0
+                      }
+                      className="w-full bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="" disabled>
+                        -- SELECT REPOSITORY --
+                      </option>
+                      {githubRepos.map((repo) => (
+                        <option key={repo.fullName} value={repo.fullName}>
+                          {repo.fullName}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => githubReposQuery.refetch()}
+                      disabled={!hasGithubAuth || githubReposQuery.isFetching}
+                      className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
+                    >
+                      {githubReposQuery.isFetching ? "[ REFRESHING ]" : "[ REFRESH ]"}
+                    </button>
+                    <button
+                      onClick={() => selectedRepo && applyRepoMutation.mutate(selectedRepo)}
+                      disabled={!selectedRepo || applyRepoMutation.isPending}
+                      className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
+                    >
+                      {applyRepoMutation.isPending ? "[ APPLYING ]" : "[ APPLY ]"}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2">
+                    <input
+                      type="text"
+                      className="w-full bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none placeholder-zinc-700"
+                      value={repoOwner}
+                      onChange={(event) => setRepoOwner(event.target.value)}
+                      placeholder="GitHub owner"
+                    />
+                    <input
+                      type="text"
+                      className="w-full bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none placeholder-zinc-700"
+                      value={repoName}
+                      onChange={(event) => setRepoName(event.target.value)}
+                      placeholder="Repository name"
+                    />
+                    <button
+                      onClick={() => createRepoMutation.mutate()}
+                      disabled={!hasGithubAuth || createRepoMutation.isPending}
+                      className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
+                    >
+                      {createRepoMutation.isPending ? "[ CREATING ]" : "[ CREATE_NEW ]"}
+                    </button>
+                  </div>
+                  {!hasGithubAuth && (
+                    <div className="text-yellow-500">
+                      `GITHUB_AUTH_MODE=token` requires `GITHUB_TOKEN` in System config
+                    </div>
+                  )}
+                  {githubReposQuery.isError && (
+                    <div className="text-red-500">
+                      &gt; REPO_LIST_ERR:{" "}
+                      {githubReposQuery.error instanceof Error
+                        ? githubReposQuery.error.message
+                        : "Failed to load repositories"}
+                    </div>
+                  )}
+                  {repoMessage && <div className="text-[10px] text-zinc-500">{repoMessage}</div>}
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-zinc-500 uppercase">Requirement Input (Paste)</label>
                 <button
-                  onClick={() => setIsRepoManagerOpen((prev) => !prev)}
-                  className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors"
+                  onClick={() => clearLogsMutation.mutate()}
+                  disabled={clearLogsMutation.isPending}
+                  className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-sm uppercase transition-colors disabled:opacity-50"
                 >
-                  {isRepoManagerOpen ? "[ CLOSE_REPO ]" : "[ CHANGE_REPO ]"}
+                  [ CLEAR_LOG ]
                 </button>
               </div>
-              <div className="space-y-1 text-[11px]">
-                <div className="text-zinc-300">{currentRepoName}</div>
-                {repoUrl ? (
-                  <a
-                    href={repoUrl}
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="inline-block text-term-tiger hover:underline break-all"
-                  >
-                    {repoUrl}
-                  </a>
-                ) : (
-                  <div className="text-yellow-500">Repo URL is not configured</div>
-                )}
+              {clearLogMessage && (
+                <div className="text-[10px] text-zinc-500 font-mono -mt-2">{clearLogMessage}</div>
+              )}
+
+              <textarea
+                className="flex-1 bg-black border border-term-border p-3 text-xs font-mono text-zinc-300 focus:border-term-tiger focus:outline-none resize-none min-h-[150px]"
+                value={content}
+                onChange={(event) => {
+                  setHasEditedRequirement(true);
+                  setContent(event.target.value);
+                }}
+                placeholder="> Waiting for content..."
+              />
+
+              <div className="flex justify-between items-center pt-2">
+                <span className="text-xs text-zinc-600">{content.length} bytes loaded</span>
+                <button
+                  onClick={() => prepareStartMutation.mutate()}
+                  disabled={
+                    startMutation.isPending || prepareStartMutation.isPending || isStartBlocked
+                  }
+                  className="bg-term-tiger text-black px-6 py-2 text-sm font-bold uppercase hover:opacity-90 disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500"
+                >
+                  {prepareStartMutation.isPending || startMutation.isPending
+                    ? "> INITIATING..."
+                    : "> EXECUTE RUN"}
+                </button>
               </div>
-            </div>
-            {isRepoManagerOpen && (
-              <div className="border border-term-border p-3 text-xs font-mono space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2">
-                  <select
-                    value={selectedRepoFullName}
-                    onChange={(event) => setSelectedRepoFullName(event.target.value)}
-                    disabled={
-                      !hasGithubAuth || githubReposQuery.isLoading || githubRepos.length === 0
-                    }
-                    className="w-full bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none disabled:opacity-50"
-                  >
-                    <option value="" disabled>
-                      -- SELECT REPOSITORY --
-                    </option>
-                    {githubRepos.map((repo) => (
-                      <option key={repo.fullName} value={repo.fullName}>
-                        {repo.fullName}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => githubReposQuery.refetch()}
-                    disabled={!hasGithubAuth || githubReposQuery.isFetching}
-                    className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
-                  >
-                    {githubReposQuery.isFetching ? "[ REFRESHING ]" : "[ REFRESH ]"}
-                  </button>
-                  <button
-                    onClick={() => selectedRepo && applyRepoMutation.mutate(selectedRepo)}
-                    disabled={!selectedRepo || applyRepoMutation.isPending}
-                    className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
-                  >
-                    {applyRepoMutation.isPending ? "[ APPLYING ]" : "[ APPLY ]"}
-                  </button>
+
+              {/* Result Console */}
+              {(startResult || isContentEmpty || isStartBlocked) && (
+                <div className="border-t border-term-border mt-2 pt-2 gap-1 flex flex-col text-xs font-mono">
+                  {isContentEmpty && (
+                    <div className="text-yellow-500">
+                      &gt; WARN: Content empty (Issue/PR preflight only)
+                    </div>
+                  )}
+                  {isStartBlocked && (
+                    <div className="text-yellow-500">&gt; WARN: GitHub repo is missing</div>
+                  )}
+                  {startResult?.warnings.map((w) => (
+                    <div key={w} className="text-yellow-500">
+                      &gt; WARN: {w}
+                    </div>
+                  ))}
+                  {startResult?.errors.map((e) => (
+                    <div key={e} className="text-red-500">
+                      &gt; ERR: {e}
+                    </div>
+                  ))}
+                  {startResult?.started.length && (
+                    <div className="text-term-tiger">&gt; BOOT SEQ INITIATED</div>
+                  )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2">
-                  <input
-                    type="text"
-                    className="w-full bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none placeholder-zinc-700"
-                    value={repoOwner}
-                    onChange={(event) => setRepoOwner(event.target.value)}
-                    placeholder="GitHub owner"
-                  />
-                  <input
-                    type="text"
-                    className="w-full bg-black border border-term-border px-3 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none placeholder-zinc-700"
-                    value={repoName}
-                    onChange={(event) => setRepoName(event.target.value)}
-                    placeholder="Repository name"
-                  />
-                  <button
-                    onClick={() => createRepoMutation.mutate()}
-                    disabled={!hasGithubAuth || createRepoMutation.isPending}
-                    className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
-                  >
-                    {createRepoMutation.isPending ? "[ CREATING ]" : "[ CREATE_NEW ]"}
-                  </button>
-                </div>
-                {!hasGithubAuth && (
-                  <div className="text-yellow-500">
-                    `GITHUB_AUTH_MODE=token` requires `GITHUB_TOKEN` in System config
-                  </div>
-                )}
-                {githubReposQuery.isError && (
-                  <div className="text-red-500">
-                    &gt; REPO_LIST_ERR:{" "}
-                    {githubReposQuery.error instanceof Error
-                      ? githubReposQuery.error.message
-                      : "Failed to load repositories"}
-                  </div>
-                )}
-                {repoMessage && <div className="text-[10px] text-zinc-500">{repoMessage}</div>}
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              <label className="text-xs text-zinc-500 uppercase">Requirement Input (Paste)</label>
-              <button
-                onClick={() => clearLogsMutation.mutate()}
-                disabled={clearLogsMutation.isPending}
-                className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-sm uppercase transition-colors disabled:opacity-50"
-              >
-                [ CLEAR_LOG ]
-              </button>
+              )}
             </div>
-            {clearLogMessage && (
-              <div className="text-[10px] text-zinc-500 font-mono -mt-2">{clearLogMessage}</div>
-            )}
-
-            <textarea
-              className="flex-1 bg-black border border-term-border p-3 text-xs font-mono text-zinc-300 focus:border-term-tiger focus:outline-none resize-none min-h-[150px]"
-              value={content}
-              onChange={(event) => {
-                setHasEditedRequirement(true);
-                setContent(event.target.value);
-              }}
-              placeholder="> Waiting for content..."
-            />
-
-            <div className="flex justify-between items-center pt-2">
-              <span className="text-xs text-zinc-600">{content.length} bytes loaded</span>
-              <button
-                onClick={() => prepareStartMutation.mutate()}
-                disabled={startMutation.isPending || prepareStartMutation.isPending || isStartBlocked}
-                className="bg-term-tiger text-black px-6 py-2 text-sm font-bold uppercase hover:opacity-90 disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500"
-              >
-                {prepareStartMutation.isPending || startMutation.isPending
-                  ? "> INITIATING..."
-                  : "> EXECUTE RUN"}
-              </button>
+          </section>
+        </div>
+        {neofetchOutput && <NeofetchPanel output={neofetchOutput} />}
+        {/* Legacy Planner Logs */}
+        <section className="border border-term-border p-0">
+          <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">
+            <h2 className="text-sm font-bold uppercase tracking-wider">Planner_Output</h2>
+            <span className={`text-xs uppercase ${STATUS_COLORS[planner?.status ?? "idle"]}`}>
+              [{STATUS_LABELS[planner?.status ?? "idle"]}]
+            </span>
+          </div>
+          <div className="p-4 font-mono text-xs space-y-1">
+            <div className="flex gap-4">
+              <span className="text-zinc-500 w-24">STARTED</span>
+              <span>{formatTimestamp(planner?.startedAt)}</span>
             </div>
-
-            {/* Result Console */}
-            {(startResult || isContentEmpty || isStartBlocked) && (
-              <div className="border-t border-term-border mt-2 pt-2 gap-1 flex flex-col text-xs font-mono">
-                {isContentEmpty && (
-                  <div className="text-yellow-500">
-                    &gt; WARN: Content empty (Issue/PR preflight only)
-                  </div>
-                )}
-                {isStartBlocked && (
-                  <div className="text-yellow-500">&gt; WARN: GitHub repo is missing</div>
-                )}
-                {startResult?.warnings.map((w) => (
-                  <div key={w} className="text-yellow-500">
-                    &gt; WARN: {w}
-                  </div>
-                ))}
-                {startResult?.errors.map((e) => (
-                  <div key={e} className="text-red-500">
-                    &gt; ERR: {e}
-                  </div>
-                ))}
-                {startResult?.started.length && (
-                  <div className="text-term-tiger">&gt; BOOT SEQ INITIATED</div>
-                )}
+            <div className="flex gap-4">
+              <span className="text-zinc-500 w-24">FINISHED</span>
+              <span>{formatTimestamp(planner?.finishedAt)}</span>
+            </div>
+            <div className="flex gap-4">
+              <span className="text-zinc-500 w-24">LOG_PATH</span>
+              <span className="text-zinc-400">{planner?.logPath || "--"}</span>
+            </div>
+            {planner?.message && planner.status === "failed" && (
+              <div className="text-red-500 mt-2 border-l-2 border-red-500 pl-2">
+                &gt; CRITICAL_ERR: {planner.message}
               </div>
             )}
           </div>
         </section>
-      </div>
-      {neofetchOutput && <NeofetchPanel output={neofetchOutput} />}
-      {/* Legacy Planner Logs */}
-      <section className="border border-term-border p-0">
-        <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wider">Planner_Output</h2>
-          <span className={`text-xs uppercase ${STATUS_COLORS[planner?.status ?? "idle"]}`}>
-            [{STATUS_LABELS[planner?.status ?? "idle"]}]
-          </span>
-        </div>
-        <div className="p-4 font-mono text-xs space-y-1">
-          <div className="flex gap-4">
-            <span className="text-zinc-500 w-24">STARTED</span>
-            <span>{formatTimestamp(planner?.startedAt)}</span>
-          </div>
-          <div className="flex gap-4">
-            <span className="text-zinc-500 w-24">FINISHED</span>
-            <span>{formatTimestamp(planner?.finishedAt)}</span>
-          </div>
-          <div className="flex gap-4">
-            <span className="text-zinc-500 w-24">LOG_PATH</span>
-            <span className="text-zinc-400">{planner?.logPath || "--"}</span>
-          </div>
-          {planner?.message && planner.status === "failed" && (
-            <div className="text-red-500 mt-2 border-l-2 border-red-500 pl-2">
-              &gt; CRITICAL_ERR: {planner.message}
-            </div>
-          )}
-        </div>
-      </section>
       </div>
       {startConfirmation && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">

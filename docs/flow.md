@@ -23,10 +23,10 @@ For startup preflight rules and full pattern matrix, see [startup-patterns](star
 
 When entering from state vocabulary, first fix terminology in [state-model](state-model.md), then check transitions and recovery paths here.
 
-| State model section                     | Next section here                                                                                    | Owning agent                |
-| --------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------- |
-| "1. Task Status" "2. Task Block Reason" | [2. Basic Lifecycle](#2-basic-lifecycle), [3. Blocked Reasons Used for Recovery](#3-blocked-reasons-used-for-recovery) | Dispatcher / Worker / Judge |
-| "2.2 Task Retry Reason (Operations)"    | [6. Worker Failure Handling](#6-worker-failure-handling), [8. Cycle Manager Self-Recovery](#8-cycle-manager-self-recovery) | Worker / Cycle Manager      |
+| State model section                     | Next section here                                                                                                                                       | Owning agent                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| "1. Task Status" "2. Task Block Reason" | [2. Basic Lifecycle](#2-basic-lifecycle), [3. Blocked Reasons Used for Recovery](#3-blocked-reasons-used-for-recovery)                                  | Dispatcher / Worker / Judge |
+| "2.2 Task Retry Reason (Operations)"    | [6. Worker Failure Handling](#6-worker-failure-handling), [8. Cycle Manager Self-Recovery](#8-cycle-manager-self-recovery)                              | Worker / Cycle Manager      |
 | "7. Patterns Prone to Stalls"           | [5. Dispatcher Recovery Layer](#5-dispatcher-recovery-layer), [7. Judge Non-Approval / Merge Failure Paths](#7-judge-non-approval--merge-failure-paths) | Dispatcher / Judge          |
 
 ## 1. Startup / Preflight
