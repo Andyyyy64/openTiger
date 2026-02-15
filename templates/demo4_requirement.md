@@ -130,14 +130,14 @@ A minimal but structurally sound baseline with a usable editor will establish wh
 
 ## Risk Assessment
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| OpenGL context/extension issues across platforms | high | Target single platform first; document GL version and extensions |
-| ECS modification-during-iteration causes undefined behavior | high | Defer add/remove to end of system tick; document iteration rules |
-| Variable frame rate causes non-deterministic simulation | medium | Fixed timestep update with accumulator; render interpolation optional |
-| ImGui input conflicts with game input | medium | Clear input ownership; editor captures when interacting with panels |
-| Editor state and game state get out of sync in Play mode | high | Explicit Edit/Play separation; reset scene on Stop |
-| Scope creep into physics/audio/scripting blocks delivery | high | Strict Out of Scope; defer to follow-up milestones |
+| Risk                                                        | Impact | Mitigation                                                            |
+| ----------------------------------------------------------- | ------ | --------------------------------------------------------------------- |
+| OpenGL context/extension issues across platforms            | high   | Target single platform first; document GL version and extensions      |
+| ECS modification-during-iteration causes undefined behavior | high   | Defer add/remove to end of system tick; document iteration rules      |
+| Variable frame rate causes non-deterministic simulation     | medium | Fixed timestep update with accumulator; render interpolation optional |
+| ImGui input conflicts with game input                       | medium | Clear input ownership; editor captures when interacting with panels   |
+| Editor state and game state get out of sync in Play mode    | high   | Explicit Edit/Play separation; reset scene on Stop                    |
+| Scope creep into physics/audio/scripting blocks delivery    | high   | Strict Out of Scope; defer to follow-up milestones                    |
 
 ## Notes
 

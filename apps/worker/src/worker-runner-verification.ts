@@ -579,14 +579,20 @@ async function attemptGeneratedArtifactRecovery(params: {
     );
   }
 
-  const cleanupResult = await discardChangesForPaths(params.repoPath, recoveryCandidates.discardPaths);
+  const cleanupResult = await discardChangesForPaths(
+    params.repoPath,
+    recoveryCandidates.discardPaths,
+  );
   if (!cleanupResult.success) {
     console.warn(
       `[Worker] Failed to discard generated artifact candidates: ${cleanupResult.stderr || "(no stderr)"}`,
     );
     return null;
   }
-  const learnedPaths = await persistGeneratedPathHints(params.repoPath, recoveryCandidates.discardPaths);
+  const learnedPaths = await persistGeneratedPathHints(
+    params.repoPath,
+    recoveryCandidates.discardPaths,
+  );
   if (learnedPaths.length > 0) {
     console.log(`[Worker] Learned generated artifact path hints: ${learnedPaths.join(", ")}`);
   }
@@ -614,7 +620,9 @@ export function selectGeneratedArtifactRecoveryCandidates(params: {
 } {
   const normalizedViolating = Array.from(
     new Set(
-      params.violatingPaths.map((path) => normalizePathForMatch(path)).filter((path) => path.length > 0),
+      params.violatingPaths
+        .map((path) => normalizePathForMatch(path))
+        .filter((path) => path.length > 0),
     ),
   );
   const untrackedSet = new Set(
