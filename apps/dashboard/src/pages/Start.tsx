@@ -34,6 +34,12 @@ type StartResult = {
   warnings: string[];
 };
 
+type StartConfirmation = {
+  targetRepository: string;
+  openIssueCount: number;
+  openPrCount: number;
+};
+
 type ExecutionEnvironment = "host" | "sandbox";
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
@@ -71,6 +77,7 @@ export const StartPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [content, setContent] = useState("");
   const [hasEditedRequirement, setHasEditedRequirement] = useState(false);
+  const [startConfirmation, setStartConfirmation] = useState<StartConfirmation | null>(null);
   const [clearLogMessage, setClearLogMessage] = useState("");
   const [startResult, setStartResult] = useState<StartResult | null>(null);
   const [repoOwner, setRepoOwner] = useState("");
@@ -99,6 +106,7 @@ export const StartPage: React.FC = () => {
     configValues.GITHUB_OWNER && configValues.GITHUB_REPO
       ? `${configValues.GITHUB_OWNER}/${configValues.GITHUB_REPO}`
       : "--";
+  const targetRepositoryLabel = currentRepoName !== "--" ? currentRepoName : repoUrl || "--";
   const githubReposQuery = useQuery({
     queryKey: ["system", "github-repos", repoListOwnerFilter ?? ""],
     queryFn: () => systemApi.listGithubRepos({ owner: repoListOwnerFilter }),
@@ -315,6 +323,46 @@ export const StartPage: React.FC = () => {
     },
   });
 
+  const resolveEffectiveStartContent = () => {
+    const trimmedContent = content.trim();
+    const fallbackRequirementContent = requirementQuery.data?.content ?? "";
+    const effectiveContent = trimmedContent.length > 0 ? content : fallbackRequirementContent;
+    return { trimmedContent, effectiveContent };
+  };
+
+  const prepareStartMutation = useMutation({
+    mutationFn: async () => {
+      const settings = config?.config;
+      if (!settings) throw new Error("Config not loaded");
+      const repoMode = (settings.REPO_MODE ?? "git").toLowerCase();
+      const hasRepoUrl = Boolean(settings.REPO_URL?.trim());
+      if (repoMode === "git" && !hasRepoUrl && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
+        throw new Error("GitHub repo is not configured");
+      }
+      const { effectiveContent } = resolveEffectiveStartContent();
+      const preflight = await systemApi.preflight({
+        content: effectiveContent,
+        autoCreateIssueTasks: false,
+        autoCreatePrJudgeTasks: false,
+      });
+      return {
+        targetRepository: targetRepositoryLabel,
+        openIssueCount: preflight.preflight.github.openIssueCount,
+        openPrCount: preflight.preflight.github.openPrCount,
+      };
+    },
+    onSuccess: (result) => {
+      setStartConfirmation(result);
+    },
+    onError: (error) => {
+      setStartResult({
+        started: [],
+        errors: [error instanceof Error ? error.message : "Failed to prepare start confirmation"],
+        warnings: [],
+      });
+    },
+  });
+
   const startMutation = useMutation({
     mutationFn: async () => {
       const settings = config?.config;
@@ -341,9 +389,7 @@ export const StartPage: React.FC = () => {
         plannerCount.warning,
       ].filter((value): value is string => typeof value === "string");
 
-      const trimmedContent = content.trim();
-      const fallbackRequirementContent = requirementQuery.data?.content ?? "";
-      const effectiveContent = trimmedContent.length > 0 ? content : fallbackRequirementContent;
+      const { trimmedContent, effectiveContent } = resolveEffectiveStartContent();
       const hasRequirementContent = effectiveContent.trim().length > 0;
 
       if (trimmedContent.length > 0) {
@@ -452,11 +498,13 @@ export const StartPage: React.FC = () => {
       return { started, errors, warnings };
     },
     onSuccess: (result) => {
+      setStartConfirmation(null);
       setStartResult(result);
       queryClient.invalidateQueries({ queryKey: ["system", "processes"] });
       queryClient.invalidateQueries({ queryKey: ["config"] });
     },
     onError: (error) => {
+      setStartConfirmation(null);
       setStartResult({
         started: [],
         errors: [error instanceof Error ? error.message : "Launch failed"],
@@ -574,7 +622,8 @@ export const StartPage: React.FC = () => {
   const isHealthy = health?.status === "ok" && !isHealthError;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6 text-term-fg">
+    <>
+      <div className="p-6 max-w-6xl mx-auto space-y-6 text-term-fg">
       <div>
         <h1 className="text-xl font-bold uppercase tracking-widest text-term-tiger font-pixel">
           &gt; System_Bootstrap
@@ -823,11 +872,13 @@ export const StartPage: React.FC = () => {
             <div className="flex justify-between items-center pt-2">
               <span className="text-xs text-zinc-600">{content.length} bytes loaded</span>
               <button
-                onClick={() => startMutation.mutate()}
-                disabled={startMutation.isPending || isStartBlocked}
+                onClick={() => prepareStartMutation.mutate()}
+                disabled={startMutation.isPending || prepareStartMutation.isPending || isStartBlocked}
                 className="bg-term-tiger text-black px-6 py-2 text-sm font-bold uppercase hover:opacity-90 disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500"
               >
-                {startMutation.isPending ? "> INITIATING..." : "> EXECUTE RUN"}
+                {prepareStartMutation.isPending || startMutation.isPending
+                  ? "> INITIATING..."
+                  : "> EXECUTE RUN"}
               </button>
             </div>
 
@@ -889,6 +940,53 @@ export const StartPage: React.FC = () => {
           )}
         </div>
       </section>
-    </div>
+      </div>
+      {startConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4">
+          <div className="w-full max-w-2xl border border-term-border bg-black p-6 font-mono text-term-fg">
+            <h3 className="text-lg font-bold uppercase tracking-widest text-term-tiger">
+              Start Confirmation
+            </h3>
+            <p className="mt-4 text-xs uppercase tracking-wide text-zinc-500">Target Repository</p>
+            <p className="mt-1 break-all text-3xl font-bold text-zinc-100">
+              {startConfirmation.targetRepository}
+            </p>
+            <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
+              <div className="border border-term-border p-3">
+                <div className="text-xs uppercase text-zinc-500">Open Issues</div>
+                <div className="mt-1 text-2xl font-bold text-term-tiger">
+                  {startConfirmation.openIssueCount}
+                </div>
+              </div>
+              <div className="border border-term-border p-3">
+                <div className="text-xs uppercase text-zinc-500">Open PRs</div>
+                <div className="mt-1 text-2xl font-bold text-term-tiger">
+                  {startConfirmation.openPrCount}
+                </div>
+              </div>
+            </div>
+            <p className="mt-4 text-xs text-zinc-500">
+              Starting will continue with issue and PR backlog processing for this repository.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={() => setStartConfirmation(null)}
+                disabled={startMutation.isPending}
+                className="border border-term-border px-4 py-2 text-sm uppercase hover:bg-term-fg hover:text-black disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => startMutation.mutate()}
+                disabled={startMutation.isPending}
+                className="bg-term-tiger px-5 py-2 text-sm font-bold uppercase text-black hover:opacity-90 disabled:opacity-50"
+              >
+                {startMutation.isPending ? "Starting..." : "Continue"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
