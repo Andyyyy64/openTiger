@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { BrailleSpinner } from "../components/BrailleSpinner";
 import { researchApi, type CreateResearchJobInput } from "../lib/api";
 
 const resolveStage = (metadata: Record<string, unknown> | null | undefined): string => {
@@ -87,8 +88,11 @@ export const ResearchPage: React.FC = () => {
             <button
               type="submit"
               disabled={createMutation.isPending || query.trim().length === 0}
-              className="text-term-tiger border border-term-tiger hover:bg-term-tiger hover:text-black disabled:opacity-50 disabled:cursor-not-allowed px-4 py-1 text-xs font-bold uppercase transition-all"
+              className="text-term-tiger border border-term-tiger hover:bg-term-tiger hover:text-black disabled:opacity-50 disabled:cursor-not-allowed px-4 py-1 text-xs font-bold uppercase transition-all flex items-center gap-2"
             >
+              {createMutation.isPending && (
+                <BrailleSpinner variant="pendulum" width={6} className="[color:inherit]" />
+              )}
               {createMutation.isPending ? "[CREATING]" : "[CREATE_JOB]"}
             </button>
           </div>
@@ -112,8 +116,11 @@ export const ResearchPage: React.FC = () => {
                 return;
               deleteAllMutation.mutate();
             }}
-            className="text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-0.5 text-xs uppercase disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-0.5 text-xs uppercase disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
           >
+            {deleteAllMutation.isPending && (
+              <BrailleSpinner variant="compress" width={5} className="[color:inherit]" />
+            )}
             {deleteAllMutation.isPending ? "[CLEARING...]" : "[CLEAR_ALL]"}
           </button>
         </div>

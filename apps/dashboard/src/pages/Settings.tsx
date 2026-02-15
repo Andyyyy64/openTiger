@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { configApi, systemApi } from "../lib/api";
+import { BrailleSpinner } from "../components/BrailleSpinner";
 import { SettingsHeader } from "./settings/SettingsHeader";
 import { SystemControlPanel } from "./settings/SystemControlPanel";
 import { SettingsConfigSections } from "./settings/SettingsConfigSections";
@@ -592,8 +593,11 @@ export const SettingsPage: React.FC = () => {
             <button
               onClick={() => githubReposQuery.refetch()}
               disabled={!hasGithubAuth || githubReposQuery.isFetching}
-              className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
+              className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50 flex items-center gap-2"
             >
+              {githubReposQuery.isFetching && (
+                <BrailleSpinner variant="sort" width={6} className="[color:inherit]" />
+              )}
               {githubReposQuery.isFetching ? "[ REFRESHING ]" : "[ REFRESH ]"}
             </button>
             <button
@@ -644,8 +648,11 @@ export const SettingsPage: React.FC = () => {
               <button
                 onClick={() => createRepoMutation.mutate()}
                 disabled={!hasGithubAuth || createRepoMutation.isPending}
-                className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
+                className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50 flex items-center gap-2"
               >
+                {createRepoMutation.isPending && (
+                  <BrailleSpinner variant="pendulum" width={6} className="[color:inherit]" />
+                )}
                 {createRepoMutation.isPending ? "[ CREATING ]" : "[ CREATE_NEW ]"}
               </button>
             </div>
@@ -673,8 +680,11 @@ export const SettingsPage: React.FC = () => {
           <button
             onClick={handleSave}
             disabled={mutation.isPending}
-            className="border border-amber-500 bg-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-black px-4 py-1.5 text-sm font-bold uppercase transition-colors disabled:opacity-50"
+            className="border border-amber-500 bg-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-black px-4 py-1.5 text-sm font-bold uppercase transition-colors disabled:opacity-50 flex items-center gap-2"
           >
+            {mutation.isPending && (
+              <BrailleSpinner variant="pendulum" width={6} className="[color:inherit]" />
+            )}
             {mutation.isPending ? "[ SAVING... ]" : "[ SAVE ]"}
           </button>
         </div>

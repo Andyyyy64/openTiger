@@ -7,6 +7,7 @@ import {
   type GitHubRepoListItem,
   type SystemProcess,
 } from "../lib/api";
+import { BrailleSpinner } from "../components/BrailleSpinner";
 import { NeofetchPanel } from "../components/NeofetchPanel";
 import { collectConfiguredExecutors } from "../lib/llm-executor";
 
@@ -795,15 +796,21 @@ export const StartPage: React.FC = () => {
                     <button
                       onClick={() => githubReposQuery.refetch()}
                       disabled={!hasGithubAuth || githubReposQuery.isFetching}
-                      className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
+                      className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50 flex items-center gap-2"
                     >
+                      {githubReposQuery.isFetching && (
+                        <BrailleSpinner variant="sort" width={6} className="[color:inherit]" />
+                      )}
                       {githubReposQuery.isFetching ? "[ REFRESHING ]" : "[ REFRESH ]"}
                     </button>
                     <button
                       onClick={() => selectedRepo && applyRepoMutation.mutate(selectedRepo)}
                       disabled={!selectedRepo || applyRepoMutation.isPending}
-                      className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
+                      className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50 flex items-center gap-2"
                     >
+                      {applyRepoMutation.isPending && (
+                        <BrailleSpinner variant="sort" width={6} className="[color:inherit]" />
+                      )}
                       {applyRepoMutation.isPending ? "[ APPLYING ]" : "[ APPLY ]"}
                     </button>
                   </div>
@@ -825,8 +832,11 @@ export const StartPage: React.FC = () => {
                     <button
                       onClick={() => createRepoMutation.mutate()}
                       disabled={!hasGithubAuth || createRepoMutation.isPending}
-                      className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50"
+                      className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-xs uppercase transition-colors disabled:opacity-50 flex items-center gap-2"
                     >
+                      {createRepoMutation.isPending && (
+                        <BrailleSpinner variant="pendulum" width={6} className="[color:inherit]" />
+                      )}
                       {createRepoMutation.isPending ? "[ CREATING ]" : "[ CREATE_NEW ]"}
                     </button>
                   </div>
@@ -851,8 +861,11 @@ export const StartPage: React.FC = () => {
                 <button
                   onClick={() => clearLogsMutation.mutate()}
                   disabled={clearLogsMutation.isPending}
-                  className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-sm uppercase transition-colors disabled:opacity-50"
+                  className="border border-term-border hover:bg-term-fg hover:text-black px-3 py-1 text-sm uppercase transition-colors disabled:opacity-50 flex items-center gap-2"
                 >
+                  {clearLogsMutation.isPending && (
+                    <BrailleSpinner variant="compress" width={6} className="[color:inherit]" />
+                  )}
                   [ CLEAR_LOG ]
                 </button>
               </div>
@@ -877,8 +890,11 @@ export const StartPage: React.FC = () => {
                   disabled={
                     startMutation.isPending || prepareStartMutation.isPending || isStartBlocked
                   }
-                  className="bg-term-tiger text-black px-6 py-2 text-sm font-bold uppercase hover:opacity-90 disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500"
+                  className="bg-term-tiger text-black px-6 py-2 text-sm font-bold uppercase hover:opacity-90 disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500 flex items-center gap-2"
                 >
+                  {(prepareStartMutation.isPending || startMutation.isPending) && (
+                    <BrailleSpinner variant="pendulum" width={8} className="[color:inherit]" />
+                  )}
                   {prepareStartMutation.isPending || startMutation.isPending
                     ? "> INITIATING..."
                     : "> EXECUTE RUN"}
@@ -982,8 +998,11 @@ export const StartPage: React.FC = () => {
               <button
                 onClick={() => startMutation.mutate()}
                 disabled={startMutation.isPending}
-                className="bg-term-tiger px-5 py-2 text-sm font-bold uppercase text-black hover:opacity-90 disabled:opacity-50"
+                className="bg-term-tiger px-5 py-2 text-sm font-bold uppercase text-black hover:opacity-90 disabled:opacity-50 flex items-center gap-2"
               >
+                {startMutation.isPending && (
+                  <BrailleSpinner variant="pendulum" width={6} className="[color:inherit]" />
+                )}
                 {startMutation.isPending ? "Starting..." : "Continue"}
               </button>
             </div>

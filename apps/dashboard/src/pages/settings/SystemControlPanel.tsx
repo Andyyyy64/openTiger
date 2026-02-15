@@ -1,4 +1,5 @@
 import React from "react";
+import { BrailleSpinner } from "../../components/BrailleSpinner";
 
 type SimpleActionState = {
   isPending: boolean;
@@ -33,8 +34,11 @@ export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({ cleanup,
           <button
             onClick={cleanup.onAction}
             disabled={cleanup.isPending}
-            className="w-full border border-red-900 text-red-500 hover:bg-red-900 hover:text-white py-2 text-xs uppercase transition-colors disabled:opacity-50"
+            className="w-full border border-red-900 text-red-500 hover:bg-red-900 hover:text-white py-2 text-xs uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
+            {cleanup.isPending && (
+              <BrailleSpinner variant="compress" width={6} className="[color:inherit]" />
+            )}
             {cleanup.isPending ? "> PURGING..." : "> PURGE DATABASE"}
           </button>
 
@@ -59,8 +63,11 @@ export const SystemControlPanel: React.FC<SystemControlPanelProps> = ({ cleanup,
           <button
             onClick={stopAll.onAction}
             disabled={stopAll.isPending}
-            className="w-full border border-orange-900 text-orange-500 hover:bg-orange-900 hover:text-white py-2 text-xs uppercase transition-colors disabled:opacity-50"
+            className="w-full border border-orange-900 text-orange-500 hover:bg-orange-900 hover:text-white py-2 text-xs uppercase transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
+            {stopAll.isPending && (
+              <BrailleSpinner variant="compress" width={6} className="[color:inherit]" />
+            )}
             {stopAll.isPending ? "> STOPPING..." : "> DELETE ALL PROCESSES"}
           </button>
 

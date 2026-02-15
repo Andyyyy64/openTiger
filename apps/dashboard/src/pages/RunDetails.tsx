@@ -1,4 +1,5 @@
 import React from "react";
+import { BrailleSpinner } from "../components/BrailleSpinner";
 import { useParams, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -113,12 +114,15 @@ export const RunDetailsPage: React.FC = () => {
             type="button"
             onClick={handleStop}
             disabled={!canStop || stopMutation.isPending}
-            className={`px-3 py-2 text-xs border uppercase tracking-widest font-bold ${
+            className={`px-3 py-2 text-xs border uppercase tracking-widest font-bold flex items-center gap-2 ${
               canStop && !stopMutation.isPending
                 ? "border-red-500 text-red-400 hover:bg-red-500/10"
                 : "border-zinc-700 text-zinc-500 cursor-not-allowed"
             }`}
           >
+            {stopMutation.isPending && (
+              <BrailleSpinner variant="compress" width={6} className="[color:inherit]" />
+            )}
             {stopMutation.isPending ? "STOPPING..." : "STOP"}
           </button>
         </div>

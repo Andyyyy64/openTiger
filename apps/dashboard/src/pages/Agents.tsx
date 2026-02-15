@@ -8,6 +8,7 @@ import {
   resolveProcessNameFromAgentId,
 } from "../lib/api";
 import { Link } from "react-router-dom";
+import { BrailleSpinner } from "../components/BrailleSpinner";
 import {
   AGENT_EXECUTOR_ROLES,
   type AgentExecutorRole,
@@ -305,24 +306,30 @@ export const AgentsPage: React.FC = () => {
                       type="button"
                       onClick={() => handleStart(agent.id)}
                       disabled={!canStart || isMutating}
-                      className={`px-2 py-1 text-[10px] border font-bold ${
+                      className={`px-2 py-1 text-[10px] border font-bold flex items-center gap-1 ${
                         canStart && !isMutating
                           ? "border-term-tiger text-term-tiger hover:bg-term-tiger/10"
                           : "border-zinc-700 text-zinc-600 cursor-not-allowed"
                       }`}
                     >
+                      {startMutation.isPending && (
+                        <BrailleSpinner variant="pendulum" width={6} className="[color:inherit]" />
+                      )}
                       START
                     </button>
                     <button
                       type="button"
                       onClick={() => handleStop(agent.id)}
                       disabled={!canStop || isMutating}
-                      className={`px-2 py-1 text-[10px] border font-bold ${
+                      className={`px-2 py-1 text-[10px] border font-bold flex items-center gap-1 ${
                         canStop && !isMutating
                           ? "border-red-500 text-red-400 hover:bg-red-500/10"
                           : "border-zinc-700 text-zinc-600 cursor-not-allowed"
                       }`}
                     >
+                      {stopMutation.isPending && (
+                        <BrailleSpinner variant="compress" width={6} className="[color:inherit]" />
+                      )}
                       STOP
                     </button>
                   </div>

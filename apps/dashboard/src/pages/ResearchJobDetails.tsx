@@ -1,5 +1,6 @@
 import React from "react";
 import { Link, useParams } from "react-router-dom";
+import { BrailleSpinner } from "../components/BrailleSpinner";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { researchApi, type CreateResearchTaskInput } from "../lib/api";
 
@@ -102,8 +103,11 @@ export const ResearchJobDetailsPage: React.FC = () => {
             <button
               onClick={createFollowupTask}
               disabled={createTaskMutation.isPending}
-              className="text-term-tiger border border-term-tiger hover:bg-term-tiger hover:text-black disabled:opacity-50 px-4 py-2 text-xs font-bold uppercase"
+              className="text-term-tiger border border-term-tiger hover:bg-term-tiger hover:text-black disabled:opacity-50 px-4 py-2 text-xs font-bold uppercase flex items-center gap-2"
             >
+              {createTaskMutation.isPending && (
+                <BrailleSpinner variant="pendulum" width={6} className="[color:inherit]" />
+              )}
               {createTaskMutation.isPending ? "[QUEUING]" : "[QUEUE_STAGE]"}
             </button>
             <span className="text-xs text-red-400">
