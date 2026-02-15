@@ -25,7 +25,7 @@
     "@openTiger/vcs": "workspace:*",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.38.4",
-    "hono": "^4.7.2",
+    "hono": "^4.11.9",
     "ioredis": "^5.4.2",
     "zod": "^3.24.1"
   },

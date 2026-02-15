@@ -44,10 +44,10 @@ importers:
     dependencies:
       '@hono/node-server':
         specifier: ^1.13.8
-        version: 1.19.9(hono@4.11.4)
+        version: 1.19.9(hono@4.11.9)
       '@hono/zod-validator':
         specifier: ^0.4.2
-        version: 0.4.3(hono@4.11.4)(zod@3.25.76)
+        version: 0.4.3(hono@4.11.9)(zod@3.25.76)
       '@openTiger/core':
         specifier: workspace:*
         version: link:../../packages/core
@@ -67,8 +67,8 @@ importers:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
       hono:
-        specifier: ^4.7.2
-        version: 4.11.4
+        specifier: ^4.11.9
+        version: 4.11.9
       ioredis:
         specifier: ^5.4.2
         version: 5.9.1
@@ -2438,8 +2438,8 @@ packages:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
     engines: {node: '>=8'}
 
-  hono@4.11.4:
-    resolution: {integrity: sha512-U7tt8JsyrxSRKspfhtLET79pU8K+tInj5QZXs1jSugO1Vq5dFj3kmZsRldo29mTBfcjDRVRXrEZ6LS63Cog9ZA==}
+  hono@4.11.9:
+    resolution: {integrity: sha512-Eaw2YTGM6WOxA6CXbckaEvslr2Ne4NFsKrvc0v97JD5awbmeBLO5w9Ho9L9kmKonrwF9RJlW6BxT1PVv/agBHQ==}
     engines: {node: '>=16.9.0'}
 
   html-escaper@2.0.2:
@@ -3807,13 +3807,13 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@hono/node-server@1.19.9(hono@4.11.4)':
+  '@hono/node-server@1.19.9(hono@4.11.9)':
     dependencies:
-      hono: 4.11.4
+      hono: 4.11.9
 
-  '@hono/zod-validator@0.4.3(hono@4.11.4)(zod@3.25.76)':
+  '@hono/zod-validator@0.4.3(hono@4.11.9)(zod@3.25.76)':
     dependencies:
-      hono: 4.11.4
+      hono: 4.11.9
       zod: 3.25.76
 
   '@humanfs/core@0.19.1': {}
@@ -4966,7 +4966,7 @@ snapshots:
 
   has-flag@4.0.0: {}
 
-  hono@4.11.4: {}
+  hono@4.11.9: {}
 
   html-escaper@2.0.2: {}
 
