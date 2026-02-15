@@ -1,16 +1,11 @@
 import { join } from "node:path";
+import { resolveOpenTigerLogDir } from "../log-dir";
 import { resolveRepoRoot } from "../system-requirements";
 import type { StartCommand } from "./types";
 
 // ログ出力先は環境変数を優先して決定する
 export function resolveLogDir(): string {
-  if (process.env.OPENTIGER_LOG_DIR) {
-    return process.env.OPENTIGER_LOG_DIR;
-  }
-  if (process.env.OPENTIGER_RAW_LOG_DIR) {
-    return process.env.OPENTIGER_RAW_LOG_DIR;
-  }
-  return join(resolveRepoRoot(), "raw-logs");
+  return resolveOpenTigerLogDir(join(resolveRepoRoot(), "raw-logs"));
 }
 
 export function describeCommand(command: StartCommand): string {

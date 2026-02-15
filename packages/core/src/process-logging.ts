@@ -1,5 +1,6 @@
 import { createWriteStream, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { resolveOpenTigerLogDir } from "./log-dir";
 
 export interface ProcessLoggingOptions {
   label?: string;
@@ -11,7 +12,11 @@ export function setupProcessLogging(
   options: ProcessLoggingOptions = {},
 ): string | undefined {
   const defaultLogDir = resolve(import.meta.dirname, "../../../raw-logs");
-  const logDir = options.logDir ?? process.env.OPENTIGER_LOG_DIR ?? defaultLogDir;
+  const logDir =
+    options.logDir ??
+    resolveOpenTigerLogDir({
+      fallbackDir: defaultLogDir,
+    });
 
   try {
     mkdirSync(logDir, { recursive: true });

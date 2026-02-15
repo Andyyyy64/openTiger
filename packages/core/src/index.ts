@@ -8,3 +8,4 @@ export * from "./policy-recovery";
 export * from "./failure-classifier";
 export * from "./failure-codes";
 export * from "./failure-retry-policy";
+export * from "./log-dir";

@@ -341,7 +341,17 @@ Worker:
 - `CLAUDE_AUTH_DIR`
 - `CLAUDE_CONFIG_DIR`
 
-### 6.8 TigerResearch
+### 6.8 Logging
+
+- `OPENTIGER_LOG_DIR` (optional)
+- `OPENTIGER_RAW_LOG_DIR` (legacy fallback)
+
+Notes:
+
+- If both are unset, runtime uses `<repo-root>/raw-logs`.
+- Legacy placeholder values such as `/absolute/path/to/openTiger/raw-logs` are ignored and fallback is used.
+
+### 6.9 TigerResearch
 
 Runtime enablement and planner handoff:
 

@@ -72,6 +72,11 @@ This command:
 - Exports DB config to `.env`
 - Starts API/Dashboard
 
+Log path note:
+
+- `OPENTIGER_LOG_DIR` is optional.
+- If unset, logs are written to `<repo-root>/raw-logs`.
+
 ## 5. Access Dashboard
 
 - Dashboard: `http://localhost:5190`

@@ -3,6 +3,22 @@ import { dirname, join, resolve } from "node:path";
 
 const logStreams = new Set<ReturnType<typeof createWriteStream>>();
 let taskLogStream: ReturnType<typeof createWriteStream> | null = null;
+const LEGACY_LOG_DIR_PLACEHOLDER_MARKER = "/absolute/path/to/opentiger";
+
+function resolveLogDir(fallbackDir: string): string {
+  const candidate = process.env.OPENTIGER_LOG_DIR?.trim() || process.env.OPENTIGER_RAW_LOG_DIR?.trim();
+  if (
+    candidate &&
+    !candidate
+      .trim()
+      .replace(/\\/gu, "/")
+      .toLowerCase()
+      .includes(LEGACY_LOG_DIR_PLACEHOLDER_MARKER)
+  ) {
+    return resolve(candidate);
+  }
+  return resolve(fallbackDir);
+}
 
 export function setTaskLogPath(logPath?: string): void {
   // Switch log stream per task
@@ -30,7 +46,7 @@ export function setTaskLogPath(logPath?: string): void {
 
 export function setupProcessLogging(agentId: string): string | undefined {
   const defaultLogDir = resolve(import.meta.dirname, "../../../raw-logs");
-  const logDir = process.env.OPENTIGER_LOG_DIR ?? defaultLogDir;
+  const logDir = resolveLogDir(defaultLogDir);
 
   try {
     mkdirSync(logDir, { recursive: true });

@@ -49,6 +49,22 @@ import { resolveWorkerTaskKindPlugin } from "./plugins";
 
 export type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 const DEFAULT_LOG_DIR = resolve(import.meta.dirname, "../../../raw-logs");
+const LEGACY_LOG_DIR_PLACEHOLDER_MARKER = "/absolute/path/to/opentiger";
+
+function resolveLogDir(fallbackDir: string): string {
+  const candidate = process.env.OPENTIGER_LOG_DIR?.trim() || process.env.OPENTIGER_RAW_LOG_DIR?.trim();
+  if (
+    candidate &&
+    !candidate
+      .trim()
+      .replace(/\\/gu, "/")
+      .toLowerCase()
+      .includes(LEGACY_LOG_DIR_PLACEHOLDER_MARKER)
+  ) {
+    return resolve(candidate);
+  }
+  return resolve(fallbackDir);
+}
 
 // Main task execution
 export async function runWorker(taskData: Task, config: WorkerConfig): Promise<WorkerResult> {
@@ -108,7 +124,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
   }
 
   const runId = runRecord.id;
-  const logDir = process.env.OPENTIGER_LOG_DIR ?? DEFAULT_LOG_DIR;
+  const logDir = resolveLogDir(DEFAULT_LOG_DIR);
   const taskLogPath = buildTaskLogPath(logDir, taskId, runId, agentId);
   setTaskLogPath(taskLogPath);
   await db.update(runs).set({ logPath: taskLogPath }).where(eq(runs.id, runId));

@@ -191,6 +191,22 @@ function replaceConfigLines(
   };
 }
 
+function sanitizeLegacyLogDirPlaceholder(source: string): { content: string; updated: boolean } {
+  const lines = source.length > 0 ? source.split(/\r?\n/) : [];
+  let updated = false;
+  const replaced = lines.map((line) => {
+    if (/^\s*OPENTIGER_LOG_DIR\s*=\s*\/absolute\/path\/to\/openTiger\/raw-logs\s*$/u.test(line)) {
+      updated = true;
+      return "# OPENTIGER_LOG_DIR (optional; defaults to <repo-root>/raw-logs when unset)";
+    }
+    return line;
+  });
+  return {
+    content: `${replaced.join("\n").replace(/\n+$/u, "")}\n`,
+    updated,
+  };
+}
+
 const LEGACY_REPLAN_COMMANDS = new Set([
   "",
   "pnpm --filter @openTiger/planner start",
@@ -366,10 +382,12 @@ async function main(): Promise<void> {
   }
 
   const { content, updatedKeys } = replaceConfigLines(current, snapshot);
-  await writeFile(envPath, content, "utf-8");
+  const sanitized = sanitizeLegacyLogDirPlaceholder(content);
+  await writeFile(envPath, sanitized.content, "utf-8");
 
   console.log("[Config] DB -> .env sync completed:", {
     path: envPath,
+    normalizedLegacyLogDir: sanitized.updated,
     updatedKeysCount: updatedKeys.length,
     updatedKeys,
   });

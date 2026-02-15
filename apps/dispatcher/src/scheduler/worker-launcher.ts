@@ -41,6 +41,7 @@ const DEFAULT_DOCKER_IMAGE = "openTiger/worker:latest";
 const DEFAULT_DOCKER_NETWORK = "bridge";
 const DEFAULT_HOST_LOG_DIR = resolve(import.meta.dirname, "../../../../raw-logs");
 const DOCKER_WORKER_LOG_DIR = "/tmp/openTiger-logs";
+const LEGACY_LOG_DIR_PLACEHOLDER_MARKER = "/absolute/path/to/opentiger";
 
 type DockerMount = {
   hostPath: string;
@@ -48,6 +49,21 @@ type DockerMount = {
   readonly?: boolean;
 };
 type ExecutorKind = "opencode" | "claude_code" | "codex";
+
+function resolveHostLogDir(fallbackDir: string): string {
+  const candidate = process.env.OPENTIGER_LOG_DIR?.trim() || process.env.OPENTIGER_RAW_LOG_DIR?.trim();
+  if (
+    candidate &&
+    !candidate
+      .trim()
+      .replace(/\\/gu, "/")
+      .toLowerCase()
+      .includes(LEGACY_LOG_DIR_PLACEHOLDER_MARKER)
+  ) {
+    return resolve(candidate);
+  }
+  return resolve(fallbackDir);
+}
 
 function resolveDockerImage(config: WorkerLaunchConfig): string {
   return config.dockerImage ?? process.env.SANDBOX_DOCKER_IMAGE ?? DEFAULT_DOCKER_IMAGE;
@@ -310,11 +326,7 @@ async function _launchAsProcess(config: WorkerLaunchConfig): Promise<LaunchResul
 async function launchAsDocker(config: WorkerLaunchConfig): Promise<LaunchResult> {
   const image = resolveDockerImage(config);
   const network = resolveDockerNetwork(config);
-  const hostLogDir = resolve(
-    process.env.OPENTIGER_LOG_DIR?.trim() ||
-      process.env.OPENTIGER_RAW_LOG_DIR?.trim() ||
-      DEFAULT_HOST_LOG_DIR,
-  );
+  const hostLogDir = resolveHostLogDir(DEFAULT_HOST_LOG_DIR);
   try {
     mkdirSync(hostLogDir, { recursive: true });
   } catch (error) {
