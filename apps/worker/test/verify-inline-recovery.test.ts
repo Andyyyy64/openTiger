@@ -13,6 +13,7 @@ const originalInlineRecoveryEnv = process.env.WORKER_VERIFY_INLINE_COMMAND_RECOV
 async function createRepo(structure: {
   rootScripts?: Record<string, string>;
   packageScripts?: Record<string, string>;
+  lockfiles?: string[];
 }): Promise<{ repoPath: string; packageDir: string }> {
   const repoPath = await mkdtemp(join(tmpdir(), "opentiger-verify-inline-"));
   createdDirs.push(repoPath);
@@ -31,6 +32,9 @@ async function createRepo(structure: {
   );
   const packageDir = join(repoPath, "apps", "web");
   await mkdir(packageDir, { recursive: true });
+  for (const lockfile of structure.lockfiles ?? []) {
+    await writeFile(join(repoPath, lockfile), "", "utf-8");
+  }
   if (structure.packageScripts) {
     await writeFile(
       join(packageDir, "package.json"),
@@ -87,6 +91,17 @@ describe("shouldAttemptInlineCommandRecovery", () => {
     expect(shouldAttempt).toBe(false);
   });
 
+  it("returns true for bootstrap failure even when there are remaining commands", () => {
+    const shouldAttempt = shouldAttemptInlineCommandRecovery({
+      source: "auto",
+      command: "pnpm run build",
+      output: "sh: 1: turbo: not found",
+      hasRemainingCommands: true,
+    });
+
+    expect(shouldAttempt).toBe(true);
+  });
+
   it("returns false when inline recovery is disabled", () => {
     process.env.WORKER_VERIFY_INLINE_COMMAND_RECOVERY = "false";
     const shouldAttempt = shouldAttemptInlineCommandRecovery({
@@ -139,6 +154,30 @@ describe("resolveInlineRecoveryCommandCandidates", () => {
 
     expect(candidates).toContainEqual({
       command: "pnpm run check",
+      cwd: repoPath,
+    });
+  });
+
+  it("prepends install candidates for setup/bootstrap failures", async () => {
+    const { repoPath } = await createRepo({
+      rootScripts: { build: "turbo build", check: "turbo lint && turbo typecheck" },
+      lockfiles: ["pnpm-lock.yaml"],
+    });
+
+    const candidates = await resolveInlineRecoveryCommandCandidates({
+      repoPath,
+      failedCommand: "pnpm run build",
+      output: "sh: 1: turbo: not found",
+      failedCommandCwd: repoPath,
+      singleChangedPackageDir: null,
+    });
+
+    expect(candidates[0]).toEqual({
+      command: "pnpm install --frozen-lockfile",
+      cwd: repoPath,
+    });
+    expect(candidates).toContainEqual({
+      command: "pnpm install",
       cwd: repoPath,
     });
   });

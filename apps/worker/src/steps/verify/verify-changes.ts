@@ -81,6 +81,8 @@ type InlineRecoveryCandidate = {
   cwd: string;
 };
 
+type PackageManager = "pnpm" | "npm" | "yarn" | "bun";
+
 const WORKSPACE_ROOT_META_FILES = new Set([
   "package.json",
   "pnpm-lock.yaml",
@@ -252,6 +254,68 @@ function uniquePathList(paths: Array<string | null | undefined>): string[] {
   return Array.from(deduped);
 }
 
+function resolvePackageManagerFromCommand(command: string): PackageManager | null {
+  const parsed = parseCommand(command);
+  if (!parsed) {
+    return null;
+  }
+  const executable = parsed.executable.trim().toLowerCase();
+  if (executable === "pnpm" || executable === "npm" || executable === "yarn" || executable === "bun") {
+    return executable;
+  }
+  return null;
+}
+
+async function resolvePackageManagerFromRepo(repoPath: string): Promise<PackageManager | null> {
+  if (await pathExists(join(repoPath, "pnpm-lock.yaml"))) {
+    return "pnpm";
+  }
+  if (await pathExists(join(repoPath, "yarn.lock"))) {
+    return "yarn";
+  }
+  if (await pathExists(join(repoPath, "package-lock.json"))) {
+    return "npm";
+  }
+  if (await pathExists(join(repoPath, "bun.lockb"))) {
+    return "bun";
+  }
+  return null;
+}
+
+function resolveInstallRecoveryCommands(packageManager: PackageManager): string[] {
+  if (packageManager === "pnpm") {
+    return ["pnpm install --frozen-lockfile", "pnpm install"];
+  }
+  if (packageManager === "yarn") {
+    return ["yarn install --immutable", "yarn install"];
+  }
+  if (packageManager === "bun") {
+    return ["bun install --frozen-lockfile", "bun install"];
+  }
+  return ["npm ci", "npm install"];
+}
+
+async function resolveBootstrapInstallCandidates(params: {
+  repoPath: string;
+  failedCommand: string;
+  output: string;
+  maxCandidates: number;
+}): Promise<InlineRecoveryCandidate[]> {
+  if (!isBootstrapLikeFailureOutput(params.output)) {
+    return [];
+  }
+  if (!(await pathExists(join(params.repoPath, "package.json")))) {
+    return [];
+  }
+  const packageManager =
+    resolvePackageManagerFromCommand(params.failedCommand) ??
+    (await resolvePackageManagerFromRepo(params.repoPath)) ??
+    "npm";
+  return resolveInstallRecoveryCommands(packageManager)
+    .slice(0, params.maxCandidates)
+    .map((command) => ({ command, cwd: params.repoPath }));
+}
+
 function inferInlineRecoveryScriptPriority(command: string, output: string): string[] {
   const normalized = `${command}\n${output}`.toLowerCase();
   if (
@@ -305,14 +369,22 @@ export async function resolveInlineRecoveryCommandCandidates(params: {
 }): Promise<InlineRecoveryCandidate[]> {
   const maxCandidatesRaw = params.maxCandidates ?? 3;
   const maxCandidates = Math.min(8, Math.max(1, maxCandidatesRaw));
+  const bootstrapCandidates = await resolveBootstrapInstallCandidates({
+    repoPath: params.repoPath,
+    failedCommand: params.failedCommand,
+    output: params.output,
+    maxCandidates,
+  });
   const priorityScripts = inferInlineRecoveryScriptPriority(params.failedCommand, params.output);
   const candidateDirs = uniquePathList([
     params.failedCommandCwd,
     params.singleChangedPackageDir,
     params.repoPath,
   ]).filter((candidate) => isInsideRepo(params.repoPath, candidate));
-  const candidates: InlineRecoveryCandidate[] = [];
-  const seen = new Set<string>();
+  const candidates: InlineRecoveryCandidate[] = [...bootstrapCandidates];
+  const seen = new Set<string>(
+    bootstrapCandidates.map((candidate) => `${resolve(candidate.cwd)}::${candidate.command}`),
+  );
   for (const candidateDir of candidateDirs) {
     const scripts = await readPackageScriptNames(candidateDir);
     if (scripts.size === 0) {
@@ -712,6 +784,14 @@ function isRuntimeCompatibilityFailure(output: string): boolean {
   return false;
 }
 
+function isBootstrapLikeFailureOutput(output: string): boolean {
+  return (
+    isMissingDependencyOrCommandNotFoundFailure(output) ||
+    isRuntimeCompatibilityFailure(output) ||
+    isSetupOrBootstrapVerificationFailure(output)
+  );
+}
+
 function usesShellCommandSubstitution(command: string): boolean {
   return /\$\(/.test(command);
 }
@@ -758,8 +838,12 @@ export function shouldAttemptInlineCommandRecovery(params: {
   if (!enabled) {
     return false;
   }
-  if (params.hasRemainingCommands) {
+  const bootstrapLikeFailure = isBootstrapLikeFailureOutput(params.output);
+  if (params.hasRemainingCommands && !bootstrapLikeFailure) {
     return false;
+  }
+  if (bootstrapLikeFailure) {
+    return true;
   }
   const { isSkippableOutput } = isSkippableSetupFailure(params.command, params.output);
   return isSkippableOutput;

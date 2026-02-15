@@ -96,9 +96,11 @@ Notes:
 
 Explicit commands that are missing script or unsupported format may be skipped depending on conditions.
 
-For last-command setup/format failures, worker also tries in-place inline recovery by deriving valid commands
-from available `package.json` scripts (for example `pnpm run test`, `pnpm run typecheck`, `pnpm run check`)
-before escalating to rework.
+For setup/bootstrap failures (for example `command not found`, missing dependency, runtime mismatch),
+worker attempts in-place inline recovery before escalating to rework:
+
+- dependency bootstrap commands inferred from repo package manager (for example `pnpm install --frozen-lockfile`)
+- replacement verification commands derived from available `package.json` scripts
 
 ## 5. No-Change and Recovery
 

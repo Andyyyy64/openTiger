@@ -66,7 +66,7 @@ Behavior:
 - Skip setup-like auto-command failures when later commands remain
 - Allow non-blocking continuation after explicit-pass (last auto command failure case)
   when `WORKER_VERIFY_AUTO_NON_BLOCKING_AFTER_EXPLICIT_PASS=true`
-- For final setup/format failures, attempt inline replacement verification commands derived from package scripts
+- For setup/bootstrap failures, attempt inline dependency bootstrap and replacement verification commands
   before promoting to rework.
 
 ## 4. Verify-Recovery Attempt Guard
