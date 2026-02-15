@@ -4,11 +4,11 @@ This document explains Cycle Manager-side verification recovery and requeue beha
 
 Related:
 
-- `docs/verification.md`
-- `docs/verify-recovery.md`
-- `docs/verify-recovery-worker.md`
-- `docs/policy-recovery.md`
-- `docs/flow.md`
+- [verification](../verification.md)
+- [verify-recovery](../verify-recovery.md)
+- [verify-recovery-worker](../verify-recovery-worker.md)
+- [policy-recovery](../policy-recovery.md)
+- [flow](../flow.md)
 
 ## 1. Scope
 

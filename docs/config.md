@@ -10,10 +10,10 @@ Primary sources are:
 
 If stalls occur after config changes, check in order: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md` (state vocabulary)
-2. `docs/flow.md` (transitions and recovery paths)
-3. `docs/operations.md` (API procedures and operation shortcuts)
-4. `docs/agent/README.md` (owning agent and implementation tracing path)
+1. [state-model](state-model.md) (state vocabulary)
+2. [flow](flow.md) (transitions and recovery paths)
+3. [operations](operations.md) (API procedures and operation shortcuts)
+4. [agent/README](agent/README.md) (owning agent and implementation tracing path)
 
 ## 1. Config Storage
 
@@ -397,7 +397,7 @@ Judge research thresholds:
 4. Counts (`WORKER_COUNT`, `JUDGE_COUNT`, `PLANNER_COUNT=1`)
 5. Recovery config (retry / cooldown / auto restart)
 
-See `docs/operations.md` for more detailed operation.
+See [operations](operations.md) for more detailed operation.
 
 ---
 
@@ -420,4 +420,4 @@ Env-only config is not reflected until the target process restarts.
 
 - Updating DB-managed keys does not auto-update env for already-running processes.
 - Restarting only affected processes via start/stop is safer than full stop-all.
-- See "Safe restart procedure for config changes" in `docs/operations.md` for specific steps.
+- See [operations](operations.md#10-safe-restart-procedure-for-config-changes) for specific steps.

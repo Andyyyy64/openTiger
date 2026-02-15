@@ -4,23 +4,23 @@ openTiger behavior is controlled by the combination of repository mode / judge m
 
 Related:
 
-- `docs/config.md`
-- `docs/state-model.md`
-- `docs/flow.md`
-- `docs/operations.md`
-- `docs/startup-patterns.md`
-- `docs/execution-mode.md`
-- `docs/agent/dispatcher.md`
-- `docs/agent/judge.md`
+- [config](config.md)
+- [state-model](state-model.md)
+- [flow](flow.md)
+- [operations](operations.md)
+- [startup-patterns](startup-patterns.md)
+- [execution-mode](execution-mode.md)
+- [agent/dispatcher](agent/dispatcher.md)
+- [agent/judge](agent/judge.md)
 
 ### Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Entering from Mode Config)
 
 When tracing stalls from mode config, check in order: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md` (state vocabulary)
-2. `docs/flow.md` (transitions and recovery paths)
-3. `docs/operations.md` (API procedures and operation shortcuts)
-4. `docs/agent/README.md` (owning agent and implementation tracing path)
+1. [state-model](state-model.md) (state vocabulary)
+2. [flow](flow.md) (transitions and recovery paths)
+3. [operations](operations.md) (API procedures and operation shortcuts)
+4. [agent/README](agent/README.md) (owning agent and implementation tracing path)
 
 ## 1. Repository Mode (`REPO_MODE`)
 
@@ -77,7 +77,7 @@ Internal launch mode is derived as:
 - `host` -> `LAUNCH_MODE=process`
 - `sandbox` -> `LAUNCH_MODE=docker`
 
-For runtime details (Docker image/network, sandbox auth, troubleshooting), see `docs/execution-mode.md`.
+For runtime details (Docker image/network, sandbox auth, troubleshooting), see [execution-mode](execution-mode.md).
 
 `LAUNCH_MODE` is internal; you normally don't set it directly.
 
@@ -120,8 +120,8 @@ Fallback behavior:
 
 Implementation responsibility:
 
-- Slot control/dispatch: `docs/agent/dispatcher.md`
-- Approve/rework decisions: `docs/agent/judge.md`
+- Slot control/dispatch: [agent/dispatcher](agent/dispatcher.md)
+- Approve/rework decisions: [agent/judge](agent/judge.md)
 
 ## 5. Expected Startup Behavior
 

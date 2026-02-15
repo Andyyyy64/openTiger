@@ -3,30 +3,41 @@
 This directory organizes openTiger implementation specifications into "navigation paths" and "references."  
 With source code as the source of truth, information necessary for operations is structured for progressive reading.
 
+## Table of Contents
+
+- [0. Purpose-Based Navigation](#0-purpose-based-navigation)
+- [0.1 Recommended Lanes by Reader Type](#01-recommended-lanes-by-reader-type)
+- [1. First-Time User Path (Shortest)](#1-first-time-user-path-shortest)
+- [2. Execution Model and Recovery Strategy](#2-execution-model-and-recovery-strategy)
+- [3. Agent Specifications](#3-agent-specifications)
+- [4. Design Principles and Supplementary Materials](#4-design-principles-and-supplementary-materials)
+- [Recommended Reading Order (Shortest)](#recommended-reading-order-shortest)
+- [Lookup When Making Changes](#lookup-when-making-changes)
+
 ## 0. Purpose-Based Navigation
 
 | Purpose                                                            | Shortest Page to Read                                                                                                      |
 | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Want to get it running first                                       | [docs/getting-started.md](docs/getting-started.md)                                                                         |
-| Want to grasp the overview                                         | [docs/architecture.md](docs/architecture.md)                                                                               |
-| Want to tune config keys                                           | [docs/config.md](docs/config.md)                                                                                           |
-| Want API integration                                               | [docs/api-reference.md](docs/api-reference.md)                                                                             |
-| Want to build your own plugin                                      | [docs/plugins.md](docs/plugins.md)                                                                                         |
-| Need incident response                                             | [docs/operations.md](docs/operations.md) + [docs/flow.md](docs/flow.md)                                                    |
-| Quick initial diagnosis of stalled state                           | [docs/state-model.md](docs/state-model.md)                                                                                 |
-| Immediate lookup of `retry.reason` meanings                        | [docs/state-model.md](docs/state-model.md)                                                                                 |
-| Trace by state vocabulary -> transition -> owner -> implementation | [docs/state-model.md](docs/state-model.md) -> [docs/flow.md](docs/flow.md) -> [docs/agent/README.md](docs/agent/README.md) |
-| Confirm startup condition formulas                                 | [docs/startup-patterns.md](docs/startup-patterns.md)                                                                       |
-| Compare agent role differences                                     | [docs/agent/README.md](docs/agent/README.md)                                                                               |
-| Build/run TigerResearch (query -> evidence-backed report)          | [docs/research.md](docs/research.md)                                                                                       |
+| Want to get it running first                                       | [getting-started](getting-started.md)                                                                                      |
+| Want to grasp the overview                                         | [architecture](architecture.md)                                                                                            |
+| Want to tune config keys                                           | [config](config.md)                                                                                                       |
+| Want API integration                                               | [api-reference](api-reference.md)                                                                                         |
+| Want to build your own plugin                                      | [plugins](plugins.md)                                                                                                     |
+| Need incident response                                             | [operations](operations.md) + [flow](flow.md)                                                                             |
+| Quick initial diagnosis of stalled state                           | [state-model](state-model.md)                                                                                             |
+| Immediate lookup of `retry.reason` meanings                        | [state-model](state-model.md)                                                                                             |
+| Trace by state vocabulary -> transition -> owner -> implementation | [state-model](state-model.md) -> [flow](flow.md) -> [agent/README](agent/README.md)                                        |
+| Confirm startup condition formulas                                 | [startup-patterns](startup-patterns.md)                                                                                   |
+| Compare agent role differences                                     | [agent/README](agent/README.md)                                                                                           |
+| Build/run TigerResearch (query -> evidence-backed report)          | [research](research.md)                                                                                                   |
 
 ## 0.1 Recommended Lanes by Reader Type
 
 ### Lane A: First-Time Users (shortest path to run)
 
-1. `docs/getting-started.md`
-2. `docs/architecture.md`
-3. `docs/operations.md`
+1. [getting-started](getting-started.md)
+2. [architecture](architecture.md)
+3. [operations](operations.md)
 
 Goals:
 
@@ -35,11 +46,11 @@ Goals:
 
 ### Lane B: Operations (stable operation and recovery)
 
-1. `docs/operations.md`
-2. `docs/config.md`
-3. `docs/state-model.md`
-4. `docs/flow.md`
-5. `docs/startup-patterns.md`
+1. [operations](operations.md)
+2. [config](config.md)
+3. [state-model](state-model.md)
+4. [flow](flow.md)
+5. [startup-patterns](startup-patterns.md)
 
 Goals:
 
@@ -48,30 +59,30 @@ Goals:
 
 Shortcut for stalled state:
 
-- `docs/state-model.md` -> `docs/flow.md` -> `docs/operations.md` (8.1 "State vocabulary -> transition -> owner -> implementation lookup") -> `docs/agent/README.md`
+- [state-model](state-model.md) -> [flow](flow.md) -> [operations](operations.md) (8.1 "State vocabulary -> transition -> owner -> implementation lookup") -> [agent/README](agent/README.md)
 
 ### Lane C: Implementation Tracing (track source diffs)
 
-1. `docs/architecture.md`
-2. `docs/agent/README.md`
-3. `docs/agent/*.md`
-4. `docs/api-reference.md`
-5. `docs/config.md`
+1. [architecture](architecture.md)
+2. [agent/README](agent/README.md)
+3. [agent/planner](agent/planner.md), [agent/dispatcher](agent/dispatcher.md), [agent/worker](agent/worker.md), etc.
+4. [api-reference](api-reference.md)
+5. [config](config.md)
 
 Goals:
 
 - Understand component responsibilities and implementation boundaries
 - Trace related areas without omission when changing API/config
-- Reach code quickly via "Implementation reference (source of truth)" in `docs/agent/*.md`
+- Reach code quickly via "Implementation reference (source of truth)" in [agent specs](agent/README.md)
 
 ### Lane D: TigerResearch Design/Operation
 
-1. `docs/research.md`
-2. `docs/architecture.md`
-3. `docs/flow.md`
-4. `docs/api-reference.md`
-5. `docs/operations.md`
-6. `docs/plugins.md`
+1. [research](research.md)
+2. [architecture](architecture.md)
+3. [flow](flow.md)
+4. [api-reference](api-reference.md)
+5. [operations](operations.md)
+6. [plugins](plugins.md)
 
 Goals:
 
@@ -81,85 +92,85 @@ Goals:
 
 ## 1. First-Time User Path (Shortest)
 
-1. `docs/getting-started.md`
+1. [getting-started](getting-started.md)
    - Setup, first run, execution start via Start page
-2. `docs/architecture.md`
+2. [architecture](architecture.md)
    - Component responsibilities and data flow
-3. `docs/config.md`
+3. [config](config.md)
    - `system_config` and environment variable reference
-4. `docs/api-reference.md`
+4. [api-reference](api-reference.md)
    - Main endpoints for Dashboard/API integration
-5. `docs/operations.md`
+5. [operations](operations.md)
    - Operations, incident recovery, log inspection, runtime hatch
 
 ## 2. Execution Model and Recovery Strategy
 
-- `docs/state-model.md`
+- [state-model](state-model.md)
   - State definitions for task/run/agent/cycle
-- `docs/flow.md`
+- [flow](flow.md)
   - End-to-end state transitions and recovery loops
-- `docs/startup-patterns.md`
+- [startup-patterns](startup-patterns.md)
   - Startup preflight rules and runtime convergence conditions
-- `docs/mode.md`
+- [mode](mode.md)
   - `REPO_MODE` / `JUDGE_MODE` / execution mode operation guidelines
-- `docs/execution-mode.md`
+- [execution-mode](execution-mode.md)
   - host/sandbox execution differences and sandbox authentication
-- `docs/policy-recovery.md`
+- [policy-recovery](policy-recovery.md)
   - Policy violation recovery, allowedPaths self-growth
-- `docs/verification.md`
+- [verification](verification.md)
   - Planner/Worker verification command resolution strategy
-- `docs/verify-recovery.md`
+- [verify-recovery](verify-recovery.md)
   - Verification recovery index (Worker/Cycle Manager split docs)
-- `docs/verify-recovery-worker.md`
+- [verify-recovery-worker](verify-recovery-worker.md)
   - Worker-side failure code resolution and skip/retry guard behavior
-- `docs/verify-recovery-cycle-manager.md`
+- [verify-recovery-cycle-manager](verify-recovery-cycle-manager.md)
   - Cycle Manager-side command adjustment and blocked/failed requeue behavior
-- `docs/research.md`
+- [research](research.md)
   - TigerResearch planner-first lifecycle and quality gates
 
 ## 3. Agent Specifications
 
-- `docs/agent/README.md` (cross-agent comparison)
-- `docs/agent/planner.md`
-- `docs/agent/dispatcher.md`
-- `docs/agent/worker.md`
-- `docs/agent/tester.md`
-- `docs/agent/judge.md`
-- `docs/agent/docser.md`
-- `docs/agent/cycle-manager.md`
+- [agent/README](agent/README.md) (cross-agent comparison)
+- [agent/planner](agent/planner.md)
+- [agent/dispatcher](agent/dispatcher.md)
+- [agent/worker](agent/worker.md)
+- [agent/tester](agent/tester.md)
+- [agent/judge](agent/judge.md)
+- [agent/docser](agent/docser.md)
+- [agent/cycle-manager](agent/cycle-manager.md)
 
 ## 4. Design Principles and Supplementary Materials
 
-- `docs/nonhumanoriented.md`
+- [nonhumanoriented](nonhumanoriented.md)
   - Design principles based on non-stalling assumption
-- `docs/requirement.md`
+- [requirement](requirement.md)
   - Requirement template example
-- `docs/idea.md`
+- [idea](idea.md)
   - Improvement idea notes (future plans)
-- `docs/research.md`
+- [research](research.md)
   - Query-driven research subsystem specification
-- `docs/plugins.md`
+- [plugins](plugins.md)
   - Plugin registry and extension implementation guide
 
 ## Recommended Reading Order (Shortest)
 
-1. `docs/getting-started.md`
-2. `docs/architecture.md`
-3. `docs/config.md`
-4. `docs/api-reference.md`
-5. `docs/operations.md`
-6. `docs/flow.md`
-7. `docs/agent/README.md`
+1. [getting-started](getting-started.md)
+2. [architecture](architecture.md)
+3. [config](config.md)
+4. [api-reference](api-reference.md)
+5. [operations](operations.md)
+6. [flow](flow.md)
+7. [agent/README](agent/README.md)
 
 ## Lookup When Making Changes
 
 - When changing startup conditions or replan conditions:
-  - `docs/startup-patterns.md`
-  - `docs/flow.md` (related runtime impact)
+  - [startup-patterns](startup-patterns.md)
+  - [flow](flow.md) (related runtime impact)
 - When changing task state transitions or blocked recovery:
-  - `docs/state-model.md`
-  - `docs/flow.md`
-  - `docs/operations.md`
+  - [state-model](state-model.md)
+  - [flow](flow.md)
+  - [operations](operations.md)
 - When changing agent implementation responsibilities:
-  - `docs/agent/README.md`
-  - Target `docs/agent/*.md`
+  - [agent/README](agent/README.md)
+  - Target [agent specs](agent/README.md)

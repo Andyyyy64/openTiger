@@ -2,6 +2,19 @@
 
 This page provides a cross-agent index for comparing responsibilities and differences of each openTiger agent.
 
+## Table of Contents
+
+- [1. Agent Comparison Table](#1-agent-comparison-table)
+- [2. Role Usage](#2-role-usage)
+- [3. Agent Boundaries (What They Don't Do)](#3-agent-boundaries-what-they-dont-do)
+- [4. Execution Target Differences (Worker Family)](#4-execution-target-differences-worker-family)
+- [5. Model / Instruction File Resolution Order](#5-model--instruction-file-resolution-order)
+- [6. Common State Model](#6-common-state-model)
+- [7. Detailed Specifications](#7-detailed-specifications)
+- [8. Common Misconceptions (Agent Responsibility Triage)](#8-common-misconceptions-agent-responsibility-triage)
+- [9. Implementation Reference Map (Source of Truth)](#9-implementation-reference-map-source-of-truth)
+- [10. Shortest Route for Implementation Tracing (Code Reading Order)](#10-shortest-route-for-implementation-tracing-code-reading-order)
+
 ## 1. Agent Comparison Table
 
 | Agent         | Primary responsibility                             | Primary input                              | Main transitions/output                               | Primary failure behavior                               |
@@ -58,8 +71,8 @@ Worker / Tester / Docser share the same runtime; behavior is switched by `AGENT_
 
 To avoid duplication when reading:
 
-1. Understand shared runtime in `docs/agent/worker.md`
-2. Check differences only in `docs/agent/tester.md` / `docs/agent/docser.md`
+1. Understand shared runtime in [worker](worker.md)
+2. Check differences only in [tester](tester.md) / [docser](docser.md)
 
 ## 5. Model / Instruction File Resolution Order
 
@@ -108,13 +121,13 @@ Blocked reason:
 
 ## 7. Detailed Specifications
 
-- `docs/agent/planner.md`
-- `docs/agent/dispatcher.md`
-- `docs/agent/worker.md`
-- `docs/agent/tester.md`
-- `docs/agent/judge.md`
-- `docs/agent/docser.md`
-- `docs/agent/cycle-manager.md`
+- [planner](planner.md)
+- [dispatcher](dispatcher.md)
+- [worker](worker.md)
+- [tester](tester.md)
+- [judge](judge.md)
+- [docser](docser.md)
+- [cycle-manager](cycle-manager.md)
 
 ## 8. Common Misconceptions (Agent Responsibility Triage)
 
@@ -139,10 +152,10 @@ Blocked reason:
 
 Common lookup path:
 
-- State vocabulary: `docs/state-model.md`
-- Transitions and recovery paths: `docs/flow.md`
-- Owner/implementation lookup: `docs/operations.md` (8.1)
-- Startup condition branches: `docs/startup-patterns.md`
+- State vocabulary: [state-model](../state-model.md)
+- Transitions and recovery paths: [flow](../flow.md)
+- Owner/implementation lookup: [operations](../operations.md) (8.1)
+- Startup condition branches: [startup-patterns](../startup-patterns.md)
 
 ## 9. Implementation Reference Map (Source of Truth)
 
@@ -156,8 +169,8 @@ The "Implementation reference (source of truth)" section in each page lists key 
 
 ## 10. Shortest Route for Implementation Tracing (Code Reading Order)
 
-1. Identify owning agent in `docs/agent/README.md`
-2. Open target `docs/agent/*.md` and check "Implementation reference (source of truth)"
+1. Identify owning agent in [README](README.md)
+2. Open target agent spec (e.g. [planner](planner.md)) and check "Implementation reference (source of truth)"
 3. Read entrypoint (`main.ts`) in the target directory (`apps/*/src`)
 4. Then proceed to loop/recovery implementations (`*-runner.ts`, `*-loops.ts`, `scheduler/*`, etc.)
 
@@ -165,8 +178,8 @@ This order makes it easy to round-trip between spec and implementation quickly.
 
 Related:
 
-- `docs/flow.md`
-- `docs/state-model.md`
-- `docs/policy-recovery.md`
-- `docs/verification.md`
-- `docs/research.md`
+- [flow](../flow.md)
+- [state-model](../state-model.md)
+- [policy-recovery](../policy-recovery.md)
+- [verification](../verification.md)
+- [research](../research.md)

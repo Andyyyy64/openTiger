@@ -10,12 +10,12 @@ Last verified: 2026-02-13
 
 ## Related
 
-- `docs/api-reference.md`
-- `docs/flow.md`
-- `docs/agent/planner.md`
-- `docs/agent/dispatcher.md`
-- `docs/agent/judge.md`
-- `docs/agent/cycle-manager.md`
+- [api-reference](api-reference.md)
+- [flow](flow.md)
+- [agent/planner](agent/planner.md)
+- [agent/dispatcher](agent/dispatcher.md)
+- [agent/judge](agent/judge.md)
+- [agent/cycle-manager](agent/cycle-manager.md)
 
 ## Scope
 
@@ -25,16 +25,16 @@ This page covers only:
 2. Planner startup guard
 3. Replan entry conditions after backlog depletion
 
-For run failure handling, blocked recovery, and detailed state transitions in judge/worker, see `docs/flow.md`.
+For run failure handling, blocked recovery, and detailed state transitions in judge/worker, see [flow](flow.md).
 
 ### Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Entering from Startup Rules)
 
 When tracing stalls from startup rules, follow: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md` (state vocabulary)
-2. `docs/flow.md` (runtime transitions and recovery paths)
-3. `docs/operations.md` (API procedures and operation shortcuts)
-4. `docs/agent/README.md` (owning agent and implementation tracing path)
+1. [state-model](state-model.md) (state vocabulary)
+2. [flow](flow.md) (runtime transitions and recovery paths)
+3. [operations](operations.md) (API procedures and operation shortcuts)
+4. [agent/README](agent/README.md) (owning agent and implementation tracing path)
 
 ## Decision Inputs
 

@@ -1,13 +1,28 @@
 # State Model Reference
 
 This page is a reference for openTiger's main status and transition vocabulary.  
-For state transition flows, see `docs/flow.md`.
+For state transition flows, see [flow](flow.md).
 
 Related:
 
-- `docs/flow.md`
-- `docs/operations.md`
-- `docs/agent/README.md`
+- [flow](flow.md)
+- [operations](operations.md)
+- [agent/README](agent/README.md)
+
+## Table of Contents
+
+- [1. Task Status](#1-task-status)
+- [1.1 Task Kind](#11-task-kind)
+- [2. Task Block Reason](#2-task-block-reason)
+- [2.1 Task Retry Reason (`GET /tasks`)](#21-task-retry-reason-get-tasks)
+- [2.2 Task Retry Reason (Operations)](#22-task-retry-reason-operations)
+- [3. Run Status](#3-run-status)
+- [4. Agent Status](#4-agent-status)
+- [5. Cycle Status](#5-cycle-status)
+- [5.1 Research Job Status and Stage](#51-research-job-status-and-stage)
+- [6. Usage](#6-usage)
+- [7. Patterns Prone to Stalls (Initial Diagnosis)](#7-patterns-prone-to-stalls-initial-diagnosis)
+- [8. Lookup: State Vocabulary -> Transition -> Owner -> Implementation (Shortest Path)](#8-lookup-state-vocabulary--transition--owner--implementation-shortest-path)
 
 ## 1. Task Status
 
@@ -139,8 +154,8 @@ Research orchestrator stage (`research_jobs.metadata.orchestrator.stage`) common
 ## 6. Usage
 
 - State definitions: this page
-- Transition conditions: `docs/flow.md`
-- Startup formulas: `docs/startup-patterns.md`
+- Transition conditions: [flow](flow.md)
+- Startup formulas: [startup-patterns](startup-patterns.md)
 
 ## 6.1 Implementation Reference (Source of Truth)
 
@@ -170,8 +185,8 @@ Research orchestrator stage (`research_jobs.metadata.orchestrator.stage`) common
 
 Notes:
 
-- For API check sequence, see "Post-change verification checklist" in `docs/operations.md`.
-- For agent triage confusion, see FAQ in `docs/agent/README.md`.
+- For API check sequence, see [operations](operations.md#11-post-change-verification-checklist).
+- For agent triage confusion, see FAQ in [agent/README](agent/README.md).
 
 ## 8. Lookup: State Vocabulary -> Transition -> Owner -> Implementation (Shortest Path)
 
@@ -179,10 +194,10 @@ Common path when tracing from state vocabulary:
 
 | Starting point (state/symptom)    | State vocabulary ref | Transition ref (flow)                                                                                   | Owner agent ref                                                              | Implementation ref                                               |
 | --------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `queued`/`running` stuck          | 1, 2, 7              | "2. Basic Lifecycle" "5. Dispatcher Recovery Layer" "6. Worker Failure Handling" in `docs/flow.md`      | `docs/agent/dispatcher.md`, `docs/agent/worker.md`                           | `apps/dispatcher/src/`, `apps/worker/src/`                       |
-| `awaiting_judge` stuck            | 2, 7                 | "3. Blocked Reasons" "4. Run Lifecycle" "7. Judge Non-Approval / Merge Failure Paths" in `docs/flow.md` | `docs/agent/judge.md`                                                        | `apps/judge/src/`                                                |
-| `quota_wait`/`needs_rework` chain | 2, 2.2, 7            | "3. Blocked Reasons" "6. Worker Failure Handling" "8. Cycle Manager Self-Recovery" in `docs/flow.md`    | `docs/agent/worker.md`, `docs/agent/judge.md`, `docs/agent/cycle-manager.md` | `apps/worker/src/`, `apps/judge/src/`, `apps/cycle-manager/src/` |
-| `issue_linking` stuck             | 2, 7                 | "3. Blocked Reasons" in `docs/flow.md` + `docs/startup-patterns.md`                                     | `docs/agent/planner.md`                                                      | `apps/planner/src/`                                              |
+| `queued`/`running` stuck          | 1, 2, 7              | [flow#2 Basic Lifecycle](flow.md#2-basic-lifecycle), [flow#5 Dispatcher Recovery](flow.md#5-dispatcher-recovery-layer), [flow#6 Worker Failure](flow.md#6-worker-failure-handling) | [agent/dispatcher](agent/dispatcher.md), [agent/worker](agent/worker.md)     | `apps/dispatcher/src/`, `apps/worker/src/`                       |
+| `awaiting_judge` stuck            | 2, 7                 | [flow#3 Blocked Reasons](flow.md#3-blocked-reasons-used-for-recovery), [flow#4 Run Lifecycle](flow.md#4-run-lifecycle-and-judge-idempotency), [flow#7 Judge](flow.md#7-judge-non-approval--merge-failure-paths) | [agent/judge](agent/judge.md)                                                 | `apps/judge/src/`                                                |
+| `quota_wait`/`needs_rework` chain | 2, 2.2, 7            | [flow#3 Blocked Reasons](flow.md#3-blocked-reasons-used-for-recovery), [flow#6 Worker Failure](flow.md#6-worker-failure-handling), [flow#8 Cycle Manager](flow.md#8-cycle-manager-self-recovery) | [agent/worker](agent/worker.md), [agent/judge](agent/judge.md), [agent/cycle-manager](agent/cycle-manager.md) | `apps/worker/src/`, `apps/judge/src/`, `apps/cycle-manager/src/` |
+| `issue_linking` stuck             | 2, 7                 | [flow#3 Blocked Reasons](flow.md#3-blocked-reasons-used-for-recovery), [startup-patterns](startup-patterns.md)                                     | [agent/planner](agent/planner.md)                                             | `apps/planner/src/`                                              |
 
 Notes:
 

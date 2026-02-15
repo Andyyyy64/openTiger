@@ -4,12 +4,26 @@ This document summarizes operational procedures for continuous openTiger operati
 
 Related:
 
-- `docs/flow.md`
-- `docs/state-model.md`
-- `docs/config.md`
-- `docs/api-reference.md`
-- `docs/agent/dispatcher.md`
-- `docs/agent/cycle-manager.md`
+- [flow](flow.md)
+- [state-model](state-model.md)
+- [config](config.md)
+- [api-reference](api-reference.md)
+- [agent/dispatcher](agent/dispatcher.md)
+- [agent/cycle-manager](agent/cycle-manager.md)
+
+## Table of Contents
+
+- [1. State to Monitor](#1-state-to-monitor)
+- [2. Process Operations](#2-process-operations)
+- [3. Runtime Hatch and Self-Recovery](#3-runtime-hatch-and-self-recovery)
+- [4. Related Env Vars for Auto-Restart and Self-Recovery](#4-related-env-vars-for-auto-restart-and-self-recovery)
+- [5. Cleanup Warnings](#5-cleanup-warnings)
+- [6. Log Operations](#6-log-operations)
+- [7. Initial Incident Triage](#7-initial-incident-triage)
+- [8. Symptom-Based Check Targets](#8-symptom-based-check-targets)
+- [9. Extra Checks for Sandbox Operation](#9-extra-checks-for-sandbox-operation)
+- [10. Safe Restart Procedure for Config Changes](#10-safe-restart-procedure-for-config-changes)
+- [11. Post-Change Verification Checklist](#11-post-change-verification-checklist)
 
 ## 1. State to Monitor
 
@@ -183,34 +197,34 @@ TigerResearch-specific first triage:
 
 ## 8. Symptom-Based Check Targets
 
-For fastest initial diagnosis, first check "Patterns prone to stalls (initial diagnosis)" in `docs/state-model.md`.
+For fastest initial diagnosis, first check [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis).
 
 - Task not progressing from `queued`
   - Check dispatcher status, lease anomalies, role-wise idle agent count
-  - Ref: `docs/agent/dispatcher.md`
+  - Ref: [agent/dispatcher](agent/dispatcher.md)
 - `awaiting_judge` not clearing for long
   - Check judge process and pending judge runs
-  - Ref: `docs/agent/judge.md`
+  - Ref: [agent/judge](agent/judge.md)
 - Not recovering after failure
   - Check cycle-manager cleanup/requeue logs
-  - Ref: `docs/agent/cycle-manager.md`
+  - Ref: [agent/cycle-manager](agent/cycle-manager.md)
 - Verification command failures repeating
   - Check run failure content and presence of verification recovery
-  - Ref: `docs/verification.md`
+  - Ref: [verification](verification.md)
 - Task stuck at `issue_linking`
   - Check issue linkage resolution failure or import non-convergence; rerun preflight if needed
-  - Ref: `docs/startup-patterns.md`
+  - Ref: [startup-patterns](startup-patterns.md)
 - Planner not restarting
   - Check backlog gate (issue/pr/local task) and replan conditions
-  - Ref: `docs/startup-patterns.md`
+  - Ref: [startup-patterns](startup-patterns.md)
 - Research runs repeatedly cancelled
   - Check API restart events (`SIGTERM`) and managed process churn
   - Confirm `OPENTIGER_PRESERVE_MANAGED_ON_DEV_SIGTERM` behavior in `dev`
-  - Ref: `docs/research.md`
+  - Ref: [research](research.md)
 
 Note:
 
-- For agent triage confusion, see FAQ in `docs/agent/README.md`.
+- For agent triage confusion, see FAQ in [agent/README](agent/README.md).
 
 ### 8.1 State Vocabulary -> Transition -> Owner -> Implementation Lookup (Operation Shortcut)
 
@@ -218,11 +232,11 @@ Common path when tracing from state vocabulary to transition to owner to impleme
 
 | Starting point (state/symptom)    | State vocabulary ref         | Transition ref (flow)  | Owner agent ref                               | Implementation ref                                   |
 | --------------------------------- | ---------------------------- | ---------------------- | --------------------------------------------- | ---------------------------------------------------- |
-| `queued` stuck                    | `docs/state-model.md` 7      | `docs/flow.md` 2, 5    | Dispatcher (`docs/agent/dispatcher.md`)       | `apps/dispatcher/src/`                               |
-| `running` stuck                   | `docs/state-model.md` 7      | `docs/flow.md` 2, 6    | Worker/Tester/Docser (`docs/agent/worker.md`) | `apps/worker/src/`                                   |
-| `awaiting_judge` stuck            | `docs/state-model.md` 2, 7   | `docs/flow.md` 3, 4, 7 | Judge (`docs/agent/judge.md`)                 | `apps/judge/src/`                                    |
-| `quota_wait`/`needs_rework` chain | `docs/state-model.md` 2, 2.2 | `docs/flow.md` 3, 6, 8 | Worker/Judge/Cycle Manager (each agent spec)  | "Implementation reference" at end of each agent spec |
-| `issue_linking` stuck             | `docs/state-model.md` 2, 7   | `docs/flow.md` 3       | Planner (`docs/agent/planner.md`)             | `apps/planner/src/`                                  |
+| `queued` stuck                    | [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis) | [flow](flow.md#2-basic-lifecycle), [flow](flow.md#5-dispatcher-recovery-layer) | [Dispatcher](agent/dispatcher.md)       | `apps/dispatcher/src/`                               |
+| `running` stuck                   | [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis) | [flow](flow.md#2-basic-lifecycle), [flow](flow.md#6-worker-failure-handling) | [Worker/Tester/Docser](agent/worker.md) | `apps/worker/src/`                                   |
+| `awaiting_judge` stuck            | [state-model](state-model.md#2-task-block-reason), [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis) | [flow](flow.md#3-blocked-reasons-used-for-recovery), [flow](flow.md#4-run-lifecycle-and-judge-idempotency), [flow](flow.md#7-judge-non-approval--merge-failure-paths) | [Judge](agent/judge.md)                 | `apps/judge/src/`                                    |
+| `quota_wait`/`needs_rework` chain | [state-model](state-model.md#2-task-block-reason), [state-model](state-model.md#22-task-retry-reason-get-tasks) | [flow](flow.md#3-blocked-reasons-used-for-recovery), [flow](flow.md#6-worker-failure-handling), [flow](flow.md#8-cycle-manager-self-recovery) | Worker/Judge/Cycle Manager (each agent spec)  | "Implementation reference" at end of each agent spec |
+| `issue_linking` stuck             | [state-model](state-model.md#2-task-block-reason), [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis) | [flow](flow.md#3-blocked-reasons-used-for-recovery)       | [Planner](agent/planner.md)             | `apps/planner/src/`                                  |
 
 Note:
 
@@ -238,7 +252,7 @@ Note:
 
 Prerequisites:
 
-- First check "Config change impact map" in `docs/config.md` for affected components
+- First check [config](config.md#9-config-change-impact-map-operation-reference) for affected components
 - If scope is narrow, restart only affected processes rather than `stop-all`
 
 ### 10.1 Basic Partial Restart Order

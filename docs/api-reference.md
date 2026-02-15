@@ -5,11 +5,11 @@ Base URL is typically `http://localhost:4301`.
 
 Related:
 
-- `docs/config.md`
-- `docs/operations.md`
-- `docs/state-model.md`
-- `docs/agent/dispatcher.md`
-- `docs/agent/cycle-manager.md`
+- [config](config.md)
+- [operations](operations.md)
+- [state-model](state-model.md)
+- [agent/dispatcher](agent/dispatcher.md)
+- [agent/cycle-manager](agent/cycle-manager.md)
 
 ## 1. Authentication and Rate Limiting
 
@@ -57,7 +57,7 @@ Main targets:
 
 Note:
 
-- For task/run state vocabulary (`queued`, `blocked`, `awaiting_judge`, etc.), see `docs/state-model.md`.
+- For task/run state vocabulary (`queued`, `blocked`, `awaiting_judge`, etc.), see [state-model](state-model.md).
 
 ## 2.1 Minimal API Set for Operations
 
@@ -73,7 +73,7 @@ Minimum set for incident triage and daily operations.
 | Judge stall     | `GET /judgements`       | non-approve chain, unprocessed backlog               |
 | Correlated logs | `GET /logs/all`         | dispatcher/worker/judge/cycle-manager timeline       |
 
-For operation check sequence, refer to "Post-change verification checklist" in `docs/operations.md`.
+For operation check sequence, refer to [operations](operations.md#11-post-change-verification-checklist).
 
 ## 2.2 API-Based Lookup (State Vocabulary -> Transition -> Owner -> Implementation)
 
@@ -81,15 +81,15 @@ Common path when tracing from state vocabulary to transition to owner to impleme
 
 | Starting point (API/symptom)                      | State vocabulary ref         | Transition ref (flow)  | Owner agent ref                                                        | Implementation ref                            |
 | ------------------------------------------------- | ---------------------------- | ---------------------- | ---------------------------------------------------------------------- | --------------------------------------------- |
-| `queued`/`running` stuck in `GET /tasks`          | `docs/state-model.md` 7      | `docs/flow.md` 2, 5, 6 | Dispatcher/Worker (`docs/agent/dispatcher.md`, `docs/agent/worker.md`) | `apps/dispatcher/src/`, `apps/worker/src/`    |
-| `awaiting_judge` stuck in `GET /tasks`            | `docs/state-model.md` 2, 7   | `docs/flow.md` 3, 4, 7 | Judge (`docs/agent/judge.md`)                                          | `apps/judge/src/`                             |
-| `quota_wait`/`needs_rework` chain in `GET /tasks` | `docs/state-model.md` 2.2, 7 | `docs/flow.md` 3, 6, 8 | Worker/Judge/Cycle Manager (each agent spec)                           | "Implementation reference" in each agent spec |
-| `issue_linking` stuck in `GET /tasks`             | `docs/state-model.md` 2, 7   | `docs/flow.md` 3       | Planner (`docs/agent/planner.md`)                                      | `apps/planner/src/`                           |
+| `queued`/`running` stuck in `GET /tasks`          | [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis) | [flow](flow.md#2-basic-lifecycle), [flow](flow.md#5-dispatcher-recovery-layer), [flow](flow.md#6-worker-failure-handling) | [Dispatcher/Worker](agent/dispatcher.md), [Worker](agent/worker.md) | `apps/dispatcher/src/`, `apps/worker/src/`    |
+| `awaiting_judge` stuck in `GET /tasks`            | [state-model](state-model.md#2-task-block-reason), [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis) | [flow](flow.md#3-blocked-reasons-used-for-recovery), [flow](flow.md#4-run-lifecycle-and-judge-idempotency), [flow](flow.md#7-judge-non-approval--merge-failure-paths) | [Judge](agent/judge.md)                                          | `apps/judge/src/`                             |
+| `quota_wait`/`needs_rework` chain in `GET /tasks` | [state-model](state-model.md#22-task-retry-reason-operations), [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis) | [flow](flow.md#3-blocked-reasons-used-for-recovery), [flow](flow.md#6-worker-failure-handling), [flow](flow.md#8-cycle-manager-self-recovery) | Worker/Judge/Cycle Manager (each agent spec)                           | "Implementation reference" in each agent spec |
+| `issue_linking` stuck in `GET /tasks`             | [state-model](state-model.md#2-task-block-reason), [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis) | [flow](flow.md#3-blocked-reasons-used-for-recovery)       | [Planner](agent/planner.md)                                      | `apps/planner/src/`                           |
 
 Note:
 
-- Operation shortcut table: `docs/operations.md` "8.1 State vocabulary -> transition -> owner -> implementation lookup"
-- Owner agent and implementation entry: `docs/agent/README.md` "Shortest route for implementation tracing"
+- Operation shortcut table: [operations](operations.md#81-state-vocabulary--transition--owner--implementation-lookup-operation-shortcut)
+- Owner agent and implementation entry: [agent/README](agent/README.md#10-shortest-route-for-implementation-tracing-code-reading-order)
 
 ---
 
@@ -122,7 +122,7 @@ Note:
 - failed/blocked tasks include `retry` info (cooldown / reason / retryCount, etc.)
 - Main `retry.reason` values:
   - `cooldown_pending`, `retry_due`, `awaiting_judge`, `quota_wait`, `needs_rework`
-- Full vocabulary (`retry_exhausted`, `non_retryable_failure`, `unknown`, `failureCategory`) in `docs/state-model.md`
+- Full vocabulary (`retry_exhausted`, `non_retryable_failure`, `unknown`, `failureCategory`) in [state-model](state-model.md)
 
 `retry` example:
 
@@ -344,5 +344,5 @@ Planner research start payload:
 
 Supplemental material for operational issues:
 
-- dispatch/lease: `docs/agent/dispatcher.md`
-- convergence/replan: `docs/agent/cycle-manager.md`
+- dispatch/lease: [agent/dispatcher](agent/dispatcher.md)
+- convergence/replan: [agent/cycle-manager](agent/cycle-manager.md)

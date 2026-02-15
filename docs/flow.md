@@ -1,19 +1,33 @@
 # Execution Flow (Current)
 
-## Scope
-
 This page describes **runtime state transitions** for task/run.  
-For startup preflight rules and full pattern matrix, see `docs/startup-patterns.md`.
+For startup preflight rules and full pattern matrix, see [startup-patterns](startup-patterns.md).
+
+## Table of Contents
+
+- [0.1 Entry Point from State Model](#01-entry-point-from-state-model)
+- [1. Startup / Preflight](#1-startup--preflight)
+- [2. Basic Lifecycle](#2-basic-lifecycle)
+- [3. Blocked Reasons Used for Recovery](#3-blocked-reasons-used-for-recovery)
+- [4. Run Lifecycle and Judge Idempotency](#4-run-lifecycle-and-judge-idempotency)
+- [5. Dispatcher Recovery Layer](#5-dispatcher-recovery-layer)
+- [6. Worker Failure Handling](#6-worker-failure-handling)
+- [7. Judge Non-Approval / Merge Failure Paths](#7-judge-non-approval--merge-failure-paths)
+- [8. Cycle Manager Self-Recovery](#8-cycle-manager-self-recovery)
+- [9. Host Snapshot and Context Update](#9-host-snapshot-and-context-update)
+- [10. Why `Failed` and `Retry` Coexist](#10-why-failed-and-retry-coexist)
+- [Related Agent Specifications](#related-agent-specifications)
+- [11. TigerResearch Lifecycle (Planner-First)](#11-tigerresearch-lifecycle-planner-first)
 
 ## 0.1 Entry Point from State Model
 
-When entering from state vocabulary, first fix terminology in `docs/state-model.md`, then check transitions and recovery paths here.
+When entering from state vocabulary, first fix terminology in [state-model](state-model.md), then check transitions and recovery paths here.
 
-| State model section                     | Next section here                                                            | Owning agent                |
-| --------------------------------------- | ---------------------------------------------------------------------------- | --------------------------- |
-| "1. Task Status" "2. Task Block Reason" | "2. Basic Lifecycle" "3. Blocked Reasons Used for Recovery"                  | Dispatcher / Worker / Judge |
-| "2.2 Task Retry Reason (Operations)"    | "6. Worker Failure Handling" "8. Cycle Manager Self-Recovery"                | Worker / Cycle Manager      |
-| "7. Patterns Prone to Stalls"           | "5. Dispatcher Recovery Layer" "7. Judge Non-Approval / Merge Failure Paths" | Dispatcher / Judge          |
+| State model section                     | Next section here                                                                                    | Owning agent                |
+| --------------------------------------- | ---------------------------------------------------------------------------------------------------- | --------------------------- |
+| "1. Task Status" "2. Task Block Reason" | [2. Basic Lifecycle](#2-basic-lifecycle), [3. Blocked Reasons Used for Recovery](#3-blocked-reasons-used-for-recovery) | Dispatcher / Worker / Judge |
+| "2.2 Task Retry Reason (Operations)"    | [6. Worker Failure Handling](#6-worker-failure-handling), [8. Cycle Manager Self-Recovery](#8-cycle-manager-self-recovery) | Worker / Cycle Manager      |
+| "7. Patterns Prone to Stalls"           | [5. Dispatcher Recovery Layer](#5-dispatcher-recovery-layer), [7. Judge Non-Approval / Merge Failure Paths](#7-judge-non-approval--merge-failure-paths) | Dispatcher / Judge          |
 
 ## 1. Startup / Preflight
 
@@ -40,7 +54,7 @@ Meaning of common warnings:
 - `Planner is skipped for this launch`
   - Normal when issue/pr backlog exists
 
-Exact formulas and all combinations are in `docs/startup-patterns.md`.
+Exact formulas and all combinations are in [startup-patterns](startup-patterns.md).
 
 ## 2. Basic Lifecycle
 
@@ -66,7 +80,7 @@ Exact formulas and all combinations are in `docs/startup-patterns.md`.
 
 ## 3. Blocked Reasons Used for Recovery
 
-Definitions are in `docs/state-model.md`.
+Definitions are in [state-model](state-model.md).
 
 - `awaiting_judge`
   - Successful run exists but not judged, or run restore needed
@@ -147,7 +161,7 @@ Main periodic actions:
   - `local task backlog == 0`: call `/system/preflight` to import/sync issue backlog
   - `issue backlog == 0`: trigger Planner replan
 
-For startup vs replan responsibility split, see `docs/startup-patterns.md`.
+For startup vs replan responsibility split, see [startup-patterns](startup-patterns.md).
 
 Blocked recovery behavior:
 
@@ -176,8 +190,8 @@ System process self-recovery:
 
 Policy lifecycle and self-growth details:
 
-- `docs/policy-recovery.md`
-- `docs/verify-recovery.md`
+- [policy-recovery](policy-recovery.md)
+- [verify-recovery](verify-recovery.md)
 
 ## 9. Host Snapshot and Context Update
 
@@ -200,13 +214,13 @@ This indicates active recovery, not a halt.
 
 ## Related Agent Specifications
 
-- `docs/agent/planner.md`
-- `docs/agent/dispatcher.md`
-- `docs/agent/worker.md`
-- `docs/agent/tester.md`
-- `docs/agent/docser.md`
-- `docs/agent/judge.md`
-- `docs/agent/cycle-manager.md`
+- [agent/planner](agent/planner.md)
+- [agent/dispatcher](agent/dispatcher.md)
+- [agent/worker](agent/worker.md)
+- [agent/tester](agent/tester.md)
+- [agent/docser](agent/docser.md)
+- [agent/judge](agent/judge.md)
+- [agent/cycle-manager](agent/cycle-manager.md)
 
 To trace implementation, use the "Implementation reference (source of truth)" section at the end of each page to locate the corresponding `apps/*/src`.
 

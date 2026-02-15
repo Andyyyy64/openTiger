@@ -5,12 +5,12 @@ It runs a planner-first, claim/evidence convergence loop on top of existing orch
 
 Related:
 
-- `docs/architecture.md`
-- `docs/flow.md`
-- `docs/api-reference.md`
-- `docs/config.md`
-- `docs/operations.md`
-- `docs/agent/README.md`
+- [architecture](architecture.md)
+- [flow](flow.md)
+- [api-reference](api-reference.md)
+- [config](config.md)
+- [operations](operations.md)
+- [agent/README](agent/README.md)
 
 ## 1. What TigerResearch Does
 

@@ -2,9 +2,9 @@
 
 Related:
 
-- `docs/agent/README.md`
-- `docs/flow.md`
-- `docs/mode.md`
+- [README](README.md)
+- [flow](../flow.md)
+- [mode](../mode.md)
 
 ## 1. Role
 

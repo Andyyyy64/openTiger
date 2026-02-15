@@ -89,7 +89,7 @@ Operators must observe not only trial results but also intended next steps:
 
 This page describes design principles; for actual triage, follow state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md` (state vocabulary)
-2. `docs/flow.md` (transitions and recovery paths)
-3. `docs/operations.md` (API procedures and operation shortcuts)
-4. `docs/agent/README.md` (owning agent and implementation tracing)
+1. [state-model](state-model.md) (state vocabulary)
+2. [flow](flow.md) (transitions and recovery paths)
+3. [operations](operations.md) (API procedures and operation shortcuts)
+4. [agent/README](agent/README.md) (owning agent and implementation tracing)

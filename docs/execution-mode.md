@@ -5,21 +5,21 @@ the prerequisites for running `claude_code` / `codex` safely in sandbox mode.
 
 Related:
 
-- `docs/mode.md`
-- `docs/config.md`
-- `docs/state-model.md`
-- `docs/flow.md`
-- `docs/operations.md`
-- `docs/agent/dispatcher.md`
+- [mode](mode.md)
+- [config](config.md)
+- [state-model](state-model.md)
+- [flow](flow.md)
+- [operations](operations.md)
+- [agent/dispatcher](agent/dispatcher.md)
 
 ### Common Lookup Path (state vocabulary -> transition -> owner -> implementation, when entering from execution env config)
 
 When tracing incidents from host/sandbox config, follow: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md` (state vocabulary)
-2. `docs/flow.md` (runtime transitions and recovery)
-3. `docs/operations.md` (API procedures and operation shortcuts)
-4. `docs/agent/README.md` (owning agent and implementation tracing)
+1. [state-model](state-model.md) (state vocabulary)
+2. [flow](flow.md) (runtime transitions and recovery)
+3. [operations](operations.md) (API procedures and operation shortcuts)
+4. [agent/README](agent/README.md) (owning agent and implementation tracing)
 
 ## 1. Overview
 

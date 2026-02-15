@@ -2,9 +2,9 @@
 
 Related:
 
-- `docs/agent/README.md`
-- `docs/policy-recovery.md`
-- `docs/verification.md`
+- [README](README.md)
+- [policy-recovery](../policy-recovery.md)
+- [verification](../verification.md)
 
 ## 1. Role
 
@@ -17,8 +17,8 @@ Worker runtime switches execution mode based on `AGENT_ROLE`:
 This page describes **shared behavior** of the Worker runtime.  
 For Tester/Docser-specific differences, see:
 
-- `docs/agent/tester.md`
-- `docs/agent/docser.md`
+- [tester](tester.md)
+- [docser](docser.md)
 
 Out of scope:
 

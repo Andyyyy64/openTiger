@@ -2,17 +2,17 @@
 
 Related:
 
-- `docs/agent/README.md`
-- `docs/agent/worker.md`
-- `docs/verification.md`
-- `docs/policy-recovery.md`
+- [README](README.md)
+- [worker](worker.md)
+- [verification](../verification.md)
+- [policy-recovery](../policy-recovery.md)
 
 ## 1. Role
 
 Docser is a derived role of the Worker runtime running with `AGENT_ROLE=docser`.  
 This page documents only Docser-specific differences.
 
-For shared execution flow, state transitions, and safety constraints, see `docs/agent/worker.md`.
+For shared execution flow, state transitions, and safety constraints, see [worker](worker.md).
 
 ## 2. Main Triggers
 
@@ -39,7 +39,7 @@ For shared execution flow, state transitions, and safety constraints, see `docs/
 - `DOCSER_INSTRUCTIONS_PATH`
 - `OPENTIGER_LOG_DIR`
 
-For shared settings (retry/policy recovery/verify recovery, etc.), see `docs/agent/worker.md`.
+For shared settings (retry/policy recovery/verify recovery, etc.), see [worker](worker.md).
 
 ## 6. Implementation Reference (Source of Truth)
 

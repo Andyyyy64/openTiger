@@ -10,12 +10,12 @@ curl -fsSL https://opentiger.dev/install.sh | bash
 
 Related:
 
-- [docs/architecture.md](docs/architecture.md)
-- [docs/config.md](docs/config.md)
-- [docs/api-reference.md](docs/api-reference.md)
-- [docs/operations.md](docs/operations.md)
-- [docs/agent/README.md](docs/agent/README.md)
-- [docs/research.md](docs/research.md)
+- [architecture](architecture.md)
+- [config](config.md)
+- [api-reference](api-reference.md)
+- [operations](operations.md)
+- [agent/README](agent/README.md)
+- [research](research.md)
 
 ## 1. Prerequisites
 
@@ -115,23 +115,23 @@ These checks help detect initial misconfig quickly:
 5. No startup errors in logs
    - Confirm no auth/connection/config errors in `GET /logs/all`
 
-For detailed operation checks, see `docs/operations.md`.  
-For state transitions that stall, start with the initial diagnosis table in `docs/state-model.md`.
+For detailed operation checks, see [operations](operations.md).  
+For state transitions that stall, start with the initial diagnosis table in [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis).
 
 ### 8.1 Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, for First-Time Users)
 
 First-time users can triage by:
 
 1. Confirm state vocabulary
-   - `docs/state-model.md` (7)
+   - [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis)
 2. Check where it stalls via transitions
-   - `docs/flow.md` (relevant section)
+   - [flow](flow.md)
 3. Run API check sequence
-   - `docs/operations.md` (11)
+   - [operations](operations.md#11-post-change-verification-checklist)
 4. Identify owning agent and implementation
-   - `docs/agent/README.md` (FAQ and implementation tracing path)
+   - [agent/README](agent/README.md) (FAQ and implementation tracing path)
 5. Use API-based lookup when tracing from API
-   - `docs/api-reference.md` (2.2)
+   - [api-reference](api-reference.md#22-api-based-lookup-state-vocabulary--transition--owner--implementation)
 
 ## 9. Common Initial Issues
 
@@ -171,4 +171,4 @@ First-time users can triage by:
 If runs keep getting `cancelled` with "Agent process restarted before task completion":
 
 - Check API dev restart behavior and `OPENTIGER_PRESERVE_MANAGED_ON_DEV_SIGTERM`
-- See `docs/research.md` and `docs/operations.md`
+- See [research](research.md) and [operations](operations.md)

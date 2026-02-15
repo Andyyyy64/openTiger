@@ -29,7 +29,7 @@
 
 When trying improvements, checking impact in order state vocabulary -> transition -> owner -> implementation helps compare:
 
-1. `docs/state-model.md` (how state vocabulary changes)
-2. `docs/flow.md` (what transition/recovery differences appear)
-3. `docs/operations.md` (whether API check procedures need updates)
-4. `docs/agent/README.md` (impact on owning agent and implementation responsibilities)
+1. [state-model](state-model.md) (how state vocabulary changes)
+2. [flow](flow.md) (what transition/recovery differences appear)
+3. [operations](operations.md) (whether API check procedures need updates)
+4. [agent/README](agent/README.md) (impact on owning agent and implementation responsibilities)

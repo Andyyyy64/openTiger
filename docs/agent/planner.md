@@ -2,9 +2,9 @@
 
 Related:
 
-- `docs/agent/README.md`
-- `docs/flow.md`
-- `docs/verification.md`
+- [README](README.md)
+- [flow](../flow.md)
+- [verification](../verification.md)
 
 ## 1. Role
 

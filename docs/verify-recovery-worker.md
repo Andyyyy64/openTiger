@@ -4,11 +4,11 @@ This document explains Worker-side verification command failure handling.
 
 Related:
 
-- `docs/verification.md`
-- `docs/verify-recovery.md`
-- `docs/verify-recovery-cycle-manager.md`
-- `docs/policy-recovery.md`
-- `docs/flow.md`
+- [verification](../verification.md)
+- [verify-recovery](../verify-recovery.md)
+- [verify-recovery-cycle-manager](../verify-recovery-cycle-manager.md)
+- [policy-recovery](../policy-recovery.md)
+- [flow](../flow.md)
 
 ## 1. Scope
 

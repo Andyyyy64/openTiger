@@ -2,16 +2,16 @@
 
 Related:
 
-- `docs/agent/README.md`
-- `docs/agent/worker.md`
-- `docs/verification.md`
+- [README](README.md)
+- [worker](worker.md)
+- [verification](../verification.md)
 
 ## 1. Role
 
 Tester is a derived role of the Worker runtime running with `AGENT_ROLE=tester`.  
 This page documents only Tester-specific differences.
 
-For shared execution flow, state transitions, and safety constraints, see `docs/agent/worker.md`.
+For shared execution flow, state transitions, and safety constraints, see [worker](worker.md).
 
 ## 2. Main Responsibilities
 
@@ -39,7 +39,7 @@ For shared execution flow, state transitions, and safety constraints, see `docs/
 - `WORKER_AUTO_VERIFY_MODE`
 - `WORKER_VERIFY_CONTRACT_PATH`
 
-For shared settings (retry/policy recovery/verify recovery, etc.), see `docs/agent/worker.md`.
+For shared settings (retry/policy recovery/verify recovery, etc.), see [worker](worker.md).
 
 ## 6. Implementation Reference (Source of Truth)
 

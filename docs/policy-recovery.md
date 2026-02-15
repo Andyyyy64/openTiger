@@ -5,21 +5,21 @@ and how recovery results are reflected into future planning for self-growth.
 
 Related:
 
-- `docs/agent/worker.md`
-- `docs/agent/planner.md`
-- `docs/verify-recovery.md`
-- `docs/flow.md`
-- `docs/state-model.md`
-- `docs/operations.md`
+- [agent/worker](agent/worker.md)
+- [agent/planner](agent/planner.md)
+- [verify-recovery](verify-recovery.md)
+- [flow](flow.md)
+- [state-model](state-model.md)
+- [operations](operations.md)
 
 ### Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Entering from Policy Violation)
 
 When investigating from policy violation (`needs_rework` chain, etc.), follow: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md` (`needs_rework` / `quota_wait`, etc.)
-2. `docs/flow.md` (Worker failure handling and blocked recovery paths)
-3. `docs/operations.md` (API procedures and operation shortcuts)
-4. `docs/agent/README.md` (owning agent and implementation tracing path)
+1. [state-model](state-model.md) (`needs_rework` / `quota_wait`, etc.)
+2. [flow](flow.md) (Worker failure handling and blocked recovery paths)
+3. [operations](operations.md) (API procedures and operation shortcuts)
+4. [agent/README](agent/README.md) (owning agent and implementation tracing path)
 
 ## 1. Purpose
 
@@ -29,7 +29,7 @@ it first attempts in-run recovery.
 Scope note:
 
 - This document covers policy/path recovery (`allowedPaths`, `deniedPaths`).
-- Verification command failures (format/order/missing-script/no-test-files) are handled by verification recovery flow in `docs/verify-recovery.md`.
+- Verification command failures (format/order/missing-script/no-test-files) are handled by verification recovery flow in [verify-recovery](verify-recovery.md).
 
 Design goals:
 
@@ -127,7 +127,7 @@ Main responsibilities:
 ## 4. Boundary with Verification Recovery
 
 Verification-command recovery (command adjustment/requeue, setup/bootstrap retry, judge-missing-run fallback)
-is documented in `docs/verify-recovery.md`.
+is documented in [verify-recovery](verify-recovery.md).
 
 This page focuses on policy/path recovery:
 
@@ -243,7 +243,7 @@ Related queue recovery events:
   - `rework_child_already_exists`
   - `rework_chain_max_depth_reached`
 
-Verification-related requeue reasons are documented in `docs/verify-recovery.md`.
+Verification-related requeue reasons are documented in [verify-recovery](verify-recovery.md).
 
 Planner observation:
 

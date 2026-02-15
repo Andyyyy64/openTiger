@@ -4,15 +4,24 @@ openTiger is an orchestration system that continues autonomous execution using m
 
 Related:
 
-- `docs/state-model.md`
-- `docs/flow.md`
-- `docs/operations.md`
-- `docs/startup-patterns.md`
-- `docs/agent/README.md`
-- `docs/mode.md`
-- `docs/execution-mode.md`
-- `docs/research.md`
-- `docs/plugins.md`
+- [state-model](state-model.md)
+- [flow](flow.md)
+- [operations](operations.md)
+- [startup-patterns](startup-patterns.md)
+- [agent/README](agent/README.md)
+- [mode](mode.md)
+- [execution-mode](execution-mode.md)
+- [research](research.md)
+- [plugins](plugins.md)
+
+## Table of Contents
+
+- [0. Runtime Control Loop (Overview)](#0-runtime-control-loop-overview)
+- [1. Components](#1-components)
+- [2. Data Stores](#2-data-stores)
+- [3. High-Level Execution Flow](#3-high-level-execution-flow)
+- [4. State Design Characteristics](#4-state-design-characteristics)
+- [5. Modes and Execution Environment](#5-modes-and-execution-environment)
 
 ## 0. Runtime Control Loop (Overview)
 
@@ -43,10 +52,10 @@ TigerResearch is implemented as a planner-first plugin specialization on top of 
 
 After understanding the architecture, when investigating incidents, tracing in the order state vocabulary -> transition -> owner -> implementation is shortest.
 
-1. Confirm state vocabulary in `docs/state-model.md`
-2. Check transitions and recovery paths in `docs/flow.md`
-3. Run API procedures and operational shortcuts in `docs/operations.md`
-4. Identify owning agent and implementation tracing path in `docs/agent/README.md`
+1. Confirm state vocabulary in [state-model](state-model.md)
+2. Check transitions and recovery paths in [flow](flow.md)
+3. Run API procedures and operational shortcuts in [operations](operations.md)
+4. Identify owning agent and implementation tracing path in [agent/README](agent/README.md)
 
 ## 1. Components
 
@@ -63,7 +72,7 @@ After understanding the architecture, when investigating incidents, tracing in t
 - Dependency normalization
 - Policy application
 - Documentation gap detection
-- Details: `docs/agent/planner.md`
+- Details: [agent/planner](agent/planner.md)
 
 ### Dispatch Control Layer (Dispatcher / `@openTiger/dispatcher`)
 
@@ -71,7 +80,7 @@ After understanding the architecture, when investigating incidents, tracing in t
 - Acquire lease
 - Assign execution agents
 - Process / Docker startup
-- Details: `docs/agent/dispatcher.md`
+- Details: [agent/dispatcher](agent/dispatcher.md)
 
 ### Execution Layer (Worker / Tester / Docser / `@openTiger/worker`)
 
@@ -79,14 +88,14 @@ After understanding the architecture, when investigating incidents, tracing in t
 - Change verification (commands + policy)
 - Commit/push/PR creation (git mode)
 - Recovery branching on failure
-- Details: `docs/agent/worker.md`, `docs/agent/tester.md`, `docs/agent/docser.md`
+- Details: [agent/worker](agent/worker.md), [agent/tester](agent/tester.md), [agent/docser](agent/docser.md)
 
 ### Judgement Layer (Judge / `@openTiger/judge`)
 
 - Evaluate successful runs (CI / policy / LLM)
 - Approve / request_changes decision
 - Merge / retry / autofix task creation
-- Details: `docs/agent/judge.md`
+- Details: [agent/judge](agent/judge.md)
 
 ### Convergence Layer (Cycle Manager / `@openTiger/cycle-manager`)
 
@@ -94,7 +103,7 @@ After understanding the architecture, when investigating incidents, tracing in t
 - `failed/blocked` recovery
 - Issue backlog sync
 - Replan decision
-- Details: `docs/agent/cycle-manager.md`
+- Details: [agent/cycle-manager](agent/cycle-manager.md)
 
 ### Dashboard Layer (Dashboard / `@openTiger/dashboard`)
 
@@ -149,7 +158,7 @@ TigerResearch path:
 4. Cycle Manager drives collect/challenge/write/rework
 5. Judge applies research quality decision (when enabled)
 
-Details in `docs/flow.md`.
+Details in [flow](flow.md).
 
 ## 4. State Design Characteristics
 
@@ -173,4 +182,4 @@ Details in `docs/flow.md`.
   - `host` (process)
   - `sandbox` (docker)
 
-Details in `docs/mode.md` and `docs/execution-mode.md`.
+Details in [mode](mode.md) and [execution-mode](execution-mode.md).

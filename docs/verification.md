@@ -5,22 +5,22 @@ This document summarizes the implementation spec for generation, execution, and 
 
 Related:
 
-- `docs/policy-recovery.md`
-- `docs/verify-recovery.md`
-- `docs/state-model.md`
-- `docs/flow.md`
-- `docs/operations.md`
-- `docs/agent/planner.md`
-- `docs/agent/worker.md`
+- [policy-recovery](policy-recovery.md)
+- [verify-recovery](verify-recovery.md)
+- [state-model](state-model.md)
+- [flow](flow.md)
+- [operations](operations.md)
+- [agent/planner](agent/planner.md)
+- [agent/worker](agent/worker.md)
 
 ## Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, When Entering from Verification Failure)
 
 When tracing from verification failure, follow: state vocabulary -> transition -> owner -> implementation.
 
-1. `docs/state-model.md` (`needs_rework` / `quota_wait`, etc.)
-2. `docs/flow.md` (Worker failure handling and recovery transitions)
-3. `docs/operations.md` (API procedures and operation shortcuts)
-4. `docs/agent/README.md` (owning agent and implementation tracing path)
+1. [state-model](state-model.md) (`needs_rework` / `quota_wait`, etc.)
+2. [flow](flow.md) (Worker failure handling and recovery transitions)
+3. [operations](operations.md) (API procedures and operation shortcuts)
+4. [agent/README](agent/README.md) (owning agent and implementation tracing path)
 
 ## 1. Overview
 
@@ -127,9 +127,9 @@ Default recovery attempts:
 
 Verification recovery now has a dedicated spec:
 
-- `docs/verify-recovery.md`
-- `docs/verify-recovery-worker.md`
-- `docs/verify-recovery-cycle-manager.md`
+- [verify-recovery](verify-recovery.md)
+- [verify-recovery-worker](verify-recovery-worker.md)
+- [verify-recovery-cycle-manager](verify-recovery-cycle-manager.md)
 
 This includes:
 
@@ -152,7 +152,7 @@ When policy violation occurs during verification:
 3. Discard + learn generated artifacts
 4. If still unresolved -> `blocked(needs_rework)`
 
-See `docs/policy-recovery.md` for details.
+See [policy-recovery](policy-recovery.md) for details.
 
 ## 8. Operation Observation (Initial Triage)
 
@@ -165,5 +165,5 @@ See `docs/policy-recovery.md` for details.
 
 Notes:
 
-- For overall operation check order, see checklist in `docs/operations.md`.
-- For state vocabulary (`quota_wait`, `needs_rework`, etc.), see `docs/state-model.md`.
+- For overall operation check order, see checklist in [operations](operations.md).
+- For state vocabulary (`quota_wait`, `needs_rework`, etc.), see [state-model](state-model.md).

@@ -84,7 +84,7 @@ and is re-exported through:
 
 See:
 
-- `docs/research.md`
+- [research](research.md)
 - `apps/api/src/plugins/tiger-research.ts`
 - `apps/dashboard/src/plugins/tiger-research.tsx`
 - `apps/worker/src/plugins/tiger-research.ts`
