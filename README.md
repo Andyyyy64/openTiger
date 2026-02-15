@@ -32,7 +32,7 @@ all under explicit runtime state transitions.
 
 - Plugin-first feature expansion
 - TigerResearch plugin (`planner-first` claim/evidence convergence) as the reference implementation
-- See `docs/plugins.md` for plugin architecture and implementation guide
+- See [docs/plugins.md](docs/plugins.md) for plugin architecture and implementation guide
 
 ## Architecture Overview
 
@@ -44,9 +44,9 @@ all under explicit runtime state transitions.
 - **Cycle Manager**: convergence loop, cleanup, retry, and replan trigger
 - **PostgreSQL + Redis**: persistent state + queueing
 
-See `docs/architecture.md` for component-level details.
-See `docs/research.md` for TigerResearch design and operation.
-See `docs/plugins.md` for plugin extension architecture.
+See [docs/architecture.md](docs/architecture.md) for component-level details.
+See [docs/research.md](docs/research.md) for TigerResearch design and operation.
+See [docs/plugins.md](docs/plugins.md) for plugin extension architecture.
 
 ## Prerequisites
 
@@ -111,7 +111,7 @@ pnpm run up
    - Dashboard: `http://localhost:5190`
    - API: `http://localhost:4301`
 5. Enter requirement on the Start page and run
-   - default canonical requirement path: `docs/requirement.md`
+   - default canonical requirement path: [docs/requirement.md](docs/requirement.md)
 6. Monitor progress:
    - `tasks`
    - `runs`
@@ -119,19 +119,19 @@ pnpm run up
    - `logs`
 7. (Optional) Run TigerResearch from the `plugins` page:
    - submit query -> planner decomposition -> parallel collect/challenge/write -> report
-   - details: `docs/research.md`
+   - details: [docs/research.md](docs/research.md)
 8. If state becomes stalled:
-   - Start with initial diagnosis in `docs/state-model.md`
-   - Check detailed runbook in `docs/operations.md`
+   - Start with initial diagnosis in [docs/state-model.md](docs/state-model.md)
+   - Check detailed runbook in [docs/operations.md](docs/operations.md)
 
 ### Common Lookup Guide (state vocabulary -> transition -> owner -> implementation)
 
 - If issues found via API:
-  - `docs/api-reference.md` "2.2 API-based lookup (state vocabulary -> transition -> owner -> implementation)"
+  - [docs/api-reference.md](docs/api-reference.md) "2.2 API-based lookup (state vocabulary -> transition -> owner -> implementation)"
 - To trace transitions from state vocabulary:
-  - `docs/state-model.md` -> `docs/flow.md`
+  - [docs/state-model.md](docs/state-model.md) -> [docs/flow.md](docs/flow.md)
 - To trace to owning agent and implementation files:
-  - `docs/agent/README.md` "Shortest route for implementation tracing"
+  - [docs/agent/README.md](docs/agent/README.md) "Shortest route for implementation tracing"
 
 ## Startup and Runtime Behavior
 
@@ -143,50 +143,50 @@ pnpm run up
   - `local backlog == 0`: sync Issue backlog via preflight
   - `Issue backlog == 0`: evaluate planner replan
 
-Details: `docs/startup-patterns.md`, `docs/flow.md`
+Details: [docs/startup-patterns.md](docs/startup-patterns.md), [docs/flow.md](docs/flow.md)
 
 ## Documentation Map
 
 First check the index by use case:
 
-- `docs/README.md`
+- [docs/README.md](docs/README.md)
   - includes reader lanes (first-time/operations/implementation tracing)
 
 Recommended order for onboarding:
 
-- `docs/getting-started.md`
-- `docs/architecture.md`
-- `docs/config.md`
-- `docs/api-reference.md`
-- `docs/operations.md`
-- `docs/api-reference.md` "2.2 API-based lookup (state vocabulary -> transition -> owner -> implementation)"
+- [docs/getting-started.md](docs/getting-started.md)
+- [docs/architecture.md](docs/architecture.md)
+- [docs/config.md](docs/config.md)
+- [docs/api-reference.md](docs/api-reference.md)
+- [docs/operations.md](docs/operations.md)
+- [docs/api-reference.md](docs/api-reference.md) "2.2 API-based lookup (state vocabulary -> transition -> owner -> implementation)"
 
 Runtime behavior reference:
 
-- `docs/state-model.md`
-- `docs/flow.md`
-- `docs/startup-patterns.md`
-- `docs/mode.md`
-- `docs/execution-mode.md`
-- `docs/policy-recovery.md`
-- `docs/verification.md`
-- `docs/research.md`
-- `docs/plugins.md`
+- [docs/state-model.md](docs/state-model.md)
+- [docs/flow.md](docs/flow.md)
+- [docs/startup-patterns.md](docs/startup-patterns.md)
+- [docs/mode.md](docs/mode.md)
+- [docs/execution-mode.md](docs/execution-mode.md)
+- [docs/policy-recovery.md](docs/policy-recovery.md)
+- [docs/verification.md](docs/verification.md)
+- [docs/research.md](docs/research.md)
+- [docs/plugins.md](docs/plugins.md)
 
 Agent specification reference:
 
-- `docs/agent/README.md` (role comparison)
-- `docs/agent/planner.md`
-- `docs/agent/dispatcher.md`
-- `docs/agent/worker.md`
-- `docs/agent/tester.md`
-- `docs/agent/judge.md`
-- `docs/agent/docser.md`
-- `docs/agent/cycle-manager.md`
+- [docs/agent/README.md](docs/agent/README.md) (role comparison)
+- [docs/agent/planner.md](docs/agent/planner.md)
+- [docs/agent/dispatcher.md](docs/agent/dispatcher.md)
+- [docs/agent/worker.md](docs/agent/worker.md)
+- [docs/agent/tester.md](docs/agent/tester.md)
+- [docs/agent/judge.md](docs/agent/judge.md)
+- [docs/agent/docser.md](docs/agent/docser.md)
+- [docs/agent/cycle-manager.md](docs/agent/cycle-manager.md)
 
 Design principles:
 
-- `docs/nonhumanoriented.md`
+- [docs/nonhumanoriented.md](docs/nonhumanoriented.md)
 
 ## Authentication and Access Control Notes
 
