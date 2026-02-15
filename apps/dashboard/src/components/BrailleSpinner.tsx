@@ -180,7 +180,8 @@ export const BrailleSpinner: React.FC<BrailleSpinnerProps> = ({
   return (
     <span
       ref={elRef}
-      className={`font-mono inline-block tabular-nums align-middle ${colorClass} ${className}`}
+      className={`inline-block tabular-nums align-middle ${colorClass} ${className}`}
+      style={{ fontFamily: "sans-serif" }}
       aria-hidden
     />
   );
