@@ -73,6 +73,9 @@ Behavior:
   commands have already passed, treat it as non-blocking and continue
 - For setup/bootstrap failures, attempt inline dependency bootstrap and replacement verification commands
   before promoting to rework.
+- For outside-allowed policy violations, generated artifacts are discarded in-place and re-verified.
+  Unknown file types are also discarded when they are untracked and outside allowed paths, so
+  verification byproducts do not stall convergence.
 
 ## 3.3 LLM Inline Command Recovery
 

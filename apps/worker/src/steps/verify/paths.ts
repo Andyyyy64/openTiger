@@ -50,6 +50,7 @@ const GENERATED_HINT_EXTENSIONS = new Set([
   ".trc",
   ".lst",
   ".out",
+  ".tsbuildinfo",
 ]);
 const GENERATED_HINT_SEGMENTS = new Set([
   "coverage",

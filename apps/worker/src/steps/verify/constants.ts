@@ -41,6 +41,8 @@ export const GENERATED_PATHS = [
   "**/*.img",
   "*.map",
   "**/*.map",
+  "*.tsbuildinfo",
+  "**/*.tsbuildinfo",
   "**/playwright-report/**",
   "**/test-results/**",
   // Judge scratch repo not treated as artifact

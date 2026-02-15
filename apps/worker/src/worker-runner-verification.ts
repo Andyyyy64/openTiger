@@ -16,13 +16,14 @@ import {
   type PolicyRecoveryConfig,
   type Task,
 } from "@openTiger/core";
-import { discardChangesForPaths } from "@openTiger/vcs";
+import { discardChangesForPaths, getUntrackedFiles } from "@openTiger/vcs";
 import { and, eq, inArray, ne } from "drizzle-orm";
 import { executeTask, verifyChanges, type ExecuteResult, type VerifyResult } from "./steps/index";
 import { buildOpenCodeEnv } from "./env";
 import {
   isLikelyGeneratedArtifactPath,
   matchesPattern,
+  normalizePathForMatch,
   persistGeneratedPathHints,
 } from "./steps/verify/paths";
 import { shouldAllowNoChanges } from "./worker-task-helpers";
@@ -559,21 +560,33 @@ async function attemptGeneratedArtifactRecovery(params: {
   repoMode: "git" | "local";
   allowNoChanges: boolean;
 }): Promise<VerifyResult | null> {
-  const violatingPaths = extractPolicyViolationPaths(params.verifyResult.policyViolations).filter(
-    (path) => isLikelyGeneratedArtifactPath(path),
-  );
+  const violatingPaths = extractPolicyViolationPaths(params.verifyResult.policyViolations);
   if (violatingPaths.length === 0) {
     return null;
   }
 
-  const cleanupResult = await discardChangesForPaths(params.repoPath, violatingPaths);
+  const untrackedFiles = await getUntrackedFiles(params.repoPath);
+  const recoveryCandidates = selectGeneratedArtifactRecoveryCandidates({
+    violatingPaths,
+    untrackedFiles,
+  });
+  if (recoveryCandidates.discardPaths.length === 0) {
+    return null;
+  }
+  if (recoveryCandidates.untrackedOutsidePaths.length > 0) {
+    console.log(
+      `[Worker] Auto-discarding untracked outside-allowed paths: ${recoveryCandidates.untrackedOutsidePaths.join(", ")}`,
+    );
+  }
+
+  const cleanupResult = await discardChangesForPaths(params.repoPath, recoveryCandidates.discardPaths);
   if (!cleanupResult.success) {
     console.warn(
       `[Worker] Failed to discard generated artifact candidates: ${cleanupResult.stderr || "(no stderr)"}`,
     );
     return null;
   }
-  const learnedPaths = await persistGeneratedPathHints(params.repoPath, violatingPaths);
+  const learnedPaths = await persistGeneratedPathHints(params.repoPath, recoveryCandidates.discardPaths);
   if (learnedPaths.length > 0) {
     console.log(`[Worker] Learned generated artifact path hints: ${learnedPaths.join(", ")}`);
   }
@@ -589,6 +602,50 @@ async function attemptGeneratedArtifactRecovery(params: {
     allowEnvExampleOutsidePaths: params.repoMode === "local",
     allowNoChanges: params.allowNoChanges,
   });
+}
+
+export function selectGeneratedArtifactRecoveryCandidates(params: {
+  violatingPaths: string[];
+  untrackedFiles: string[];
+}): {
+  discardPaths: string[];
+  generatedPaths: string[];
+  untrackedOutsidePaths: string[];
+} {
+  const normalizedViolating = Array.from(
+    new Set(
+      params.violatingPaths.map((path) => normalizePathForMatch(path)).filter((path) => path.length > 0),
+    ),
+  );
+  const untrackedSet = new Set(
+    params.untrackedFiles
+      .map((path) => normalizePathForMatch(path))
+      .filter((path) => path.length > 0),
+  );
+
+  const discardPaths: string[] = [];
+  const generatedPaths: string[] = [];
+  const untrackedOutsidePaths: string[] = [];
+
+  for (const path of normalizedViolating) {
+    const generatedPath = isLikelyGeneratedArtifactPath(path);
+    const untrackedPath = untrackedSet.has(path);
+    if (!generatedPath && !untrackedPath) {
+      continue;
+    }
+    discardPaths.push(path);
+    if (generatedPath) {
+      generatedPaths.push(path);
+    } else if (untrackedPath) {
+      untrackedOutsidePaths.push(path);
+    }
+  }
+
+  return {
+    discardPaths,
+    generatedPaths,
+    untrackedOutsidePaths,
+  };
 }
 
 function buildLlmInlineRecoveryHandler(params: {
