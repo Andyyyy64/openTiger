@@ -191,7 +191,7 @@ export const TaskDetailsPage: React.FC = () => {
                     Related Files
                   </h3>
                   <div className="flex flex-wrap gap-2">
-                    {task.context.files.map((file, i) => (
+                    {task.context.files.map((file: string, i: number) => (
                       <span
                         key={i}
                         className="text-xs text-zinc-300 bg-zinc-900 px-2 py-0.5 border border-zinc-800"
@@ -306,7 +306,7 @@ export const TaskDetailsPage: React.FC = () => {
               <h2 className="text-sm font-bold uppercase tracking-wider">Scope: Allowed_Paths</h2>
             </div>
             <div className="p-4 space-y-1">
-              {task.allowedPaths.map((path, i) => (
+              {task.allowedPaths.map((path: string, i: number) => (
                 <div key={i} className="text-xs font-mono text-zinc-400 break-all">
                   - {path}
                 </div>
@@ -368,7 +368,7 @@ export const TaskDetailsPage: React.FC = () => {
               <h2 className="text-sm font-bold uppercase tracking-wider">Verification_Cmds</h2>
             </div>
             <div className="p-4 space-y-1">
-              {task.commands.map((cmd, i) => (
+              {task.commands.map((cmd: string, i: number) => (
                 <div key={i} className="text-xs font-mono text-yellow-500 break-all">
                   $ {cmd}
                 </div>
@@ -387,7 +387,7 @@ export const TaskDetailsPage: React.FC = () => {
             <div className="p-4">
               {task.dependencies?.length ? (
                 <div className="space-y-1">
-                  {task.dependencies.map((dependencyId) => (
+                  {task.dependencies.map((dependencyId: string) => (
                     <Link
                       key={dependencyId}
                       to={`/tasks/${dependencyId}`}
