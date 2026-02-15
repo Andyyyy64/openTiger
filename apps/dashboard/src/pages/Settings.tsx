@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { configApi, systemApi } from "../lib/api";
 import { SettingsHeader } from "./settings/SettingsHeader";
@@ -63,12 +63,21 @@ export const SettingsPage: React.FC = () => {
   const [latestRepoAutofilled, setLatestRepoAutofilled] = useState(false);
   const [ghDefaultsSaved, setGhDefaultsSaved] = useState(false);
   const [isAgentOverridesOpen, setIsAgentOverridesOpen] = useState(false);
+  const lastSavedConfigRef = useRef<Record<string, string> | null>(null);
+
+  const hasUnsavedChanges = useMemo(() => {
+    const baseline = lastSavedConfigRef.current;
+    if (!baseline) return false;
+    const normalize = (o: Record<string, string>) =>
+      JSON.stringify(Object.fromEntries(Object.entries(o).sort(([a], [b]) => (a < b ? -1 : 1))));
+    return normalize(values) !== normalize(baseline);
+  }, [values]);
 
   useEffect(() => {
-    if (data?.config) {
-      setValues(data.config);
-    }
-  }, [data]);
+    if (!data?.config || hasUnsavedChanges) return;
+    setValues(data.config);
+    lastSavedConfigRef.current = { ...data.config };
+  }, [data, hasUnsavedChanges]);
 
   const defaultExecutor = normalizeExecutor(values.LLM_EXECUTOR);
   const configuredExecutors = useMemo(() => collectConfiguredExecutors(values), [values]);
@@ -90,7 +99,8 @@ export const SettingsPage: React.FC = () => {
 
   const mutation = useMutation({
     mutationFn: (updates: Record<string, string>) => configApi.update(updates),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      if (res?.config) lastSavedConfigRef.current = { ...res.config };
       queryClient.invalidateQueries({ queryKey: ["config"] });
     },
   });
@@ -183,7 +193,8 @@ export const SettingsPage: React.FC = () => {
 
   const syncGhDefaultsMutation = useMutation({
     mutationFn: (updates: Record<string, string>) => configApi.update(updates),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      if (res?.config) lastSavedConfigRef.current = { ...res.config };
       queryClient.invalidateQueries({ queryKey: ["config"] });
       queryClient.invalidateQueries({ queryKey: ["system", "github-repos"] });
     },
@@ -405,8 +416,12 @@ export const SettingsPage: React.FC = () => {
   }, [githubRepos, selectedRepoFullName, values.GITHUB_OWNER, values.GITHUB_REPO]);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 text-term-fg">
-      <SettingsHeader isSaving={mutation.isPending} onSave={handleSave} />
+    <div className="p-6 max-w-5xl mx-auto space-y-6 text-term-fg pb-24">
+      <SettingsHeader
+        isSaving={mutation.isPending}
+        hasUnsavedChanges={hasUnsavedChanges}
+        onSave={handleSave}
+      />
       {saveMessage && (
         <div
           className={`font-mono text-xs ${
@@ -651,6 +666,19 @@ export const SettingsPage: React.FC = () => {
         onChange={updateValue}
         fieldWarnings={fieldWarnings}
       />
+
+      {hasUnsavedChanges && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 px-5 py-3 border border-amber-500 bg-black shadow-lg shadow-amber-500/20">
+          <span className="text-amber-400 text-sm font-mono">Unsaved changes</span>
+          <button
+            onClick={handleSave}
+            disabled={mutation.isPending}
+            className="border border-amber-500 bg-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-black px-4 py-1.5 text-sm font-bold uppercase transition-colors disabled:opacity-50"
+          >
+            {mutation.isPending ? "[ SAVING... ]" : "[ SAVE ]"}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
