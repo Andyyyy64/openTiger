@@ -64,7 +64,12 @@ export function shouldAttemptVerifyRecovery(
     return false;
   }
   if (verifyResult.failureCode === FAILURE_CODE.SETUP_OR_BOOTSTRAP_ISSUE) {
-    return false;
+    const setupRecoveryEnabled =
+      (process.env.WORKER_SETUP_IN_PROCESS_RECOVERY ?? "true").toLowerCase() !== "false";
+    if (!setupRecoveryEnabled) {
+      return false;
+    }
+    // Allow in-process recovery for setup issues when enabled
   }
   const failedCommand = verifyResult.failedCommand?.trim();
   if (!failedCommand) {
@@ -80,6 +85,10 @@ export function shouldAttemptVerifyRecovery(
   return source === "explicit" || source === "light-check" || source === "guard";
 }
 
+export function isSetupBootstrapFailure(verifyResult: VerifyResult): boolean {
+  return verifyResult.failureCode === FAILURE_CODE.SETUP_OR_BOOTSTRAP_ISSUE;
+}
+
 export function buildVerifyRecoveryHint(params: {
   verifyResult: VerifyResult;
   attempt: number;
@@ -90,12 +99,46 @@ export function buildVerifyRecoveryHint(params: {
     ? ` [${params.verifyResult.failedCommandSource}]`
     : "";
   const stderrSummary = summarizeVerificationFailure(params.verifyResult.failedCommandStderr);
+  if (isSetupBootstrapFailure(params.verifyResult)) {
+    return buildSetupRecoveryHint({
+      command,
+      sourceLabel,
+      stderrSummary,
+      attempt: params.attempt,
+      maxAttempts: params.maxAttempts,
+    });
+  }
   return (
     `Prioritize recovery for verification failure (${params.attempt}/${params.maxAttempts}): ` +
     `${command}${sourceLabel} failed. ` +
     `stderr: ${stderrSummary}. ` +
     "Apply the smallest possible fix to make the failed command pass."
   );
+}
+
+export function buildSetupRecoveryHint(params: {
+  command: string;
+  sourceLabel: string;
+  stderrSummary: string;
+  attempt: number;
+  maxAttempts: number;
+}): string {
+  return (
+    `Setup/bootstrap recovery (${params.attempt}/${params.maxAttempts}): ` +
+    `${params.command}${params.sourceLabel} failed with a dependency or environment issue. ` +
+    `stderr: ${params.stderrSummary}. ` +
+    "Fix the environment before retrying: install missing dependencies (e.g. pnpm install, npm install), " +
+    "add missing dev-dependencies to package.json, or fix configuration issues. " +
+    "Do NOT modify source code to work around the missing dependency."
+  );
+}
+
+export function buildExecuteFailureHint(
+  stderr: string | undefined,
+  error: string | undefined,
+): string {
+  const summary = summarizeVerificationFailure(stderr ?? error, 300);
+  return `Previous recovery execution itself failed: ${summary}. Adjust your approach to avoid the same execution failure.`;
 }
 
 export function encodeVerifyReworkMarker(payload: {

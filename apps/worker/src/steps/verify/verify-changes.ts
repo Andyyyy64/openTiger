@@ -243,6 +243,70 @@ async function resolveSingleChangedPackageDir(
   return singleDir;
 }
 
+function trimGlobPatternPrefix(pattern: string): string {
+  const normalized = normalizePathForMatch(pattern).trim();
+  if (!normalized) {
+    return "";
+  }
+  const wildcardIndex = normalized.search(/[*?[{]/);
+  if (wildcardIndex < 0) {
+    return normalized.replace(/\/+$/, "");
+  }
+  return normalized.slice(0, wildcardIndex).replace(/\/+$/, "");
+}
+
+async function findNearestPackageDirFromPathPrefix(
+  repoPath: string,
+  pathPrefix: string,
+): Promise<string | null> {
+  if (!pathPrefix) {
+    return null;
+  }
+  let current = resolve(repoPath, pathPrefix);
+  if (!isInsideRepo(repoPath, current)) {
+    return null;
+  }
+  while (isInsideRepo(repoPath, current)) {
+    if (await pathExists(join(current, "package.json"))) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+  return null;
+}
+
+async function resolveSingleAllowedPackageDir(
+  repoPath: string,
+  allowedPaths: string[],
+): Promise<string | null> {
+  const packageDirs = new Set<string>();
+
+  for (const allowedPath of allowedPaths) {
+    const prefix = trimGlobPatternPrefix(allowedPath);
+    if (!prefix || prefix === ".") {
+      continue;
+    }
+    const packageDir = await findNearestPackageDirFromPathPrefix(repoPath, prefix);
+    if (!packageDir) {
+      continue;
+    }
+    if (resolve(packageDir) === resolve(repoPath)) {
+      continue;
+    }
+    packageDirs.add(packageDir);
+    if (packageDirs.size > 1) {
+      return null;
+    }
+  }
+
+  const [singleDir] = Array.from(packageDirs);
+  return singleDir ?? null;
+}
+
 function uniquePathList(paths: Array<string | null | undefined>): string[] {
   const deduped = new Set<string>();
   for (const candidate of paths) {
@@ -269,6 +333,48 @@ function resolvePackageManagerFromCommand(command: string): PackageManager | nul
     return executable;
   }
   return null;
+}
+
+function removeWorkspaceRecursiveFlags(
+  executable: string,
+  args: string[],
+): { hasRecursiveScope: boolean; args: string[] } {
+  const filtered: string[] = [];
+  let hasRecursiveScope = false;
+
+  for (const arg of args) {
+    const normalized = arg.trim().toLowerCase();
+    if (
+      (executable === "pnpm" && (normalized === "-r" || normalized === "--recursive")) ||
+      (executable === "npm" && (normalized === "-ws" || normalized === "--workspaces"))
+    ) {
+      hasRecursiveScope = true;
+      continue;
+    }
+    filtered.push(arg);
+  }
+
+  return { hasRecursiveScope, args: filtered };
+}
+
+export function resolvePackageScopedRetryCommand(command: string): string | null {
+  const parsed = parseCommand(command);
+  if (!parsed) {
+    return null;
+  }
+  const executable = parsed.executable.trim().toLowerCase();
+  if (executable !== "pnpm" && executable !== "npm") {
+    return null;
+  }
+  const { hasRecursiveScope, args } = removeWorkspaceRecursiveFlags(executable, parsed.args);
+  if (!hasRecursiveScope) {
+    return null;
+  }
+  if (args.some((arg) => arg === "--filter" || arg.toLowerCase().startsWith("--filter="))) {
+    return null;
+  }
+  const nextCommand = [parsed.executable, ...args].join(" ").trim();
+  return nextCommand.length > 0 ? nextCommand : null;
 }
 
 async function resolvePackageManagerFromRepo(repoPath: string): Promise<PackageManager | null> {
@@ -660,6 +766,14 @@ function summarizeCommandError(stderr: string, maxChars = 300): string {
   return `${normalized.slice(0, maxChars)}...`;
 }
 
+function buildInlineExecuteFailureHint(
+  stderr: string | undefined,
+  error: string | undefined,
+): string {
+  const summary = summarizeCommandError(stderr || error || "", 300);
+  return `Previous recovery execution itself failed: ${summary}. Adjust your approach to avoid the same execution failure.`;
+}
+
 function formatVerificationFailureError(params: {
   command?: string;
   source?: VerificationCommandSource;
@@ -976,6 +1090,14 @@ export function shouldSkipExplicitCommandFailure(params: {
     params.output,
   );
   if (!isSkippableOutput) {
+    const isWorkspaceRecursiveCommand = resolvePackageScopedRetryCommand(params.command) !== null;
+    if (
+      isWorkspaceRecursiveCommand &&
+      params.hasPriorEffectiveCommand &&
+      !params.hasRemainingCommands
+    ) {
+      return true;
+    }
     return false;
   }
   if (params.hasRemainingCommands) {
@@ -1040,6 +1162,7 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
     allowLockfileOutsidePaths = false,
     allowEnvExampleOutsidePaths = false,
     allowNoChanges = false,
+    llmInlineRecoveryHandler,
   } = options;
 
   console.log("Verifying changes...");
@@ -1294,11 +1417,13 @@ ${clippedDiff || "(diff unavailable)"}
   });
   const autoCommands = await filterUnsupportedAutoCommands(repoPath, rawAutoCommands);
   const singleChangedPackageDir = await resolveSingleChangedPackageDir(repoPath, relevantFiles);
-  const singleChangedPackageLabel = singleChangedPackageDir
-    ? normalizePathForMatch(relative(repoPath, singleChangedPackageDir)) || "."
+  const singleAllowedPackageDir = await resolveSingleAllowedPackageDir(repoPath, allowedPaths);
+  const packageScopeCandidateDir = singleChangedPackageDir ?? singleAllowedPackageDir;
+  const packageScopeCandidateLabel = packageScopeCandidateDir
+    ? normalizePathForMatch(relative(repoPath, packageScopeCandidateDir)) || "."
     : undefined;
-  if (singleChangedPackageLabel) {
-    console.log(`[Verify] Auto command package scope candidate: ${singleChangedPackageLabel}`);
+  if (packageScopeCandidateLabel) {
+    console.log(`[Verify] Verification package scope candidate: ${packageScopeCandidateLabel}`);
   }
   if (autoCommands.length > 0) {
     console.log(`[Verify] Auto verification commands added: ${autoCommands.join(", ")}`);
@@ -1394,11 +1519,20 @@ ${clippedDiff || "(diff unavailable)"}
       console.log(`  ✓ Passed (${Math.round(result.durationMs / 1000)}s)`);
     } else {
       let output = resolveCommandOutput(result.stderr, result.stdout);
-      if (source === "auto" && singleChangedPackageDir && singleChangedPackageLabel) {
+      const packageScopedRetryCommand =
+        source === "explicit"
+          ? resolvePackageScopedRetryCommand(normalizedCommand)
+          : normalizedCommand;
+      if (
+        packageScopeCandidateDir &&
+        packageScopeCandidateLabel &&
+        (source === "auto" || packageScopedRetryCommand !== null)
+      ) {
+        const packageScopedCommand = packageScopedRetryCommand ?? normalizedCommand;
         console.warn(
-          `[Verify] Retrying failed auto command within package scope (${singleChangedPackageLabel}): ${normalizedCommand}`,
+          `[Verify] Retrying failed ${source} command within package scope (${packageScopeCandidateLabel}): ${packageScopedCommand}`,
         );
-        const scopedResult = await runCommand(normalizedCommand, singleChangedPackageDir);
+        const scopedResult = await runCommand(packageScopedCommand, packageScopeCandidateDir);
         if (scopedResult.success && scopedResult.outcome === "passed") {
           ranEffectiveCommand = true;
           console.log(
@@ -1411,7 +1545,8 @@ ${clippedDiff || "(diff unavailable)"}
           continue;
         }
         const scopedOutput = resolveCommandOutput(scopedResult.stderr, scopedResult.stdout);
-        output = `${output}\n[package-scope:${singleChangedPackageLabel}] ${scopedOutput}`.trim();
+        output =
+          `${output}\n[package-scope:${packageScopeCandidateLabel}] ${packageScopedCommand}: ${scopedOutput}`.trim();
       }
 
       const hasRemainingCommands = index < verificationCommands.length - 1;
@@ -1476,7 +1611,7 @@ ${clippedDiff || "(diff unavailable)"}
           failedCommand: normalizedCommand,
           output,
           failedCommandCwd: cwd,
-          singleChangedPackageDir,
+          singleChangedPackageDir: packageScopeCandidateDir,
           deniedCommands: policy.deniedCommands ?? [],
         });
         if (inlineRecovery.attempted) {
@@ -1496,6 +1631,65 @@ ${clippedDiff || "(diff unavailable)"}
           if (source === "explicit") {
             ranExplicitEffectiveCommand = true;
           }
+          continue;
+        }
+      }
+
+      // LLM-driven inline recovery: call LLM to fix the specific command failure in-place
+      if (llmInlineRecoveryHandler) {
+        const llmInlineMaxAttempts = Number.parseInt(
+          process.env.WORKER_VERIFY_LLM_INLINE_RECOVERY_ATTEMPTS ?? "3",
+          10,
+        );
+        const effectiveLlmInlineMax =
+          Number.isFinite(llmInlineMaxAttempts) && llmInlineMaxAttempts > 0
+            ? llmInlineMaxAttempts
+            : 3;
+        let llmInlineRecovered = false;
+        let lastInlineExecuteFailureHint: string | undefined;
+        for (let llmAttempt = 1; llmAttempt <= effectiveLlmInlineMax; llmAttempt++) {
+          console.warn(
+            `[Verify] LLM inline recovery attempt ${llmAttempt}/${effectiveLlmInlineMax} for: ${normalizedCommand}`,
+          );
+          const recoveryResult = await llmInlineRecoveryHandler({
+            failedCommand: normalizedCommand,
+            source,
+            stderr: output,
+            previousExecuteFailureHint: lastInlineExecuteFailureHint,
+            attempt: llmAttempt,
+            maxAttempts: effectiveLlmInlineMax,
+          });
+          if (!recoveryResult.success) {
+            lastInlineExecuteFailureHint = buildInlineExecuteFailureHint(
+              recoveryResult.executeStderr,
+              recoveryResult.executeError,
+            );
+            console.warn(
+              `[Verify] LLM inline recovery execution failed (attempt ${llmAttempt}/${effectiveLlmInlineMax})`,
+            );
+            continue;
+          }
+          lastInlineExecuteFailureHint = undefined;
+          const effectiveCwd = packageScopeCandidateDir ?? cwd;
+          const llmRetryCommand = packageScopeCandidateDir
+            ? (resolvePackageScopedRetryCommand(normalizedCommand) ?? normalizedCommand)
+            : normalizedCommand;
+          const retryResult = await runCommand(llmRetryCommand, effectiveCwd);
+          if (retryResult.success && retryResult.outcome === "passed") {
+            console.log(
+              `  ✓ LLM inline recovery passed (attempt ${llmAttempt}, ${Math.round(retryResult.durationMs / 1000)}s)`,
+            );
+            commandResults[commandResults.length - 1] = { ...retryResult, source };
+            ranEffectiveCommand = true;
+            if (source === "explicit") {
+              ranExplicitEffectiveCommand = true;
+            }
+            llmInlineRecovered = true;
+            break;
+          }
+          output = resolveCommandOutput(retryResult.stderr, retryResult.stdout);
+        }
+        if (llmInlineRecovered) {
           continue;
         }
       }

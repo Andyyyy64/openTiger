@@ -2,13 +2,18 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { DEFAULT_POLICY } from "@openTiger/core";
 import {
+  verifyChanges,
   resolveInlineRecoveryCommandCandidates,
   shouldAttemptInlineCommandRecovery,
 } from "../src/steps/verify/verify-changes";
+import type { LlmInlineRecoveryHandler } from "../src/steps/verify/types";
 
 const createdDirs: string[] = [];
 const originalInlineRecoveryEnv = process.env.WORKER_VERIFY_INLINE_COMMAND_RECOVERY;
+const originalLlmInlineAttemptsEnv = process.env.WORKER_VERIFY_LLM_INLINE_RECOVERY_ATTEMPTS;
+const originalAutoVerifyModeEnv = process.env.WORKER_AUTO_VERIFY_MODE;
 
 async function createRepo(structure: {
   rootScripts?: Record<string, string>;
@@ -58,6 +63,16 @@ afterEach(async () => {
     delete process.env.WORKER_VERIFY_INLINE_COMMAND_RECOVERY;
   } else {
     process.env.WORKER_VERIFY_INLINE_COMMAND_RECOVERY = originalInlineRecoveryEnv;
+  }
+  if (originalLlmInlineAttemptsEnv === undefined) {
+    delete process.env.WORKER_VERIFY_LLM_INLINE_RECOVERY_ATTEMPTS;
+  } else {
+    process.env.WORKER_VERIFY_LLM_INLINE_RECOVERY_ATTEMPTS = originalLlmInlineAttemptsEnv;
+  }
+  if (originalAutoVerifyModeEnv === undefined) {
+    delete process.env.WORKER_AUTO_VERIFY_MODE;
+  } else {
+    process.env.WORKER_AUTO_VERIFY_MODE = originalAutoVerifyModeEnv;
   }
   while (createdDirs.length > 0) {
     const dir = createdDirs.pop();
@@ -180,5 +195,43 @@ describe("resolveInlineRecoveryCommandCandidates", () => {
       command: "pnpm install",
       cwd: repoPath,
     });
+  });
+});
+
+describe("verifyChanges - LLM inline recovery context propagation", () => {
+  it("passes previous execute failure hint to the next llm inline attempt", async () => {
+    process.env.WORKER_VERIFY_INLINE_COMMAND_RECOVERY = "false";
+    process.env.WORKER_VERIFY_LLM_INLINE_RECOVERY_ATTEMPTS = "2";
+    process.env.WORKER_AUTO_VERIFY_MODE = "fallback";
+    const { repoPath } = await createRepo({});
+    const calls: Parameters<LlmInlineRecoveryHandler>[0][] = [];
+    const llmInlineRecoveryHandler: LlmInlineRecoveryHandler = async (params) => {
+      calls.push(params);
+      if (calls.length === 1) {
+        return {
+          success: false,
+          executeStderr: "[Codex] Timeout exceeded",
+          executeError: "Task execution timed out",
+        };
+      }
+      return { success: false };
+    };
+
+    const result = await verifyChanges({
+      repoPath,
+      commands: ["node -e process.exit(1)"],
+      allowedPaths: ["**/*"],
+      policy: DEFAULT_POLICY,
+      allowNoChanges: true,
+      llmInlineRecoveryHandler,
+    });
+
+    expect(result.success).toBe(false);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.previousExecuteFailureHint).toBeUndefined();
+    expect(calls[1]?.previousExecuteFailureHint).toContain(
+      "Previous recovery execution itself failed",
+    );
+    expect(calls[1]?.previousExecuteFailureHint).toContain("Timeout exceeded");
   });
 });

@@ -29,14 +29,17 @@ import { shouldAllowNoChanges } from "./worker-task-helpers";
 import { finalizeTaskState } from "./worker-runner-state";
 import {
   appendContextNotes,
+  buildExecuteFailureHint,
   buildVerifyRecoveryHint,
   encodeVerifyReworkMarker,
   isExecutionTimeout,
+  isSetupBootstrapFailure,
   parseRecoveryAttempts,
   restoreExpectedBranchContext,
   shouldAttemptVerifyRecovery,
   summarizeVerificationFailure,
 } from "./worker-runner-utils";
+import type { LlmInlineRecoveryHandler } from "./steps/verify/types";
 import type { WorkerResult } from "./worker-runner-types";
 import { recordContextDeltaFailure } from "./context/context-delta";
 
@@ -588,6 +591,57 @@ async function attemptGeneratedArtifactRecovery(params: {
   });
 }
 
+function buildLlmInlineRecoveryHandler(params: {
+  repoPath: string;
+  taskData: Task;
+  instructionsPath?: string;
+  model?: string;
+  effectivePolicy: Policy;
+  branchName: string;
+  runtimeExecutorDisplayName: string;
+  retryHints: string[];
+}): LlmInlineRecoveryHandler {
+  return async (recoveryParams) => {
+    const hint =
+      `Inline verification recovery (${recoveryParams.attempt}/${recoveryParams.maxAttempts}): ` +
+      `verification command \`${recoveryParams.failedCommand}\` failed. ` +
+      `stderr: ${recoveryParams.stderr.slice(0, 400)}. ` +
+      "Apply the smallest possible targeted fix to make this specific command pass. " +
+      "Do NOT restructure the code or undo prior work.";
+    const recoveryHints = [
+      hint,
+      ...(recoveryParams.previousExecuteFailureHint
+        ? [recoveryParams.previousExecuteFailureHint]
+        : []),
+      ...params.retryHints,
+    ];
+    const result = await executeTask({
+      repoPath: params.repoPath,
+      task: params.taskData,
+      instructionsPath: params.instructionsPath,
+      model: params.model,
+      retryHints: recoveryHints,
+      policy: params.effectivePolicy,
+      verificationRecovery: {
+        attempt: recoveryParams.attempt,
+        failedCommand: recoveryParams.failedCommand,
+        failedCommandSource: recoveryParams.source,
+        failedCommandStderr: recoveryParams.stderr.slice(0, 400),
+      },
+    });
+    await restoreExpectedBranchContext(
+      params.repoPath,
+      params.branchName,
+      params.runtimeExecutorDisplayName,
+    );
+    return {
+      success: result.success,
+      executeStderr: result.success ? undefined : result.openCodeResult.stderr,
+      executeError: result.success ? undefined : result.error,
+    };
+  };
+}
+
 export async function runVerificationPhase(
   options: RunVerificationPhaseOptions,
 ): Promise<VerificationPhaseResult> {
@@ -608,6 +662,21 @@ export async function runVerificationPhase(
     runtimeExecutorDisplayName,
   } = options;
   let executeResult = options.executeResult;
+
+  const llmInlineRecoveryEnabled =
+    (process.env.WORKER_VERIFY_LLM_INLINE_RECOVERY ?? "true").toLowerCase() !== "false";
+  const llmInlineRecoveryHandler = llmInlineRecoveryEnabled
+    ? buildLlmInlineRecoveryHandler({
+        repoPath,
+        taskData,
+        instructionsPath,
+        model,
+        effectivePolicy,
+        branchName,
+        runtimeExecutorDisplayName,
+        retryHints,
+      })
+    : undefined;
   let effectiveAllowedPaths = [...verificationAllowedPaths];
   const verificationCommands = resolveVerificationCommands(taskData);
   const policyRecoveryConfig = await loadPolicyRecoveryConfig(repoPath);
@@ -625,6 +694,7 @@ export async function runVerificationPhase(
     // Allow .env.example creation in local mode
     allowEnvExampleOutsidePaths: repoMode === "local",
     allowNoChanges: shouldAllowNoChanges(taskData),
+    llmInlineRecoveryHandler,
   });
 
   const isNoChangeFailure = (message: string | undefined): boolean => {
@@ -640,8 +710,7 @@ export async function runVerificationPhase(
 
   // Attempt self-repair within same process even when failing with no changes
   if (!verifyResult.success && isNoChangeFailure(verifyResult.error)) {
-    const rawAttempts = Number.parseInt(process.env.WORKER_NO_CHANGE_RECOVERY_ATTEMPTS ?? "2", 10);
-    const noChangeRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
+    const noChangeRecoveryAttempts = parseRecoveryAttempts("WORKER_NO_CHANGE_RECOVERY_ATTEMPTS", 5);
     for (let attempt = 1; attempt <= noChangeRecoveryAttempts; attempt += 1) {
       const recoveryHint = "No changes detected. Make changes required to meet the task goal.";
       const recoveryHints = [recoveryHint, ...retryHints];
@@ -739,8 +808,7 @@ export async function runVerificationPhase(
     }
 
     if (!verifyResult.success && verifyResult.policyViolations.length > 0) {
-      const rawAttempts = Number.parseInt(process.env.WORKER_POLICY_RECOVERY_ATTEMPTS ?? "2", 10);
-      const policyRecoveryAttempts = Number.isFinite(rawAttempts) ? Math.max(0, rawAttempts) : 0;
+      const policyRecoveryAttempts = parseRecoveryAttempts("WORKER_POLICY_RECOVERY_ATTEMPTS", 5);
       let llmDeniedRecovery = false;
       for (let attempt = 1; attempt <= policyRecoveryAttempts; attempt += 1) {
         await restoreExpectedBranchContext(repoPath, branchName, runtimeExecutorDisplayName);
@@ -986,7 +1054,7 @@ export async function runVerificationPhase(
     }
   }
 
-  const verifyRecoveryAttempts = parseRecoveryAttempts("WORKER_VERIFY_RECOVERY_ATTEMPTS", 2);
+  const verifyRecoveryAttempts = parseRecoveryAttempts("WORKER_VERIFY_RECOVERY_ATTEMPTS", 5);
   const allowExplicitVerifyRecovery =
     (process.env.WORKER_VERIFY_RECOVERY_ALLOW_EXPLICIT ?? "true").toLowerCase() !== "false";
 
@@ -994,16 +1062,23 @@ export async function runVerificationPhase(
     !verifyResult.success &&
     shouldAttemptVerifyRecovery(verifyResult, allowExplicitVerifyRecovery)
   ) {
+    let lastExecuteFailureHint: string | undefined;
     for (let attempt = 1; attempt <= verifyRecoveryAttempts; attempt += 1) {
       const failedCommand = verifyResult.failedCommand ?? "(unknown command)";
+      const isSetupFailure = isSetupBootstrapFailure(verifyResult);
       const recoveryHint = buildVerifyRecoveryHint({
         verifyResult,
         attempt,
         maxAttempts: verifyRecoveryAttempts,
       });
-      const recoveryHints = [recoveryHint, ...retryHints];
+      const recoveryHints = [
+        recoveryHint,
+        ...(lastExecuteFailureHint ? [lastExecuteFailureHint] : []),
+        ...retryHints,
+      ];
+      const failureLabel = isSetupFailure ? "setup/bootstrap" : "verification";
       console.warn(
-        `[Worker] Verification failed at ${failedCommand}; recovery attempt ${attempt}/${verifyRecoveryAttempts}`,
+        `[Worker] ${failureLabel} failed at ${failedCommand}; recovery attempt ${attempt}/${verifyRecoveryAttempts}`,
       );
       executeResult = await executeTask({
         repoPath,
@@ -1029,9 +1104,17 @@ export async function runVerificationPhase(
           console.warn(
             "[Worker] Verification recovery execution timed out; continuing to re-verify changes.",
           );
+          lastExecuteFailureHint = undefined;
         } else {
+          lastExecuteFailureHint = buildExecuteFailureHint(
+            executeResult.openCodeResult.stderr,
+            executeResult.error,
+          );
+          console.warn(`[Worker] Recovery execution failed; context will carry to next attempt.`);
           continue;
         }
+      } else {
+        lastExecuteFailureHint = undefined;
       }
 
       await restoreExpectedBranchContext(repoPath, branchName, runtimeExecutorDisplayName);
@@ -1045,6 +1128,7 @@ export async function runVerificationPhase(
         allowLockfileOutsidePaths: true,
         allowEnvExampleOutsidePaths: repoMode === "local",
         allowNoChanges: shouldAllowNoChanges(taskData),
+        llmInlineRecoveryHandler,
       });
       if (verifyResult.success) {
         break;

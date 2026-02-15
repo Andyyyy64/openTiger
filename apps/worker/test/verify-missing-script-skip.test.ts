@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  resolvePackageScopedRetryCommand,
   resolveVerificationCommandFailureCode,
   shouldSkipAutoCommandFailure,
   shouldSkipExplicitCommandFailure,
@@ -197,6 +198,36 @@ describe("shouldSkipExplicitCommandFailure", () => {
     });
 
     expect(shouldSkip).toBe(true);
+  });
+
+  it("skips final recursive workspace explicit command failure after prior effective verification", () => {
+    const shouldSkip = shouldSkipExplicitCommandFailure({
+      source: "explicit",
+      command: "pnpm -r run typecheck",
+      output:
+        "apps/web typecheck: src/api/client.ts(2,15): error TS2339: Property 'env' does not exist on type 'ImportMeta'.",
+      hasRemainingCommands: false,
+      hasPriorEffectiveCommand: true,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(true);
+  });
+
+  it("does not skip recursive workspace explicit command failure when no prior effective verification passed", () => {
+    const shouldSkip = shouldSkipExplicitCommandFailure({
+      source: "explicit",
+      command: "pnpm -r run typecheck",
+      output:
+        "apps/web typecheck: src/api/client.ts(2,15): error TS2339: Property 'env' does not exist on type 'ImportMeta'.",
+      hasRemainingCommands: false,
+      hasPriorEffectiveCommand: false,
+      isDocOnlyChange: false,
+      isNoOpChange: false,
+    });
+
+    expect(shouldSkip).toBe(false);
   });
 
   it("skips missing package manifest on doc-only explicit command", () => {
@@ -488,5 +519,32 @@ describe("resolveVerificationCommandFailureCode", () => {
     });
 
     expect(code).toBe(FAILURE_CODE.VERIFICATION_COMMAND_FAILED);
+  });
+});
+
+describe("resolvePackageScopedRetryCommand", () => {
+  it("converts pnpm recursive run command into package-scoped run command", () => {
+    const scoped = resolvePackageScopedRetryCommand("pnpm -r run typecheck");
+    expect(scoped).toBe("pnpm run typecheck");
+  });
+
+  it("converts pnpm recursive short-flag command into package-scoped command", () => {
+    const scoped = resolvePackageScopedRetryCommand("pnpm run -r test");
+    expect(scoped).toBe("pnpm run test");
+  });
+
+  it("converts npm workspaces run command into package-scoped run command", () => {
+    const scoped = resolvePackageScopedRetryCommand("npm run --workspaces typecheck");
+    expect(scoped).toBe("npm run typecheck");
+  });
+
+  it("returns null when command is already package-scoped via --filter", () => {
+    const scoped = resolvePackageScopedRetryCommand("pnpm -r --filter @openTiger/db run typecheck");
+    expect(scoped).toBeNull();
+  });
+
+  it("returns null for non-recursive commands", () => {
+    const scoped = resolvePackageScopedRetryCommand("pnpm run typecheck");
+    expect(scoped).toBeNull();
   });
 });

@@ -1,5 +1,18 @@
 import type { Policy, VerificationFailureCode } from "@openTiger/core";
 
+export type LlmInlineRecoveryHandler = (params: {
+  failedCommand: string;
+  source: VerificationCommandSource;
+  stderr: string;
+  previousExecuteFailureHint?: string;
+  attempt: number;
+  maxAttempts: number;
+}) => Promise<{
+  success: boolean;
+  executeStderr?: string;
+  executeError?: string;
+}>;
+
 export interface VerifyOptions {
   repoPath: string;
   commands: string[];
@@ -10,6 +23,7 @@ export interface VerifyOptions {
   allowLockfileOutsidePaths?: boolean;
   allowEnvExampleOutsidePaths?: boolean;
   allowNoChanges?: boolean;
+  llmInlineRecoveryHandler?: LlmInlineRecoveryHandler;
 }
 
 export type VerificationCommandSource = "explicit" | "auto" | "light-check" | "guard";
