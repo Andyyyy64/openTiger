@@ -5,6 +5,10 @@ Comprehensive operating guide for coding agents working in this repository.
 This file is intentionally detailed and agent-oriented.
 Use it as the first reference before changing code.
 
+## Agent Guidelines
+
+Always prefer simplicity over pathological correctness. YAGNI, KISS, DRY. No backward-compat shims or fallback paths unless they come free without adding cyclomatic complexity.
+
 ## 1. Scope and Intent
 
 - This repository is `openTiger`, an autonomous coding orchestration system.
