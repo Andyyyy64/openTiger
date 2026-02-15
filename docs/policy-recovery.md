@@ -207,7 +207,7 @@ Core:
 Worker recovery:
 
 - `WORKER_POLICY_RECOVERY_USE_LLM`
-- `WORKER_POLICY_RECOVERY_ATTEMPTS`
+- `WORKER_POLICY_RECOVERY_ATTEMPTS` (default: 5)
 - `WORKER_POLICY_RECOVERY_TIMEOUT_SECONDS`
 - `WORKER_POLICY_RECOVERY_MODEL`
 
@@ -217,7 +217,7 @@ Cycle Manager rework suppression:
   - Max suppression retries when no safe path found
 - `AUTO_REWORK_MAX_DEPTH` (default: 2)
   - Max rework chain depth; cancel when exceeded
-- `BLOCKED_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT` (default: 5)
+- `BLOCKED_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT` (default: 5, `-1` for unlimited)
   - Retry same `needs_rework` task as queued before splitting into a new rework child
 
 ## 8. Event Reference
