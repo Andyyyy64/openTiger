@@ -43,6 +43,21 @@ export const CONFIG_FIELDS: ConfigField[] = [
     defaultValue: "5",
   },
   {
+    key: "DISPATCH_CONFLICT_LANE_MAX_SLOTS",
+    column: "dispatchConflictLaneMaxSlots",
+    defaultValue: "2",
+  },
+  {
+    key: "DISPATCH_FEATURE_LANE_MIN_SLOTS",
+    column: "dispatchFeatureLaneMinSlots",
+    defaultValue: "1",
+  },
+  {
+    key: "DISPATCH_DOCSER_LANE_MAX_SLOTS",
+    column: "dispatchDocserLaneMaxSlots",
+    defaultValue: "1",
+  },
+  {
     key: "WORKER_SETUP_IN_PROCESS_RECOVERY",
     column: "workerSetupInProcessRecovery",
     defaultValue: "true",
@@ -108,6 +123,21 @@ export const CONFIG_FIELDS: ConfigField[] = [
   },
   { key: "PLANNER_MODEL", column: "plannerModel", defaultValue: "google/gemini-3-pro-preview" },
   { key: "JUDGE_MODEL", column: "judgeModel", defaultValue: "google/gemini-3-pro-preview" },
+  {
+    key: "JUDGE_MERGE_QUEUE_MAX_ATTEMPTS",
+    column: "judgeMergeQueueMaxAttempts",
+    defaultValue: "3",
+  },
+  {
+    key: "JUDGE_MERGE_QUEUE_RETRY_DELAY_MS",
+    column: "judgeMergeQueueRetryDelayMs",
+    defaultValue: "30000",
+  },
+  {
+    key: "JUDGE_MERGE_QUEUE_CLAIM_TTL_MS",
+    column: "judgeMergeQueueClaimTtlMs",
+    defaultValue: "120000",
+  },
   { key: "WORKER_MODEL", column: "workerModel", defaultValue: "google/gemini-3-flash-preview" },
   { key: "TESTER_MODEL", column: "testerModel", defaultValue: "google/gemini-3-flash-preview" },
   { key: "DOCSER_MODEL", column: "docserModel", defaultValue: "google/gemini-3-flash-preview" },

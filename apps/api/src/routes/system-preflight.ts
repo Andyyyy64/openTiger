@@ -214,6 +214,7 @@ async function createTaskFromIssue(
       priority,
       riskLevel,
       role,
+      lane: role === "docser" ? "docser" : "feature",
       status: "queued",
       timeboxMinutes: 60,
     })
@@ -558,6 +559,7 @@ export async function buildPreflightSummary(options: {
           priority: 50,
           riskLevel: "low",
           role: "worker",
+          lane: "feature",
           status: "blocked",
           blockReason: "awaiting_judge",
           timeboxMinutes: 30,

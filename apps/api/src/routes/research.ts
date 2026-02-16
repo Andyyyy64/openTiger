@@ -178,6 +178,7 @@ researchRoute.post("/jobs", zValidator("json", createResearchJobSchema), async (
         goal: "Decompose the research query into concrete claims for parallel investigation.",
         kind: "research",
         role: "worker",
+        lane: "research",
         context: {
           research: {
             jobId,
@@ -268,6 +269,7 @@ researchRoute.post("/jobs/:id/tasks", zValidator("json", createResearchTaskSchem
         `Execute TigerResearch ${stageLabel(stage).toLowerCase()} stage and update evidence-backed findings.`,
       kind: "research",
       role: "worker",
+      lane: "research",
       context: {
         research: {
           jobId,

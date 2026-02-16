@@ -1,7 +1,15 @@
 import type { Hono } from "hono";
 import { and, desc, eq, gte, inArray, not } from "drizzle-orm";
 import { db } from "@openTiger/db";
-import { agents, config as configTable, events, leases, runs, tasks } from "@openTiger/db/schema";
+import {
+  agents,
+  config as configTable,
+  events,
+  leases,
+  prMergeQueue,
+  runs,
+  tasks,
+} from "@openTiger/db/schema";
 import { ensureConfigRow } from "../../config-store";
 import { getAuthInfo } from "../../middleware/index";
 import { buildPreflightSummary, parseBooleanSetting, parseCountSetting } from "../system-preflight";
@@ -672,6 +680,38 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
     if (boundAgentId && canTerminateManagedProcess) {
       try {
         await cancelRunningWorkForAgent(boundAgentId, "Stopped via system process stop request");
+        if (boundAgentId.startsWith("judge")) {
+          const mergeQueueRetryDelayMs = Number.parseInt(
+            process.env.JUDGE_MERGE_QUEUE_RETRY_DELAY_MS ?? "30000",
+            10,
+          );
+          const nextAttemptAt = new Date(
+            Date.now() +
+              (Number.isFinite(mergeQueueRetryDelayMs) && mergeQueueRetryDelayMs >= 0
+                ? mergeQueueRetryDelayMs
+                : 30000),
+          );
+          const releasedClaims = await db
+            .update(prMergeQueue)
+            .set({
+              status: "pending",
+              claimOwner: null,
+              claimToken: null,
+              claimExpiresAt: null,
+              claimedAt: null,
+              nextAttemptAt,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(eq(prMergeQueue.status, "processing"), eq(prMergeQueue.claimOwner, boundAgentId)),
+            )
+            .returning({ id: prMergeQueue.id });
+          if (releasedClaims.length > 0) {
+            console.log(
+              `[System] Released ${releasedClaims.length} merge queue claim(s) for ${boundAgentId}`,
+            );
+          }
+        }
       } catch (error) {
         console.error(`[System] Failed to cancel running work for ${boundAgentId}:`, error);
       }
@@ -716,6 +756,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
 
     let cancelledRuns = 0;
     let requeuedTasks = 0;
+    let releasedMergeQueueClaims = 0;
     let orphanCleanup = { matched: 0, signaled: 0, killed: 0, pids: [] as number[] };
     try {
       orphanCleanup = await forceTerminateUnmanagedSystemProcesses();
@@ -755,6 +796,31 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
 
         await db.delete(leases).where(inArray(leases.taskId, runningTaskIds));
       }
+
+      const mergeQueueRetryDelayMs = Number.parseInt(
+        process.env.JUDGE_MERGE_QUEUE_RETRY_DELAY_MS ?? "30000",
+        10,
+      );
+      const nextAttemptAt = new Date(
+        Date.now() +
+          (Number.isFinite(mergeQueueRetryDelayMs) && mergeQueueRetryDelayMs >= 0
+            ? mergeQueueRetryDelayMs
+            : 30000),
+      );
+      const releasedClaims = await db
+        .update(prMergeQueue)
+        .set({
+          status: "pending",
+          claimOwner: null,
+          claimToken: null,
+          claimExpiresAt: null,
+          claimedAt: null,
+          nextAttemptAt,
+          updatedAt: new Date(),
+        })
+        .where(eq(prMergeQueue.status, "processing"))
+        .returning({ id: prMergeQueue.id });
+      releasedMergeQueueClaims = releasedClaims.length;
 
       await db
         .update(agents)
@@ -812,6 +878,7 @@ export function registerProcessManagerRoutes(systemRoute: Hono): void {
       orphanCleanup,
       cancelledRuns,
       requeuedTasks,
+      releasedMergeQueueClaims,
       message: `Stopped ${stopped.length} process(es)`,
     });
   });

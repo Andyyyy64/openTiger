@@ -390,6 +390,24 @@ async function ensureConfigColumns(): Promise<void> {
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "blocked_needs_rework_in_place_retry_limit" text DEFAULT '5' NOT NULL`,
   );
   await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "dispatch_conflict_lane_max_slots" text DEFAULT '2' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "dispatch_feature_lane_min_slots" text DEFAULT '1' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "dispatch_docser_lane_max_slots" text DEFAULT '1' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_merge_queue_max_attempts" text DEFAULT '3' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_merge_queue_retry_delay_ms" text DEFAULT '30000' NOT NULL`,
+  );
+  await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "judge_merge_queue_claim_ttl_ms" text DEFAULT '120000' NOT NULL`,
+  );
+  await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "github_auth_mode" text DEFAULT 'gh' NOT NULL`,
   );
   await db.execute(

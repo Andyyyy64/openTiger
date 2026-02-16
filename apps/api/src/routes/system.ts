@@ -1,10 +1,10 @@
 import { Hono } from "hono";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { db } from "@openTiger/db";
-import { config as configTable } from "@openTiger/db/schema";
+import { config as configTable, events, prMergeQueue, tasks } from "@openTiger/db/schema";
 import { ensureConfigRow } from "../config-store";
 import { getAuthInfo } from "../middleware/index";
 import { createRepo, getOctokit, resolveGitHubAuthMode } from "@openTiger/vcs";
@@ -857,6 +857,90 @@ systemRoute.post("/preflight", async (c) => {
     const message = error instanceof Error ? error.message : "Failed to run preflight";
     return c.json({ error: message }, 500);
   }
+});
+
+systemRoute.get("/runtime/throughput", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  const since = new Date(Date.now() - 6 * 60 * 60 * 1000);
+  const [queueByStatus, activeLaneBacklog, runningLaneBacklog, recentEventCounts] =
+    await Promise.all([
+      db
+        .select({
+          status: prMergeQueue.status,
+          count: sql<number>`count(*)`,
+        })
+        .from(prMergeQueue)
+        .groupBy(prMergeQueue.status),
+      db
+        .select({
+          lane: tasks.lane,
+          count: sql<number>`count(*)`,
+        })
+        .from(tasks)
+        .where(inArray(tasks.status, ["queued", "running", "blocked"]))
+        .groupBy(tasks.lane),
+      db
+        .select({
+          lane: tasks.lane,
+          count: sql<number>`count(*)`,
+        })
+        .from(tasks)
+        .where(eq(tasks.status, "running"))
+        .groupBy(tasks.lane),
+      db
+        .select({
+          type: events.type,
+          count: sql<number>`count(*)`,
+        })
+        .from(events)
+        .where(
+          and(
+            inArray(events.type, [
+              "judge.merge_queue_enqueued",
+              "judge.merge_queue_claim_recovered",
+              "judge.merge_queue_merged",
+              "judge.merge_queue_retried",
+              "judge.merge_queue_failed",
+              "dispatcher.lane_throttled",
+              "worker.push_divergence_guard_triggered",
+            ]),
+            gte(events.createdAt, since),
+          ),
+        )
+        .groupBy(events.type),
+    ]);
+
+  const queueStatusMap = Object.fromEntries(
+    queueByStatus.map((row) => [row.status ?? "unknown", Number(row.count ?? 0)]),
+  );
+  const activeLaneMap = Object.fromEntries(
+    activeLaneBacklog.map((row) => [row.lane ?? "feature", Number(row.count ?? 0)]),
+  );
+  const runningLaneMap = Object.fromEntries(
+    runningLaneBacklog.map((row) => [row.lane ?? "feature", Number(row.count ?? 0)]),
+  );
+  const eventCountMap = Object.fromEntries(
+    recentEventCounts.map((row) => [row.type, Number(row.count ?? 0)]),
+  );
+
+  return c.json({
+    checkedAt: new Date().toISOString(),
+    mergeQueue: {
+      statusCounts: queueStatusMap,
+    },
+    lanes: {
+      activeBacklogCounts: activeLaneMap,
+      runningCounts: runningLaneMap,
+    },
+    recentEvents: {
+      windowHours: 6,
+      counts: eventCountMap,
+    },
+  });
 });
 
 systemRoute.post("/cleanup", async (c) => {
