@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 @theme {
-  --font-mono: "Fira Code", monospace;
+  --font-mono: "Geist Pixel", monospace;
   --font-pixel: "Geist Pixel", monospace;
 
   --color-term-bg: #050505;
@@ -20,7 +20,7 @@
 }
 
 :root {
-  font-family: var(--font-mono);
+  font-family: var(--font-pixel);
   line-height: 1.5;
   font-weight: 400;
 
