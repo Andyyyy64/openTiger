@@ -312,7 +312,9 @@ export const NeofetchPanel: React.FC<NeofetchPanelProps> = ({
         {output ? (
           <>
             <div className="font-mono text-xs leading-5 text-zinc-300 overflow-x-auto">
-              {parsed.infoLines.map((chunks, index) => renderAnsiLine(chunks, `host-info-${index}`))}
+              {parsed.infoLines.map((chunks, index) =>
+                renderAnsiLine(chunks, `host-info-${index}`),
+              )}
             </div>
             <div className="font-mono text-xs leading-5 text-zinc-300 overflow-x-auto lg:justify-self-end">
               {parsed.logoLines.map((chunks, index) =>
