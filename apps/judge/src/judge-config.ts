@@ -59,6 +59,18 @@ export const JUDGE_AWAITING_RETRY_COOLDOWN_MS = Number.parseInt(
   process.env.JUDGE_AWAITING_RETRY_COOLDOWN_MS ?? "120000",
   10,
 );
+export const JUDGE_MERGE_QUEUE_MAX_ATTEMPTS = Number.parseInt(
+  process.env.JUDGE_MERGE_QUEUE_MAX_ATTEMPTS ?? "3",
+  10,
+);
+export const JUDGE_MERGE_QUEUE_RETRY_DELAY_MS = Number.parseInt(
+  process.env.JUDGE_MERGE_QUEUE_RETRY_DELAY_MS ?? "30000",
+  10,
+);
+export const JUDGE_MERGE_QUEUE_CLAIM_TTL_MS = Number.parseInt(
+  process.env.JUDGE_MERGE_QUEUE_CLAIM_TTL_MS ?? "120000",
+  10,
+);
 export const JUDGE_PR_MERGEABLE_PRECHECK_RETRIES = Number.parseInt(
   process.env.JUDGE_PR_MERGEABLE_PRECHECK_RETRIES ?? "3",
   10,

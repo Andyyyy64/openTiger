@@ -11,6 +11,7 @@ export type PendingPR = {
   startedAt: Date;
   taskTitle: string;
   taskGoal: string;
+  priority: number;
   taskRiskLevel: "low" | "medium" | "high";
   allowedPaths: string[];
   commands: string[];
@@ -122,6 +123,7 @@ export async function getPendingPRs(): Promise<PendingPR[]> {
 
     // Only review tasks waiting for Judge (blocked)
     if (task.status !== "blocked") continue;
+    if (task.blockReason !== "awaiting_judge") continue;
 
     pendingPRs.push({
       prNumber,
@@ -131,6 +133,7 @@ export async function getPendingPRs(): Promise<PendingPR[]> {
       startedAt: row.startedAt,
       taskTitle: task.title,
       taskGoal: task.goal,
+      priority: task.priority ?? 0,
       taskRiskLevel: (task.riskLevel as "low" | "medium" | "high") ?? "low",
       allowedPaths: task.allowedPaths ?? [],
       commands: task.commands ?? [],
@@ -184,6 +187,7 @@ export async function getPendingWorktrees(): Promise<PendingWorktree[]> {
     if (!task) continue;
     // Only review tasks waiting for Judge (blocked)
     if (task.status !== "blocked") continue;
+    if (task.blockReason !== "awaiting_judge") continue;
 
     pendingWorktrees.push({
       worktreePath: row.worktreePath,
