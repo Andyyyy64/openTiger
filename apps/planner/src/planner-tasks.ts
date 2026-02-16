@@ -35,6 +35,7 @@ export async function saveTasks(
         priority: input.priority ?? 0,
         riskLevel: input.riskLevel ?? "low",
         role: input.role ?? "worker",
+        lane: input.lane ?? "feature",
         targetArea: input.targetArea,
         touches: input.touches ?? [],
         dependencies: input.dependencies ?? [],
@@ -72,8 +73,11 @@ export async function resolveDependencies(
     const dependencyIds = dependsOnIndexes
       .map((depIndex) => savedIds[depIndex])
       .filter((depId): depId is string => typeof depId === "string");
+    const mergedDependencyIds = Array.from(
+      new Set([...(original.dependencies ?? []), ...dependencyIds]),
+    );
 
-    if (dependencyIds.length === 0) {
+    if (mergedDependencyIds.length === 0) {
       console.warn(`[Planner] dependencies resolve failed for task ${savedId}`);
       continue;
     }
@@ -86,7 +90,7 @@ export async function resolveDependencies(
 
     await database
       .update(tasks)
-      .set({ dependencies: dependencyIds, updatedAt: new Date() })
+      .set({ dependencies: mergedDependencyIds, updatedAt: new Date() })
       .where(eq(tasks.id, savedId));
   }
 }
