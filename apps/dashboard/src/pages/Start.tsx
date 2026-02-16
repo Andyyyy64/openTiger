@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   configApi,
@@ -135,9 +135,11 @@ export const StartPage: React.FC = () => {
   const [isRepoManagerOpen, setIsRepoManagerOpen] = useState(false);
   const [ghDefaultsApplied, setGhDefaultsApplied] = useState(false);
   const [cachedHostinfo, setCachedHostinfo] = useState("");
+  const hasFetchedHostinfoRef = useRef(false);
 
   useEffect(() => {
-    setCachedHostinfo(getHostinfoFromStorage());
+    const cached = getHostinfoFromStorage();
+    setCachedHostinfo(cached);
   }, []);
 
   const { data: config } = useQuery({
@@ -208,6 +210,13 @@ export const StartPage: React.FC = () => {
       }
     },
   });
+  useEffect(() => {
+    const cached = getHostinfoFromStorage();
+    if (!cached && !hasFetchedHostinfoRef.current) {
+      hasFetchedHostinfoRef.current = true;
+      hostinfoReloadMutation.mutate();
+    }
+  }, [hostinfoReloadMutation.mutate]);
   const hostinfoOutput =
     hostinfoReloadMutation.data?.available && hostinfoReloadMutation.data?.output
       ? hostinfoReloadMutation.data.output
