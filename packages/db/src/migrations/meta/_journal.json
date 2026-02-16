@@ -169,6 +169,13 @@
       "when": 1771152935329,
       "tag": "0023_mature_stephen_strange",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1771215518006,
+      "tag": "0024_graceful_mathemanic",
+      "breakpoints": true
     }
   ]
 }
