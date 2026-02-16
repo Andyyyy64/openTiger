@@ -67,9 +67,9 @@ export const DEFAULT_CONFIG: PlannerConfig = {
   instructionsPath: resolve(import.meta.dirname, "../instructions/planning.md"),
   useLlm: parseBoolean(process.env.USE_LLM, true),
   dryRun: parseBoolean(process.env.DRY_RUN, false),
-  timeoutSeconds: parseInt(process.env.PLANNER_TIMEOUT ?? "300", 10),
+  timeoutSeconds: parseInt(process.env.PLANNER_TIMEOUT ?? "1200", 10),
   inspectCodebase: parseBoolean(process.env.PLANNER_INSPECT, true),
-  inspectionTimeoutSeconds: parseInt(process.env.PLANNER_INSPECT_TIMEOUT ?? "180", 10),
+  inspectionTimeoutSeconds: parseInt(process.env.PLANNER_INSPECT_TIMEOUT ?? "1200", 10),
   repoUrl: (() => {
     const plannerRepoUrl = process.env.PLANNER_REPO_URL?.trim();
     if (plannerRepoUrl) {

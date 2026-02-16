@@ -354,7 +354,7 @@ function isInspectionPayload(value: unknown): value is {
 }
 
 // LLM call timeout per attempt (seconds)
-const PER_ATTEMPT_TIMEOUT_SECONDS = 120;
+const PER_ATTEMPT_TIMEOUT_SECONDS = 300;
 // Retry limit on no response (-1 = unlimited)
 const INSPECTION_MAX_RETRIES = (() => {
   const parsed = Number.parseInt(process.env.PLANNER_INSPECT_MAX_RETRIES ?? "-1", 10);
@@ -417,7 +417,7 @@ export async function inspectCodebase(
   const prompt = buildInspectionPrompt(requirement, snapshot);
 
   const model = process.env.PLANNER_INSPECT_MODEL ?? process.env.PLANNER_MODEL;
-  const totalTimeout = options.timeoutSeconds ?? 180;
+  const totalTimeout = options.timeoutSeconds ?? 1200;
   const hasDeadline = Number.isFinite(totalTimeout) && totalTimeout > 0;
   // Adjust per-attempt timeout to fit within total budget
   const perAttemptTimeout = hasDeadline

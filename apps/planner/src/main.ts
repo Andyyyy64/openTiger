@@ -71,10 +71,10 @@ Options:
 Environment Variables:
   USE_LLM=false         Disable LLM generation
   DRY_RUN=true          Enable dry run mode
-  PLANNER_TIMEOUT=300   LLM timeout in seconds
+  PLANNER_TIMEOUT=1200   LLM timeout in seconds
   PLANNER_MODEL=xxx     Planner LLM model
   PLANNER_INSPECT=false 差分点検は必須のため無視される
-  PLANNER_INSPECT_TIMEOUT=180  LLM inspection timeout in seconds (<=0で無制限)
+  PLANNER_INSPECT_TIMEOUT=1200  LLM inspection timeout in seconds (<=0で無制限)
   PLANNER_INSPECT_MAX_RETRIES=-1  Inspection retry limit (-1で無制限)
   PLANNER_INSPECT_QUOTA_RETRY_DELAY_MS=30000  Quota wait before retry
 
