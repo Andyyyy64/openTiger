@@ -20,7 +20,7 @@
     "@openTiger/core": "workspace:*",
     "@openTiger/db": "workspace:*",
     "@openTiger/queue": "workspace:*",
-    "dotenv": "^17.2.3",
+    "dotenv": "^17.3.1",
     "drizzle-orm": "^0.38.4"
   },
   "devDependencies": {

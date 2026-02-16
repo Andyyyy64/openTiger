@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
+        specifier: ^17.3.1
+        version: 17.3.1
     devDependencies:
       '@types/node':
         specifier: ^25.2.3
@@ -61,8 +61,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/vcs
       dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
+        specifier: ^17.3.1
+        version: 17.3.1
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -101,8 +101,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/queue
       dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
+        specifier: ^17.3.1
+        version: 17.3.1
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -205,8 +205,8 @@ importers:
         specifier: ^5.34.8
         version: 5.66.5
       dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
+        specifier: ^17.3.1
+        version: 17.3.1
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -239,8 +239,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/vcs
       dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
+        specifier: ^17.3.1
+        version: 17.3.1
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -273,8 +273,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/vcs
       dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
+        specifier: ^17.3.1
+        version: 17.3.1
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -313,8 +313,8 @@ importers:
         specifier: ^5.66.5
         version: 5.66.5
       dotenv:
-        specifier: ^17.2.3
-        version: 17.2.3
+        specifier: ^17.3.1
+        version: 17.3.1
       drizzle-orm:
         specifier: ^0.38.4
         version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.3)
@@ -2133,8 +2133,8 @@ packages:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
 
-  dotenv@17.2.3:
-    resolution: {integrity: sha512-JVUnt+DUIzu87TABbhPmNfVdBDt18BLOWjMUFJMSi/Qqg7NTYtabbvSNJGOJ7afbRuv9D/lngizHtP7QyLQ+9w==}
+  dotenv@17.3.1:
+    resolution: {integrity: sha512-IO8C/dzEb6O3F9/twg6ZLXz164a2fhTnEWb95H23Dm4OuN+92NmEAlTrupP9VW6Jm3sO26tQlqyvyi4CsnY9GA==}
     engines: {node: '>=12'}
 
   drizzle-kit@0.30.6:
@@ -4645,7 +4645,7 @@ snapshots:
 
   detect-libc@2.1.2: {}
 
-  dotenv@17.2.3: {}
+  dotenv@17.3.1: {}
 
   drizzle-kit@0.30.6:
     dependencies:
