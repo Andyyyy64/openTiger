@@ -1,4 +1,12 @@
-import { stageChanges, commit, push, getCurrentBranch } from "@openTiger/vcs";
+import {
+  stageChanges,
+  commit,
+  push,
+  getCurrentBranch,
+  fetchRemoteBranch,
+  getCommitSha,
+  isAncestorRef,
+} from "@openTiger/vcs";
 import { getRepoMode } from "@openTiger/core";
 import type { Task } from "@openTiger/core";
 
@@ -42,13 +50,39 @@ function findForbiddenChangedFiles(changedFiles: string[]): string[] {
   );
 }
 
-function isNonFastForwardPush(stderr: string, stdout: string): boolean {
+export function isNonFastForwardPush(stderr: string, stdout: string): boolean {
   const message = `${stderr}\n${stdout}`.toLowerCase();
   return (
     message.includes("fetch first") ||
     message.includes("non-fast-forward") ||
     message.includes("failed to push some refs")
   );
+}
+
+async function resolveDivergenceGuardError(repoPath: string, branchName: string): Promise<string> {
+  const localHead = await getCommitSha(repoPath, "HEAD");
+  const remoteHead = await getCommitSha(repoPath, `origin/${branchName}`);
+
+  if (!localHead || !remoteHead) {
+    return "branch_diverged_requires_recreate:missing_head_after_fetch";
+  }
+
+  const localContainsRemote = await isAncestorRef(repoPath, remoteHead, localHead);
+  const remoteContainsLocal = await isAncestorRef(repoPath, localHead, remoteHead);
+
+  if (localContainsRemote === null || remoteContainsLocal === null) {
+    return `branch_diverged_requires_recreate:merge_base_check_failed:${localHead}:${remoteHead}`;
+  }
+
+  if (!localContainsRemote && !remoteContainsLocal) {
+    return `branch_diverged_requires_recreate:both_diverged:${localHead}:${remoteHead}`;
+  }
+
+  if (remoteContainsLocal) {
+    return `branch_diverged_requires_recreate:local_behind_remote:${localHead}:${remoteHead}`;
+  }
+
+  return `branch_diverged_requires_recreate:push_rejected_after_fetch:${localHead}:${remoteHead}`;
 }
 
 function isTransientStageFailure(stderr: string): boolean {
@@ -166,19 +200,33 @@ export async function commitAndPush(options: CommitOptions): Promise<CommitResul
       if (pushResult.success) {
         break;
       }
-      if (
-        branchName.startsWith("agent/") &&
-        isNonFastForwardPush(pushResult.stderr, pushResult.stdout)
-      ) {
+      if (isNonFastForwardPush(pushResult.stderr, pushResult.stdout)) {
         console.warn(
-          `Push rejected for ${branchName} due to non-fast-forward. Retrying with force push...`,
+          `Push rejected for ${branchName} due to non-fast-forward. Running divergence guard.`,
         );
-        const forcePushResult = await push(repoPath, branchName, true);
-        if (forcePushResult.success) {
-          pushResult = forcePushResult;
+        const fetchResult = await fetchRemoteBranch(repoPath, branchName);
+        if (!fetchResult.success) {
+          return {
+            success: false,
+            committed,
+            commitMessage,
+            error: `branch_diverged_requires_recreate:fetch_remote_failed:${fetchResult.stderr || fetchResult.stdout || "unknown"}`,
+          };
+        }
+
+        const retryAfterFetch = await push(repoPath, branchName);
+        if (retryAfterFetch.success) {
+          pushResult = retryAfterFetch;
           break;
         }
-        pushResult = forcePushResult;
+
+        pushResult = retryAfterFetch;
+        return {
+          success: false,
+          committed,
+          commitMessage,
+          error: await resolveDivergenceGuardError(repoPath, branchName),
+        };
       }
       if (!isTransientPushFailure(pushResult.stderr, pushResult.stdout) || attempt >= 3) {
         break;
@@ -190,20 +238,9 @@ export async function commitAndPush(options: CommitOptions): Promise<CommitResul
       await sleep(delayMs);
     }
     if (!pushResult?.success) {
-      if (branchName.startsWith("agent/") && pushResult) {
-        const nonFastForward = isNonFastForwardPush(pushResult.stderr, pushResult.stdout);
-        if (nonFastForward) {
-          return {
-            success: false,
-            committed: false,
-            commitMessage,
-            error: `Failed to push after force retry: ${pushResult.stderr}`,
-          };
-        }
-      }
       return {
         success: false,
-        committed: false,
+        committed,
         commitMessage,
         error: `Failed to push: ${pushResult?.stderr ?? "unknown push error"}`,
       };
