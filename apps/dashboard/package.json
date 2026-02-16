@@ -19,7 +19,7 @@
     "geist": "^1.7.0",
     "lucide-react": "^0.474.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.0",
     "tailwind-merge": "^3.4.0"
   },
