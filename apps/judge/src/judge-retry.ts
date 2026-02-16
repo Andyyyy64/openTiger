@@ -1,5 +1,5 @@
 import { db } from "@openTiger/db";
-import { artifacts, runs, tasks, events } from "@openTiger/db/schema";
+import { artifacts, events, prMergeQueue, runs, tasks } from "@openTiger/db/schema";
 import { and, desc, eq, inArray, isNull, lte, sql } from "drizzle-orm";
 import { JUDGE_AWAITING_RETRY_COOLDOWN_MS } from "./judge-config";
 
@@ -10,6 +10,18 @@ const JUDGE_ARTIFACT_TYPES: string[] = [
   "research_source",
   "research_report",
 ];
+
+function parsePrNumberFromRef(ref: string | null | undefined): number | null {
+  if (!ref) {
+    return null;
+  }
+  const match = ref.match(/([0-9]+)/u);
+  if (!match?.[1]) {
+    return null;
+  }
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
 
 export async function requeueTaskAfterJudge(params: {
   taskId: string;
@@ -66,7 +78,7 @@ export async function scheduleTaskForJudgeRetry(params: {
   reason: string;
   restoreRunImmediately?: boolean;
 }): Promise<void> {
-  const { taskId, runId, agentId, reason, restoreRunImmediately = true } = params;
+  const { taskId, runId, agentId, reason, restoreRunImmediately = false } = params;
   const [task] = await db
     .select({ retryCount: tasks.retryCount })
     .from(tasks)
@@ -136,6 +148,44 @@ export async function recoverAwaitingJudgeBacklog(agentId: string): Promise<numb
 
   let recovered = 0;
   for (const task of stuckTasks) {
+    const [activeMergeQueue] = await db
+      .select({ id: prMergeQueue.id })
+      .from(prMergeQueue)
+      .where(
+        and(
+          eq(prMergeQueue.taskId, task.id),
+          inArray(prMergeQueue.status, ["pending", "processing"]),
+        ),
+      )
+      .limit(1);
+    if (activeMergeQueue?.id) {
+      continue;
+    }
+
+    const [taskPrArtifact] = await db
+      .select({ ref: artifacts.ref })
+      .from(artifacts)
+      .innerJoin(runs, eq(runs.id, artifacts.runId))
+      .where(and(eq(runs.taskId, task.id), eq(artifacts.type, "pr")))
+      .orderBy(desc(artifacts.createdAt))
+      .limit(1);
+    const taskPrNumber = parsePrNumberFromRef(taskPrArtifact?.ref);
+    if (taskPrNumber) {
+      const [activeMergeQueueByPr] = await db
+        .select({ id: prMergeQueue.id })
+        .from(prMergeQueue)
+        .where(
+          and(
+            eq(prMergeQueue.prNumber, taskPrNumber),
+            inArray(prMergeQueue.status, ["pending", "processing"]),
+          ),
+        )
+        .limit(1);
+      if (activeMergeQueueByPr?.id) {
+        continue;
+      }
+    }
+
     const [pendingRun] = await db
       .select({ id: runs.id })
       .from(runs)

@@ -275,6 +275,42 @@ async function isMergedPR(prNumber: number): Promise<boolean> {
   }
 }
 
+export async function attemptMergeForApprovedPR(prNumber: number): Promise<{
+  merged: boolean;
+  mergeDeferred: boolean;
+  mergeDeferredReason?: string;
+}> {
+  let merged = false;
+  let mergeDeferred = false;
+  let mergeDeferredReason: string | undefined;
+
+  const mergeResult = await autoMergePR(prNumber);
+  merged = mergeResult.merged;
+  if (!merged) {
+    const mergedAfterFailure = await isMergedPR(prNumber);
+    if (mergedAfterFailure) {
+      return {
+        merged: true,
+        mergeDeferred: false,
+      };
+    }
+
+    if (isMergeInProgressReason(mergeResult.reason)) {
+      mergeDeferred = true;
+      mergeDeferredReason = "merge_already_in_progress";
+    } else {
+      const sync = await trySyncPRWithBase(prNumber);
+      mergeDeferred = sync.requested;
+      mergeDeferredReason = sync.reason;
+      if (sync.requested) {
+        console.log(`Requested branch update for PR #${prNumber} before retry`);
+      }
+    }
+  }
+
+  return { merged, mergeDeferred, mergeDeferredReason };
+}
+
 // Run full review flow
 export async function reviewAndAct(
   prNumber: number,
@@ -311,30 +347,17 @@ export async function reviewAndAct(
         }
 
         if (result.autoMerge) {
-          const mergeResult = await autoMergePR(prNumber);
+          const mergeResult = await attemptMergeForApprovedPR(prNumber);
           merged = mergeResult.merged;
+          mergeDeferred = mergeResult.mergeDeferred;
+          mergeDeferredReason = mergeResult.mergeDeferredReason;
           if (merged) {
             console.log(`PR #${prNumber} has been automatically merged`);
-          } else {
-            const mergedAfterFailure = await isMergedPR(prNumber);
-            if (mergedAfterFailure) {
-              merged = true;
-              console.log(`PR #${prNumber} was already merged by another process`);
-              break;
-            }
-
-            if (isMergeInProgressReason(mergeResult.reason)) {
-              mergeDeferred = true;
-              mergeDeferredReason = "merge_already_in_progress";
-              break;
-            }
-
-            const sync = await trySyncPRWithBase(prNumber);
-            mergeDeferred = sync.requested;
-            mergeDeferredReason = sync.reason;
-            if (sync.requested) {
-              console.log(`Requested branch update for PR #${prNumber} before retry`);
-            }
+          } else if (mergeDeferred) {
+            // Keep return payload explicit so caller can enqueue merge queue retries.
+            console.log(
+              `PR #${prNumber} merge deferred (${mergeDeferredReason ?? "pending_branch_sync"})`,
+            );
           }
         }
         break;

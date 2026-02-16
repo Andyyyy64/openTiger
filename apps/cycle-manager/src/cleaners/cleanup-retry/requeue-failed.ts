@@ -313,6 +313,7 @@ export async function requeueFailedTasksWithCooldown(
       commands: tasks.commands,
       allowedPaths: tasks.allowedPaths,
       role: tasks.role,
+      lane: tasks.lane,
       updatedAt: tasks.updatedAt,
       retryCount: tasks.retryCount,
     })
@@ -503,11 +504,16 @@ export async function requeueFailedTasksWithCooldown(
       const blockDetailReason = repeatedFailure
         ? "repeated_same_failure_signature"
         : failure.reason;
+      const laneOverride =
+        failure.reason === FAILURE_CODE.BRANCH_DIVERGED_REQUIRES_RECREATE
+          ? "conflict_recovery"
+          : (task.lane ?? "feature");
       await db
         .update(tasks)
         .set({
           status: "blocked",
           blockReason,
+          lane: laneOverride,
           updatedAt: new Date(),
         })
         .where(eq(tasks.id, task.id));
@@ -525,6 +531,7 @@ export async function requeueFailedTasksWithCooldown(
           retryLimitUnlimited: categoryRetryLimit < 0,
           reason: blockDetailReason,
           blockReason,
+          lane: laneOverride,
           globalRetryAllowed,
           categoryRetryAllowed,
           repeatedFailure,

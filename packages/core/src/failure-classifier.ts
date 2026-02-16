@@ -143,6 +143,13 @@ export function classifyFailureByCode(failureCode: string): FailureClassificatio
       reason: FAILURE_CODE.ENVIRONMENT_ISSUE,
     };
   }
+  if (code === FAILURE_CODE.BRANCH_DIVERGED_REQUIRES_RECREATE) {
+    return {
+      category: "setup",
+      retryable: false,
+      reason: FAILURE_CODE.BRANCH_DIVERGED_REQUIRES_RECREATE,
+    };
+  }
   if (code === FAILURE_CODE.VERIFICATION_COMMAND_FAILED || code === FAILURE_CODE.TEST_FAILURE) {
     return {
       category: "test",
@@ -275,6 +282,14 @@ export function classifyFailure(
       category: "env",
       retryable: true,
       reason: FAILURE_CODE.ENVIRONMENT_ISSUE,
+    };
+  }
+
+  if (/branch_diverged_requires_recreate|non-fast-forward|failed to push some refs/.test(message)) {
+    return {
+      category: "setup",
+      retryable: false,
+      reason: FAILURE_CODE.BRANCH_DIVERGED_REQUIRES_RECREATE,
     };
   }
 

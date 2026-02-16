@@ -76,10 +76,11 @@ export function buildDocserTaskForGap(params: {
     commands,
     priority: 5,
     riskLevel: "low",
+    lane: "docser",
     dependencies: [],
     dependsOnIndexes: params.dependsOnIndexes,
     timeboxMinutes: 45,
-    targetArea: undefined,
-    touches: [],
+    targetArea: "docser:global",
+    touches: ["docs/README.md", "README.md", "docs", "ops/runbooks"],
   };
 }

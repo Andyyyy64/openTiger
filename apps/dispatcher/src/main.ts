@@ -1,8 +1,13 @@
 import { resolve, relative, isAbsolute } from "node:path";
 import { db } from "@openTiger/db";
-import { tasks, runs } from "@openTiger/db/schema";
+import { events, runs, tasks } from "@openTiger/db/schema";
 import { and, count, eq } from "drizzle-orm";
-import { getRepoMode, getLocalRepoPath, getLocalWorktreeRoot } from "@openTiger/core";
+import {
+  SYSTEM_ENTITY_ID,
+  getRepoMode,
+  getLocalRepoPath,
+  getLocalWorktreeRoot,
+} from "@openTiger/core";
 import { setupProcessLogging } from "@openTiger/core/process-logging";
 import { createTaskQueue, enqueueTask, getQueueStats, getTaskQueueName } from "@openTiger/queue";
 
@@ -21,6 +26,13 @@ import {
   getAvailableAgents,
   type LaunchMode,
 } from "./scheduler/index";
+import {
+  countTasksByLane,
+  normalizeLane,
+  selectTasksForDispatch,
+  type DispatcherLane,
+  type LaneLimits,
+} from "./scheduler/lane-policy";
 
 // Dispatcher config
 interface DispatcherConfig {
@@ -52,6 +64,47 @@ const MAX_POLL_INTERVAL_MS = (() => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_MAX_POLL_INTERVAL_MS;
 })();
 const noIdleLogState = new Map<string, { lastLoggedAt: number; suppressed: number }>();
+
+const DEFAULT_DISPATCH_CONFLICT_LANE_MAX_SLOTS = 2;
+const DEFAULT_DISPATCH_FEATURE_LANE_MIN_SLOTS = 1;
+const DEFAULT_DISPATCH_DOCSER_LANE_MAX_SLOTS = 1;
+
+function parseLaneCap(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  if (parsed <= 0) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return parsed;
+}
+
+function parseLaneMinimum(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
+const DISPATCH_CONFLICT_LANE_MAX_SLOTS = parseLaneCap(
+  process.env.DISPATCH_CONFLICT_LANE_MAX_SLOTS,
+  DEFAULT_DISPATCH_CONFLICT_LANE_MAX_SLOTS,
+);
+const DISPATCH_FEATURE_LANE_MIN_SLOTS = parseLaneMinimum(
+  process.env.DISPATCH_FEATURE_LANE_MIN_SLOTS,
+  DEFAULT_DISPATCH_FEATURE_LANE_MIN_SLOTS,
+);
+const DISPATCH_DOCSER_LANE_MAX_SLOTS = parseLaneCap(
+  process.env.DISPATCH_DOCSER_LANE_MAX_SLOTS,
+  DEFAULT_DISPATCH_DOCSER_LANE_MAX_SLOTS,
+);
+const LANE_LIMITS: LaneLimits = {
+  conflictMaxSlots: DISPATCH_CONFLICT_LANE_MAX_SLOTS,
+  featureMinSlots: DISPATCH_FEATURE_LANE_MIN_SLOTS,
+  docserMaxSlots: DISPATCH_DOCSER_LANE_MAX_SLOTS,
+};
 
 function parseMaxConcurrentWorkers(value: string | undefined): number {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -93,6 +146,25 @@ function resolveAgentRoleForTask(taskRole: string | null | undefined): string {
   }
   // Semantic research roles run on standard worker pool.
   return "worker";
+}
+
+async function getActiveRunningByLane(): Promise<Map<DispatcherLane, number>> {
+  const running = await db
+    .select({ lane: tasks.lane, kind: tasks.kind })
+    .from(tasks)
+    .where(eq(tasks.status, "running"));
+
+  const counts = new Map<DispatcherLane, number>();
+  for (const task of running) {
+    const lane =
+      task.lane === "research" || task.kind === "research"
+        ? "research"
+        : normalizeLane({
+            lane: task.lane ?? "feature",
+          });
+    counts.set(lane, (counts.get(lane) ?? 0) + 1);
+  }
+  return counts;
 }
 
 // Default config
@@ -337,25 +409,47 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
         const availableTasks = await getAvailableTasks();
 
         if (availableTasks.length > 0) {
+          const activeRunningByLane = await getActiveRunningByLane();
+          const tasksToDispatch = selectTasksForDispatch({
+            availableTasks,
+            availableSlots,
+            activeRunningByLane,
+            laneLimits: LANE_LIMITS,
+          });
+          const laneSummary = {
+            feature: activeRunningByLane.get("feature") ?? 0,
+            conflict_recovery: activeRunningByLane.get("conflict_recovery") ?? 0,
+            docser: activeRunningByLane.get("docser") ?? 0,
+            research: activeRunningByLane.get("research") ?? 0,
+          };
+          const availableByLane = countTasksByLane(availableTasks);
+          const selectedByLane = countTasksByLane(tasksToDispatch);
           console.log(
-            `[Dispatch] Found ${availableTasks.length} available tasks, ${availableSlots} slots available`,
+            `[Dispatch] Found ${availableTasks.length} available tasks, ${availableSlots} slots available, selected=${tasksToDispatch.length}, active_by_lane=${JSON.stringify(laneSummary)}`,
           );
 
-          // Dispatch up to available slots
-          const tasksToDispatch = availableTasks.slice(0, availableSlots);
-
-          // Track targetArea to be dispatched in current cycle
-          const pendingTargetAreas = new Set<string>();
+          const availableFeatureLike = availableByLane.feature + availableByLane.research;
+          const selectedFeatureLike = selectedByLane.feature + selectedByLane.research;
+          if (
+            tasksToDispatch.length === 0 ||
+            (availableFeatureLike > 0 && selectedFeatureLike === 0) ||
+            (availableByLane.conflict_recovery > 0 && selectedByLane.conflict_recovery === 0)
+          ) {
+            await db.insert(events).values({
+              type: "dispatcher.lane_throttled",
+              entityType: "system",
+              entityId: SYSTEM_ENTITY_ID,
+              payload: {
+                availableSlots,
+                availableByLane,
+                selectedByLane,
+                activeRunningByLane: laneSummary,
+                laneLimits: LANE_LIMITS,
+              },
+            });
+          }
 
           for (const task of tasksToDispatch) {
-            // Check targetArea overlap (avoid collision within same cycle)
-            if (task.targetArea && pendingTargetAreas.has(task.targetArea)) {
-              continue;
-            }
-            if (task.targetArea) {
-              pendingTargetAreas.add(task.targetArea);
-            }
-
             const requiredRole = resolveAgentRoleForTask(task.role);
             const selectedAgent =
               config.launchMode === "docker"

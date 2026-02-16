@@ -1,5 +1,5 @@
 import { db } from "@openTiger/db";
-import { runs, artifacts } from "@openTiger/db/schema";
+import { artifacts, events, runs } from "@openTiger/db/schema";
 import { and, desc, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { Task } from "@openTiger/core";
 import { resolve } from "node:path";
@@ -566,6 +566,9 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     }).catch(() => undefined);
     const quotaFailure = isQuotaFailure(errorMessage);
     const permissionPromptFailure = isExternalDirectoryPermissionPromptFailure(errorMessage);
+    const pushDivergenceFailure = errorMessage.includes(
+      FAILURE_CODE.BRANCH_DIVERGED_REQUIRES_RECREATE,
+    );
     const nextTaskStatus: "failed" | "blocked" = quotaFailure ? "blocked" : "failed";
     const nextBlockReason = quotaFailure ? "quota_wait" : null;
 
@@ -575,6 +578,18 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       console.warn(
         `[Worker] Quota failure detected. Parking task ${taskId} as blocked(quota_wait) for cooldown retry.`,
       );
+    }
+    if (pushDivergenceFailure) {
+      await db.insert(events).values({
+        type: "worker.push_divergence_guard_triggered",
+        entityType: "task",
+        entityId: taskId,
+        agentId,
+        payload: {
+          runId,
+          errorMessage,
+        },
+      });
     }
     console.error("=".repeat(60));
 
@@ -592,7 +607,9 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
           ? FAILURE_CODE.QUOTA_FAILURE
           : permissionPromptFailure
             ? FAILURE_CODE.EXTERNAL_DIRECTORY_PERMISSION_PROMPT
-            : FAILURE_CODE.EXECUTION_FAILED,
+            : pushDivergenceFailure
+              ? FAILURE_CODE.BRANCH_DIVERGED_REQUIRES_RECREATE
+              : FAILURE_CODE.EXECUTION_FAILED,
       },
     });
 

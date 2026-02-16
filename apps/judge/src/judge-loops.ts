@@ -21,13 +21,7 @@ import {
   isNonActionableLLMFailure,
 } from "./judge-evaluate";
 import { evaluateResearchRun, markResearchJobAfterJudge } from "./judge-research";
-import {
-  createAutoFixTaskForPr,
-  closeConflictPrAndCreateMainlineTask,
-  createConflictAutoFixTaskForPr,
-  hasMergeConflictSignals,
-  isConflictAutoFixAttemptLimitReason,
-} from "./judge-autofix";
+import { createAutoFixTaskForPr } from "./judge-autofix";
 import {
   getTaskRetryCount,
   scheduleTaskForJudgeRetry,
@@ -35,16 +29,13 @@ import {
   recoverAwaitingJudgeBacklog,
   claimRunForJudgement,
 } from "./judge-retry";
+import { enqueueMergeQueueItem, processMergeQueue } from "./judge-merge-queue";
 
 function hasActiveAutoFix(reason: string): boolean {
   return (
     reason.startsWith("existing_active_autofix:") ||
     reason.startsWith("existing_active_conflict_autofix:")
   );
-}
-
-function hasActiveMainlineRecreate(reason: string): boolean {
-  return reason.startsWith("existing_active_mainline_recreate:");
 }
 
 export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
@@ -73,6 +64,18 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
         console.log(
           `[Judge] Recovered ${recoveredAwaiting} awaiting_judge task(s) by restoring runs`,
         );
+      }
+
+      if (!config.dryRun) {
+        const mergeQueueResult = await processMergeQueue({
+          agentId: config.agentId,
+          workdir: config.workdir,
+        });
+        if (mergeQueueResult.processed > 0 || mergeQueueResult.recoveredClaims > 0) {
+          console.log(
+            `[Judge] Merge queue processed=${mergeQueueResult.processed}, merged=${mergeQueueResult.merged}, retried=${mergeQueueResult.retried}, failed=${mergeQueueResult.failed}, recovered_claims=${mergeQueueResult.recoveredClaims}`,
+          );
+        }
       }
 
       // Get PRs awaiting review
@@ -378,136 +381,89 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                   }
 
                   if (!handledApprovedWithoutMerge) {
-                    // If approve but merge didn't complete, send conflict-related ones to AutoFix, others back to judge retry
-                    let handledByConflictAutoFix = false;
-                    const conflictSignals = hasMergeConflictSignals({
-                      summary,
-                      mergeDeferredReason: actionResult.mergeDeferredReason,
+                    const mergeQueueReason = actionResult.mergeDeferred
+                      ? `Judge approved but merge deferred: ${actionResult.mergeDeferredReason ?? "pending_branch_sync"}`
+                      : `Judge approved but merge was not completed${actionResult.mergeDeferredReason ? ` (${actionResult.mergeDeferredReason})` : ""}`;
+                    const queueResult = await enqueueMergeQueueItem({
+                      prNumber: pr.prNumber,
+                      taskId: pr.taskId,
+                      runId: pr.runId,
+                      priority: pr.priority,
+                      agentId: config.agentId,
+                      reason: mergeQueueReason,
                     });
-                    if (conflictSignals && !actionResult.mergeDeferred) {
-                      const conflictAutoFix = await createConflictAutoFixTaskForPr({
-                        prNumber: pr.prNumber,
-                        prUrl: pr.prUrl,
-                        sourceTaskId: pr.taskId,
-                        sourceRunId: pr.runId,
-                        sourceTaskTitle: pr.taskTitle,
-                        sourceTaskGoal: pr.taskGoal,
-                        allowedPaths: pr.allowedPaths,
-                        commands: pr.commands,
-                        summary,
-                        agentId: config.agentId,
-                        mergeDeferredReason: actionResult.mergeDeferredReason,
-                      });
-
-                      if (conflictAutoFix.created) {
+                    const duplicateSourceRun =
+                      queueResult.reason.startsWith("duplicate_source_run:");
+                    const duplicateSourceRunActive =
+                      duplicateSourceRun &&
+                      (queueResult.existingStatus === "pending" ||
+                        queueResult.existingStatus === "processing");
+                    if (
+                      queueResult.enqueued ||
+                      queueResult.reason.startsWith("existing_active_queue:") ||
+                      duplicateSourceRunActive
+                    ) {
+                      await db
+                        .update(tasks)
+                        .set({
+                          status: "blocked",
+                          blockReason: "awaiting_judge",
+                          updatedAt: new Date(),
+                        })
+                        .where(eq(tasks.id, pr.taskId));
+                      console.warn(
+                        `  Task ${pr.taskId} moved to merge queue (${queueResult.reason})`,
+                      );
+                    } else if (duplicateSourceRun) {
+                      if (queueResult.existingStatus === "merged") {
                         await db
                           .update(tasks)
                           .set({
-                            status: "blocked",
-                            blockReason: "needs_rework",
+                            status: "done",
+                            blockReason: null,
                             updatedAt: new Date(),
                           })
                           .where(eq(tasks.id, pr.taskId));
                         console.warn(
-                          `  Task ${pr.taskId} blocked as needs_rework; conflict auto-fix task queued: ${conflictAutoFix.taskId}`,
+                          `  Task ${pr.taskId} marked done from duplicate source run (status=merged, queue=${queueResult.queueId ?? "unknown"})`,
                         );
-                        handledByConflictAutoFix = true;
+                      } else if (
+                        queueResult.existingStatus === "failed" ||
+                        queueResult.existingStatus === "cancelled"
+                      ) {
+                        await db
+                          .update(tasks)
+                          .set({
+                            status: "failed",
+                            blockReason: null,
+                            updatedAt: new Date(),
+                          })
+                          .where(eq(tasks.id, pr.taskId));
+                        console.warn(
+                          `  Task ${pr.taskId} marked failed from duplicate source run (status=${queueResult.existingStatus}, queue=${queueResult.queueId ?? "unknown"})`,
+                        );
                       } else {
-                        if (hasActiveAutoFix(conflictAutoFix.reason)) {
-                          await db
-                            .update(tasks)
-                            .set({
-                              status: "blocked",
-                              blockReason: "needs_rework",
-                              updatedAt: new Date(),
-                            })
-                            .where(eq(tasks.id, pr.taskId));
-                          console.warn(
-                            `  Task ${pr.taskId} remains blocked as needs_rework (active conflict autofix in progress: ${conflictAutoFix.reason})`,
-                          );
-                          handledByConflictAutoFix = true;
-                        } else if (isConflictAutoFixAttemptLimitReason(conflictAutoFix.reason)) {
-                          const recreateResult = await closeConflictPrAndCreateMainlineTask({
-                            prNumber: pr.prNumber,
-                            prUrl: pr.prUrl,
-                            sourceTaskId: pr.taskId,
-                            sourceRunId: pr.runId,
-                            sourceTaskTitle: pr.taskTitle,
-                            sourceTaskGoal: pr.taskGoal,
-                            allowedPaths: pr.allowedPaths,
-                            commands: pr.commands,
-                            summary,
-                            agentId: config.agentId,
-                            conflictAutoFixReason: conflictAutoFix.reason,
-                            mergeDeferredReason: actionResult.mergeDeferredReason,
-                          });
-
-                          if (
-                            recreateResult.created ||
-                            hasActiveMainlineRecreate(recreateResult.reason)
-                          ) {
-                            await db
-                              .update(tasks)
-                              .set({
-                                status: "failed",
-                                blockReason: null,
-                                updatedAt: new Date(),
-                              })
-                              .where(eq(tasks.id, pr.taskId));
-                            const recreateState = recreateResult.created
-                              ? `queued:${recreateResult.taskId}`
-                              : recreateResult.reason;
-                            const closeState = recreateResult.closed ? "closed" : "close_failed";
-                            console.warn(
-                              `  Task ${pr.taskId} conflict-autofix limit reached; source task failed, PR ${pr.prNumber} close=${closeState}, recreate=${recreateState}`,
-                            );
-                            handledByConflictAutoFix = true;
-                          } else {
-                            const fallbackReason =
-                              "Judge approved but conflict autofix attempt limit fallback failed " +
-                              `(${recreateResult.reason})`;
-                            await scheduleTaskForJudgeRetry({
-                              taskId: pr.taskId,
-                              runId: pr.runId,
-                              agentId: config.agentId,
-                              reason: fallbackReason,
-                              restoreRunImmediately: false,
-                            });
-                            console.warn(
-                              `  Task ${pr.taskId} scheduled for judge retry (limit fallback failed: ${recreateResult.reason})`,
-                            );
-                          }
-                        } else {
-                          const fallbackReason = `Judge approved but merge conflict auto-fix was not queued (${conflictAutoFix.reason})`;
-                          await scheduleTaskForJudgeRetry({
-                            taskId: pr.taskId,
-                            runId: pr.runId,
-                            agentId: config.agentId,
-                            reason: fallbackReason,
-                            restoreRunImmediately: false,
-                          });
-                          console.warn(
-                            `  Task ${pr.taskId} scheduled for judge retry (conflict autofix fallback: ${conflictAutoFix.reason})`,
-                          );
-                        }
+                        await scheduleTaskForJudgeRetry({
+                          taskId: pr.taskId,
+                          runId: pr.runId,
+                          agentId: config.agentId,
+                          reason: `judge_merge_queue_duplicate_source_unknown_status:${queueResult.existingStatus ?? "unknown"}`,
+                          restoreRunImmediately: false,
+                        });
+                        console.warn(
+                          `  Task ${pr.taskId} scheduled for judge retry (duplicate source run status unknown: ${queueResult.existingStatus ?? "unknown"})`,
+                        );
                       }
-                      // Keep review record for continuity
-                    }
-
-                    if (!handledByConflictAutoFix) {
-                      const retryReason = actionResult.mergeDeferred
-                        ? `Judge approved but merge deferred: ${actionResult.mergeDeferredReason ?? "pending_branch_sync"}`
-                        : `Judge approved but merge was not completed${actionResult.mergeDeferredReason ? ` (${actionResult.mergeDeferredReason})` : ""}`;
+                    } else {
                       await scheduleTaskForJudgeRetry({
                         taskId: pr.taskId,
                         runId: pr.runId,
                         agentId: config.agentId,
-                        reason: retryReason,
-                        // If update-branch was triggered, don't re-evaluate the same run until cooldown
-                        restoreRunImmediately: !actionResult.mergeDeferred,
+                        reason: `judge_merge_queue_enqueue_failed:${queueResult.reason}`,
+                        restoreRunImmediately: false,
                       });
                       console.warn(
-                        `  Task ${pr.taskId} scheduled for judge retry because merge did not complete`,
+                        `  Task ${pr.taskId} scheduled for judge retry (merge queue enqueue failed: ${queueResult.reason})`,
                       );
                     }
                   }

@@ -1,5 +1,6 @@
 import { db } from "@openTiger/db";
 import { tasks, events, runs } from "@openTiger/db/schema";
+import { resolveDeterministicTargetArea } from "@openTiger/core";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { closePR, getOctokit, getRepoInfo } from "@openTiger/vcs";
 import {
@@ -240,6 +241,11 @@ export async function createAutoFixTaskForPr(params: {
     judgeRetryReason,
     autoFixFailureReason,
   });
+  const autoFixTargetArea = resolveDeterministicTargetArea({
+    kind: "code",
+    touches: issueFiles,
+    allowedPaths: params.allowedPaths,
+  });
 
   const [taskRow] = await db
     .insert(tasks)
@@ -265,11 +271,14 @@ export async function createAutoFixTaskForPr(params: {
         },
       },
       allowedPaths: params.allowedPaths.length > 0 ? params.allowedPaths : ["**"],
+      targetArea: autoFixTargetArea ?? undefined,
+      touches: issueFiles,
       commands: params.commands,
       dependencies: [],
       priority: 80,
       riskLevel: "medium",
       role: "worker",
+      lane: "conflict_recovery",
       status: "queued",
       timeboxMinutes: 60,
     })
@@ -356,6 +365,10 @@ export async function createConflictAutoFixTaskForPr(params: {
       : "- (none)";
   const nextAttempt = attemptCount + 1;
   const prBranchContext = await getPrBranchContext(params.prNumber);
+  const conflictTargetArea = resolveDeterministicTargetArea({
+    kind: "code",
+    targetArea: `conflict:pr:${params.prNumber}`,
+  });
 
   const [taskRow] = await db
     .insert(tasks)
@@ -388,11 +401,14 @@ export async function createConflictAutoFixTaskForPr(params: {
       // outside the source task's allowed paths. Restricting paths here causes
       // policy false-positives and endless rework loops.
       allowedPaths: ["**"],
+      targetArea: conflictTargetArea ?? undefined,
+      touches: [],
       commands: params.commands,
       dependencies: [],
       priority: 90,
       riskLevel: "medium",
       role: "worker",
+      lane: "conflict_recovery",
       status: "queued",
       timeboxMinutes: 60,
     })
@@ -509,6 +525,11 @@ export async function closeConflictPrAndCreateMainlineTask(params: {
         .filter((file): file is string => Boolean(file)),
     ),
   );
+  const recreateTargetArea = resolveDeterministicTargetArea({
+    kind: "code",
+    touches: issueFiles,
+    allowedPaths: params.allowedPaths,
+  });
 
   const [taskRow] = await db
     .insert(tasks)
@@ -539,11 +560,14 @@ export async function closeConflictPrAndCreateMainlineTask(params: {
         },
       },
       allowedPaths: params.allowedPaths.length > 0 ? params.allowedPaths : ["**"],
+      targetArea: recreateTargetArea ?? undefined,
+      touches: issueFiles,
       commands: params.commands,
       dependencies: [],
       priority: 85,
       riskLevel: "medium",
       role: "worker",
+      lane: "conflict_recovery",
       status: "queued",
       timeboxMinutes: 60,
     })

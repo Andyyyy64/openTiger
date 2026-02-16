@@ -8,6 +8,10 @@ export type RiskLevel = z.infer<typeof RiskLevel>;
 export const TaskRole = z.enum(["worker", "tester", "docser"]);
 export type TaskRole = z.infer<typeof TaskRole>;
 
+// Task lane
+export const TaskLane = z.enum(["feature", "conflict_recovery", "docser", "research"]);
+export type TaskLane = z.infer<typeof TaskLane>;
+
 // Task kind
 export const TaskKind = z.enum(["code", "research"]);
 export type TaskKind = z.infer<typeof TaskKind>;
@@ -71,6 +75,7 @@ export const TaskSchema = z.object({
   priority: z.number().int().default(0),
   riskLevel: RiskLevel.default("low"),
   role: TaskRole.default("worker"),
+  lane: TaskLane.default("feature"),
   kind: TaskKind.default("code"),
   status: TaskStatus.default("queued"),
   blockReason: z.string().optional(), // blocked reason (awaiting_judge/needs_rework)
@@ -97,6 +102,7 @@ export const CreateTaskInput = TaskSchema.omit({
   timeboxMinutes: true,
   context: true,
   retryCount: true,
+  lane: true,
 });
 export type CreateTaskInput = z.infer<typeof CreateTaskInput>;
 

@@ -25,6 +25,15 @@ export interface CycleManagerConfig {
   stuckRunTimeoutMs: number; // Stuck run threshold
 }
 
+function readNonEmptyEnv(key: string): string | undefined {
+  const raw = process.env[key];
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function sanitizePathSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, "_");
 }
@@ -98,6 +107,15 @@ function resolveRequirementPath(
     return requirementPath;
   }
 
+  // In git mode, always prefer the managed repository snapshot first.
+  // This avoids resolving docs/requirement.md against service cwd.
+  if (repoUrl) {
+    const managedCandidate = resolveManagedRequirementPath(requirementPath, repoUrl);
+    if (managedCandidate) {
+      return managedCandidate;
+    }
+  }
+
   // Search parent dirs if not under launch dir
   let currentDir = resolve(workdir);
   while (true) {
@@ -112,21 +130,14 @@ function resolveRequirementPath(
     currentDir = parentDir;
   }
 
-  if (repoUrl) {
-    const managedCandidate = resolveManagedRequirementPath(requirementPath, repoUrl);
-    if (managedCandidate) {
-      return managedCandidate;
-    }
-  }
-
   // Return deterministic path; error explicitly later if not found
   return resolve(workdir, requirementPath);
 }
 
-const defaultReplanWorkdir = process.env.REPLAN_WORKDIR ?? process.cwd();
-const defaultReplanRepoUrl = process.env.REPLAN_REPO_URL ?? process.env.REPO_URL;
+const defaultReplanWorkdir = readNonEmptyEnv("REPLAN_WORKDIR") ?? process.cwd();
+const defaultReplanRepoUrl = readNonEmptyEnv("REPLAN_REPO_URL") ?? readNonEmptyEnv("REPO_URL");
 const defaultReplanRequirementPath = resolveRequirementPath(
-  process.env.REPLAN_REQUIREMENT_PATH ?? process.env.REQUIREMENT_PATH,
+  readNonEmptyEnv("REPLAN_REQUIREMENT_PATH") ?? readNonEmptyEnv("REQUIREMENT_PATH"),
   defaultReplanWorkdir,
   defaultReplanRepoUrl,
 );
@@ -152,7 +163,7 @@ export const DEFAULT_CONFIG: CycleManagerConfig = {
   replanRequirementPath: defaultReplanRequirementPath,
   replanCommand: process.env.REPLAN_COMMAND ?? "pnpm --filter @openTiger/planner run start:fresh",
   replanWorkdir: defaultReplanWorkdir,
-  replanRepoUrl: process.env.REPLAN_REPO_URL ?? process.env.REPO_URL,
+  replanRepoUrl: defaultReplanRepoUrl,
   replanBaseBranch: process.env.REPLAN_BASE_BRANCH ?? process.env.BASE_BRANCH ?? "main",
   systemApiBaseUrl:
     process.env.SYSTEM_API_BASE_URL ?? `http://127.0.0.1:${process.env.API_PORT?.trim() || "4301"}`,

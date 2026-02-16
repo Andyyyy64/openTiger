@@ -283,10 +283,13 @@ async function createDocserTask(params: {
         notes,
       },
       allowedPaths: DOCSER_ALLOWED_PATHS,
+      targetArea: "docser:global",
+      touches: ["docs/README.md", "README.md", "docs", "ops/runbooks"],
       commands,
       priority: baseTask.priority ?? 0,
       riskLevel: "low",
       role: "docser",
+      lane: "docser",
       dependencies: [params.source.taskId],
       timeboxMinutes: 45,
     })

@@ -11,6 +11,7 @@ export const tasks = pgTable("tasks", {
   priority: integer("priority").default(0).notNull(),
   riskLevel: text("risk_level").default("low").notNull(), // low/medium/high
   role: text("role").default("worker").notNull(), // worker/tester
+  lane: text("lane").default("feature").notNull(), // feature/conflict_recovery/docser/research
   kind: text("kind").default("code").notNull(), // code/research
   status: text("status").default("queued").notNull(), // queued/running/done/failed/blocked/cancelled
   blockReason: text("block_reason"), // Block reason (awaiting_judge/needs_rework)
@@ -39,6 +40,30 @@ export const runs = pgTable("runs", {
   errorMeta: jsonb("error_meta"),
   judgedAt: timestamp("judged_at", { withTimezone: true }),
   judgementVersion: integer("judgement_version").default(0).notNull(),
+});
+
+// PR merge queue table: serialized merge attempts
+export const prMergeQueue = pgTable("pr_merge_queue", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  prNumber: integer("pr_number").notNull(),
+  taskId: uuid("task_id")
+    .references(() => tasks.id)
+    .notNull(),
+  runId: uuid("run_id")
+    .references(() => runs.id)
+    .notNull(),
+  status: text("status").default("pending").notNull(), // pending/processing/merged/failed/cancelled
+  priority: integer("priority").default(0).notNull(),
+  attemptCount: integer("attempt_count").default(0).notNull(),
+  maxAttempts: integer("max_attempts").default(3).notNull(),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).defaultNow().notNull(),
+  lastError: text("last_error"),
+  claimOwner: text("claim_owner"),
+  claimToken: text("claim_token"),
+  claimExpiresAt: timestamp("claim_expires_at", { withTimezone: true }),
+  claimedAt: timestamp("claimed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // Artifacts table: PR, commit, CI result, etc.
@@ -128,6 +153,9 @@ export const config = pgTable("config", {
   blockedNeedsReworkInPlaceRetryLimit: text("blocked_needs_rework_in_place_retry_limit")
     .default("5")
     .notNull(),
+  dispatchConflictLaneMaxSlots: text("dispatch_conflict_lane_max_slots").default("2").notNull(),
+  dispatchFeatureLaneMinSlots: text("dispatch_feature_lane_min_slots").default("1").notNull(),
+  dispatchDocserLaneMaxSlots: text("dispatch_docser_lane_max_slots").default("1").notNull(),
   workerSetupInProcessRecovery: text("worker_setup_in_process_recovery").default("true").notNull(),
   workerVerifyLlmInlineRecovery: text("worker_verify_llm_inline_recovery")
     .default("true")
@@ -164,6 +192,9 @@ export const config = pgTable("config", {
   claudeCodeAppendSystemPrompt: text("claude_code_append_system_prompt").default("").notNull(),
   plannerModel: text("planner_model").default("google/gemini-3-pro-preview").notNull(),
   judgeModel: text("judge_model").default("google/gemini-3-pro-preview").notNull(),
+  judgeMergeQueueMaxAttempts: text("judge_merge_queue_max_attempts").default("3").notNull(),
+  judgeMergeQueueRetryDelayMs: text("judge_merge_queue_retry_delay_ms").default("30000").notNull(),
+  judgeMergeQueueClaimTtlMs: text("judge_merge_queue_claim_ttl_ms").default("120000").notNull(),
   workerModel: text("worker_model").default("google/gemini-3-flash-preview").notNull(),
   testerModel: text("tester_model").default("google/gemini-3-flash-preview").notNull(),
   docserModel: text("docser_model").default("google/gemini-3-flash-preview").notNull(),
@@ -197,6 +228,9 @@ export type NewTaskRecord = typeof tasks.$inferInsert;
 
 export type RunRecord = typeof runs.$inferSelect;
 export type NewRunRecord = typeof runs.$inferInsert;
+
+export type PRMergeQueueRecord = typeof prMergeQueue.$inferSelect;
+export type NewPRMergeQueueRecord = typeof prMergeQueue.$inferInsert;
 
 export type ArtifactRecord = typeof artifacts.$inferSelect;
 export type NewArtifactRecord = typeof artifacts.$inferInsert;

@@ -15,6 +15,7 @@ export const FAILURE_CODE = {
   MODEL_OR_UNKNOWN_FAILURE: "model_or_unknown_failure",
   EXTERNAL_DIRECTORY_PERMISSION_PROMPT: "external_directory_permission_prompt",
   QUOTA_FAILURE: "quota_failure",
+  BRANCH_DIVERGED_REQUIRES_RECREATE: "branch_diverged_requires_recreate",
   EXECUTION_FAILED: "execution_failed",
 } as const;
 

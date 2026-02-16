@@ -164,6 +164,9 @@ export const BrailleSpinner: React.FC<BrailleSpinnerProps> = ({
   );
   const interval = INTERVALS[variant];
   const colorClass = COLOR_CLASSES[variant];
+  const inheritColorToken = "[color:inherit]";
+  const shouldInheritColor = className.includes(inheritColorToken);
+  const normalizedClassName = className.replace(inheritColorToken, "").trim();
 
   useEffect(() => {
     const el = elRef.current;
@@ -180,9 +183,12 @@ export const BrailleSpinner: React.FC<BrailleSpinnerProps> = ({
   return (
     <span
       ref={elRef}
-      className={`inline-block tabular-nums align-middle ${colorClass} ${className}`}
-      style={{ fontFamily: "sans-serif" }}
+      className={`inline-block tabular-nums align-middle ${colorClass} ${normalizedClassName}`}
+      // Tailwind 任意値クラスに依存せず、読み込み色の継承を常に確実にする。
+      style={{ fontFamily: "sans-serif", ...(shouldInheritColor ? { color: "inherit" } : {}) }}
       aria-hidden
-    />
+    >
+      {frames[0] ?? ""}
+    </span>
   );
 };

@@ -1,6 +1,6 @@
 import { db } from "@openTiger/db";
 import { researchClaims, researchJobs, tasks } from "@openTiger/db/schema";
-import { getRepoMode } from "@openTiger/core";
+import { getRepoMode, resolveDeterministicTargetArea } from "@openTiger/core";
 import { resolveGitHubAuthMode, resolveGitHubToken } from "@openTiger/vcs";
 import { and, eq, sql } from "drizzle-orm";
 import {
@@ -51,6 +51,7 @@ import {
 } from "./planner-notes";
 import { clipText, getErrorMessage, isRepoUninitialized } from "./planner-utils";
 import { augmentVerificationCommandsForTasks } from "./planner-verification";
+import { applyHotFilePlanning } from "./hot-file-planning";
 import {
   computePlanSignature,
   resolvePlanDedupeWindowMs,
@@ -69,6 +70,26 @@ function appendPlannerWarning(result: TaskGenerationResult, warning: string): Ta
   return {
     ...result,
     warnings: [...result.warnings, warning],
+  };
+}
+
+function applyDeterministicTargetAreas(result: TaskGenerationResult): TaskGenerationResult {
+  return {
+    ...result,
+    tasks: result.tasks.map((task, index) => {
+      const targetArea = resolveDeterministicTargetArea({
+        id: `plan:${index}`,
+        kind: task.kind,
+        targetArea: task.targetArea,
+        touches: task.touches,
+        allowedPaths: task.allowedPaths,
+        context: task.context,
+      });
+      return {
+        ...task,
+        targetArea: targetArea ?? undefined,
+      };
+    }),
   };
 }
 
@@ -124,6 +145,18 @@ async function applyPlannerTaskPolicies(params: {
   next = applyPolicyRecoveryPathHints(next, params.policyRecoveryHints ?? []);
   next = attachJudgeFeedbackToTasks(next, params.judgeFeedback);
   next = attachInspectionToTasks(next, params.inspectionNotes);
+  next = applyDeterministicTargetAreas(next);
+  const hotFileResult = await applyHotFilePlanning(next.tasks);
+  if (hotFileResult.overlapCount > 0) {
+    next = {
+      ...next,
+      tasks: hotFileResult.tasks,
+      warnings: [
+        ...next.warnings,
+        `Hot-file overlap detector added dependencies to ${hotFileResult.overlapCount} task(s).`,
+      ],
+    };
+  }
   return next;
 }
 
@@ -324,6 +357,7 @@ export async function planFromResearchJob(
         goal: buildResearchCollectTaskGoal(),
         kind: "research",
         role: "worker",
+        lane: "research",
         context: {
           research: {
             jobId: researchJobId,

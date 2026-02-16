@@ -334,6 +334,9 @@ const createTaskSchema = z.object({
 // Create task
 tasksRoute.post("/", zValidator("json", createTaskSchema), async (c) => {
   const body = c.req.valid("json");
+  const role = body.role ?? "worker";
+  const kind = body.kind ?? "code";
+  const lane = kind === "research" ? "research" : role === "docser" ? "docser" : "feature";
 
   const result = await db
     .insert(tasks)
@@ -345,14 +348,15 @@ tasksRoute.post("/", zValidator("json", createTaskSchema), async (c) => {
       commands: body.commands,
       priority: body.priority ?? 0,
       riskLevel: body.riskLevel ?? "low",
-      role: body.role ?? "worker",
-      kind: body.kind ?? "code",
+      role,
+      kind,
+      lane,
       dependencies: body.dependencies ?? [],
       timeboxMinutes: body.timeboxMinutes ?? 60,
     })
     .returning();
 
-  const runtime = body.kind === "research" ? await ensureResearchRuntimeStarted() : undefined;
+  const runtime = kind === "research" ? await ensureResearchRuntimeStarted() : undefined;
 
   return c.json({ task: result[0], runtime }, 201);
 });

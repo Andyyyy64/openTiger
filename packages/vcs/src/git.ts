@@ -211,6 +211,10 @@ export async function fetchRefspecs(cwd: string, refspecs: string[]): Promise<Gi
   return execGit(["fetch", "origin", ...refspecs], cwd);
 }
 
+export async function fetchRemoteBranch(cwd: string, branchName: string): Promise<GitResult> {
+  return fetchRefspecs(cwd, [`refs/heads/${branchName}:refs/remotes/origin/${branchName}`]);
+}
+
 // Create branch and checkout
 export async function createBranch(
   cwd: string,
@@ -599,6 +603,30 @@ export async function getDiffStatsBetweenRefs(
 export async function refExists(cwd: string, ref: string): Promise<boolean> {
   const result = await execGit(["rev-parse", "--verify", ref], cwd);
   return result.success;
+}
+
+export async function getCommitSha(cwd: string, ref: string): Promise<string | null> {
+  const result = await execGit(["rev-parse", "--verify", ref], cwd);
+  if (!result.success) {
+    return null;
+  }
+  const sha = result.stdout.trim();
+  return sha.length > 0 ? sha : null;
+}
+
+export async function isAncestorRef(
+  cwd: string,
+  ancestorRef: string,
+  descendantRef: string,
+): Promise<boolean | null> {
+  const result = await execGit(["merge-base", "--is-ancestor", ancestorRef, descendantRef], cwd);
+  if (result.success) {
+    return true;
+  }
+  if (result.exitCode === 1) {
+    return false;
+  }
+  return null;
 }
 
 export async function getChangedFilesFromRoot(cwd: string): Promise<string[]> {

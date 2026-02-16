@@ -354,3 +354,120 @@ curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/tasks
 curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/runs
 curl -s -H "X-API-Key: $API_KEY" http://localhost:4301/logs/all
 ```
+
+## 12. Throughput/Conflict KPI Acceptance Gates
+
+Use these gates for rollout acceptance after throughput/conflict architecture changes.
+
+Baseline fixing rule:
+
+- Freeze `T0` at Phase 1 migration deployment timestamp.
+- Baseline window is fixed to `T0-24h` to `T0`.
+- Do not redefine baseline during post-rollout evaluation.
+
+### 12.1 KPI Targets
+
+- `not_merged_rate < 0.20`
+- `update_branch_failed_rate < 0.15`
+- `conflict_autofix_created_per_hour (p95, rolling 6h) <= 5`
+- `feature_lane_dispatch_share >= 0.50` while conflict backlog exists
+- `conflict_recovery_active_share <= 0.35` sustained over rolling 3h
+- `feature_done_per_hour (rolling 3h) >= baseline_feature_done_per_hour * 0.90`
+
+### 12.2 SQL Measurement Queries (PostgreSQL)
+
+`not_merged_rate` from `judge.review`:
+
+```sql
+select
+  coalesce(
+    sum(case when (payload->'actions'->>'merged')::boolean is true then 0 else 1 end)::numeric
+    / nullif(count(*), 0),
+    0
+  ) as not_merged_rate
+from events
+where type = 'judge.review'
+  and coalesce(payload->>'mode', 'git') <> 'research'
+  and created_at >= now() - interval '6 hours';
+```
+
+`update_branch_failed_rate` from merge queue retry/fail reasons:
+
+```sql
+select
+  coalesce(
+    sum(case when (payload->>'mergeFailureReason') ilike 'update_branch_failed:%' then 1 else 0 end)::numeric
+    / nullif(count(*), 0),
+    0
+  ) as update_branch_failed_rate
+from events
+where type in ('judge.merge_queue_retried', 'judge.merge_queue_failed')
+  and created_at >= now() - interval '6 hours';
+```
+
+`conflict_autofix_created_per_hour` p95:
+
+```sql
+with hourly as (
+  select date_trunc('hour', created_at) as hour_bucket, count(*)::numeric as created_count
+  from events
+  where type = 'judge.conflict_autofix_task_created'
+    and created_at >= now() - interval '24 hours'
+  group by 1
+)
+select coalesce(percentile_cont(0.95) within group (order by created_count), 0) as p95_conflict_autofix_per_hour
+from hourly;
+```
+
+`feature_lane_dispatch_share` using lane throttle telemetry:
+
+```sql
+with samples as (
+  select payload
+  from events
+  where type = 'dispatcher.lane_throttled'
+    and created_at >= now() - interval '6 hours'
+)
+select coalesce(
+  sum(
+    ((payload->'selectedByLane'->>'feature')::numeric + (payload->'selectedByLane'->>'research')::numeric)
+    / nullif(
+      ((payload->'selectedByLane'->>'feature')::numeric
+      + (payload->'selectedByLane'->>'research')::numeric
+      + (payload->'selectedByLane'->>'conflict_recovery')::numeric
+      + (payload->'selectedByLane'->>'docser')::numeric),
+      0
+    )
+  ) / nullif(count(*), 0),
+  0
+) as feature_lane_dispatch_share
+from samples
+where ((payload->'availableByLane'->>'conflict_recovery')::numeric) > 0;
+```
+
+`conflict_recovery_active_share` over active backlog:
+
+```sql
+select
+  coalesce(
+    sum(case when lane = 'conflict_recovery' then 1 else 0 end)::numeric
+    / nullif(count(*), 0),
+    0
+  ) as conflict_recovery_active_share
+from tasks
+where status in ('queued', 'running', 'blocked');
+```
+
+`feature_done_per_hour` (rolling 3h):
+
+```sql
+with recent_done as (
+  select count(*)::numeric as done_count
+  from tasks
+  where status = 'done'
+    and lane = 'feature'
+    and updated_at >= now() - interval '3 hours'
+)
+select coalesce(done_count / 3, 0) as feature_done_per_hour
+from recent_done;
+```

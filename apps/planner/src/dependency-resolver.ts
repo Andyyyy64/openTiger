@@ -77,16 +77,36 @@ export function inferDependencies(tasks: CreateTaskInput[]): DependencyResolutio
   return resolutions;
 }
 
+function normalizePathForOverlap(path: string): string {
+  return path
+    .trim()
+    .replaceAll("\\", "/")
+    .replace(/^\.\/+/u, "")
+    .replace(/^\/+/u, "")
+    .replace(/\*\*/gu, "")
+    .replace(/\*/gu, "")
+    .replace(/\/+/gu, "/")
+    .replace(/\/$/u, "");
+}
+
 // パスが重複するかチェック（glob対応）
-function pathsOverlap(path1: string, path2: string): boolean {
-  // 単純な前方一致チェック
-  const normalized1 = path1.replace(/\*\*/g, "").replace(/\*/g, "");
-  const normalized2 = path2.replace(/\*\*/g, "").replace(/\*/g, "");
+export function pathsOverlap(path1: string, path2: string): boolean {
+  const trimmed1 = path1.trim();
+  const trimmed2 = path2.trim();
+  if (trimmed1 === "**" || trimmed2 === "**") {
+    return true;
+  }
+
+  const normalized1 = normalizePathForOverlap(path1);
+  const normalized2 = normalizePathForOverlap(path2);
+  if (!normalized1 || !normalized2) {
+    return false;
+  }
 
   return (
-    normalized1.startsWith(normalized2) ||
-    normalized2.startsWith(normalized1) ||
-    normalized1 === normalized2
+    normalized1 === normalized2 ||
+    normalized1.startsWith(`${normalized2}/`) ||
+    normalized2.startsWith(`${normalized1}/`)
   );
 }
 
