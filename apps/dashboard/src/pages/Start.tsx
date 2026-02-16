@@ -13,6 +13,53 @@ import { collectConfiguredExecutors } from "../lib/llm-executor";
 
 const MAX_PLANNERS = 1;
 
+const LAST_SELECTED_REPO_KEY = "opentiger:lastSelectedRepo";
+const HOSTINFO_CACHE_KEY = "opentiger:hostinfo";
+
+function getLastSelectedRepo(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return localStorage.getItem(LAST_SELECTED_REPO_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function setLastSelectedRepo(fullName: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (fullName) {
+      localStorage.setItem(LAST_SELECTED_REPO_KEY, fullName);
+    } else {
+      localStorage.removeItem(LAST_SELECTED_REPO_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function getHostinfoFromStorage(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return localStorage.getItem(HOSTINFO_CACHE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function setHostinfoToStorage(output: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (output) {
+      localStorage.setItem(HOSTINFO_CACHE_KEY, output);
+    } else {
+      localStorage.removeItem(HOSTINFO_CACHE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 const STATUS_LABELS: Record<SystemProcess["status"], string> = {
   idle: "IDLE",
   running: "RUNNING",
@@ -87,6 +134,11 @@ export const StartPage: React.FC = () => {
   const [repoMessage, setRepoMessage] = useState("");
   const [isRepoManagerOpen, setIsRepoManagerOpen] = useState(false);
   const [ghDefaultsApplied, setGhDefaultsApplied] = useState(false);
+  const [cachedHostinfo, setCachedHostinfo] = useState("");
+
+  useEffect(() => {
+    setCachedHostinfo(getHostinfoFromStorage());
+  }, []);
 
   const { data: config } = useQuery({
     queryKey: ["config"],
@@ -147,12 +199,19 @@ export const StartPage: React.FC = () => {
     queryFn: () => systemApi.processes(),
     refetchInterval: 5000,
   });
-  const neofetchQuery = useQuery({
-    queryKey: ["system", "host-neofetch"],
-    queryFn: () => systemApi.neofetch(),
-    retry: 0,
-    refetchInterval: false,
+  const hostinfoReloadMutation = useMutation({
+    mutationFn: () => systemApi.neofetch(),
+    onSuccess: (data) => {
+      if (data?.available && data?.output) {
+        setHostinfoToStorage(data.output);
+        setCachedHostinfo(data.output);
+      }
+    },
   });
+  const hostinfoOutput =
+    hostinfoReloadMutation.data?.available && hostinfoReloadMutation.data?.output
+      ? hostinfoReloadMutation.data.output
+      : cachedHostinfo;
   const configuredExecutors = useMemo(() => {
     if (!config?.config) {
       return new Set<"claude_code" | "codex" | "opencode">();
@@ -168,10 +227,6 @@ export const StartPage: React.FC = () => {
   );
   const shouldCheckClaudeAuth = configuredExecutors.has("claude_code");
   const shouldCheckCodexAuth = configuredExecutors.has("codex");
-  const neofetchOutput =
-    neofetchQuery.data?.available && neofetchQuery.data.output
-      ? neofetchQuery.data.output
-      : undefined;
   const claudeAuthEnvironment = normalizeExecutionEnvironment(config?.config.EXECUTION_ENVIRONMENT);
   const claudeAuthQuery = useQuery({
     queryKey: ["system", "claude-auth", activeExecutorSignature, claudeAuthEnvironment],
@@ -212,10 +267,18 @@ export const StartPage: React.FC = () => {
   }, [config?.config, repoName, repoOwner]);
   useEffect(() => {
     if (selectedRepoFullName) return;
-    if (!configValues.GITHUB_OWNER || !configValues.GITHUB_REPO) return;
-    const fullName = `${configValues.GITHUB_OWNER}/${configValues.GITHUB_REPO}`;
-    if (githubRepos.some((repo) => repo.fullName === fullName)) {
-      setSelectedRepoFullName(fullName);
+    const configFullName =
+      configValues.GITHUB_OWNER && configValues.GITHUB_REPO
+        ? `${configValues.GITHUB_OWNER}/${configValues.GITHUB_REPO}`
+        : "";
+    if (configFullName && githubRepos.some((repo) => repo.fullName === configFullName)) {
+      setSelectedRepoFullName(configFullName);
+      setLastSelectedRepo(configFullName);
+      return;
+    }
+    const lastSelected = getLastSelectedRepo();
+    if (lastSelected && githubRepos.some((repo) => repo.fullName === lastSelected)) {
+      setSelectedRepoFullName(lastSelected);
       return;
     }
     if (githubAuthMode === "gh" && githubRepos.length > 0) {
@@ -234,6 +297,8 @@ export const StartPage: React.FC = () => {
     selectedRepoFullName,
     viewerLogin,
   ]);
+  // Auto-select latest repo only when NO repo is configured (first-time setup).
+  // Never overwrite an existing config to avoid switching away from user's choice.
   useEffect(() => {
     if (githubAuthMode !== "gh") {
       return;
@@ -244,6 +309,12 @@ export const StartPage: React.FC = () => {
     if (!viewerLogin || githubRepos.length === 0) {
       return;
     }
+    const hasRepoConfigured =
+      Boolean(configValues.GITHUB_OWNER?.trim()) && Boolean(configValues.GITHUB_REPO?.trim());
+    if (hasRepoConfigured) {
+      setGhDefaultsApplied(true);
+      return;
+    }
     const latestRepo = githubRepos[0];
     if (!latestRepo) {
       return;
@@ -252,14 +323,6 @@ export const StartPage: React.FC = () => {
     const nextRepo = latestRepo.name;
     const nextUrl = latestRepo.url;
     const nextBranch = latestRepo.defaultBranch || "main";
-    const sameOwner = (configValues.GITHUB_OWNER?.trim() ?? "") === nextOwner;
-    const sameRepo = (configValues.GITHUB_REPO?.trim() ?? "") === nextRepo;
-    const sameUrl = (configValues.REPO_URL?.trim() ?? "") === nextUrl;
-    const sameBranch = (configValues.BASE_BRANCH?.trim() ?? "") === nextBranch;
-    if (sameOwner && sameRepo && sameUrl && sameBranch) {
-      setGhDefaultsApplied(true);
-      return;
-    }
     syncGhDefaultsMutation.mutate(
       {
         GITHUB_OWNER: nextOwner,
@@ -270,6 +333,7 @@ export const StartPage: React.FC = () => {
       {
         onSuccess: () => {
           setSelectedRepoFullName(latestRepo.fullName);
+          setLastSelectedRepo(latestRepo.fullName);
           setRepoOwner(nextOwner);
           setRepoName(nextRepo);
           setRepoMessage(`> REPO_AUTO_SELECTED: ${latestRepo.fullName}`);
@@ -526,8 +590,10 @@ export const StartPage: React.FC = () => {
       });
     },
     onSuccess: (repo) => {
-      setRepoMessage(`> REPO_READY: ${repo.owner}/${repo.name}`);
-      setSelectedRepoFullName(`${repo.owner}/${repo.name}`);
+      const fullName = `${repo.owner}/${repo.name}`;
+      setRepoMessage(`> REPO_READY: ${fullName}`);
+      setSelectedRepoFullName(fullName);
+      setLastSelectedRepo(fullName);
       void configApi
         .update({
           REPO_MODE: "git",
@@ -568,9 +634,10 @@ export const StartPage: React.FC = () => {
         BASE_BRANCH: repo.defaultBranch,
       }),
     onSuccess: (_, repo) => {
+      const repoFullName = repo.fullName ?? `${repo.owner}/${repo.name}`;
       setRepoOwner(repo.owner);
       setRepoName(repo.name);
-      const repoFullName = repo.fullName ?? `${repo.owner}/${repo.name}`;
+      setLastSelectedRepo(repoFullName);
       setRepoMessage(`> REPO_SELECTED: ${repoFullName}`);
       queryClient.invalidateQueries({ queryKey: ["config"] });
       queryClient.invalidateQueries({ queryKey: ["system", "github-repos"] });
@@ -778,7 +845,11 @@ export const StartPage: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2">
                     <select
                       value={selectedRepoFullName}
-                      onChange={(event) => setSelectedRepoFullName(event.target.value)}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setSelectedRepoFullName(value);
+                        setLastSelectedRepo(value);
+                      }}
                       disabled={
                         !hasGithubAuth || githubReposQuery.isLoading || githubRepos.length === 0
                       }
@@ -930,7 +1001,11 @@ export const StartPage: React.FC = () => {
             </div>
           </section>
         </div>
-        {neofetchOutput && <NeofetchPanel output={neofetchOutput} />}
+        <NeofetchPanel
+          output={hostinfoOutput}
+          onReload={() => hostinfoReloadMutation.mutate()}
+          isReloading={hostinfoReloadMutation.isPending}
+        />
         {/* Legacy Planner Logs */}
         <section className="border border-term-border p-0">
           <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between">

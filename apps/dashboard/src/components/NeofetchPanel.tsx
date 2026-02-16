@@ -18,6 +18,8 @@ type ParsedNeofetchOutput = {
 
 type NeofetchPanelProps = {
   output: string;
+  onReload?: () => void;
+  isReloading?: boolean;
 };
 
 const ANSI_ESCAPE = String.fromCharCode(27);
@@ -269,21 +271,60 @@ function renderAnsiLine(chunks: AnsiChunk[], key: string): React.ReactNode {
   );
 }
 
-export const NeofetchPanel: React.FC<NeofetchPanelProps> = ({ output }) => {
+export const NeofetchPanel: React.FC<NeofetchPanelProps> = ({
+  output,
+  onReload,
+  isReloading = false,
+}) => {
   const parsed = React.useMemo(() => parseNeofetchOutput(output), [output]);
 
   return (
     <section className="border border-term-border p-0">
-      <div className="bg-term-border/10 px-4 py-2 border-b border-term-border">
+      <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between items-center">
         <h2 className="text-sm font-bold uppercase tracking-wider">Host_Info</h2>
+        {onReload && (
+          <button
+            type="button"
+            onClick={onReload}
+            disabled={isReloading}
+            className="border border-term-border hover:bg-term-fg hover:text-black p-1.5 transition-colors disabled:opacity-50"
+            title="Reload host info"
+            aria-label="Reload host info"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={isReloading ? "animate-spin" : ""}
+            >
+              <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" />
+              <path d="M21 3v5h-5" />
+            </svg>
+          </button>
+        )}
       </div>
       <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6">
-        <div className="font-mono text-xs leading-5 text-zinc-300 overflow-x-auto">
-          {parsed.infoLines.map((chunks, index) => renderAnsiLine(chunks, `host-info-${index}`))}
-        </div>
-        <div className="font-mono text-xs leading-5 text-zinc-300 overflow-x-auto lg:justify-self-end">
-          {parsed.logoLines.map((chunks, index) => renderAnsiLine(chunks, `host-logo-${index}`))}
-        </div>
+        {output ? (
+          <>
+            <div className="font-mono text-xs leading-5 text-zinc-300 overflow-x-auto">
+              {parsed.infoLines.map((chunks, index) => renderAnsiLine(chunks, `host-info-${index}`))}
+            </div>
+            <div className="font-mono text-xs leading-5 text-zinc-300 overflow-x-auto lg:justify-self-end">
+              {parsed.logoLines.map((chunks, index) =>
+                renderAnsiLine(chunks, `host-logo-${index}`),
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="font-mono text-xs text-zinc-500 col-span-full">
+            {isReloading ? "Fetching..." : "Click reload icon to fetch host info"}
+          </div>
+        )}
       </div>
     </section>
   );
