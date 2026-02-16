@@ -11,6 +11,7 @@ import {
   cleanupExpiredLeases,
   resetOfflineAgents,
   cancelStuckRuns,
+  recoverStaleMergeQueueClaims,
   requeueFailedTasksWithCooldown,
   requeueBlockedTasksWithCooldown,
 } from "../cleaners/index";
@@ -250,6 +251,11 @@ export async function runCleanupLoop(config: CycleManagerConfig): Promise<void> 
     const stuckRuns = await cancelStuckRuns(config.stuckRunTimeoutMs);
     if (stuckRuns > 0) {
       console.log(`[Cleanup] Cancelled ${stuckRuns} stuck runs`);
+    }
+
+    const recoveredMergeQueueClaims = await recoverStaleMergeQueueClaims();
+    if (recoveredMergeQueueClaims > 0) {
+      console.log(`[Cleanup] Recovered ${recoveredMergeQueueClaims} stale merge queue claims`);
     }
 
     // Requeue failed tasks after cooldown (default: unlimited)

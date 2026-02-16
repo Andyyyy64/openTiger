@@ -439,6 +439,7 @@ async function queueResearchTask(params: {
     goal,
     kind: "research",
     role: "worker",
+    lane: "research",
     context: {
       research: {
         jobId: params.jobId,

@@ -146,6 +146,17 @@ describe("classifyFailure", () => {
     });
   });
 
+  it("classifies branch divergence as non-retryable setup failure", () => {
+    const failure = classifyFailure("branch_diverged_requires_recreate:local_behind_remote");
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: false,
+      reason: "branch_diverged_requires_recreate",
+      blockReason: "needs_rework",
+    });
+  });
+
   it("falls back to model_or_unknown when both structured and message classification are unavailable", () => {
     const failure = classifyFailure("something unknown", { failureCode: "unknown_code" });
 
