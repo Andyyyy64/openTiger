@@ -144,8 +144,13 @@ Queue duplicate prevention:
 ## 7. Judge Non-Approval / Merge Failure Paths
 
 - Non-approval may create AutoFix task and move parent to `blocked(needs_rework)`
-- On approval, merge conflict may generate `[AutoFix-Conflict] PR #...`
-- On conflict autofix enqueue failure, uses judge retry fallback
+- On approval, merge retries are handled by `pr_merge_queue` (not same-run re-judgement)
+- Queue lifecycle:
+  - `pending` -> `processing` (claim)
+  - `processing` -> `merged` (task `done`) or `pending` (retry with backoff)
+  - `processing` -> `failed` (attempt budget exhausted)
+- Conflict recovery (`[AutoFix-Conflict]` / `[Recreate-From-Main]`) is triggered only after merge queue exhaustion
+- Stale queue claims are recovered by Judge and Cycle Manager cleanup paths
 
 ## 8. Cycle Manager Self-Recovery
 

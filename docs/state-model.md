@@ -13,16 +13,18 @@ Related:
 
 - [1. Task Status](#1-task-status)
 - [1.1 Task Kind](#11-task-kind)
+- [1.2 Task Lane](#12-task-lane)
 - [2. Task Block Reason](#2-task-block-reason)
 - [2.1 Task Retry Reason (`GET /tasks`)](#21-task-retry-reason-get-tasks)
 - [2.2 Task Retry Reason (Operations)](#22-task-retry-reason-operations)
 - [3. Run Status](#3-run-status)
+- [3.1 Merge Queue Status](#31-merge-queue-status)
 - [4. Agent Status](#4-agent-status)
 - [5. Cycle Status](#5-cycle-status)
 - [5.1 Research Job Status and Stage](#51-research-job-status-and-stage)
 - [6. Usage](#6-usage)
 - [7. Patterns Prone to Stalls (Initial Diagnosis)](#7-patterns-prone-to-stalls-initial-diagnosis)
-- [8. Lookup: State Vocabulary -> Transition -> Owner -> Implementation (Shortest Path)](#8-lookup-state-vocabulary--transition--owner--implementation-shortest-path)
+- [8. Lookup: State Vocabulary to Transition to Owner to Implementation (Shortest Path)](#8-lookup-state-vocabulary-to-transition-to-owner-to-implementation-shortest-path)
 
 ## 1. Task Status
 
@@ -48,6 +50,19 @@ Notes:
 
 - `code` follows git/local implementation pipeline
 - `research` follows non-git evidence synthesis pipeline
+
+## 1.2 Task Lane
+
+- `feature`
+- `conflict_recovery`
+- `docser`
+- `research`
+
+Notes:
+
+- Dispatcher lane scheduler uses lane + active running usage to prevent feature starvation.
+- `docser` lane is serialized through `targetArea=docser:global`.
+- `conflict_recovery` lane is capped to avoid monopolizing worker slots.
 
 ## 2. Task Block Reason
 
@@ -105,6 +120,22 @@ For initial triage, these values are most useful:
 - `success`
 - `failed`
 - `cancelled`
+
+## 3.1 Merge Queue Status
+
+`pr_merge_queue.status`:
+
+- `pending`
+- `processing`
+- `merged`
+- `failed`
+- `cancelled`
+
+Notes:
+
+- `pending` rows are claimable when `next_attempt_at <= now`.
+- `processing` rows require valid claim lease (`claim_owner`, `claim_expires_at`).
+- On claim timeout, recovery transitions `processing -> pending`.
 
 ## 4. Agent Status
 
@@ -188,7 +219,7 @@ Notes:
 - For API check sequence, see [operations](operations.md#11-post-change-verification-checklist).
 - For agent triage confusion, see FAQ in [agent/README](agent/README.md).
 
-## 8. Lookup: State Vocabulary -> Transition -> Owner -> Implementation (Shortest Path)
+## 8. Lookup: State Vocabulary to Transition to Owner to Implementation (Shortest Path)
 
 Common path when tracing from state vocabulary:
 

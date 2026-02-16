@@ -34,8 +34,9 @@ Out of scope:
 5. Dependency normalization
 6. Apply role / allowedPaths / command policy
 7. Verification command augmentation
-8. Save plan (with dedupe lock)
-9. Link to issue when needed
+8. Hot-file overlap detection against active backlog (`queued/running/blocked`)
+9. Save plan (with dedupe lock)
+10. Link to issue when needed
 
 ## 4. Main Behavior
 
@@ -45,6 +46,7 @@ Out of scope:
 - Command-driven allowedPaths completion
 - Doc gap detection and docser task injection
 - Reflect policy recovery hints into future tasks
+- Attach backlog-overlap dependencies before persistence to reduce hot-file collisions
 - Save plan summary in `planner.plan_created` event
 
 Research mode behavior:

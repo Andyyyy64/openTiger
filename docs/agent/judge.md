@@ -39,8 +39,9 @@ Legacy `needs_human` is normalized into request_changes-style recovery flow.
 ## 5. Post-Decision Transitions
 
 - approve + merge success -> `done`
+- approve + merge incomplete -> enqueue `pr_merge_queue` and keep task `blocked(awaiting_judge)`
 - non-approve -> retry or move to `needs_rework`
-- merge conflict -> attempt `[AutoFix-Conflict]` task creation
+- merge queue exhaustion -> conflict recovery escalation (`[AutoFix-Conflict]` / `[Recreate-From-Main]`)
 
 Research decision path:
 
@@ -50,10 +51,12 @@ Research decision path:
 ## 6. Loop Prevention and Recovery
 
 - Idempotent run claim control (`judgedAt`, `judgementVersion`)
+- Merge-incomplete paths do not reset `runs.judgedAt`; only explicit run restoration does
+- Merge queue claim lease recovery (`processing -> pending` on claim timeout)
 - Non-approve circuit breaker
 - Doom loop circuit breaker
 - Run restoration for awaiting_judge backlog
-- Autofix fallback on conflict
+- Conflict autofix/recreate are gated behind merge queue retry budget
 
 ## 7. Implementation Reference (Source of Truth)
 
@@ -73,6 +76,9 @@ Research decision path:
 - `JUDGE_AUTO_FIX_ON_FAIL`
 - `JUDGE_AUTO_FIX_MAX_ATTEMPTS`
 - `JUDGE_AWAITING_RETRY_COOLDOWN_MS`
+- `JUDGE_MERGE_QUEUE_MAX_ATTEMPTS`
+- `JUDGE_MERGE_QUEUE_RETRY_DELAY_MS`
+- `JUDGE_MERGE_QUEUE_CLAIM_TTL_MS`
 - `JUDGE_PR_MERGEABLE_PRECHECK_RETRIES`
 - `JUDGE_PR_MERGEABLE_PRECHECK_DELAY_MS`
 - `JUDGE_DOOM_LOOP_CIRCUIT_BREAKER_RETRIES`

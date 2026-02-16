@@ -19,7 +19,7 @@ Out of scope:
 ## 2. Input
 
 - Current state of `tasks` / `runs` / `leases` / `agents`
-- Task `priority`, `dependencies`, `targetArea`, `role`
+- Task `priority`, `dependencies`, `targetArea`, `lane`, `role`
 - Execution mode (`LAUNCH_MODE=process|docker`)
 - Repository execution mode (`REPO_MODE=git|local`)
 
@@ -28,10 +28,11 @@ Out of scope:
 1. First recover lease anomalies and orphaned running tasks
 2. Compute available slots (busy agent count + limit)
 3. Collect `queued` tasks, filter by dependencies/conflicts
-4. Sort by priority score
-5. Select idle agent matching role
-6. Atomically acquire lease and update `queued -> running`
-7. Launch worker (queue enqueue or docker start)
+4. Apply lane budget (`feature` / `conflict_recovery` / `docser` / `research`) using active running usage and this-cycle dispatch usage
+5. Sort by priority score within each lane
+6. Select idle agent matching role
+7. Atomically acquire lease and update `queued -> running`
+8. Launch worker (queue enqueue or docker start)
 
 ## 4. Selection Logic and Guardrails
 
@@ -40,6 +41,8 @@ Out of scope:
 - Recent failure/cancel suppresses re-dispatch during cooldown
 - Tasks with conflicting `targetArea` are not run concurrently
 - Tasks with unresolved `dependencies` are not dispatched
+- Feature lane is protected from starvation by minimum-slot policy
+- Conflict/docser lanes are capped; dispatcher emits lane-throttle telemetry events when caps block dispatch
 
 Research-specific:
 
@@ -81,6 +84,9 @@ Research-specific:
 - `DISPATCH_NO_IDLE_LOG_INTERVAL_MS`
 - `DISPATCH_BLOCK_ON_AWAITING_JUDGE`
 - `DISPATCH_RETRY_DELAY_MS`
+- `DISPATCH_CONFLICT_LANE_MAX_SLOTS`
+- `DISPATCH_FEATURE_LANE_MIN_SLOTS`
+- `DISPATCH_DOCSER_LANE_MAX_SLOTS`
 - `DISPATCH_AGENT_HEARTBEAT_TIMEOUT_SECONDS`
 - `DISPATCH_AGENT_RUNNING_RUN_GRACE_MS`
 - `SANDBOX_DOCKER_IMAGE`

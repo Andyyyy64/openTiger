@@ -6,7 +6,7 @@ Primary sources are:
 - DB-managed keys: `apps/api/src/system-config.ts` (`CONFIG_FIELDS`)
 - Env-only config: each runtime (dispatcher/worker/judge/cycle-manager/api)
 
-### Common Lookup Path (state vocabulary -> transition -> owner -> implementation, when entering from config change)
+## Common Lookup Path (state vocabulary -> transition -> owner -> implementation, when entering from config change)
 
 If stalls occur after config changes, check in order: state vocabulary -> transition -> owner -> implementation.
 
@@ -50,6 +50,9 @@ If stalls occur after config changes, check in order: state vocabulary -> transi
 - `DOCSER_COUNT`
 - `JUDGE_COUNT`
 - `PLANNER_COUNT`
+- `DISPATCH_CONFLICT_LANE_MAX_SLOTS`
+- `DISPATCH_FEATURE_LANE_MIN_SLOTS`
+- `DISPATCH_DOCSER_LANE_MAX_SLOTS`
 
 Note:
 
@@ -91,6 +94,9 @@ Note:
 - `CLAUDE_CODE_APPEND_SYSTEM_PROMPT`
 - `PLANNER_MODEL`
 - `JUDGE_MODEL`
+- `JUDGE_MERGE_QUEUE_MAX_ATTEMPTS`
+- `JUDGE_MERGE_QUEUE_RETRY_DELAY_MS`
+- `JUDGE_MERGE_QUEUE_CLAIM_TTL_MS`
 - `WORKER_MODEL`
 - `TESTER_MODEL`
 - `DOCSER_MODEL`
@@ -152,6 +158,12 @@ Resolution note:
 - `WORKER_POLICY_RECOVERY_ATTEMPTS=5`
 - `WORKER_VERIFY_RECOVERY_ATTEMPTS=5`
 - `BLOCKED_NEEDS_REWORK_IN_PLACE_RETRY_LIMIT=5`
+- `DISPATCH_CONFLICT_LANE_MAX_SLOTS=2`
+- `DISPATCH_FEATURE_LANE_MIN_SLOTS=1`
+- `DISPATCH_DOCSER_LANE_MAX_SLOTS=1`
+- `JUDGE_MERGE_QUEUE_MAX_ATTEMPTS=3`
+- `JUDGE_MERGE_QUEUE_RETRY_DELAY_MS=30000`
+- `JUDGE_MERGE_QUEUE_CLAIM_TTL_MS=120000`
 - `AUTO_REPLAN=true`
 - `REPLAN_REQUIREMENT_PATH=docs/requirement.md`
 - `REPLAN_INTERVAL_MS=60000`

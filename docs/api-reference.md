@@ -229,6 +229,17 @@ Current implementation behavior:
 - `POST /system/preflight`
   - Returns recommended startup configuration from requirement content + local backlog + GitHub issue/PR backlog
 
+### Runtime Throughput / Conflict Telemetry
+
+- `GET /system/runtime/throughput`
+  - Returns:
+    - merge queue status counts (`pending`/`processing`/`merged`/`failed`/`cancelled`)
+    - lane backlog/running counts by `tasks.lane`
+    - recent event counts (6h window):
+      - `judge.merge_queue_*`
+      - `dispatcher.lane_throttled`
+      - `worker.push_divergence_guard_triggered`
+
 ### Process Manager (system)
 
 - `GET /system/processes`
