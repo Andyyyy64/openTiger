@@ -69,6 +69,16 @@ describe("failure-classifier", () => {
     });
   });
 
+  it("classifies branch divergence as non-retryable setup failure", () => {
+    const failure = classifyFailure("branch_diverged_requires_recreate:local_behind_remote");
+
+    expect(failure).toEqual({
+      category: "setup",
+      retryable: false,
+      reason: "branch_diverged_requires_recreate",
+    });
+  });
+
   it("keeps legacy message fallback when errorMeta is missing", () => {
     const failure = classifyFailure("ERR_PNPM_NO_SCRIPT Missing script: verify");
 
