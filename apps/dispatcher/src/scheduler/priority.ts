@@ -1,5 +1,6 @@
 import { db } from "@openTiger/db";
 import { tasks, leases, runs, artifacts } from "@openTiger/db/schema";
+import { resolveDeterministicTargetArea } from "@openTiger/core";
 import { eq, and, inArray, gt, count, isNull, desc } from "drizzle-orm";
 
 // Task selection result
@@ -10,6 +11,7 @@ export interface AvailableTask {
   priority: number;
   riskLevel: string;
   role: string;
+  lane: string;
   timeboxMinutes: number;
   dependencies: string[];
   allowedPaths: string[];
@@ -32,40 +34,22 @@ let lastObservedJudgeBacklog = -1;
 let lastObservedPendingJudgeRun = false;
 let lastObservedJudgeBacklogBlocked = false;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function resolveResearchJobIdFromContext(context: unknown): string | null {
-  if (!isRecord(context)) {
-    return null;
-  }
-  const research = context.research;
-  if (!isRecord(research)) {
-    return null;
-  }
-  const raw = research.jobId;
-  if (typeof raw !== "string") {
-    return null;
-  }
-  const trimmed = raw.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
 function resolveEffectiveTargetArea(task: {
   id: string;
   kind?: string | null;
   targetArea?: string | null;
+  touches?: string[] | null;
+  allowedPaths?: string[] | null;
   context?: unknown;
 }): string | null {
-  if (task.targetArea && task.targetArea.trim().length > 0) {
-    return task.targetArea;
-  }
-  if (task.kind !== "research") {
-    return null;
-  }
-  const jobId = resolveResearchJobIdFromContext(task.context);
-  return jobId ? `research:${jobId}` : `research:task:${task.id}`;
+  return resolveDeterministicTargetArea({
+    id: task.id,
+    kind: task.kind,
+    targetArea: task.targetArea,
+    touches: task.touches,
+    allowedPaths: task.allowedPaths,
+    context: task.context,
+  });
 }
 
 function isQuotaFailureMessage(message: string): boolean {
@@ -236,6 +220,8 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
       id: tasks.id,
       kind: tasks.kind,
       targetArea: tasks.targetArea,
+      touches: tasks.touches,
+      allowedPaths: tasks.allowedPaths,
       context: tasks.context,
     })
     .from(tasks)
@@ -303,6 +289,7 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     priority: task.priority ?? 0,
     riskLevel: task.riskLevel ?? "low",
     role: task.role ?? "worker",
+    lane: task.lane ?? (task.kind === "research" ? "research" : "feature"),
     timeboxMinutes: task.timeboxMinutes ?? 60,
     dependencies: task.dependencies ?? [],
     allowedPaths: task.allowedPaths ?? [],
