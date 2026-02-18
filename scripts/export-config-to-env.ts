@@ -1,5 +1,7 @@
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { execFile } from "node:child_process";
+import { readFile, stat, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 import { db, closeDb, sql } from "../packages/db/src/client.ts";
 import { config as configTable } from "../packages/db/src/schema.ts";
 
@@ -10,6 +12,12 @@ type ConfigField = {
   column: ConfigColumn;
   defaultValue: string;
 };
+
+const execFileAsync = promisify(execFile);
+const DEFAULT_LLM_EXECUTOR = "codex" as const;
+
+type ExecutorKind = "opencode" | "claude_code" | "codex";
+let bootstrapLlmExecutorPromise: Promise<ExecutorKind> | null = null;
 
 const CONFIG_FIELDS: ConfigField[] = [
   { key: "MAX_CONCURRENT_WORKERS", column: "maxConcurrentWorkers", defaultValue: "-1" },
@@ -45,7 +53,7 @@ const CONFIG_FIELDS: ConfigField[] = [
   { key: "LOCAL_REPO_PATH", column: "localRepoPath", defaultValue: "" },
   { key: "LOCAL_WORKTREE_ROOT", column: "localWorktreeRoot", defaultValue: "" },
   { key: "BASE_BRANCH", column: "baseBranch", defaultValue: "main" },
-  { key: "LLM_EXECUTOR", column: "llmExecutor", defaultValue: "claude_code" },
+  { key: "LLM_EXECUTOR", column: "llmExecutor", defaultValue: "codex" },
   { key: "WORKER_LLM_EXECUTOR", column: "workerLlmExecutor", defaultValue: "inherit" },
   { key: "TESTER_LLM_EXECUTOR", column: "testerLlmExecutor", defaultValue: "inherit" },
   { key: "DOCSER_LLM_EXECUTOR", column: "docserLlmExecutor", defaultValue: "inherit" },
@@ -237,6 +245,116 @@ function sanitizeLegacyLogDirPlaceholder(source: string): { content: string; upd
   };
 }
 
+function isNonEmpty(value: string | null | undefined): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+async function pathExists(path: string, kind: "file" | "dir"): Promise<boolean> {
+  try {
+    const info = await stat(path);
+    return kind === "file" ? info.isFile() : info.isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function resolveCandidatePath(path: string): string {
+  return path.startsWith("/") ? path : resolve(path);
+}
+
+function uniqueCandidatePaths(candidates: Array<string | undefined>): string[] {
+  const resolved: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    if (!isNonEmpty(candidate)) {
+      continue;
+    }
+    const absolutePath = resolveCandidatePath(candidate);
+    if (seen.has(absolutePath)) {
+      continue;
+    }
+    seen.add(absolutePath);
+    resolved.push(absolutePath);
+  }
+  return resolved;
+}
+
+async function hasAnyDirectory(paths: string[]): Promise<boolean> {
+  for (const path of paths) {
+    if (await pathExists(path, "dir")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasCodexApiCredential(): boolean {
+  return (
+    isNonEmpty(process.env.CODEX_API_KEY?.trim()) || isNonEmpty(process.env.OPENAI_API_KEY?.trim())
+  );
+}
+
+function hasClaudeApiCredential(): boolean {
+  return isNonEmpty(process.env.ANTHROPIC_API_KEY?.trim());
+}
+
+async function commandSucceeds(command: string, args: string[]): Promise<boolean> {
+  try {
+    await execFileAsync(command, args, {
+      timeout: 5000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function hasCodexSubscription(): Promise<boolean> {
+  if (hasCodexApiCredential()) {
+    return true;
+  }
+  const homeDir = process.env.HOME?.trim();
+  const authDirectories = uniqueCandidatePaths([
+    process.env.CODEX_AUTH_DIR?.trim(),
+    homeDir ? join(homeDir, ".codex") : undefined,
+  ]);
+  if (await hasAnyDirectory(authDirectories)) {
+    return true;
+  }
+  return await commandSucceeds("codex", ["login", "status"]);
+}
+
+async function hasClaudeCodeSubscription(): Promise<boolean> {
+  if (hasClaudeApiCredential()) {
+    return true;
+  }
+  const homeDir = process.env.HOME?.trim();
+  const authDirectories = uniqueCandidatePaths([
+    process.env.CLAUDE_AUTH_DIR?.trim(),
+    process.env.CLAUDE_CONFIG_DIR?.trim(),
+    homeDir ? join(homeDir, ".claude") : undefined,
+    homeDir ? join(homeDir, ".config", "claude") : undefined,
+  ]);
+  return await hasAnyDirectory(authDirectories);
+}
+
+async function detectBootstrapLlmExecutor(): Promise<ExecutorKind> {
+  if (await hasCodexSubscription()) {
+    return "codex";
+  }
+  if (await hasClaudeCodeSubscription()) {
+    return "claude_code";
+  }
+  return DEFAULT_LLM_EXECUTOR;
+}
+
+async function getBootstrapLlmExecutor(): Promise<ExecutorKind> {
+  if (!bootstrapLlmExecutorPromise) {
+    bootstrapLlmExecutorPromise = detectBootstrapLlmExecutor();
+  }
+  return bootstrapLlmExecutorPromise;
+}
+
 const LEGACY_REPLAN_COMMANDS = new Set([
   "",
   "pnpm --filter @openTiger/planner start",
@@ -272,7 +390,7 @@ async function ensureConfigColumns(): Promise<void> {
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_small_model" text DEFAULT 'google/gemini-2.5-flash' NOT NULL`,
   );
   await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "llm_executor" text DEFAULT 'claude_code' NOT NULL`,
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "llm_executor" text DEFAULT 'codex' NOT NULL`,
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "worker_llm_executor" text DEFAULT 'inherit' NOT NULL`,
@@ -405,9 +523,13 @@ async function ensureConfigRow(): Promise<typeof configTable.$inferSelect> {
       return updated ?? current;
     }
 
+    const defaultsForInsert = {
+      ...DEFAULT_CONFIG,
+      LLM_EXECUTOR: await getBootstrapLlmExecutor(),
+    };
     const created = await tx
       .insert(configTable)
-      .values(buildConfigRecord(DEFAULT_CONFIG, { includeDefaults: true }))
+      .values(buildConfigRecord(defaultsForInsert, { includeDefaults: true }))
       .returning();
     const row = created[0];
     if (!row) {

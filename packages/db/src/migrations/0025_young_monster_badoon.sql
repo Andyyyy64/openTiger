@@ -1,0 +1,1 @@
+ALTER TABLE "config" ALTER COLUMN "llm_executor" SET DEFAULT 'codex';

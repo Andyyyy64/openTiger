@@ -168,7 +168,7 @@ export const config = pgTable("config", {
   localRepoPath: text("local_repo_path").default("").notNull(),
   localWorktreeRoot: text("local_worktree_root").default("").notNull(),
   baseBranch: text("base_branch").default("main").notNull(),
-  llmExecutor: text("llm_executor").default("claude_code").notNull(),
+  llmExecutor: text("llm_executor").default("codex").notNull(),
   workerLlmExecutor: text("worker_llm_executor").default("inherit").notNull(),
   testerLlmExecutor: text("tester_llm_executor").default("inherit").notNull(),
   docserLlmExecutor: text("docser_llm_executor").default("inherit").notNull(),

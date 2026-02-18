@@ -1,7 +1,7 @@
 // Settings form definitions and display order
 export const REPO_MODE_OPTIONS = ["git", "local"] as const;
 export const GITHUB_AUTH_MODE_OPTIONS = ["gh", "token"] as const;
-export const LLM_EXECUTOR_OPTIONS = ["claude_code", "codex", "opencode"] as const;
+export const LLM_EXECUTOR_OPTIONS = ["codex", "claude_code", "opencode"] as const;
 export const AGENT_LLM_EXECUTOR_OPTIONS = ["inherit", ...LLM_EXECUTOR_OPTIONS] as const;
 export const EXECUTION_ENVIRONMENT_OPTIONS = ["host", "sandbox"] as const;
 export const CLAUDE_PERMISSION_MODE_OPTIONS = [
