@@ -1,9 +1,8 @@
-import { execFile } from "node:child_process";
-import { readFile, stat, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { promisify } from "node:util";
+import { readFile, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { db, closeDb, sql } from "../packages/db/src/client.ts";
 import { config as configTable } from "../packages/db/src/schema.ts";
+import { getBootstrapLlmExecutor } from "../apps/api/src/bootstrap-llm-executor.ts";
 
 type ConfigColumn = string;
 
@@ -12,12 +11,6 @@ type ConfigField = {
   column: ConfigColumn;
   defaultValue: string;
 };
-
-const execFileAsync = promisify(execFile);
-const DEFAULT_LLM_EXECUTOR = "codex" as const;
-
-type ExecutorKind = "opencode" | "claude_code" | "codex";
-let bootstrapLlmExecutorPromise: Promise<ExecutorKind> | null = null;
 
 const CONFIG_FIELDS: ConfigField[] = [
   { key: "MAX_CONCURRENT_WORKERS", column: "maxConcurrentWorkers", defaultValue: "-1" },
@@ -243,116 +236,6 @@ function sanitizeLegacyLogDirPlaceholder(source: string): { content: string; upd
     content: `${replaced.join("\n").replace(/\n+$/u, "")}\n`,
     updated,
   };
-}
-
-function isNonEmpty(value: string | null | undefined): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-async function pathExists(path: string, kind: "file" | "dir"): Promise<boolean> {
-  try {
-    const info = await stat(path);
-    return kind === "file" ? info.isFile() : info.isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-function resolveCandidatePath(path: string): string {
-  return path.startsWith("/") ? path : resolve(path);
-}
-
-function uniqueCandidatePaths(candidates: Array<string | undefined>): string[] {
-  const resolved: string[] = [];
-  const seen = new Set<string>();
-  for (const candidate of candidates) {
-    if (!isNonEmpty(candidate)) {
-      continue;
-    }
-    const absolutePath = resolveCandidatePath(candidate);
-    if (seen.has(absolutePath)) {
-      continue;
-    }
-    seen.add(absolutePath);
-    resolved.push(absolutePath);
-  }
-  return resolved;
-}
-
-async function hasAnyDirectory(paths: string[]): Promise<boolean> {
-  for (const path of paths) {
-    if (await pathExists(path, "dir")) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function hasCodexApiCredential(): boolean {
-  return (
-    isNonEmpty(process.env.CODEX_API_KEY?.trim()) || isNonEmpty(process.env.OPENAI_API_KEY?.trim())
-  );
-}
-
-function hasClaudeApiCredential(): boolean {
-  return isNonEmpty(process.env.ANTHROPIC_API_KEY?.trim());
-}
-
-async function commandSucceeds(command: string, args: string[]): Promise<boolean> {
-  try {
-    await execFileAsync(command, args, {
-      timeout: 5000,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function hasCodexSubscription(): Promise<boolean> {
-  if (hasCodexApiCredential()) {
-    return true;
-  }
-  const homeDir = process.env.HOME?.trim();
-  const authDirectories = uniqueCandidatePaths([
-    process.env.CODEX_AUTH_DIR?.trim(),
-    homeDir ? join(homeDir, ".codex") : undefined,
-  ]);
-  if (await hasAnyDirectory(authDirectories)) {
-    return true;
-  }
-  return await commandSucceeds("codex", ["login", "status"]);
-}
-
-async function hasClaudeCodeSubscription(): Promise<boolean> {
-  if (hasClaudeApiCredential()) {
-    return true;
-  }
-  const homeDir = process.env.HOME?.trim();
-  const authDirectories = uniqueCandidatePaths([
-    process.env.CLAUDE_AUTH_DIR?.trim(),
-    process.env.CLAUDE_CONFIG_DIR?.trim(),
-    homeDir ? join(homeDir, ".claude") : undefined,
-    homeDir ? join(homeDir, ".config", "claude") : undefined,
-  ]);
-  return await hasAnyDirectory(authDirectories);
-}
-
-async function detectBootstrapLlmExecutor(): Promise<ExecutorKind> {
-  if (await hasCodexSubscription()) {
-    return "codex";
-  }
-  if (await hasClaudeCodeSubscription()) {
-    return "claude_code";
-  }
-  return DEFAULT_LLM_EXECUTOR;
-}
-
-async function getBootstrapLlmExecutor(): Promise<ExecutorKind> {
-  if (!bootstrapLlmExecutorPromise) {
-    bootstrapLlmExecutorPromise = detectBootstrapLlmExecutor();
-  }
-  return bootstrapLlmExecutorPromise;
 }
 
 const LEGACY_REPLAN_COMMANDS = new Set([
