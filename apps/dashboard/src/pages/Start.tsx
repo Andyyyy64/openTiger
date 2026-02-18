@@ -216,7 +216,7 @@ export const StartPage: React.FC = () => {
       hasFetchedHostinfoRef.current = true;
       hostinfoReloadMutation.mutate();
     }
-  }, [hostinfoReloadMutation.mutate]);
+  }, [hostinfoReloadMutation]);
   const hostinfoOutput =
     hostinfoReloadMutation.data?.available && hostinfoReloadMutation.data?.output
       ? hostinfoReloadMutation.data.output
