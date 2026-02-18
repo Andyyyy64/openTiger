@@ -59,12 +59,8 @@
           "name": "agents_current_task_id_tasks_id_fk",
           "tableFrom": "agents",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "current_task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["current_task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -130,12 +126,8 @@
           "name": "artifacts_run_id_runs_id_fk",
           "tableFrom": "artifacts",
           "tableTo": "runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -867,12 +859,8 @@
           "name": "leases_task_id_tasks_id_fk",
           "tableFrom": "leases",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -882,9 +870,7 @@
         "leases_task_id_unique": {
           "name": "leases_task_id_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "task_id"
-          ]
+          "columns": ["task_id"]
         }
       },
       "policies": {},
@@ -1006,12 +992,8 @@
           "name": "pr_merge_queue_task_id_tasks_id_fk",
           "tableFrom": "pr_merge_queue",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1019,12 +1001,8 @@
           "name": "pr_merge_queue_run_id_runs_id_fk",
           "tableFrom": "pr_merge_queue",
           "tableTo": "runs",
-          "columnsFrom": [
-            "run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["run_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1105,12 +1083,8 @@
           "name": "research_claims_job_id_research_jobs_id_fk",
           "tableFrom": "research_claims",
           "tableTo": "research_jobs",
-          "columnsFrom": [
-            "job_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1118,12 +1092,8 @@
           "name": "research_claims_origin_run_id_runs_id_fk",
           "tableFrom": "research_claims",
           "tableTo": "runs",
-          "columnsFrom": [
-            "origin_run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["origin_run_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1221,12 +1191,8 @@
           "name": "research_evidence_job_id_research_jobs_id_fk",
           "tableFrom": "research_evidence",
           "tableTo": "research_jobs",
-          "columnsFrom": [
-            "job_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1234,12 +1200,8 @@
           "name": "research_evidence_claim_id_research_claims_id_fk",
           "tableFrom": "research_evidence",
           "tableTo": "research_claims",
-          "columnsFrom": [
-            "claim_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["claim_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1247,12 +1209,8 @@
           "name": "research_evidence_origin_run_id_runs_id_fk",
           "tableFrom": "research_evidence",
           "tableTo": "runs",
-          "columnsFrom": [
-            "origin_run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["origin_run_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1391,12 +1349,8 @@
           "name": "research_reports_job_id_research_jobs_id_fk",
           "tableFrom": "research_reports",
           "tableTo": "research_jobs",
-          "columnsFrom": [
-            "job_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["job_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1404,12 +1358,8 @@
           "name": "research_reports_origin_run_id_runs_id_fk",
           "tableFrom": "research_reports",
           "tableTo": "runs",
-          "columnsFrom": [
-            "origin_run_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["origin_run_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1507,12 +1457,8 @@
           "name": "runs_task_id_tasks_id_fk",
           "tableFrom": "runs",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["task_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }

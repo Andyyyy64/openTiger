@@ -5,11 +5,7 @@ import { execFile } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
-import {
-  getBootstrapLlmExecutor,
-  isNonEmpty,
-  type ExecutorKind,
-} from "./bootstrap-llm-executor";
+import { getBootstrapLlmExecutor, isNonEmpty, type ExecutorKind } from "./bootstrap-llm-executor";
 import { DEFAULT_CONFIG, buildConfigRecord } from "./system-config";
 
 const LEGACY_REPLAN_COMMANDS = new Set([
@@ -476,7 +472,10 @@ function createLegacyNormalizationPatch(
 
 export async function ensureConfigRow(): Promise<typeof configTable.$inferSelect> {
   await ensureConfigColumns();
-  const [bootstrapLlmExecutor] = await Promise.all([getBootstrapLlmExecutor(), getBootstrapHints()]);
+  const [bootstrapLlmExecutor] = await Promise.all([
+    getBootstrapLlmExecutor(),
+    getBootstrapHints(),
+  ]);
   return await db.transaction(async (tx) => {
     // Ensure singleton row creation remains safe under concurrent boot requests.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(703614, 1)`);
