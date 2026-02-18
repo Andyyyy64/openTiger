@@ -79,7 +79,7 @@ function isCodexExecutorValue(value: string | undefined): boolean {
 
 function normalizeExecutorValue(
   value: string | undefined,
-  fallback: ExecutorKind = "claude_code",
+  fallback: ExecutorKind = "codex",
 ): ExecutorKind {
   if (isClaudeExecutorValue(value)) {
     return "claude_code";
@@ -97,7 +97,7 @@ function resolveExecutorForRole(
   role: ManagedAgentRole,
   env: Record<string, string | undefined>,
 ): ExecutorKind {
-  const defaultExecutor = normalizeExecutorValue(env.LLM_EXECUTOR, "claude_code");
+  const defaultExecutor = normalizeExecutorValue(env.LLM_EXECUTOR, "codex");
   const roleValue = env[EXECUTOR_KEY_BY_ROLE[role]];
   if (!roleValue || roleValue.trim().toLowerCase() === "inherit") {
     return defaultExecutor;

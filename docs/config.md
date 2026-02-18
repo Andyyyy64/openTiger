@@ -105,7 +105,7 @@ Executor resolution notes:
 
 - `LLM_EXECUTOR` default is selected at startup in this order: `codex` -> `claude_code` -> `codex`.
 - Role-specific `*_LLM_EXECUTOR` supports `inherit` to follow `LLM_EXECUTOR`.
-- If `LLM_EXECUTOR` is missing or unrecognized at runtime, it falls back to `claude_code`.
+- If `LLM_EXECUTOR` is missing or unrecognized at runtime, it falls back to `codex`.
 
 ### 2.5 Planner / Replan
 

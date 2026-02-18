@@ -105,7 +105,7 @@ function isCodexExecutorValue(value: string | undefined): boolean {
 
 function normalizeExecutorValue(
   value: string | undefined,
-  fallback: ExecutorKind = "claude_code",
+  fallback: ExecutorKind = "codex",
 ): ExecutorKind {
   if (isClaudeExecutorValue(value)) {
     return "claude_code";
@@ -123,7 +123,7 @@ function resolveExecutorForAgentRole(
   rowRecord: Record<string, string | undefined>,
   rawRole: string | undefined,
 ): ExecutorKind {
-  const defaultExecutor = normalizeExecutorValue(rowRecord.llmExecutor, "claude_code");
+  const defaultExecutor = normalizeExecutorValue(rowRecord.llmExecutor, "codex");
   const role = rawRole?.trim().toLowerCase();
   const roleOverride =
     role === "tester"

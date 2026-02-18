@@ -49,7 +49,7 @@ function resolvePlannerExecutor(): "opencode" | "claude_code" | "codex" {
   if (isCodexExecutor(fallback)) {
     return "codex";
   }
-  return "claude_code";
+  return "codex";
 }
 
 // ヘルプを表示
