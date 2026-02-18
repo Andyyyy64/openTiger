@@ -28,6 +28,7 @@ import {
 } from "./steps/verify/paths";
 import { shouldAllowNoChanges } from "./worker-task-helpers";
 import { finalizeTaskState } from "./worker-runner-state";
+import { persistVisualProbeArtifacts } from "./worker-runner-artifacts";
 import {
   appendContextNotes,
   buildExecuteFailureHint,
@@ -97,6 +98,34 @@ function shouldEnableNoChangeVerificationFallback(): boolean {
 
 function hasMeaningfulVerificationPass(verifyResult: VerifyResult): boolean {
   return verifyResult.commandResults.some((result) => result.outcome === "passed");
+}
+
+type VisualProbeSummary = {
+  id: string;
+  status: "passed" | "failed" | "skipped";
+  message: string;
+  metrics?: {
+    centerPixel: [number, number, number, number];
+    clearRatio: number;
+    nearBlackRatio: number;
+    luminanceStdDev: number;
+  };
+};
+
+function summarizeVisualProbeResults(verifyResult: VerifyResult): VisualProbeSummary[] {
+  return (verifyResult.visualProbeResults ?? []).map((probe) => ({
+    id: probe.id,
+    status: probe.status,
+    message: probe.message,
+    metrics: probe.metrics
+      ? {
+          centerPixel: probe.metrics.centerPixel,
+          clearRatio: probe.metrics.clearRatio,
+          nearBlackRatio: probe.metrics.nearBlackRatio,
+          luminanceStdDev: probe.metrics.luminanceStdDev,
+        }
+      : undefined,
+  }));
 }
 
 const DOCSER_SAFE_VERIFY_COMMAND = /^\s*(?:pnpm|npm|yarn|bun)\s+(?:run\s+)?check(?:\s+.*)?$/i;
@@ -1204,7 +1233,31 @@ export async function runVerificationPhase(
     }
   }
 
+  for (const probe of verifyResult.visualProbeResults ?? []) {
+    try {
+      const persisted = await persistVisualProbeArtifacts({
+        runId,
+        repoPath,
+        probeId: probe.id,
+        status: probe.status,
+        message: probe.message,
+        artifactPaths: probe.artifactPaths,
+        metrics: probe.metrics,
+      });
+      if (persisted > 0) {
+        console.log(`[Worker] Saved ${persisted} visual probe artifact(s) for ${probe.id}.`);
+      }
+    } catch (error) {
+      console.warn(
+        `[Worker] Failed to persist visual probe artifacts for ${probe.id}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
   if (!verifyResult.success) {
+    const visualProbes = summarizeVisualProbeResults(verifyResult);
     if (verifyResult.policyViolations.length > 0) {
       const errorMessage =
         verifyResult.error ?? `Policy violations: ${verifyResult.policyViolations.join(", ")}`;
@@ -1231,6 +1284,7 @@ export async function runVerificationPhase(
             verifyResult.failedCommandStderr ?? verifyResult.error,
           ),
           policyViolations: verifyResult.policyViolations,
+          visualProbes,
         },
       });
       return {
@@ -1266,6 +1320,7 @@ export async function runVerificationPhase(
             verifyResult.failedCommandStderr ?? verifyResult.error,
           ),
           policyViolations: verifyResult.policyViolations,
+          visualProbes,
         },
       });
       return {
@@ -1337,6 +1392,7 @@ export async function runVerificationPhase(
         failedCommand,
         failedCommandSource: failedSource,
         failedCommandStderr: stderrSummary,
+        visualProbes,
       },
     });
     return {

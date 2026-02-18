@@ -157,6 +157,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       localWorktreeRoot: `${getLocalWorktreeRoot()}/${agentId}`,
       branchName: localBranchName,
       extraFetchRefs: buildPrFetchRefspecs(taskPrContext),
+      verificationCommands: taskData.commands ?? [],
     });
 
     if (!checkoutResult.success) {

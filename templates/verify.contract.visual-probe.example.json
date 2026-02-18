@@ -1,0 +1,25 @@
+{
+  "commands": ["ctest --test-dir build --output-on-failure"],
+  "rules": [
+    {
+      "whenChangedAny": ["engine/**", "renderer/**", "editor/**"],
+      "commands": ["ctest --test-dir build -R Smoke --output-on-failure"]
+    }
+  ],
+  "visualProbes": [
+    {
+      "id": "visible_frame_smoke",
+      "whenChangedAny": ["engine/**", "renderer/**", "editor/**"],
+      "captureCommand": "ctest --test-dir build -R VisibleFrameSmoke --output-on-failure",
+      "imagePath": "build/artifacts/visible-frame.png",
+      "artifactPaths": ["build/artifacts/visible-frame.png", "build/artifacts/visible-frame.json"],
+      "skipExitCodes": [77],
+      "clearColor": [26, 26, 26],
+      "clearTolerance": 4,
+      "nearBlackLumaThreshold": 10,
+      "maxClearRatio": 0.98,
+      "maxNearBlackRatio": 0.995,
+      "minLuminanceStdDev": 1.5
+    }
+  ]
+}

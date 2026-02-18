@@ -103,6 +103,7 @@ export async function runCommand(
       stdout: "",
       stderr: "Unsupported command format. Shell operators are not allowed.",
       durationMs: Date.now() - startTime,
+      exitCode: null,
     };
   }
   if (isUnsupportedShellBuiltin(parsed.executable)) {
@@ -113,6 +114,7 @@ export async function runCommand(
       stdout: "",
       stderr: `Unsupported shell builtin in verification command: ${parsed.executable}`,
       durationMs: Date.now() - startTime,
+      exitCode: null,
     };
   }
   const env = {
@@ -148,6 +150,7 @@ export async function runCommand(
         stdout,
         stderr,
         durationMs: Date.now() - startTime,
+        exitCode: code,
       });
     });
 
@@ -159,6 +162,7 @@ export async function runCommand(
         stdout,
         stderr: error.message,
         durationMs: Date.now() - startTime,
+        exitCode: null,
       });
     });
   });
@@ -217,6 +221,7 @@ async function runDevCommandOnce(
       stdout,
       stderr: "Unsupported command format. Shell operators are not allowed.",
       durationMs: Date.now() - startTime,
+      exitCode: null,
     };
   }
   if (isUnsupportedShellBuiltin(parsed.executable)) {
@@ -227,6 +232,7 @@ async function runDevCommandOnce(
       stdout,
       stderr: `Unsupported shell builtin in verification command: ${parsed.executable}`,
       durationMs: Date.now() - startTime,
+      exitCode: null,
     };
   }
   const env = {
@@ -280,6 +286,7 @@ async function runDevCommandOnce(
         stdout: timedOut ? `${stdout}\n[dev-check] warmup completed, process terminated` : stdout,
         stderr,
         durationMs,
+        exitCode: timedOut ? null : code,
       });
     });
 
@@ -292,6 +299,7 @@ async function runDevCommandOnce(
         stdout,
         stderr: error.message,
         durationMs: Date.now() - startTime,
+        exitCode: null,
       });
     });
   });

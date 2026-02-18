@@ -26,7 +26,12 @@ export interface VerifyOptions {
   llmInlineRecoveryHandler?: LlmInlineRecoveryHandler;
 }
 
-export type VerificationCommandSource = "explicit" | "auto" | "light-check" | "guard";
+export type VerificationCommandSource =
+  | "explicit"
+  | "auto"
+  | "light-check"
+  | "guard"
+  | "visual-probe";
 
 export type VerifyFailureCode = VerificationFailureCode;
 
@@ -38,11 +43,34 @@ export interface CommandResult {
   stdout: string;
   stderr: string;
   durationMs: number;
+  exitCode?: number | null;
+}
+
+export interface VisualProbeMetrics {
+  width: number;
+  height: number;
+  pixelCount: number;
+  centerPixel: [number, number, number, number];
+  clearRatio: number;
+  nearBlackRatio: number;
+  luminanceStdDev: number;
+}
+
+export interface VisualProbeResult {
+  id: string;
+  status: "passed" | "failed" | "skipped";
+  command: string;
+  message: string;
+  durationMs: number;
+  exitCode: number | null;
+  metrics?: VisualProbeMetrics;
+  artifactPaths: string[];
 }
 
 export interface VerifyResult {
   success: boolean;
   commandResults: CommandResult[];
+  visualProbeResults?: VisualProbeResult[];
   policyViolations: string[];
   changedFiles: string[];
   stats: { additions: number; deletions: number };
