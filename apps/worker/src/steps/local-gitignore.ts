@@ -64,7 +64,9 @@ function resolveCommandArtifactDirectories(command: string): string[] {
   if (!parsed) {
     return [];
   }
-  const executable = basename(parsed.executable).replace(/\.exe$/i, "").toLowerCase();
+  const executable = basename(parsed.executable)
+    .replace(/\.exe$/i, "")
+    .toLowerCase();
   if (executable === "cmake") {
     return collectFlagPathValues(parsed.args, ["-B", "--build"]);
   }
