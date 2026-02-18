@@ -143,10 +143,15 @@ Note:
 - `GET /runs`
 - `GET /runs/:id`
 - `GET /runs/stats`
+- `GET /runs/:id/artifacts/:artifactId/content`
 - `POST /runs`
 - `PATCH /runs/:id`
 - `POST /runs/:id/cancel`
 - `POST /runs/:id/artifacts`
+
+Notes:
+
+- `GET /runs/:id/artifacts/:artifactId/content` serves file-backed artifact content (for example visual probe screenshots).
 
 ### Agents
 

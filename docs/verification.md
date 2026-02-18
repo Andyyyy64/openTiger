@@ -81,6 +81,43 @@ Main config:
 
 For docser, restricted to doc-safe commands (e.g. `pnpm run check`).
 
+### Visual Probes (Optional)
+
+Worker can run visual runtime probes from `.opentiger/verify.contract.json` via `visualProbes`.
+Use this for GUI/renderer tasks where command success alone is insufficient.
+
+Example:
+
+```json
+{
+  "visualProbes": [
+    {
+      "id": "runtime_visible_frame",
+      "whenChangedAny": ["engine/**", "renderer/**"],
+      "captureCommand": "ctest --test-dir build -R VisibleFrameSmoke --output-on-failure",
+      "imagePath": "build/artifacts/visible-frame.png",
+      "artifactPaths": ["build/artifacts/visible-frame.png", "build/artifacts/visible-frame.json"],
+      "skipExitCodes": [77],
+      "clearColor": [26, 26, 26],
+      "maxClearRatio": 0.98,
+      "maxNearBlackRatio": 0.995,
+      "minLuminanceStdDev": 1.5
+    }
+  ]
+}
+```
+
+Copy-ready template: `templates/verify.contract.visual-probe.example.json`
+
+Behavior:
+
+- Probe runs only when `whenChangedAny/whenChangedAll` match changed files.
+- Probe evaluation is still executed after the no-command light-check fallback path when verification remains passing.
+- `captureCommand` is executed by direct spawn (same constraints as verification commands).
+- If command exits with a configured `skipExitCodes` value, probe is marked `skipped`.
+- Otherwise worker analyzes `imagePath` and fails verification when frame is mostly clear/black.
+- Probe outputs are persisted as `ci_result` artifacts and can be downloaded via run artifact API.
+
 ## 4. Execution Constraints
 
 Verification commands run via direct spawn, not shell; the following are not supported:

@@ -76,6 +76,10 @@ Behavior:
 - For outside-allowed policy violations, generated artifacts are discarded in-place and re-verified.
   Unknown file types are also discarded when they are untracked and outside allowed paths, so
   verification byproducts do not stall convergence.
+- During checkout, worker derives build/test output directories from verification commands
+  (for example `cmake -B build-headless`, `cmake --build build-headless`,
+  `ctest --test-dir build-headless`) and writes them to local `.git/info/exclude`.
+  This prevents untracked build artifacts from being counted as policy-violating changes.
 
 ## 3.3 LLM Inline Command Recovery
 
