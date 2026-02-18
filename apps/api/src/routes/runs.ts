@@ -1,11 +1,61 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
+import { readFile, stat } from "node:fs/promises";
+import { extname, resolve } from "node:path";
 import { db } from "@openTiger/db";
 import { runs, artifacts } from "@openTiger/db/schema";
-import { eq, sql, gte } from "drizzle-orm";
+import { and, eq, sql, gte } from "drizzle-orm";
+import { resolveOpenTigerLogDir } from "./log-dir";
 
 export const runsRoute = new Hono();
+
+const DEFAULT_LOG_DIR = resolve(import.meta.dirname, "../../../../raw-logs");
+
+function resolveArtifactStorageRoot(): string {
+  return resolveOpenTigerLogDir(DEFAULT_LOG_DIR);
+}
+
+function normalizeStoredArtifactPath(path: string): string | null {
+  const normalized = path.trim().replace(/\\/g, "/").replace(/^\/+/, "");
+  if (!normalized || normalized.includes("..")) {
+    return null;
+  }
+  return normalized;
+}
+
+function isInsidePath(basePath: string, candidatePath: string): boolean {
+  const normalizedBase = resolve(basePath);
+  const normalizedCandidate = resolve(candidatePath);
+  return (
+    normalizedCandidate === normalizedBase ||
+    normalizedCandidate.startsWith(`${normalizedBase}/`) ||
+    normalizedCandidate.startsWith(`${normalizedBase}\\`)
+  );
+}
+
+function inferMimeType(path: string): string {
+  const extension = extname(path).toLowerCase();
+  if (extension === ".png") {
+    return "image/png";
+  }
+  if (extension === ".jpg" || extension === ".jpeg") {
+    return "image/jpeg";
+  }
+  if (extension === ".webp") {
+    return "image/webp";
+  }
+  if (extension === ".bmp") {
+    return "image/bmp";
+  }
+  if (extension === ".json") {
+    return "application/json";
+  }
+  if (extension === ".txt" || extension === ".log") {
+    return "text/plain; charset=utf-8";
+  }
+  return "application/octet-stream";
+}
 
 // 統計情報取得
 runsRoute.get("/stats", async (c) => {
@@ -63,7 +113,6 @@ runsRoute.get("/:id", async (c) => {
   const logPath = runData.logPath;
   if (logPath) {
     try {
-      const { readFile, stat } = await import("node:fs/promises");
       const stats = await stat(logPath);
       // 1MB制限
       if (stats.size > 1024 * 1024) {
@@ -91,6 +140,51 @@ runsRoute.get("/:id", async (c) => {
     run: { ...runData, logContent },
     artifacts: artifactResult,
   });
+});
+
+runsRoute.get("/:id/artifacts/:artifactId/content", async (c) => {
+  const runId = c.req.param("id");
+  const artifactId = c.req.param("artifactId");
+  const [artifact] = await db
+    .select()
+    .from(artifacts)
+    .where(and(eq(artifacts.id, artifactId), eq(artifacts.runId, runId)));
+
+  if (!artifact) {
+    return c.json({ error: "Artifact not found" }, 404);
+  }
+
+  const metadata =
+    artifact.metadata && typeof artifact.metadata === "object"
+      ? (artifact.metadata as Record<string, unknown>)
+      : null;
+  const storedPathRaw = metadata?.storedPath;
+  const storedPath =
+    typeof storedPathRaw === "string" ? normalizeStoredArtifactPath(storedPathRaw) : null;
+  if (!storedPath) {
+    return c.json({ error: "Artifact content is unavailable" }, 404);
+  }
+
+  const storageRoot = resolveArtifactStorageRoot();
+  const filePath = resolve(storageRoot, storedPath);
+  if (!isInsidePath(storageRoot, filePath)) {
+    return c.json({ error: "Invalid artifact path" }, 400);
+  }
+
+  try {
+    const [fileStat, content] = await Promise.all([stat(filePath), readFile(filePath)]);
+    const contentType =
+      typeof metadata?.mimeType === "string" && metadata.mimeType.trim().length > 0
+        ? metadata.mimeType
+        : inferMimeType(filePath);
+    return c.body(content, 200, {
+      "Content-Type": contentType,
+      "Content-Length": String(fileStat.size),
+      "Cache-Control": "no-store",
+    });
+  } catch {
+    return c.json({ error: "Artifact file not found" }, 404);
+  }
 });
 
 // 実行開始リクエストのスキーマ
