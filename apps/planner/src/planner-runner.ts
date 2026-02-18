@@ -886,6 +886,16 @@ export async function planFromContent(
   const repoUninitialized = await isRepoUninitialized(fullConfig.workdir);
   let inspectionNotes: string | undefined;
   let inspectionResult: CodebaseInspection | undefined;
+  const applyRequirementSyncTaskIfNeeded = (result: TaskGenerationResult): TaskGenerationResult => {
+    if (!requirementCompletion.completionApplied) {
+      return result;
+    }
+    const requirementSyncTask = buildRequirementSyncTask({
+      requirement,
+      checkCommand,
+    });
+    return injectRequirementSyncTask(result, requirementSyncTask);
+  };
 
   if (!repoUninitialized && !fullConfig.useLlm) {
     throw new Error("Inspection is required; LLM cannot be disabled.");
@@ -917,7 +927,7 @@ export async function planFromContent(
   }
 
   if (repoUninitialized) {
-    return applyPlannerTaskPolicies({
+    const initializationResult = await applyPlannerTaskPolicies({
       result: generateInitializationTasks(requirement),
       requirement,
       workdir: fullConfig.workdir,
@@ -928,9 +938,11 @@ export async function planFromContent(
       inspectionNotes,
       policyRecoveryHints,
     });
+    return applyRequirementSyncTaskIfNeeded(initializationResult);
   }
 
   const canUseLlmPlanning = fullConfig.useLlm && (repoUninitialized || Boolean(inspectionResult));
+
   if (fullConfig.useLlm && !canUseLlmPlanning) {
     console.warn(
       "[Planner] No inspection result; skipping LLM planning and using simple fallback.",
@@ -972,7 +984,7 @@ export async function planFromContent(
         warnings: [...result.warnings, "Added docser task for undocumented code."],
       };
     }
-    return applyPlannerTaskPolicies({
+    const plannedResult = await applyPlannerTaskPolicies({
       result,
       requirement,
       workdir: fullConfig.workdir,
@@ -983,9 +995,10 @@ export async function planFromContent(
       inspectionNotes,
       policyRecoveryHints,
     });
+    return applyRequirementSyncTaskIfNeeded(plannedResult);
   }
 
-  return applyPlannerTaskPolicies({
+  const fallbackResult = await applyPlannerTaskPolicies({
     result: appendPlannerWarning(
       generateSimpleTasks(requirement),
       "LLM planning skipped because inspection was unavailable.",
@@ -999,4 +1012,5 @@ export async function planFromContent(
     inspectionNotes,
     policyRecoveryHints,
   });
+  return applyRequirementSyncTaskIfNeeded(fallbackResult);
 }
