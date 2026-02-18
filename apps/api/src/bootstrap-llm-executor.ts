@@ -10,7 +10,7 @@ export type ExecutorKind = "opencode" | "claude_code" | "codex";
 
 let bootstrapLlmExecutorPromise: Promise<ExecutorKind> | null = null;
 
-function isNonEmpty(value: string | null | undefined): value is string {
+export function isNonEmpty(value: string | null | undefined): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 

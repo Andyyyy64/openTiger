@@ -5,7 +5,11 @@ import { execFile } from "node:child_process";
 import { stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { promisify } from "node:util";
-import { getBootstrapLlmExecutor } from "./bootstrap-llm-executor";
+import {
+  getBootstrapLlmExecutor,
+  isNonEmpty,
+  type ExecutorKind,
+} from "./bootstrap-llm-executor";
 import { DEFAULT_CONFIG, buildConfigRecord } from "./system-config";
 
 const LEGACY_REPLAN_COMMANDS = new Set([
@@ -27,10 +31,6 @@ type BootstrapHints = {
 };
 
 let bootstrapHintsPromise: Promise<BootstrapHints> | null = null;
-
-function isNonEmpty(value: string | null | undefined): value is string {
-  return typeof value === "string" && value.trim().length > 0;
-}
 
 async function pathExists(path: string, kind: "file" | "dir"): Promise<boolean> {
   try {
@@ -265,6 +265,7 @@ async function getBootstrapHints(): Promise<BootstrapHints> {
 
 async function createRequiredAutofillPatch(
   current: typeof configTable.$inferSelect,
+  bootstrapLlmExecutor: ExecutorKind,
 ): Promise<Partial<typeof configTable.$inferInsert> | null> {
   const hints = await getBootstrapHints();
   const patch: Partial<typeof configTable.$inferInsert> = {};
@@ -303,7 +304,7 @@ async function createRequiredAutofillPatch(
     patch.baseBranch = hints.baseBranch;
   }
   if (!isNonEmpty(current.llmExecutor)) {
-    patch.llmExecutor = await getBootstrapLlmExecutor();
+    patch.llmExecutor = bootstrapLlmExecutor;
   }
 
   if (Object.keys(patch).length === 0) {
@@ -475,6 +476,7 @@ function createLegacyNormalizationPatch(
 
 export async function ensureConfigRow(): Promise<typeof configTable.$inferSelect> {
   await ensureConfigColumns();
+  const [bootstrapLlmExecutor] = await Promise.all([getBootstrapLlmExecutor(), getBootstrapHints()]);
   return await db.transaction(async (tx) => {
     // Ensure singleton row creation remains safe under concurrent boot requests.
     await tx.execute(sql`SELECT pg_advisory_xact_lock(703614, 1)`);
@@ -483,7 +485,7 @@ export async function ensureConfigRow(): Promise<typeof configTable.$inferSelect
     const current = existing[0];
     if (current) {
       const legacyPatch = createLegacyNormalizationPatch(current);
-      const requiredPatch = await createRequiredAutofillPatch(current);
+      const requiredPatch = await createRequiredAutofillPatch(current, bootstrapLlmExecutor);
       if (!legacyPatch && !requiredPatch) {
         return current;
       }
@@ -505,7 +507,7 @@ export async function ensureConfigRow(): Promise<typeof configTable.$inferSelect
 
     const defaultsForInsert = {
       ...DEFAULT_CONFIG,
-      LLM_EXECUTOR: await getBootstrapLlmExecutor(),
+      LLM_EXECUTOR: bootstrapLlmExecutor,
     };
     const created = await tx
       .insert(configTable)
@@ -515,7 +517,7 @@ export async function ensureConfigRow(): Promise<typeof configTable.$inferSelect
     if (!row) {
       throw new Error("Failed to create config");
     }
-    const requiredPatch = await createRequiredAutofillPatch(row);
+    const requiredPatch = await createRequiredAutofillPatch(row, bootstrapLlmExecutor);
     if (!requiredPatch) {
       return row;
     }
