@@ -202,7 +202,7 @@ function isCodexExecutor(value: string | undefined): boolean {
 
 function normalizeExecutor(
   value: string | undefined,
-  fallback: ExecutorKind = "claude_code",
+  fallback: ExecutorKind = "codex",
 ): ExecutorKind {
   if (isClaudeExecutor(value)) {
     return "claude_code";
@@ -217,7 +217,7 @@ function normalizeExecutor(
 }
 
 function resolveExecutorForAgentRole(agentRole: string | undefined): ExecutorKind {
-  const defaultExecutor = normalizeExecutor(process.env.LLM_EXECUTOR, "claude_code");
+  const defaultExecutor = normalizeExecutor(process.env.LLM_EXECUTOR, "codex");
   const normalizedRole = agentRole?.trim().toLowerCase();
   const roleOverride =
     normalizedRole === "tester"

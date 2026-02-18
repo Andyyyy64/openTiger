@@ -72,7 +72,7 @@ function resolveJudgeExecutor(): "opencode" | "claude_code" | "codex" {
   if (isCodexExecutor(fallback)) {
     return "codex";
   }
-  return "claude_code";
+  return "codex";
 }
 
 async function loadPolicyConfig(): Promise<Policy> {

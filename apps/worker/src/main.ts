@@ -77,7 +77,7 @@ function resolveExecutor(value: string | undefined): "opencode" | "claude_code" 
   if (isCodexExecutor(value)) {
     return "codex";
   }
-  return "claude_code";
+  return "codex";
 }
 
 function resolveExecutorForRole(role: string): "opencode" | "claude_code" | "codex" {

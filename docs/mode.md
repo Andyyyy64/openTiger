@@ -110,7 +110,7 @@ Available executor values:
 Fallback behavior:
 
 - If an override is unset, empty, or `inherit`, that role follows `LLM_EXECUTOR`.
-- If `LLM_EXECUTOR` is unset or unrecognized, runtime resolution falls back to `claude_code`.
+- If `LLM_EXECUTOR` is unset or unrecognized, runtime resolution falls back to `codex`.
 
 ## 4. Scaling Rules
 

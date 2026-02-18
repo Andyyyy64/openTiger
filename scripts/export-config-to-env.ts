@@ -2,6 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { db, closeDb, sql } from "../packages/db/src/client.ts";
 import { config as configTable } from "../packages/db/src/schema.ts";
+import { getBootstrapLlmExecutor } from "../apps/api/src/bootstrap-llm-executor.ts";
 
 type ConfigColumn = string;
 
@@ -45,7 +46,7 @@ const CONFIG_FIELDS: ConfigField[] = [
   { key: "LOCAL_REPO_PATH", column: "localRepoPath", defaultValue: "" },
   { key: "LOCAL_WORKTREE_ROOT", column: "localWorktreeRoot", defaultValue: "" },
   { key: "BASE_BRANCH", column: "baseBranch", defaultValue: "main" },
-  { key: "LLM_EXECUTOR", column: "llmExecutor", defaultValue: "claude_code" },
+  { key: "LLM_EXECUTOR", column: "llmExecutor", defaultValue: "codex" },
   { key: "WORKER_LLM_EXECUTOR", column: "workerLlmExecutor", defaultValue: "inherit" },
   { key: "TESTER_LLM_EXECUTOR", column: "testerLlmExecutor", defaultValue: "inherit" },
   { key: "DOCSER_LLM_EXECUTOR", column: "docserLlmExecutor", defaultValue: "inherit" },
@@ -272,7 +273,7 @@ async function ensureConfigColumns(): Promise<void> {
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "opencode_small_model" text DEFAULT 'google/gemini-2.5-flash' NOT NULL`,
   );
   await db.execute(
-    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "llm_executor" text DEFAULT 'claude_code' NOT NULL`,
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "llm_executor" text DEFAULT 'codex' NOT NULL`,
   );
   await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "worker_llm_executor" text DEFAULT 'inherit' NOT NULL`,
@@ -405,9 +406,13 @@ async function ensureConfigRow(): Promise<typeof configTable.$inferSelect> {
       return updated ?? current;
     }
 
+    const defaultsForInsert = {
+      ...DEFAULT_CONFIG,
+      LLM_EXECUTOR: await getBootstrapLlmExecutor(),
+    };
     const created = await tx
       .insert(configTable)
-      .values(buildConfigRecord(DEFAULT_CONFIG, { includeDefaults: true }))
+      .values(buildConfigRecord(defaultsForInsert, { includeDefaults: true }))
       .returning();
     const row = created[0];
     if (!row) {

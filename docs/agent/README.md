@@ -90,7 +90,7 @@ Executor resolution order:
 
 Fallback:
 
-- If `LLM_EXECUTOR` is missing or unrecognized, the effective default executor is `claude_code`.
+- If `LLM_EXECUTOR` is missing or unrecognized, the effective default executor is `codex`.
 
 | Role   | Model config (priority)            | Instruction file config (priority)                                 |
 | ------ | ---------------------------------- | ------------------------------------------------------------------ |

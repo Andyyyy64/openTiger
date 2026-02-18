@@ -3,7 +3,7 @@ export type AgentExecutorRole = "planner" | "judge" | "worker" | "tester" | "doc
 
 export const CLAUDE_CODE_DEFAULT_MODEL = "claude-opus-4-6";
 export const CODEX_DEFAULT_MODEL = "gpt-5.3-codex";
-export const DEFAULT_EXECUTOR: ExecutorMode = "claude_code";
+export const DEFAULT_EXECUTOR: ExecutorMode = "codex";
 export const INHERIT_EXECUTOR_TOKEN = "inherit";
 export const AGENT_EXECUTOR_ROLES: readonly AgentExecutorRole[] = [
   "planner",

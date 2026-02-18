@@ -103,9 +103,9 @@ Note:
 
 Executor resolution notes:
 
-- `LLM_EXECUTOR` default is `claude_code`.
+- `LLM_EXECUTOR` default is selected at startup in this order: `codex` -> `claude_code` -> `codex`.
 - Role-specific `*_LLM_EXECUTOR` supports `inherit` to follow `LLM_EXECUTOR`.
-- If `LLM_EXECUTOR` is missing or unrecognized at runtime, it falls back to `claude_code`.
+- If `LLM_EXECUTOR` is missing or unrecognized at runtime, it falls back to `codex`.
 
 ### 2.5 Planner / Replan
 
@@ -140,7 +140,7 @@ Resolution note:
 ### 2.8 Main Defaults (Initial State)
 
 - `EXECUTION_ENVIRONMENT=host`
-- `LLM_EXECUTOR=claude_code`
+- `LLM_EXECUTOR=codex` (fallback default when no executor credential is detected)
 - `WORKER_LLM_EXECUTOR=inherit`
 - `TESTER_LLM_EXECUTOR=inherit`
 - `DOCSER_LLM_EXECUTOR=inherit`
@@ -250,6 +250,8 @@ Thus requirement edits affect both "file save" and "repository state update."
 - Auto-completion from workspace/git info
   - `repoUrl`, `githubOwner`, `githubRepo`, `baseBranch`
   - requirement path candidates (e.g. `docs/requirement.md`)
+- Auto-detection of initial `LLM_EXECUTOR` for first row creation
+  - Priority: `codex` (API key / Codex auth) -> `claude_code` (Anthropic API key / Claude auth) -> `codex`
 - Legacy value normalization
   - Unify old `REPLAN_COMMAND` to `pnpm --filter @openTiger/planner run start:fresh`
   - Unify old token/concurrency fixed values to `-1` unlimited
