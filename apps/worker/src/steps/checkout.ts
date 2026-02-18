@@ -20,6 +20,7 @@ import {
   getLocalWorktreeRoot,
   type RepoMode,
 } from "@openTiger/core";
+import { ensureLocalGitIgnoreEntries } from "./local-gitignore";
 
 export interface CheckoutOptions {
   repoUrl: string;
@@ -32,6 +33,7 @@ export interface CheckoutOptions {
   localWorktreeRoot?: string;
   branchName?: string;
   extraFetchRefs?: string[];
+  verificationCommands?: string[];
 }
 
 export interface CheckoutResult {
@@ -114,6 +116,7 @@ export async function checkoutRepository(options: CheckoutOptions): Promise<Chec
     localWorktreeRoot = getLocalWorktreeRoot(),
     branchName,
     extraFetchRefs = [],
+    verificationCommands = [],
   } = options;
 
   // Working directory per task
@@ -197,6 +200,20 @@ export async function checkoutRepository(options: CheckoutOptions): Promise<Chec
         await copyFile(sourceEnvPath, targetEnvPath);
       }
 
+      const localGitIgnoreResult = await ensureLocalGitIgnoreEntries({
+        repoPath: worktreePath,
+        commands: verificationCommands,
+      });
+      if (!localGitIgnoreResult.success) {
+        console.warn(
+          `[Checkout] Failed to prepare local gitignore excludes: ${localGitIgnoreResult.error ?? "unknown error"}`,
+        );
+      } else if (localGitIgnoreResult.addedEntries.length > 0) {
+        console.log(
+          `[Checkout] Added local gitignore excludes: ${localGitIgnoreResult.addedEntries.join(", ")}`,
+        );
+      }
+
       return {
         success: true,
         repoPath: worktreePath,
@@ -253,6 +270,20 @@ export async function checkoutRepository(options: CheckoutOptions): Promise<Chec
           error: `Failed to fetch required refs: ${fetchRefsResult.stderr}`,
         };
       }
+    }
+
+    const localGitIgnoreResult = await ensureLocalGitIgnoreEntries({
+      repoPath,
+      commands: verificationCommands,
+    });
+    if (!localGitIgnoreResult.success) {
+      console.warn(
+        `[Checkout] Failed to prepare local gitignore excludes: ${localGitIgnoreResult.error ?? "unknown error"}`,
+      );
+    } else if (localGitIgnoreResult.addedEntries.length > 0) {
+      console.log(
+        `[Checkout] Added local gitignore excludes: ${localGitIgnoreResult.addedEntries.join(", ")}`,
+      );
     }
 
     return {
