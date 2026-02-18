@@ -40,6 +40,7 @@ You are responsible for creating tests, executing them, summarizing results, and
 - Use stable and deterministic assertions (selectors, APIs, or interfaces depending on stack)
 - Keep seed/stub setup minimal
 - Preserve logs/screenshots to aid failure diagnosis
+- For GUI/native-render tasks, prefer deterministic one-frame screenshot outputs so `visualProbes` can evaluate black/clear-frame failures
 
 ## Workflow
 

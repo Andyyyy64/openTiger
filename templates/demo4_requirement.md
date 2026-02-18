@@ -15,10 +15,12 @@ A minimal but structurally sound baseline with a usable editor will establish wh
 - Language: C or C++ (C++ recommended for RAII, STL, and component patterns)
 - Build system: CMake
 - Target: Native desktop (Linux, macOS, or Windows; at least one platform)
+- Define and document one primary developer target and one CI target (for example: desktop Linux + headless Linux CI)
 - Graphics: OpenGL 3.3+ (Core Profile) or equivalent
 - Window/context: GLFW or SDL
 - Editor GUI: Dear ImGui (imgui) or equivalent immediate-mode UI library
 - Keep frame timing and update logic deterministic enough for automated tests
+- Keep at least one non-interactive visual validation path that does not rely on manual screen observation
 - Prioritize incremental, testable slices over monolithic rewrites
 
 ## Acceptance Criteria
@@ -47,6 +49,7 @@ A minimal but structurally sound baseline with a usable editor will establish wh
 - [ ] Texture loading from file paths with caching; placeholder texture for missing/failed loads
 - [ ] Basic layer/ordering: render order by entity property (e.g. `zIndex` or `layer`)
 - [ ] Viewport resize on window resize
+- [ ] Automated visible-frame smoke validation exists (for example, framebuffer readback with clear-color ratio threshold) and fails when output is effectively clear-only/black-only
 
 ### Input Handling
 
@@ -74,6 +77,7 @@ A minimal but structurally sound baseline with a usable editor will establish wh
 - [ ] Toolbar: Play (run game loop), Pause, Stop buttons; Create Entity button
 - [ ] Editor and game runtime modes: in Edit mode, changes persist; in Play mode, scene state can reset on Stop
 - [ ] All panels are dockable/resizable (ImGui docking or manual layout)
+- [ ] Editor startup provides at least one immediately visible element in viewport/UI (sample sprite, grid, or diagnostic overlay) to avoid "blank-but-running" ambiguity
 
 ### Verification and Quality
 
@@ -82,6 +86,8 @@ A minimal but structurally sound baseline with a usable editor will establish wh
 - [ ] Unit tests for ECS (entity/component add/remove/query), transform math, and input state
 - [ ] Example game (e.g. simple top-down mover or collectible demo) runs in Play mode and is playable
 - [ ] Build and tests pass via CMake (build, ctest or equivalent)
+- [ ] Visual probe test path is CI-runnable (or explicitly skipped with reason code) and stores image + metrics artifacts for diagnosis
+- [ ] Verification gates include both command success and output quality checks (not command success alone)
 - [ ] Documentation: setup, architecture overview, editor usage, and extension points
 
 ## Scope
@@ -115,6 +121,7 @@ A minimal but structurally sound baseline with a usable editor will establish wh
 
 ## Allowed Paths
 
+- `CMakeLists.txt`
 - `engine/`
   - `core/`
   - `ecs/`
@@ -122,6 +129,7 @@ A minimal but structurally sound baseline with a usable editor will establish wh
   - `input/`
   - `assets/`
   - `editor/`
+- `editor/`
 - `engine-demo/`
 - `engine-tests/`
 - `cmake/`
@@ -144,16 +152,27 @@ A minimal but structurally sound baseline with a usable editor will establish wh
 Milestone-first strategy suggested:
 
 1. Core loop + lifecycle + headless test harness
+   - Exit criteria: fixed-step test passes; clean shutdown test passes.
 2. ECS (entity, component, Transform, basic system)
+   - Exit criteria: add/remove/query tests pass; deferred-mutation test passes.
 3. OpenGL init + ortho camera + single quad render
+   - Exit criteria: OpenGL init smoke passes; visible-frame smoke fails on forced clear-only frame.
 4. Input manager + event batching
+   - Exit criteria: key/mouse event ordering tests pass; no blocking in frame loop.
 5. Texture loading + sprite batch renderer
+   - Exit criteria: texture cache and missing-texture fallback tests pass.
 6. Scene JSON loader + hierarchy
+   - Exit criteria: load/save round-trip test passes.
 7. ImGui integration + window layout
+   - Exit criteria: editor window opens and reports at least one visible panel region.
 8. Editor: hierarchy panel + inspector + viewport (read-only select)
+   - Exit criteria: selection synchronization tests pass (hierarchy <-> viewport).
 9. Editor: asset browser + drag-assign, toolbar, menu bar
+   - Exit criteria: drag-assign and menu smoke tests pass.
 10. Edit/Play mode + scene save
+    - Exit criteria: pre-play snapshot restore test passes.
 11. Example game + documentation
+    - Exit criteria: playable demo smoke + docs checklist complete.
 
 For openTiger operation, ensure at least one non-interactive verification path (e.g. `ctest` or `./engine-tests`) that does not require a display.
 Keep system boundaries explicit so planner can decompose into separate modules/tasks.

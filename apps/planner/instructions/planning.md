@@ -66,3 +66,4 @@ Read requirement definitions and split them into executable tasks.
 
 - Include startup checks when relevant (e.g. `pnpm run dev`)
 - If a task explicitly requires end-to-end coverage, include one minimal critical-path E2E command that matches the existing project tooling
+- For GUI/renderer runtime validation tasks, prefer verification contracts that include `visualProbes` (screenshot-based runtime checks) in addition to command pass/fail
