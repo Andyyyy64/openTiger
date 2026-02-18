@@ -4,11 +4,15 @@ import { getRepoMode, resolveDeterministicTargetArea } from "@openTiger/core";
 import { resolveGitHubAuthMode, resolveGitHubToken } from "@openTiger/vcs";
 import { and, eq, sql } from "drizzle-orm";
 import {
+  detectMissingRequirementFields,
   parseRequirementFile,
   parseRequirementContent,
   validateRequirement,
+  type RequirementFieldName,
   type Requirement,
 } from "./parser";
+import { completeRequirementWithLlm } from "./requirement-completion";
+import { buildRequirementSyncTask, injectRequirementSyncTask } from "./requirement-sync-task";
 import {
   generateTasksFromRequirement,
   generateResearchPlanFromQuery,
@@ -116,6 +120,67 @@ function canUseGitHubIssueLinking(): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+async function enrichRequirementIfMissing(params: {
+  requirement: Requirement;
+  useLlm: boolean;
+  workdir: string;
+  timeoutSeconds: number;
+}): Promise<{
+  requirement: Requirement;
+  completionApplied: boolean;
+  missingFields: RequirementFieldName[];
+}> {
+  const missingFields = detectMissingRequirementFields(params.requirement.rawContent);
+  if (missingFields.length === 0) {
+    return {
+      requirement: params.requirement,
+      completionApplied: false,
+      missingFields,
+    };
+  }
+
+  console.warn(`[Planner] Requirement missing sections: ${missingFields.join(", ")}`);
+  if (!params.useLlm) {
+    console.warn("[Planner] LLM completion skipped (USE_LLM=false). Using fallback defaults.");
+    return {
+      requirement: params.requirement,
+      completionApplied: false,
+      missingFields,
+    };
+  }
+
+  try {
+    const completed = await completeRequirementWithLlm({
+      workdir: params.workdir,
+      timeoutSeconds: params.timeoutSeconds,
+      rawContent: params.requirement.rawContent,
+      current: params.requirement,
+      missingFields,
+    });
+    if (completed.warnings.length > 0) {
+      console.warn(
+        `[Planner] Requirement completion warnings: ${completed.warnings.join(" | ")}`,
+      );
+    }
+    console.log("[Planner] Requirement was complemented by LLM for missing sections.");
+    return {
+      requirement: completed.requirement,
+      completionApplied: true,
+      missingFields,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[Planner] Requirement completion failed; continuing with fallback defaults. reason=${message}`,
+    );
+    return {
+      requirement: params.requirement,
+      completionApplied: false,
+      missingFields,
+    };
   }
 }
 
@@ -436,6 +501,13 @@ export async function planFromRequirement(
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Failed to read requirement file: ${message}`);
   }
+  const requirementCompletion = await enrichRequirementIfMissing({
+    requirement,
+    useLlm: config.useLlm,
+    workdir: config.workdir,
+    timeoutSeconds: config.timeoutSeconds,
+  });
+  requirement = requirementCompletion.requirement;
 
   // Validate requirement
   const validationErrors = validateRequirement(requirement);
@@ -617,6 +689,14 @@ export async function planFromRequirement(
     policyRecoveryHints,
   });
 
+  if (requirementCompletion.completionApplied) {
+    const requirementSyncTask = buildRequirementSyncTask({
+      requirement,
+      checkCommand,
+    });
+    result = injectRequirementSyncTask(result, requirementSyncTask);
+  }
+
   // Log results
   console.log(`\n[Generated ${result.tasks.length} tasks]`);
   console.log(`Total estimated time: ${result.totalEstimatedMinutes} minutes`);
@@ -778,6 +858,13 @@ export async function planFromContent(
 ): Promise<TaskGenerationResult> {
   const fullConfig = { ...DEFAULT_CONFIG, ...config };
   let requirement = parseRequirementContent(content);
+  const requirementCompletion = await enrichRequirementIfMissing({
+    requirement,
+    useLlm: fullConfig.useLlm,
+    workdir: fullConfig.workdir,
+    timeoutSeconds: fullConfig.timeoutSeconds,
+  });
+  requirement = requirementCompletion.requirement;
 
   const validationErrors = validateRequirement(requirement);
   if (validationErrors.length > 0) {
