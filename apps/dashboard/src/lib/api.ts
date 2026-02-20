@@ -381,7 +381,7 @@ export type TaskView = Task & { retry?: TaskRetryInfo | null };
 export interface ResearchJob {
   id: string;
   query: string;
-  qualityProfile: string;
+  qualityProfile: "low" | "mid" | "high" | "ultra";
   status: string;
   latestReportId: string | null;
   metadata: Record<string, unknown> | null;
@@ -438,7 +438,7 @@ export interface ResearchJobDetails {
 
 export interface CreateResearchJobInput {
   query: string;
-  qualityProfile?: string;
+  qualityProfile?: "low" | "mid" | "high" | "ultra";
   priority?: number;
   riskLevel?: "low" | "medium" | "high";
   timeboxMinutes?: number;
@@ -446,7 +446,7 @@ export interface CreateResearchJobInput {
 
 export interface CreateResearchTaskInput {
   stage?: string;
-  profile?: string;
+  profile?: "low" | "mid" | "high" | "ultra";
   title?: string;
   goal?: string;
   claimId?: string;

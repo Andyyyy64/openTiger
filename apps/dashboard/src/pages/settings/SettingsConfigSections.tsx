@@ -7,6 +7,7 @@ type SettingsConfigSectionsProps = {
   values: Record<string, string>;
   onChange: (key: string, value: string) => void;
   fieldWarnings?: Partial<Record<string, string>>;
+  pluginOptions?: string[];
 };
 
 export const SettingsConfigSections: React.FC<SettingsConfigSectionsProps> = ({
@@ -14,6 +15,7 @@ export const SettingsConfigSections: React.FC<SettingsConfigSectionsProps> = ({
   values,
   onChange,
   fieldWarnings,
+  pluginOptions,
 }) => {
   return (
     <div className="space-y-6">
@@ -61,6 +63,7 @@ export const SettingsConfigSections: React.FC<SettingsConfigSectionsProps> = ({
                     field={field}
                     value={values[field.key] ?? ""}
                     onChange={(value) => onChange(field.key, value)}
+                    pluginOptions={pluginOptions}
                   />
                   <div className="text-[10px] text-zinc-600 truncate">{field.description}</div>
                   {fieldWarning && (

@@ -8,6 +8,7 @@ export const ResearchJobDetailsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [stage, setStage] = React.useState("collect");
+  const [profile, setProfile] = React.useState<"low" | "mid" | "high" | "ultra">("mid");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["research", "jobs", id],
@@ -23,6 +24,13 @@ export const ResearchJobDetailsPage: React.FC = () => {
       await queryClient.invalidateQueries({ queryKey: ["research", "jobs", id] });
     },
   });
+
+  React.useEffect(() => {
+    if (!data?.job.qualityProfile) {
+      return;
+    }
+    setProfile(data.job.qualityProfile);
+  }, [data?.job.qualityProfile]);
 
   if (isLoading) {
     return (
@@ -55,7 +63,7 @@ export const ResearchJobDetailsPage: React.FC = () => {
     }
     createTaskMutation.mutate({
       stage,
-      profile: data.job.qualityProfile,
+      profile,
       riskLevel: "medium",
       timeboxMinutes: 60,
     });
@@ -99,6 +107,21 @@ export const ResearchJobDetailsPage: React.FC = () => {
               <option value="write">write</option>
             </select>
           </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Strength</label>
+            <select
+              value={profile}
+              onChange={(event) =>
+                setProfile(event.target.value as "low" | "mid" | "high" | "ultra")
+              }
+              className="w-full bg-black border border-term-border text-sm p-2 focus:outline-none focus:border-term-tiger"
+            >
+              <option value="low">low</option>
+              <option value="mid">mid</option>
+              <option value="high">high</option>
+              <option value="ultra">ultra</option>
+            </select>
+          </div>
           <div className="flex items-center gap-3">
             <button
               onClick={createFollowupTask}
@@ -106,7 +129,7 @@ export const ResearchJobDetailsPage: React.FC = () => {
               className="text-term-tiger border border-term-tiger hover:bg-term-tiger hover:text-black disabled:opacity-50 px-4 py-2 text-xs font-bold uppercase flex items-center gap-2"
             >
               {createTaskMutation.isPending && (
-                <BrailleSpinner variant="pendulum" width={6} className="[color:inherit]" />
+                <BrailleSpinner variant="pendulum" width={6} className="text-inherit" />
               )}
               {createTaskMutation.isPending ? "[QUEUING]" : "[QUEUE_STAGE]"}
             </button>

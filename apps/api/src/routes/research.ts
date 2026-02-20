@@ -4,6 +4,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@openTiger/db";
 import { artifacts, leases, runs, tasks } from "@openTiger/db/schema";
+import { RESEARCH_STRENGTH_PROFILES } from "@openTiger/plugin-tiger-research";
 import {
   researchClaims,
   researchEvidence,
@@ -125,7 +126,7 @@ researchRoute.get("/jobs/:id", async (c) => {
 
 const createResearchJobSchema = z.object({
   query: z.string().min(1),
-  qualityProfile: z.string().min(1).optional(),
+  qualityProfile: z.enum(RESEARCH_STRENGTH_PROFILES).optional(),
   priority: z.number().int().optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
   timeboxMinutes: z.number().int().positive().optional(),
@@ -134,7 +135,7 @@ const createResearchJobSchema = z.object({
 researchRoute.post("/jobs", zValidator("json", createResearchJobSchema), async (c) => {
   const body = c.req.valid("json");
   const jobId = randomUUID();
-  const profile = body.qualityProfile ?? "high_precision";
+  const profile = body.qualityProfile ?? "mid";
   const plannerPendingUntilIso = new Date(
     Date.now() + getResearchPlannerPendingWindowMs(),
   ).toISOString();
@@ -233,7 +234,7 @@ researchRoute.post("/jobs", zValidator("json", createResearchJobSchema), async (
 
 const createResearchTaskSchema = z.object({
   stage: z.string().min(1).optional(),
-  profile: z.string().min(1).optional(),
+  profile: z.enum(RESEARCH_STRENGTH_PROFILES).optional(),
   title: z.string().min(1).optional(),
   goal: z.string().min(1).optional(),
   claimId: z.string().uuid().optional(),
@@ -254,7 +255,7 @@ researchRoute.post("/jobs/:id/tasks", zValidator("json", createResearchTaskSchem
   }
 
   const stage = body.stage ?? "collect";
-  const profile = body.profile ?? job.qualityProfile ?? "high_precision";
+  const profile = body.profile ?? job.qualityProfile ?? "mid";
   const defaultTitle = `[Research/${stageLabel(stage)}] ${truncateText(job.query, 64)}`;
 
   const [task] = await db

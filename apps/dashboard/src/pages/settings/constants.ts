@@ -164,9 +164,9 @@ export const SETTINGS: SettingField[] = [
   {
     key: "ENABLED_PLUGINS",
     label: "Enabled_Plugins",
-    description: "Comma-separated plugin IDs. Empty means all registered plugins are enabled.",
+    description: "Select plugin IDs. Clear selection to enable all registered plugins.",
     group: "Runtime",
-    type: "text",
+    type: "select",
   },
   {
     key: "EXECUTION_ENVIRONMENT",

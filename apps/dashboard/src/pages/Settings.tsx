@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { configApi, systemApi } from "../lib/api";
+import { configApi, pluginsApi, systemApi } from "../lib/api";
 import { BrailleSpinner } from "../components/BrailleSpinner";
 import { SettingsHeader } from "./settings/SettingsHeader";
 import { SystemControlPanel } from "./settings/SystemControlPanel";
@@ -52,6 +52,10 @@ export const SettingsPage: React.FC = () => {
     queryKey: ["config"],
     queryFn: () => configApi.get(),
   });
+  const pluginsQuery = useQuery({
+    queryKey: ["plugins"],
+    queryFn: () => pluginsApi.list(),
+  });
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [selectedRepoFullName, setSelectedRepoFullName] = useState("");
@@ -96,12 +100,20 @@ export const SettingsPage: React.FC = () => {
     enabled: hasGithubAuth,
   });
   const githubRepos = useMemo(() => githubReposQuery.data?.repos ?? [], [githubReposQuery.data]);
+  const pluginOptions = useMemo(
+    () => (pluginsQuery.data ?? []).map((plugin) => plugin.id).sort((a, b) => a.localeCompare(b)),
+    [pluginsQuery.data],
+  );
   const viewerLogin = githubReposQuery.data?.viewerLogin?.trim() ?? "";
 
   const mutation = useMutation({
     mutationFn: (updates: Record<string, string>) => configApi.update(updates),
     onSuccess: (res) => {
-      if (res?.config) lastSavedConfigRef.current = { ...res.config };
+      if (res?.config) {
+        // APIで正規化された設定値を同期し、保存直後の差分表示を防ぐ
+        setValues(res.config);
+        lastSavedConfigRef.current = { ...res.config };
+      }
       queryClient.invalidateQueries({ queryKey: ["config"] });
     },
   });
@@ -195,7 +207,11 @@ export const SettingsPage: React.FC = () => {
   const syncGhDefaultsMutation = useMutation({
     mutationFn: (updates: Record<string, string>) => configApi.update(updates),
     onSuccess: (res) => {
-      if (res?.config) lastSavedConfigRef.current = { ...res.config };
+      if (res?.config) {
+        // 自動同期でもUI状態を保存済み設定と一致させる
+        setValues(res.config);
+        lastSavedConfigRef.current = { ...res.config };
+      }
       queryClient.invalidateQueries({ queryKey: ["config"] });
       queryClient.invalidateQueries({ queryKey: ["system", "github-repos"] });
     },
@@ -676,6 +692,7 @@ export const SettingsPage: React.FC = () => {
         values={values}
         onChange={updateValue}
         fieldWarnings={fieldWarnings}
+        pluginOptions={pluginOptions}
       />
 
       {hasUnsavedChanges && (

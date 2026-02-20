@@ -16,6 +16,9 @@ const resolveStage = (metadata: Record<string, unknown> | null | undefined): str
 export const ResearchPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [query, setQuery] = React.useState("");
+  const [qualityProfile, setQualityProfile] = React.useState<"low" | "mid" | "high" | "ultra">(
+    "mid",
+  );
 
   const {
     data: jobs,
@@ -52,6 +55,7 @@ export const ResearchPage: React.FC = () => {
 
     createMutation.mutate({
       query: trimmed,
+      qualityProfile,
       riskLevel: "medium",
       timeboxMinutes: 90,
     });
@@ -80,6 +84,21 @@ export const ResearchPage: React.FC = () => {
             className="w-full min-h-[120px] bg-black border border-term-border text-sm p-3 focus:outline-none focus:border-term-tiger"
             placeholder="What should TigerResearch investigate?"
           />
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">Strength</label>
+            <select
+              value={qualityProfile}
+              onChange={(event) =>
+                setQualityProfile(event.target.value as "low" | "mid" | "high" | "ultra")
+              }
+              className="w-full bg-black border border-term-border text-sm p-2 focus:outline-none focus:border-term-tiger"
+            >
+              <option value="low">low</option>
+              <option value="mid">mid</option>
+              <option value="high">high</option>
+              <option value="ultra">ultra</option>
+            </select>
+          </div>
 
           <div className="flex items-center justify-between">
             <div className="text-xs text-red-400">
@@ -91,7 +110,7 @@ export const ResearchPage: React.FC = () => {
               className="text-term-tiger border border-term-tiger hover:bg-term-tiger hover:text-black disabled:opacity-50 disabled:cursor-not-allowed px-4 py-1 text-xs font-bold uppercase transition-all flex items-center gap-2"
             >
               {createMutation.isPending && (
-                <BrailleSpinner variant="pendulum" width={6} className="[color:inherit]" />
+                <BrailleSpinner variant="pendulum" width={6} className="text-inherit" />
               )}
               {createMutation.isPending ? "[CREATING]" : "[CREATE_JOB]"}
             </button>
@@ -119,7 +138,7 @@ export const ResearchPage: React.FC = () => {
             className="text-red-400 hover:text-red-300 border border-red-800 hover:border-red-600 px-2 py-0.5 text-xs uppercase disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
           >
             {deleteAllMutation.isPending && (
-              <BrailleSpinner variant="compress" width={5} className="[color:inherit]" />
+              <BrailleSpinner variant="compress" width={5} className="text-inherit" />
             )}
             {deleteAllMutation.isPending ? "[CLEARING...]" : "[CLEAR_ALL]"}
           </button>
