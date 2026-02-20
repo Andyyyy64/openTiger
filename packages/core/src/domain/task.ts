@@ -9,11 +9,13 @@ export const TaskRole = z.enum(["worker", "tester", "docser"]);
 export type TaskRole = z.infer<typeof TaskRole>;
 
 // Task lane
-export const TaskLane = z.enum(["feature", "conflict_recovery", "docser", "research"]);
+export const CORE_TASK_LANES = ["feature", "conflict_recovery", "docser"] as const;
+export const TaskLane = z.string().min(1);
 export type TaskLane = z.infer<typeof TaskLane>;
 
 // Task kind
-export const TaskKind = z.enum(["code", "research"]);
+export const CORE_TASK_KINDS = ["code"] as const;
+export const TaskKind = z.string().min(1);
 export type TaskKind = z.infer<typeof TaskKind>;
 
 // Task status

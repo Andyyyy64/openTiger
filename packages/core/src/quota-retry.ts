@@ -23,7 +23,49 @@ function parseDurationTokenMs(value: string): number | null {
   return Math.ceil(amount * 1_000);
 }
 
-export function parseQuotaRetryDelayMs(errorMessage: string | null | undefined): number | null {
+function parseClockRetryDelayMs(
+  errorMessage: string,
+  referenceDate: Date | undefined,
+): number | null {
+  const match = errorMessage.match(
+    /\b(?:try again|retry|resets?|available)\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
+  );
+  const hourToken = match?.[1];
+  const minuteToken = match?.[2];
+  const meridiemToken = match?.[3];
+  if (!hourToken || !meridiemToken) {
+    return null;
+  }
+
+  const hour12 = Number.parseInt(hourToken, 10);
+  const minute = minuteToken ? Number.parseInt(minuteToken, 10) : 0;
+  if (!Number.isFinite(hour12) || hour12 < 1 || hour12 > 12) {
+    return null;
+  }
+  if (!Number.isFinite(minute) || minute < 0 || minute > 59) {
+    return null;
+  }
+
+  let hour24 = hour12 % 12;
+  if (meridiemToken.toLowerCase() === "pm") {
+    hour24 += 12;
+  }
+
+  const now = referenceDate ? new Date(referenceDate) : new Date();
+  const nextRetryAt = new Date(now);
+  nextRetryAt.setSeconds(0, 0);
+  nextRetryAt.setHours(hour24, minute, 0, 0);
+  if (nextRetryAt.getTime() <= now.getTime()) {
+    nextRetryAt.setDate(nextRetryAt.getDate() + 1);
+  }
+  const delayMs = nextRetryAt.getTime() - now.getTime();
+  return delayMs > 0 ? delayMs : null;
+}
+
+export function parseQuotaRetryDelayMs(
+  errorMessage: string | null | undefined,
+  referenceDate?: Date,
+): number | null {
   if (!errorMessage) {
     return null;
   }
@@ -45,6 +87,11 @@ export function parseQuotaRetryDelayMs(errorMessage: string | null | undefined):
     if (ms && ms > 0) {
       candidates.push(ms);
     }
+  }
+
+  const clockDelayMs = parseClockRetryDelayMs(errorMessage, referenceDate);
+  if (clockDelayMs && clockDelayMs > 0) {
+    candidates.push(clockDelayMs);
   }
 
   if (candidates.length === 0) {
@@ -73,6 +120,7 @@ export interface QuotaBackoffOptions {
   factor: number;
   jitterRatio: number;
   errorMessage?: string | null;
+  referenceDate?: Date;
 }
 
 export interface QuotaBackoffResult {
@@ -92,8 +140,19 @@ export function computeQuotaBackoff(options: QuotaBackoffOptions): QuotaBackoffR
       ? Math.min(options.jitterRatio, 1)
       : 0.2;
 
-  const retryHintMs = parseQuotaRetryDelayMs(options.errorMessage ?? null);
+  const retryHintMs = parseQuotaRetryDelayMs(options.errorMessage ?? null, options.referenceDate);
   const exponentialMs = Math.min(maxDelayMs, Math.ceil(baseDelayMs * Math.pow(factor, retryCount)));
+  // 提供元が明示した再開時刻はジッターを加えず優先する。
+  if (retryHintMs !== null && retryHintMs > 0) {
+    const cooldownMs = Math.max(exponentialMs, retryHintMs);
+    return {
+      cooldownMs,
+      retryHintMs,
+      exponentialMs,
+      jitterMs: 0,
+    };
+  }
+
   const preJitterMs = Math.min(maxDelayMs, Math.max(exponentialMs, retryHintMs ?? 0));
   const maxJitterMs = Math.floor(preJitterMs * jitterRatio);
   const jitterMs = deterministicJitter(options.taskId, retryCount, maxJitterMs);

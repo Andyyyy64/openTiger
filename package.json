@@ -36,6 +36,8 @@
     "runtime:hatch:status": "tsx scripts/runtime-hatch.ts status",
     "runtime:hatch:arm": "tsx scripts/runtime-hatch.ts arm --source=manual_cli",
     "runtime:hatch:disarm": "tsx scripts/runtime-hatch.ts disarm --source=pnpm_up",
+    "plugin:new": "tsx scripts/plugin-new.ts",
+    "plugin:validate": "tsx scripts/plugin-validate.ts",
     "requeue": "pnpm --filter @openTiger/cycle-manager exec tsx src/utils/requeue-failed-tasks.ts",
     "line": "tsx scripts/check-lint-count.ts"
   },

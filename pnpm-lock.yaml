@@ -54,6 +54,12 @@ importers:
       '@openTiger/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@openTiger/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@openTiger/plugin-tiger-research':
+        specifier: workspace:*
+        version: link:../../plugins/tiger-research
       '@openTiger/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -97,6 +103,12 @@ importers:
       '@openTiger/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@openTiger/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@openTiger/plugin-tiger-research':
+        specifier: workspace:*
+        version: link:../../plugins/tiger-research
       '@openTiger/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -125,6 +137,12 @@ importers:
       '@openTiger/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@openTiger/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@openTiger/plugin-tiger-research':
+        specifier: workspace:*
+        version: link:../../plugins/tiger-research
       '@tanstack/react-query':
         specifier: ^5.64.2
         version: 5.90.19(react@19.2.4)
@@ -198,6 +216,12 @@ importers:
       '@openTiger/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@openTiger/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@openTiger/plugin-tiger-research':
+        specifier: workspace:^
+        version: link:../../plugins/tiger-research
       '@openTiger/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -235,6 +259,12 @@ importers:
       '@openTiger/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@openTiger/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@openTiger/plugin-tiger-research':
+        specifier: workspace:*
+        version: link:../../plugins/tiger-research
       '@openTiger/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
@@ -269,6 +299,12 @@ importers:
       '@openTiger/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@openTiger/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@openTiger/plugin-tiger-research':
+        specifier: workspace:*
+        version: link:../../plugins/tiger-research
       '@openTiger/vcs':
         specifier: workspace:*
         version: link:../../packages/vcs
@@ -303,6 +339,12 @@ importers:
       '@openTiger/llm':
         specifier: workspace:*
         version: link:../../packages/llm
+      '@openTiger/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/plugin-sdk
+      '@openTiger/plugin-tiger-research':
+        specifier: workspace:*
+        version: link:../../plugins/tiger-research
       '@openTiger/queue':
         specifier: workspace:*
         version: link:../../packages/queue
@@ -372,6 +414,9 @@ importers:
       drizzle-kit:
         specifier: ^0.30.4
         version: 0.30.6
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -394,6 +439,19 @@ importers:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.4(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)
+
+  packages/plugin-sdk:
+    dependencies:
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.7.3
       vitest:
         specifier: ^3.0.4
         version: 3.2.4(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)
@@ -432,6 +490,34 @@ importers:
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
+      vitest:
+        specifier: ^3.0.4
+        version: 3.2.4(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)
+
+  plugins/tiger-research:
+    dependencies:
+      '@openTiger/core':
+        specifier: workspace:^
+        version: link:../../packages/core
+      '@openTiger/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@openTiger/llm':
+        specifier: workspace:^
+        version: link:../../packages/llm
+      '@openTiger/plugin-sdk':
+        specifier: workspace:^
+        version: link:../../packages/plugin-sdk
+      '@openTiger/vcs':
+        specifier: workspace:^
+        version: link:../../packages/vcs
+      drizzle-orm:
+        specifier: ^0.38.4
+        version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.4)
+    devDependencies:
+      typescript:
+        specifier: ^5.7.3
+        version: 5.7.3
       vitest:
         specifier: ^3.0.4
         version: 3.2.4(@types/node@25.2.3)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)
