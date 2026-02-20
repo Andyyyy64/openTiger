@@ -18,6 +18,13 @@ function parseRetryCount(): number {
   return Math.max(0, parsed);
 }
 
+function normalizeRetryCount(value: number): number {
+  if (!Number.isFinite(value)) {
+    return DEFAULT_PARSE_REGEN_RETRIES;
+  }
+  return Math.max(0, Math.floor(value));
+}
+
 function parseReconcileTimeout(baseTimeoutSeconds: number): number {
   const parsed = Number.parseInt(
     process.env.PLANNER_TASK_PARSE_RECONCILE_TIMEOUT_SECONDS ??
@@ -28,6 +35,13 @@ function parseReconcileTimeout(baseTimeoutSeconds: number): number {
     return Math.max(60, Math.min(baseTimeoutSeconds, DEFAULT_RECONCILE_TIMEOUT_SECONDS));
   }
   return parsed;
+}
+
+function normalizeTimeoutSeconds(value: number, fallback: number): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    return fallback;
+  }
+  return Math.floor(value);
 }
 
 function clipOutput(text: string): string {
@@ -107,8 +121,13 @@ export async function generateAndParseWithRetry<T>(options: {
   env: Record<string, string>;
   guard: (value: unknown) => value is T;
   label: string;
+  retryCountOverride?: number;
+  reconcileTimeoutSecondsOverride?: number;
 }): Promise<T> {
-  const retryCount = parseRetryCount();
+  const retryCount =
+    options.retryCountOverride === undefined
+      ? parseRetryCount()
+      : normalizeRetryCount(options.retryCountOverride);
   const maxAttempts = retryCount + 1;
   const outputs: string[] = [];
   const parseErrors: string[] = [];
@@ -159,7 +178,13 @@ export async function generateAndParseWithRetry<T>(options: {
       workdir: options.workdir,
       task: buildReconcilePrompt(options.prompt, outputs),
       model: options.model,
-      timeoutSeconds: parseReconcileTimeout(options.timeoutSeconds),
+      timeoutSeconds:
+        options.reconcileTimeoutSecondsOverride === undefined
+          ? parseReconcileTimeout(options.timeoutSeconds)
+          : normalizeTimeoutSeconds(
+              options.reconcileTimeoutSecondsOverride,
+              parseReconcileTimeout(options.timeoutSeconds),
+            ),
       env: options.env,
     });
 

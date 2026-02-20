@@ -4,11 +4,11 @@ import { and, eq, sql } from "drizzle-orm";
 import type { PlannerHookHandleJobParams } from "@openTiger/plugin-sdk";
 import { researchClaims, researchJobs } from "../db";
 import { generateResearchPlanFromQuery } from "./from-research-query";
+import { resolveResearchStrengthProfile } from "../profile";
 
 type PlannerConfigLike = {
   useLlm?: boolean;
   dryRun?: boolean;
-  timeoutSeconds?: number;
   workdir?: string;
 };
 
@@ -65,7 +65,6 @@ function toPlannerConfig(config: unknown): Required<PlannerConfigLike> {
   return {
     useLlm: source.useLlm ?? true,
     dryRun: source.dryRun ?? false,
-    timeoutSeconds: source.timeoutSeconds ?? 900,
     workdir: source.workdir ?? process.cwd(),
   };
 }
@@ -95,6 +94,7 @@ export async function handleResearchPlanningJob(params: PlannerHookHandleJobPara
     console.log(`[Planner] Research job is already terminal (status=${job.status}). Skipping.`);
     return;
   }
+  const profile = resolveResearchStrengthProfile(job.qualityProfile);
 
   const existingClaims = await db
     .select({
@@ -126,8 +126,7 @@ export async function handleResearchPlanningJob(params: PlannerHookHandleJobPara
     } else {
       const decomposition = await generateResearchPlanFromQuery(job.query, {
         workdir: config.workdir,
-        profile: job.qualityProfile,
-        timeoutSeconds: config.timeoutSeconds,
+        profile,
       });
       plannedClaimInputs = decomposition.claims;
       plannerWarnings = decomposition.warnings;
@@ -225,7 +224,7 @@ export async function handleResearchPlanningJob(params: PlannerHookHandleJobPara
             jobId: researchJobId,
             query: job.query,
             stage: "collect",
-            profile: job.qualityProfile,
+            profile,
             claimId: claim.id,
             claimText: claim.claimText,
           },

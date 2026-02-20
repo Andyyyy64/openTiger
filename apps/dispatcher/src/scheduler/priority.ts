@@ -1,7 +1,8 @@
 import { db } from "@openTiger/db";
 import { tasks, leases, runs, artifacts } from "@openTiger/db/schema";
 import { resolveDeterministicTargetArea } from "@openTiger/core";
-import { buildPluginRuntimeRegistry } from "@openTiger/plugin-sdk";
+import { buildPluginRuntimeRegistry, registerPlugin } from "@openTiger/plugin-sdk";
+import { tigerResearchPluginManifest } from "@openTiger/plugin-tiger-research";
 import { eq, and, inArray, gt, count, isNull, desc } from "drizzle-orm";
 
 // Task selection result
@@ -34,6 +35,8 @@ const JUDGE_ARTIFACT_TYPES: string[] = [
 let lastObservedJudgeBacklog = -1;
 let lastObservedPendingJudgeRun = false;
 let lastObservedJudgeBacklogBlocked = false;
+
+registerPlugin(tigerResearchPluginManifest);
 const pluginRuntimeRegistry = buildPluginRuntimeRegistry(process.env.ENABLED_PLUGINS);
 
 function resolveEffectiveTargetArea(task: {

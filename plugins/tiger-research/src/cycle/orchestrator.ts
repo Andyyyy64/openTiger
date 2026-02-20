@@ -2,6 +2,7 @@ import { db } from "@openTiger/db";
 import { tasks } from "@openTiger/db/schema";
 import { researchClaims, researchEvidence, researchJobs, researchReports } from "../db";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { getResearchProfileConfig, resolveResearchStrengthProfile } from "../profile";
 
 type ResearchStage = "plan" | "collect" | "challenge" | "write";
 
@@ -82,16 +83,14 @@ function parseEnvBool(name: string, fallback: boolean): boolean {
   return fallback;
 }
 
-function readThresholds(): QualityThresholds {
+function readThresholds(profile: string): QualityThresholds {
+  const profileConfig = getResearchProfileConfig(resolveResearchStrengthProfile(profile));
   return {
     maxConcurrency: Math.max(1, parseEnvInt("RESEARCH_MAX_CONCURRENCY", 6)),
     maxDepth: Math.max(1, parseEnvInt("RESEARCH_MAX_DEPTH", 3)),
-    minEvidencePerClaim: Math.max(1, parseEnvInt("RESEARCH_MIN_EVIDENCE_PER_CLAIM", 3)),
-    minDistinctDomainsPerClaim: Math.max(
-      1,
-      parseEnvInt("RESEARCH_MIN_DISTINCT_DOMAINS_PER_CLAIM", 2),
-    ),
-    requireCounterEvidence: parseEnvBool("RESEARCH_REQUIRE_COUNTER_EVIDENCE", true),
+    minEvidencePerClaim: profileConfig.quality.minEvidencePerClaim,
+    minDistinctDomainsPerClaim: profileConfig.quality.minDistinctDomainsPerClaim,
+    requireCounterEvidence: profileConfig.quality.requireCounterEvidence,
     minReportConfidence: Math.max(
       0,
       Math.min(100, parseEnvInt("RESEARCH_MIN_REPORT_CONFIDENCE", 70)),
@@ -175,7 +174,10 @@ function isTaskActive(task: { status: string; blockReason: string | null }): boo
   if (task.status === "queued" || task.status === "running") {
     return true;
   }
-  return task.status === "blocked" && task.blockReason === "awaiting_judge";
+  return (
+    task.status === "blocked" &&
+    (task.blockReason === "awaiting_judge" || task.blockReason === "quota_wait")
+  );
 }
 
 function extractDomain(urlValue: string | null): string | null {
@@ -458,7 +460,8 @@ async function queueResearchTask(params: {
 }
 
 async function orchestrateJob(job: typeof researchJobs.$inferSelect): Promise<void> {
-  const thresholds = readThresholds();
+  const profile = resolveResearchStrengthProfile(job.qualityProfile);
+  const thresholds = readThresholds(profile);
   const requiresJudge = parseEnvBool("RESEARCH_REQUIRE_JUDGE", false);
 
   const [claims, evidence, reports, taskRows] = await Promise.all([
@@ -510,7 +513,6 @@ async function orchestrateJob(job: typeof researchJobs.$inferSelect): Promise<vo
   ]);
 
   const query = job.query;
-  const profile = job.qualityProfile;
   const activeRows = taskRows.filter((row) => isTaskActive(row));
   const activePipelineTaskCount = activeRows.filter((row) => {
     const stage = normalizeResearchStage(readResearchTaskContext(row.context).stage);

@@ -4,7 +4,7 @@ import { runs } from "@openTiger/db/schema";
 export const tigerResearchJobs = pgTable("research_jobs", {
   id: uuid("id").primaryKey().defaultRandom(),
   query: text("query").notNull(),
-  qualityProfile: text("quality_profile").default("high_precision").notNull(),
+  qualityProfile: text("quality_profile").default("mid").notNull(),
   status: text("status").default("queued").notNull(),
   latestReportId: uuid("latest_report_id"),
   metadata: jsonb("metadata"),

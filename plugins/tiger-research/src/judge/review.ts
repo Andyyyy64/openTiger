@@ -7,6 +7,7 @@ import type {
   JudgeHook,
 } from "@openTiger/plugin-sdk";
 import { researchClaims, researchEvidence, researchJobs, researchReports } from "../db";
+import { getResearchProfileConfig, resolveResearchStrengthProfile } from "../profile";
 
 type PendingResearchRun = {
   taskId: string;
@@ -296,16 +297,17 @@ async function evaluateResearchRun(pending: PendingResearchRun): Promise<{
   summary: ResearchEvaluationData["summary"];
   metrics: ResearchJudgeMetrics;
 }> {
-  const minClaims = parseThreshold("JUDGE_RESEARCH_MIN_CLAIMS", 1);
-  const minEvidencePerClaim = parseThreshold("JUDGE_RESEARCH_MIN_EVIDENCE_PER_CLAIM", 3);
-  const minDistinctDomainsPerClaim = parseThreshold(
-    "JUDGE_RESEARCH_MIN_DISTINCT_DOMAINS_PER_CLAIM",
-    2,
-  );
-  const requireCounterEvidence = parseBooleanThreshold(
-    "JUDGE_RESEARCH_REQUIRE_COUNTER_EVIDENCE",
-    true,
-  );
+  const [jobRow] = await db
+    .select({ qualityProfile: researchJobs.qualityProfile })
+    .from(researchJobs)
+    .where(eq(researchJobs.id, pending.researchJobId))
+    .limit(1);
+  const profile = resolveResearchStrengthProfile(jobRow?.qualityProfile);
+  const profileConfig = getResearchProfileConfig(profile);
+  const minClaims = profileConfig.planner.claimCount.min;
+  const minEvidencePerClaim = profileConfig.quality.minEvidencePerClaim;
+  const minDistinctDomainsPerClaim = profileConfig.quality.minDistinctDomainsPerClaim;
+  const requireCounterEvidence = profileConfig.quality.requireCounterEvidence;
   const minConfidence = parseThreshold("JUDGE_RESEARCH_MIN_CONFIDENCE", 70);
   const minVerifiableRatio = Math.max(
     0,

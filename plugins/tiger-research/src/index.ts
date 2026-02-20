@@ -29,3 +29,4 @@ export const tigerResearchPluginManifest = definePluginManifest({
 
 export * from "./db";
 export * from "./manifest";
+export * from "./profile";

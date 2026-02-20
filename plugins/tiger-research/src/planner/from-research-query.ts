@@ -1,5 +1,10 @@
 import { getResearchPlannerOpenCodeEnv } from "./opencode-config";
 import { generateAndParseWithRetry } from "./llm-json-retry";
+import {
+  getResearchProfileConfig,
+  type ResearchStrengthProfile,
+  resolveResearchStrengthProfile,
+} from "../profile";
 
 export interface ResearchClaimCandidate {
   text: string;
@@ -38,7 +43,11 @@ function inferRiskLevel(text: string): "low" | "medium" | "high" {
   return "low";
 }
 
-function buildPromptFromResearchQuery(query: string, profile: string): string {
+function buildPromptFromResearchQuery(
+  query: string,
+  profile: ResearchStrengthProfile,
+  claimCount: { min: number; max: number },
+): string {
   return `
 You are a planning agent for TigerResearch.
 Given the research query below, decompose it into atomic, testable claims for a high-precision research workflow.
@@ -52,7 +61,7 @@ ${profile}
 
 ## Output Requirements
 - Return JSON only.
-- Produce 4 to 10 non-overlapping claims when scope allows.
+- Produce ${claimCount.min} to ${claimCount.max} non-overlapping claims when scope allows.
 - Each claim should be specific, falsifiable, and evidence-friendly.
 - Avoid vague or duplicated claims.
 - Prioritize claims that are critical to answering the query.
@@ -89,6 +98,7 @@ function isResearchQueryPayload(value: unknown): value is {
 
 function normalizeClaims(
   rawClaims: Array<{ text: string; priority?: number; riskLevel?: string }>,
+  maxClaims: number,
 ): ResearchClaimCandidate[] {
   const seen = new Set<string>();
   const claims: ResearchClaimCandidate[] = [];
@@ -119,7 +129,7 @@ function normalizeClaims(
   }
 
   claims.sort((a, b) => b.priority - a.priority);
-  return claims;
+  return claims.slice(0, Math.max(1, maxClaims));
 }
 
 export async function generateResearchPlanFromQuery(
@@ -130,8 +140,9 @@ export async function generateResearchPlanFromQuery(
     timeoutSeconds?: number;
   },
 ): Promise<ResearchQueryPlanResult> {
-  const profile = options.profile ?? "high_precision";
-  const prompt = buildPromptFromResearchQuery(query, profile);
+  const profile = resolveResearchStrengthProfile(options.profile);
+  const profileConfig = getResearchProfileConfig(profile);
+  const prompt = buildPromptFromResearchQuery(query, profile, profileConfig.planner.claimCount);
   const plannerModel = process.env.PLANNER_MODEL ?? "google/gemini-3-pro-preview";
 
   try {
@@ -142,13 +153,14 @@ export async function generateResearchPlanFromQuery(
       workdir: options.workdir,
       model: plannerModel,
       prompt,
-      timeoutSeconds: options.timeoutSeconds ?? 180,
+      timeoutSeconds: options.timeoutSeconds ?? profileConfig.planner.timeoutSeconds,
+      retryCountOverride: profileConfig.planner.parseRegenRetries,
       env: getResearchPlannerOpenCodeEnv(),
       guard: isResearchQueryPayload,
       label: "Research query planning",
     });
 
-    const claims = normalizeClaims(parsed.claims);
+    const claims = normalizeClaims(parsed.claims, profileConfig.planner.claimCount.max);
     if (claims.length > 0) {
       return {
         claims,
