@@ -1,91 +1,182 @@
-# Plugin Development Guide
+# Plugin Platform Guide (Manifest v1)
 
-openTiger supports feature expansion as plugins that reuse the same runtime model:
+openTiger plugin support is standardized around a single contract: `PluginManifestV1`.
 
-- `tasks`
-- `runs`
-- `artifacts`
-- `events`
-- Dispatcher/Worker/Judge/Cycle Manager convergence loop
+This document defines the platform contract and migration-safe behavior for:
 
-TigerResearch is the reference plugin.
+- API route exposure
+- planner/dispatcher/worker/judge/cycle hooks
+- dashboard route/nav exposure
+- plugin-scoped database migration
+- compatibility and enable/disable behavior
 
-## 1. Design Rules (for OSS plugin authors)
+TigerResearch is the reference implementation.
 
-1. Keep orchestration contracts unchanged:
-   - enqueue work in `tasks`
-   - execute via worker agents
-   - persist execution history in `runs/artifacts`
-2. Add plugin-specific domain schema outside core `packages/db/src/schema.ts`
-3. Register plugin surfaces via registries, not hardcoded conditionals
-4. Keep plugin task kind explicit (`tasks.kind = <plugin-kind>`)
-5. Ensure recoverability (`blocked`, `retry`, `needs_rework`) within existing loops
+## 1. Platform Goals
 
-## 2. Registry Points
+1. Keep core orchestration stable while allowing plugin specialization.
+2. Use one manifest contract across all runtime agents.
+3. Let operators enable/disable plugins without code edits.
+4. Keep failure isolation explicit (`incompatible`, `error`, `disabled`) and observable.
+5. Preserve recoverability-first task lifecycle behavior.
 
-### API registry
+## 2. Plugin Packaging Model
 
-- `apps/api/src/plugins/index.ts`
-- `apps/api/src/plugins/types.ts`
-- `apps/api/src/plugins/tiger-research.ts`
+Plugins are first-party monorepo packages under `plugins/<plugin-id>/`.
 
-Mount plugin routes under:
+Each plugin package exports one manifest entrypoint:
 
-- `/plugins/<plugin-id>/...`
+- `plugins/<plugin-id>/index.ts`
 
-TigerResearch keeps `/research/...` as backward-compatible alias.
+The core loader (`packages/plugin-sdk`) discovers, validates, and activates plugins according to `ENABLED_PLUGINS`.
 
-### Dashboard registry
+## 3. PluginManifestV1 Contract
 
-- `apps/dashboard/src/plugins/registry.ts`
-- `apps/dashboard/src/plugins/types.ts`
-- `apps/dashboard/src/plugins/tiger-research.tsx`
+Manifest fields:
 
-The sidebar now exposes a `plugins` section and plugin-specific pages.
+- Required
+  - `id: string` (stable plugin identifier)
+  - `version: string` (plugin package version)
+  - `pluginApiVersion: string` (platform contract version, e.g. `"1"`)
+  - `taskKinds: string[]` (kinds owned/handled by the plugin)
+  - `lanes: string[]` (dispatcher lanes contributed by the plugin)
+- Optional
+  - `requires?: string[]` (plugin dependencies by `id`)
+  - `api?`
+  - `planner?`
+  - `dispatcher?`
+  - `worker?`
+  - `judge?`
+  - `cycleManager?`
+  - `dashboard?`
+  - `db?`
 
-### Worker task-kind registry
+### 3.1 Compatibility Policy
 
-- `apps/worker/src/plugins/index.ts`
-- `apps/worker/src/plugins/types.ts`
-- `apps/worker/src/plugins/tiger-research.ts`
+- Loader compares `pluginApiVersion` with core-supported version.
+- If incompatible:
+  - plugin status becomes `incompatible`
+  - plugin is skipped (not loaded)
+  - core runtime continues
+  - structured logs and `/plugins` response include reason
 
-`worker-runner.ts` resolves handler by `task.kind` and dispatches to plugin code path.
+### 3.2 Activation Policy
 
-### Cycle Manager monitor plugin registry
+- `ENABLED_PLUGINS` is a CSV list (example: `tiger-research,slack-triage`).
+- Plugins not listed are treated as `disabled`.
+- Activation changes are applied on process restart.
 
-- `apps/cycle-manager/src/plugins/index.ts`
-- `apps/cycle-manager/src/plugins/types.ts`
-- `apps/cycle-manager/src/plugins/tiger-research.ts`
+## 4. Hook Contracts
 
-Plugin monitor ticks are executed each loop without hardcoding in `loops.ts`.
+## 4.1 API Hook
 
-## 3. Plugin Schema Placement
+- Registers all plugin routes under `/plugins/<plugin-id>/*`.
+- Legacy alias routes (for example `/research/*`) are not part of the v1 contract.
 
-Core schema (`packages/db/src/schema.ts`) now excludes TigerResearch domain tables.
+## 4.2 Planner Hook
 
-TigerResearch plugin schema lives in:
+Planner hook owns plugin-specific decomposition while preserving planner responsibility boundaries.
 
-- `packages/db/src/plugins/tiger-research.ts`
+Canonical shape:
 
-and is re-exported through:
+- `planPluginJob(input) -> { tasks, domainUpdates, warnings }`
 
-- `@openTiger/db/schema` (compatibility names: `researchJobs`, `researchClaims`, ...)
+Expected behavior:
 
-## 4. Minimal Checklist for New Plugin
+- Read plugin domain state
+- Produce `tasks` with valid `kind/lane` registered by manifest
+- Return deterministic domain updates (if any)
+- Never embed cross-agent orchestration decisions in planner hook
 
-1. Create plugin domain schema (`packages/db/src/plugins/<plugin>.ts`)
-2. Add API route module and registry registration
-3. Add dashboard plugin entry and routes
-4. Add worker task-kind handler for plugin execution
-5. Optionally add cycle/judge/planner hooks
-6. Add docs page under `docs/`
+## 4.3 Dispatcher Hook
 
-## 5. TigerResearch as Reference
+- Registers additional lane semantics and lane selection metadata.
+- Dispatcher keeps lease/idempotency ownership.
+
+## 4.4 Worker Hook
+
+- Resolves plugin task handler by `task.kind`.
+- Executes plugin path without forcing git pipeline usage.
+
+## 4.5 Judge Hook
+
+Judge hook evaluates plugin outputs and returns verdict inputs to existing task transitions.
+
+Canonical shape:
+
+- `collectPendingTargets() -> Target[]`
+- `evaluateTarget(target) -> EvaluationResult`
+- `applyVerdict(result) -> DomainUpdate`
+
+Judge remains the owner of judgement idempotency and rework transitions.
+
+## 4.6 Cycle Manager Hook
+
+- Provides periodic plugin monitor/orchestration tick.
+- Must be safe and idempotent across repeated loop executions.
+
+## 4.7 Dashboard Hook
+
+- Provides plugin routes and nav entries.
+- Discovery uses `import.meta.glob` at build time.
+- Enabling/disabling existing plugins can be toggled at runtime startup.
+- Adding a new plugin package requires dashboard rebuild because route modules must exist at build time.
+
+## 4.8 DB Hook
+
+Plugin DB integration is migration-based, not schema hardcoding in core.
+
+Expected manifest db metadata:
+
+- plugin migration directory location
+- optional schema exports used by plugin package
+
+## 5. DB Migration Order and Safety
+
+Global migration order:
+
+1. Core migrations
+2. Plugin migrations in topological order by `requires`
+
+Rules:
+
+- Dependency cycle in `requires` is a hard failure.
+- Missing dependency plugin is a hard failure for dependent plugin.
+- Migration execution is idempotent and persisted in migration state.
+- Plugin migration failure does not silently continue; error is explicit and actionable.
+
+## 6. Runtime Introspection
+
+`GET /plugins` returns plugin inventory including status:
+
+- `enabled`
+- `disabled`
+- `incompatible`
+- `error`
+
+Response includes at least:
+
+- `id`
+- `version`
+- `pluginApiVersion`
+- `status`
+- `capabilities`
+- `reason` (for non-enabled states)
+
+## 7. Minimal Authoring Checklist
+
+1. Create `plugins/<id>/index.ts` with `PluginManifestV1`.
+2. Declare `taskKinds`, `lanes`, and optional `requires`.
+3. Implement required hooks for target behavior.
+4. Add plugin-scoped DB migrations if domain tables are needed.
+5. Register plugin in loader discovery map.
+6. Enable plugin via `ENABLED_PLUGINS`.
+7. Run `pnpm run plugin:validate` and `pnpm run check`.
+8. Add plugin docs and operational notes.
+
+## 8. TigerResearch Reference
 
 See:
 
 - [research](research.md)
-- `apps/api/src/plugins/tiger-research.ts`
-- `apps/dashboard/src/plugins/tiger-research.tsx`
-- `apps/worker/src/plugins/tiger-research.ts`
-- `packages/db/src/plugins/tiger-research.ts`
+- `plugins/tiger-research/` (manifest + hooks)

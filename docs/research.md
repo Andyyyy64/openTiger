@@ -69,7 +69,7 @@ Plugin domain:
 
 Schema location:
 
-- `packages/db/src/plugins/tiger-research.ts`
+- `plugins/tiger-research/src/db.ts`
 
 Primary linkages:
 
@@ -202,7 +202,7 @@ Primary plugin routes:
 - `POST /plugins/tiger-research/jobs/:id/tasks`
 - `DELETE /plugins/tiger-research/jobs`
 
-Backward-compatible alias routes remain available under `/research/*`.
+`/research/*` aliases are removed. Use only `/plugins/tiger-research/*`.
 
 Notes:
 

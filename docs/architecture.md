@@ -133,7 +133,7 @@ Main tables:
 - `agents`
 - `cycles`
 - `config`
-- TigerResearch plugin tables (`packages/db/src/plugins/tiger-research.ts`)
+- TigerResearch plugin tables (`plugins/tiger-research/src/db.ts`)
 
 ### Message Queue (Redis / BullMQ)
 
@@ -183,3 +183,35 @@ Details in [flow](flow.md).
   - `sandbox` (docker)
 
 Details in [mode](mode.md) and [execution-mode](execution-mode.md).
+
+## 6. Plugin Platform Architecture (Manifest v1)
+
+Plugin integration is standardized through `PluginManifestV1` and a shared loader in
+`packages/plugin-sdk`.
+
+High-level loading model:
+
+1. Core discovers plugin packages (`plugins/<id>/index.ts`)
+2. Loader validates manifest compatibility (`pluginApiVersion`)
+3. Loader resolves dependency order (`requires`)
+4. Enabled plugins are mounted into each agent through hooks
+
+Activation source:
+
+- `ENABLED_PLUGINS` (CSV)
+
+Runtime inventory:
+
+- `GET /plugins` returns plugin status (`enabled` / `disabled` / `incompatible` / `error`)
+
+Dashboard behavior:
+
+- Plugin route modules are discovered with `import.meta.glob`
+- New plugin package modules require dashboard rebuild
+- Enabled/disabled filtering is applied during startup/runtime bootstrapping
+
+DB behavior:
+
+- Core migrations run first
+- Plugin migrations run in dependency order
+- Migration state is persisted to guarantee idempotent re-runs

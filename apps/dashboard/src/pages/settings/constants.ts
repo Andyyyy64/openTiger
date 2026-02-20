@@ -162,6 +162,13 @@ export const SETTINGS: SettingField[] = [
     type: "boolean",
   },
   {
+    key: "ENABLED_PLUGINS",
+    label: "Enabled_Plugins",
+    description: "Comma-separated plugin IDs. Empty means all registered plugins are enabled.",
+    group: "Runtime",
+    type: "text",
+  },
+  {
     key: "EXECUTION_ENVIRONMENT",
     label: "Execution_Environment",
     description: "host=process runtime, sandbox=docker runtime",

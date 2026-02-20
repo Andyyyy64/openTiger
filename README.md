@@ -34,6 +34,9 @@ all under explicit runtime state transitions.
 
 - Plugin-first feature expansion
 - TigerResearch plugin (`planner-first` claim/evidence convergence) as the reference implementation
+- Plugin activation via `ENABLED_PLUGINS` (CSV)
+- Plugin inventory endpoint: `GET /plugins`
+- TigerResearch routes are exposed only under `/plugins/tiger-research/*`
 - See [docs/plugins.md](docs/plugins.md) for plugin architecture and implementation guide
 
 ## Architecture Overview

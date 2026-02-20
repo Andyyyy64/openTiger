@@ -1,12 +1,13 @@
 import { ResearchPage } from "../pages/Research";
 import { ResearchJobDetailsPage } from "../pages/ResearchJobDetails";
 import type { DashboardPlugin } from "./types";
+import { tigerResearchPluginManifestCore } from "@openTiger/plugin-tiger-research/manifest";
 
 export const tigerResearchPlugin: DashboardPlugin = {
-  id: "tiger-research",
-  name: "TigerResearch",
-  description: "High-precision claim/evidence research pipeline",
-  entryPath: "/plugins/tiger-research",
+  id: tigerResearchPluginManifestCore.id,
+  name: tigerResearchPluginManifestCore.name,
+  description: tigerResearchPluginManifestCore.description,
+  entryPath: tigerResearchPluginManifestCore.dashboard?.entryPath ?? "/plugins/tiger-research",
   navItems: [{ to: "/plugins/tiger-research", label: "tiger-research" }],
   routes: [
     {
@@ -19,3 +20,5 @@ export const tigerResearchPlugin: DashboardPlugin = {
     },
   ],
 };
+
+export const dashboardPlugin = tigerResearchPlugin;

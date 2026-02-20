@@ -471,3 +471,40 @@ with recent_done as (
 select coalesce(done_count / 3, 0) as feature_done_per_hour
 from recent_done;
 ```
+
+## 13. Plugin Operations Runbook
+
+### 13.1 Enable/Disable Plugins
+
+Plugin activation is controlled by `ENABLED_PLUGINS` (CSV).
+
+Example:
+
+- `ENABLED_PLUGINS=tiger-research`
+
+Operational rule:
+
+- Update env/config
+- Restart affected processes (API/Planner/Dispatcher/Worker/Judge/Cycle Manager/Dashboard)
+
+### 13.2 First Checks After Plugin Toggle
+
+1. `GET /plugins`
+2. `GET /health/ready`
+3. `GET /system/processes`
+4. `GET /tasks` and `GET /runs`
+
+Expected:
+
+- Target plugin status is `enabled`
+- Non-target plugins are `disabled` (or `incompatible`/`error` with reason)
+- Core loops continue running even if one plugin is incompatible
+
+### 13.3 Recovery on Plugin Failure
+
+If a plugin enters `error` or `incompatible`:
+
+1. Remove plugin id from `ENABLED_PLUGINS`
+2. Restart processes
+3. Confirm plugin status transitions to `disabled`
+4. Verify core backlog progression (`queued`/`running`/`blocked` movement)

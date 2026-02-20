@@ -1,8 +1,10 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { dashboardPlugins } from "../plugins/registry";
+import { useEnabledDashboardPlugins } from "../plugins/registry";
 
 export const PluginsPage: React.FC = () => {
+  const dashboardPlugins = useEnabledDashboardPlugins();
+
   return (
     <div className="p-6 text-term-fg">
       <div className="mb-8">

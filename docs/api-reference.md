@@ -54,6 +54,7 @@ Main targets:
 | GitHub integration   | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github`       |
 | Requirement updates  | `GET /system/requirements`, `POST /system/requirements`                                                         |
 | TigerResearch plugin | `GET /plugins/tiger-research/jobs`, `GET /plugins/tiger-research/jobs/:id`, `POST /plugins/tiger-research/jobs` |
+| Plugin inventory     | `GET /plugins`                                                                                                  |
 
 Note:
 
@@ -198,7 +199,24 @@ Note:
 - `DELETE /plugins/tiger-research/jobs`
   - Deletes all research jobs and linked runtime rows
 
-Backward-compatible aliases under `/research/*` are still available.
+`/research/*` aliases are removed. Use only `/plugins/tiger-research/*`.
+
+### Plugin Inventory
+
+- `GET /plugins`
+  - Returns plugin load status and capabilities.
+  - Status values:
+    - `enabled`
+    - `disabled`
+    - `incompatible`
+    - `error`
+  - Main fields:
+    - `id`
+    - `version`
+    - `pluginApiVersion`
+    - `status`
+    - `capabilities`
+    - `reason` (optional)
 
 ### Webhook / GitHub
 

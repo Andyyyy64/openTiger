@@ -13,9 +13,11 @@ import { SettingsPage } from "./pages/Settings";
 import { StartPage } from "./pages/Start";
 import { LogsPage } from "./pages/Logs";
 import { PluginsPage } from "./pages/Plugins";
-import { dashboardPlugins } from "./plugins/registry";
+import { useEnabledDashboardPlugins } from "./plugins/registry";
 
 function App() {
+  const dashboardPlugins = useEnabledDashboardPlugins();
+
   return (
     <BrowserRouter>
       <Layout>

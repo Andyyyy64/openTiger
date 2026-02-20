@@ -316,26 +316,31 @@ Planner:
 
 - Responsible for planning and decomposition.
 - Not responsible for execution runtime and merge operations.
+- Plugin logic execution: Delegated to `plugin.planner.handleJob`.
 
 Dispatcher:
 
 - Responsible for selecting queued tasks, lease discipline, assignment.
 - Not responsible for judgement or replan policy.
+- Plugin lane integration: Resolves `plugin.lanes` from registry.
 
 Worker/Tester/Docser:
 
 - Responsible for task execution and verification.
 - Not responsible for global replan decisions.
+- Plugin execution: Delegated to `plugin.worker.run`.
 
 Judge:
 
 - Responsible for review/evaluation and approve/rework actions.
 - Not responsible for task dispatch.
+- Plugin judgement: Delegated to `plugin.judge.evaluateTarget` and `applyVerdict`.
 
 Cycle Manager:
 
 - Responsible for convergence, cleanup, retry/requeue orchestration.
 - Not responsible for implementing individual tasks.
+- Plugin monitoring: Delegated to `plugin.cycleManager.runMonitorTick`.
 
 ## 16. Startup and Runtime Ordering Invariants
 
@@ -513,6 +518,7 @@ Before major refactors, run:
 - Skipping tests for changed branch/condition paths.
 - Changing behavior without updating operational docs.
 - Hardcoding one-off logic where plugin/extension hooks exist.
+- Calling `loadPlugins()` without a preceding `registerPlugin()` block for static imports.
 
 ## 24. Agent Checklist (Quick)
 

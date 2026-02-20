@@ -43,26 +43,28 @@ Notes:
 
 ## 1.1 Task Kind
 
-- `code`
-- `research`
+- `code` (core built-in)
+- plugin-defined kinds (registered through `PluginManifestV1.taskKinds`)
 
 Notes:
 
-- `code` follows git/local implementation pipeline
-- `research` follows non-git evidence synthesis pipeline
+- `code` follows git/local implementation pipeline.
+- Plugin kinds are validated against runtime plugin registry before task creation/dispatch.
+- Unknown/unregistered kinds are rejected at API validation time.
 
 ## 1.2 Task Lane
 
-- `feature`
-- `conflict_recovery`
-- `docser`
-- `research`
+- `feature` (core built-in)
+- `conflict_recovery` (core built-in)
+- `docser` (core built-in)
+- plugin-defined lanes (registered through `PluginManifestV1.lanes`)
 
 Notes:
 
 - Dispatcher lane scheduler uses lane + active running usage to prevent feature starvation.
 - `docser` lane is serialized through `targetArea=docser:global`.
 - `conflict_recovery` lane is capped to avoid monopolizing worker slots.
+- Plugin lanes are admitted only when declared by an enabled compatible plugin.
 
 ## 2. Task Block Reason
 

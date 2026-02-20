@@ -246,3 +246,30 @@ Fallback behavior:
 
 - If planner cannot be started on job creation, API enqueues a fallback `plan` task.
 - While `plannerPendingUntil` is active, cycle manager waits before fallback plan task injection.
+
+## 12. Plugin Hook Flow (Manifest v1)
+
+All plugin runtime behavior is driven by `PluginManifestV1` loaded by `packages/plugin-sdk`.
+
+1. Startup loader phase
+   - Read available plugin manifests
+   - Validate `pluginApiVersion`
+   - Resolve `requires` order
+   - Build enabled plugin registry from `ENABLED_PLUGINS`
+2. API phase
+   - Mount plugin routes under `/plugins/<plugin-id>/*`
+   - Expose plugin inventory/status through `GET /plugins`
+3. Planner/Dispatcher/Worker/Judge/Cycle phase
+   - Resolve hooks from shared registry
+   - Execute plugin-specific behavior without hardcoded plugin id checks
+4. Dashboard phase
+   - Discover route modules via `import.meta.glob`
+   - Apply enabled-filter to nav/routes at startup
+5. DB phase
+   - Apply core migrations
+   - Apply plugin migrations in dependency order
+
+Failure handling:
+
+- Incompatible plugin manifest -> `incompatible` status, plugin skipped, core continues
+- Plugin load/runtime initialization error -> `error` status with explicit reason

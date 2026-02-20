@@ -217,6 +217,10 @@ export const SettingsPage: React.FC = () => {
     }
     const warnings = mutation.data.warnings ?? [];
     setSaveWarnings(warnings);
+    if (mutation.data.requiresRestart) {
+      setSaveMessage("> CONFIG_SAVED_RESTART_REQUIRED");
+      return;
+    }
     if (warnings.length > 0) {
       setSaveMessage("> CONFIG_SAVED_WITH_WARNINGS");
       return;

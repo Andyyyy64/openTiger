@@ -2,13 +2,14 @@ import React, { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { systemApi, runsApi } from "../lib/api";
-import { dashboardPlugins } from "../plugins/registry";
+import { useEnabledDashboardPlugins } from "../plugins/registry";
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const dashboardPlugins = useEnabledDashboardPlugins();
   const { data: health, isError: isHealthError } = useQuery({
     queryKey: ["system", "health"],
     queryFn: () => systemApi.health(),

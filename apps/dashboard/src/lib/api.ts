@@ -190,6 +190,19 @@ export interface ConfigResponse {
   config: Record<string, string>;
 }
 
+export type PluginInventoryStatus = "enabled" | "disabled" | "incompatible" | "error";
+
+export interface PluginInventoryItem {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  pluginApiVersion: string;
+  status: PluginInventoryStatus;
+  capabilities: string[];
+  reason?: string;
+}
+
 export interface SystemProcess {
   name: string;
   label: string;
@@ -661,4 +674,8 @@ export const configApi = {
         body: JSON.stringify({ updates }),
       },
     ),
+};
+
+export const pluginsApi = {
+  list: () => fetchApi<{ plugins: PluginInventoryItem[] }>("/plugins").then((res) => res.plugins),
 };
