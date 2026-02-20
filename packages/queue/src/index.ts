@@ -59,13 +59,13 @@ export function createTaskWorker(
 ): Worker<TaskJobData> {
   // Shorter lockDuration for faster recovery when process crashes; BullMQ extends lock during normal execution so long tasks can continue
   const configuredLockDurationMs = Number.parseInt(
-    process.env.TASK_QUEUE_LOCK_DURATION_MS ?? "120000",
+    process.env.TASK_QUEUE_LOCK_DURATION_MS ?? "300000",
     10,
   );
   const lockDurationMs =
     Number.isFinite(configuredLockDurationMs) && configuredLockDurationMs >= 30000
       ? configuredLockDurationMs
-      : 120000;
+      : 300000;
   const configuredStalledIntervalMs = Number.parseInt(
     process.env.TASK_QUEUE_STALLED_INTERVAL_MS ?? "30000",
     10,
@@ -75,13 +75,13 @@ export function createTaskWorker(
       ? configuredStalledIntervalMs
       : 30000;
   const configuredMaxStalledCount = Number.parseInt(
-    process.env.TASK_QUEUE_MAX_STALLED_COUNT ?? "1",
+    process.env.TASK_QUEUE_MAX_STALLED_COUNT ?? "2",
     10,
   );
   const maxStalledCount =
     Number.isFinite(configuredMaxStalledCount) && configuredMaxStalledCount >= 0
       ? configuredMaxStalledCount
-      : 1;
+      : 2;
   // Single job per agent by default (1 agent = 1 task)
   const configuredConcurrency = Number.parseInt(
     process.env.TASK_QUEUE_WORKER_CONCURRENCY ?? "1",

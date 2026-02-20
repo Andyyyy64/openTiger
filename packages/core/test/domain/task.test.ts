@@ -119,10 +119,11 @@ describe("TaskKind", () => {
   it("accepts valid task kinds", () => {
     expect(TaskKind.safeParse("code").success).toBe(true);
     expect(TaskKind.safeParse("research").success).toBe(true);
+    expect(TaskKind.safeParse("analysis").success).toBe(true);
   });
 
-  it("rejects invalid task kinds", () => {
-    expect(TaskKind.safeParse("analysis").success).toBe(false);
+  it("rejects empty task kind", () => {
+    expect(TaskKind.safeParse("").success).toBe(false);
   });
 });
 
