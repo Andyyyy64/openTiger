@@ -135,6 +135,8 @@ This page focuses on policy/path recovery:
 - blocked `needs_rework` suppression for policy-only paths
 - planner-side policy hint self-growth
 
+Research JSON parse recovery (in-run regeneration + parser repair) is documented in [research](research.md).
+
 ## 5. Rework Chain Suppression (Cycle Manager)
 
 Cycle Manager suppresses policy-only failure and rework chain amplification.

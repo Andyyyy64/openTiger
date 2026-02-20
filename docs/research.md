@@ -169,7 +169,23 @@ Judge reviews research runs (when required) and decides:
 
 ## 6. Quality Gates
 
-Cycle Manager thresholds (default in code):
+Research strength profiles:
+
+- `low`
+- `mid` (default)
+- `high`
+- `ultra`
+
+Only these 4 parameters are profile-driven:
+
+- claim/evidence volume (planner claim target + evidence count per claim)
+- distinct-domain threshold per claim
+- counter-evidence requirement
+- LLM parse retry count / timeout
+
+`high_precision` and any non-enum profile values are rejected by API validation.
+
+Cycle Manager thresholds:
 
 - `RESEARCH_MIN_EVIDENCE_PER_CLAIM` (default `3`)
 - `RESEARCH_MIN_DISTINCT_DOMAINS_PER_CLAIM` (default `2`)
@@ -179,7 +195,7 @@ Cycle Manager thresholds (default in code):
 - `RESEARCH_MAX_CONCURRENCY` (default `6`)
 - `RESEARCH_MAX_DEPTH` (default `3`)
 
-Judge-specific research thresholds:
+Judge thresholds:
 
 - `JUDGE_RESEARCH_MIN_CLAIMS`
 - `JUDGE_RESEARCH_MIN_EVIDENCE_PER_CLAIM`
@@ -187,6 +203,11 @@ Judge-specific research thresholds:
 - `JUDGE_RESEARCH_REQUIRE_COUNTER_EVIDENCE`
 - `JUDGE_RESEARCH_MIN_CONFIDENCE`
 - `JUDGE_RESEARCH_MIN_VERIFIABLE_RATIO`
+
+Notes:
+
+- `RESEARCH_MIN_REPORT_CONFIDENCE` and `RESEARCH_MIN_VERIFIABLE_RATIO` stay as global env thresholds.
+- claim/evidence/domain/counter-evidence are derived from the selected profile at runtime.
 
 Judge enablement for research:
 
@@ -209,6 +230,7 @@ Notes:
 - `POST /plugins/tiger-research/jobs` response includes runtime/planner start result
 - `POST /plugins/tiger-research/jobs/:id/tasks` is an operator override for manual stage injection
 - `DELETE /plugins/tiger-research/jobs` deletes research jobs and linked runtime rows in a transaction
+- `qualityProfile` / `profile` accepts only: `low | mid | high | ultra`
 
 ## 8. Operational Notes
 
@@ -232,13 +254,60 @@ Current behavior:
 - In API dev lifecycle (`npm_lifecycle_event=dev`), `SIGTERM` preserves managed processes by default.
 - Override with `OPENTIGER_PRESERVE_MANAGED_ON_DEV_SIGTERM=false` to restore strict shutdown behavior.
 
-## 8.3 First Checks
+## 8.3 Common Failure Pattern: BullMQ stalled jobs
+
+If you see:
+
+- `UnrecoverableError: job stalled more than allowable limit`
+- task status remaining `running` without meaningful progress
+
+current behavior:
+
+- Worker queue failure handler detects stalled-job failures and force-recovers runtime state:
+  - running `runs` for the task -> `failed`
+  - `tasks.status` -> `failed`
+  - stale task lease is released
+- Cycle Manager then requeues by normal failed-task cooldown policy.
+
+Tuning knobs:
+
+- `TASK_QUEUE_LOCK_DURATION_MS` (default `300000`)
+- `TASK_QUEUE_STALLED_INTERVAL_MS` (default `30000`)
+- `TASK_QUEUE_MAX_STALLED_COUNT` (default `2`)
+
+## 8.4 First Checks
 
 1. `GET /system/processes`
 2. `GET /agents`
 3. `GET /plugins/tiger-research/jobs`
 4. `GET /tasks` (research tasks only)
 5. `GET /runs` + `GET /logs/all`
+
+## 8.5 Common Failure Pattern: malformed research JSON output
+
+If a research worker run completes but the model output cannot be parsed as JSON:
+
+- Worker now performs in-run JSON recovery before failing the task.
+- Recovery retries regenerate the same research response with stricter "JSON only" instructions.
+- A lightweight parser repair pass also handles common malformed patterns (trailing commas, missing closing braces/brackets).
+
+Runtime knobs:
+
+- `RESEARCH_PARSE_REGEN_RETRIES` (default `2`)
+- `RESEARCH_PARSE_REGEN_TIMEOUT_SECONDS` (default `240`)
+
+Behavior:
+
+- If recovery succeeds, the run continues normally and persists claims/evidence/report artifacts.
+- If all recovery attempts fail, the run fails explicitly and enters normal failed-task retry flow.
+
+## 8.6 Quota wait behavior in orchestration
+
+When research collect/challenge tasks are blocked as `quota_wait`:
+
+- Orchestrator treats these blocked tasks as active in-flight tasks.
+- This prevents enqueue amplification (duplicate stage tasks piling up while waiting for quota cooldown).
+- Cycle Manager still requeues blocked tasks after quota cooldown using normal blocked-task recovery.
 
 ## 9. Implementation Reference (Source of Truth)
 

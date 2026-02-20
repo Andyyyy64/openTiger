@@ -382,22 +382,24 @@ Runtime enablement and planner handoff:
 - `RESEARCH_PLANNER_PENDING_WINDOW_MS`
 - `RESEARCH_REQUIRE_JUDGE`
 
-Cycle-orchestrator quality thresholds:
+Profile-driven (request payload `qualityProfile` / `profile`):
+
+- `low | mid | high | ultra` (`mid` default)
+- Controlled knobs are limited to:
+  - claim/evidence volume
+  - distinct-domain threshold
+  - counter-evidence requirement
+  - planner LLM parse retries + timeout
+
+Cycle-orchestrator global thresholds:
 
 - `RESEARCH_MAX_CONCURRENCY`
 - `RESEARCH_MAX_DEPTH`
-- `RESEARCH_MIN_EVIDENCE_PER_CLAIM`
-- `RESEARCH_MIN_DISTINCT_DOMAINS_PER_CLAIM`
-- `RESEARCH_REQUIRE_COUNTER_EVIDENCE`
 - `RESEARCH_MIN_REPORT_CONFIDENCE`
 - `RESEARCH_MIN_VERIFIABLE_RATIO`
 
-Judge research thresholds:
+Judge research thresholds (global):
 
-- `JUDGE_RESEARCH_MIN_CLAIMS`
-- `JUDGE_RESEARCH_MIN_EVIDENCE_PER_CLAIM`
-- `JUDGE_RESEARCH_MIN_DISTINCT_DOMAINS_PER_CLAIM`
-- `JUDGE_RESEARCH_REQUIRE_COUNTER_EVIDENCE`
 - `JUDGE_RESEARCH_MIN_CONFIDENCE`
 - `JUDGE_RESEARCH_MIN_VERIFIABLE_RATIO`
 
