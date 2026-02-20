@@ -1,0 +1,46 @@
+{
+  "name": "@openTiger/plugin-tiger-research",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./db": {
+      "types": "./dist/db.d.ts",
+      "import": "./dist/db.js",
+      "require": "./dist/db.js"
+    },
+    "./manifest": {
+      "types": "./dist/manifest.d.ts",
+      "import": "./dist/manifest.js",
+      "require": "./dist/manifest.js"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsc --watch",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage --passWithNoTests",
+    "lint": "oxlint .",
+    "lint:ci": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@openTiger/core": "workspace:^",
+    "@openTiger/db": "workspace:*",
+    "@openTiger/llm": "workspace:^",
+    "@openTiger/plugin-sdk": "workspace:^",
+    "@openTiger/vcs": "workspace:^",
+    "drizzle-orm": "^0.38.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.4"
+  }
+}
