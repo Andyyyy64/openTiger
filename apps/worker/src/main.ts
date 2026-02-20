@@ -1,6 +1,6 @@
 import { db } from "@openTiger/db";
 import { tasks, runs, leases, agents } from "@openTiger/db/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Task } from "@openTiger/core";
 import { getRepoMode, getLocalRepoPath } from "@openTiger/core";
 import "dotenv/config";
@@ -324,8 +324,62 @@ async function main() {
     }
   }, getTaskQueueName(agentId));
 
-  queueWorker.on("failed", (job: Job<TaskJobData> | undefined, err: Error) => {
+  queueWorker.on("failed", async (job: Job<TaskJobData> | undefined, err: Error) => {
     console.error(`[Queue] Job ${job?.id} failed:`, err);
+    const taskId = job?.data?.taskId;
+    if (!taskId) {
+      return;
+    }
+
+    const reason = err.message ?? String(err);
+    const isStalledFailure = reason.includes("stalled more than allowable limit");
+    if (!isStalledFailure) {
+      return;
+    }
+
+    try {
+      const now = new Date();
+      const [taskRow] = await db
+        .select({ id: tasks.id, status: tasks.status })
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1);
+      if (!taskRow || taskRow.status !== "running") {
+        return;
+      }
+
+      // ジョブがstallした場合は running 固着を防ぐため、run/task/leaseを明示的に回復状態へ戻す。
+      await db
+        .update(runs)
+        .set({
+          status: "failed",
+          finishedAt: now,
+          errorMessage:
+            "Queue job stalled more than allowable limit; marked failed for deterministic recovery",
+        })
+        .where(and(eq(runs.taskId, taskId), inArray(runs.status, ["running"])));
+
+      await db
+        .update(tasks)
+        .set({
+          status: "failed",
+          blockReason: null,
+          updatedAt: now,
+        })
+        .where(eq(tasks.id, taskId));
+
+      await db.delete(leases).where(eq(leases.taskId, taskId));
+      await db
+        .update(agents)
+        .set({ status: "idle", currentTaskId: null, lastHeartbeat: now })
+        .where(eq(agents.id, agentId));
+
+      console.warn(
+        `[Queue] Recovered stalled task ${taskId}: status set to failed and lease released.`,
+      );
+    } catch (recoveryError) {
+      console.error(`[Queue] Failed to recover stalled task ${taskId}:`, recoveryError);
+    }
   });
 
   queueWorker.on("error", (err: Error) => {

@@ -40,7 +40,7 @@ export function resolveResearchInput(task: Task): ResearchInput {
     jobId,
     query,
     stage: normalizeResearchStage(asString(research.stage)),
-    profile: asString(research.profile) ?? "high_precision",
+    profile: asString(research.profile) ?? "mid",
     claimId: asString(research.claimId),
     claimText: asString(research.claimText),
     claims: asStringArray(research.claims),

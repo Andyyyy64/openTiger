@@ -1,5 +1,10 @@
 import type { ResearchClaimOutput, ResearchModelOutput, ResearchSourceOutput } from "./types";
 
+const ANSI_ESCAPE_SEQUENCE = `${String.fromCharCode(27)}\\[[0-9;]*m`;
+const ANSI_ESCAPE_REGEX = new RegExp(ANSI_ESCAPE_SEQUENCE, "g");
+const CONTROL_CHARS_CLASS = `${String.fromCharCode(0)}-${String.fromCharCode(8)}${String.fromCharCode(11)}${String.fromCharCode(12)}${String.fromCharCode(14)}-${String.fromCharCode(31)}${String.fromCharCode(127)}`;
+const CONTROL_CHARS_REGEX = new RegExp(`[${CONTROL_CHARS_CLASS}]+`, "g");
+
 function clampScore(value: number): number {
   if (!Number.isFinite(value)) {
     return 0;
@@ -13,16 +18,121 @@ function clampScore(value: number): number {
   return Math.round(value);
 }
 
+function stripControlChars(text: string): string {
+  return text.replace(ANSI_ESCAPE_REGEX, "").replace(CONTROL_CHARS_REGEX, "");
+}
+
+function appendMissingJsonClosers(value: string): string {
+  const stack: ("{" | "[")[] = [];
+  let inString = false;
+  let escaping = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const ch = value[index];
+    if (!ch) {
+      continue;
+    }
+
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaping = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (ch === "{" || ch === "[") {
+      stack.push(ch);
+      continue;
+    }
+
+    if (ch === "}" || ch === "]") {
+      const expected = ch === "}" ? "{" : "[";
+      if (stack[stack.length - 1] === expected) {
+        stack.pop();
+      }
+    }
+  }
+
+  let patched = value.trim();
+  for (let index = stack.length - 1; index >= 0; index -= 1) {
+    const opener = stack[index];
+    patched += opener === "{" ? "}" : "]";
+  }
+  return patched;
+}
+
+function buildCandidateVariants(candidate: string): string[] {
+  const normalized = stripControlChars(candidate).trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const noTrailingCommas = normalized.replace(/,\s*([}\]])/g, "$1");
+  const closed = appendMissingJsonClosers(noTrailingCommas);
+  const variants = [normalized, noTrailingCommas, closed];
+  const unique: string[] = [];
+  const seen = new Set<string>();
+  for (const value of variants) {
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    unique.push(trimmed);
+  }
+  return unique;
+}
+
 function parseJsonCandidates(raw: string): string[] {
-  const codeBlocks = [...raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)]
+  const normalized = stripControlChars(raw);
+  const codeBlocks = [...normalized.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)]
     .map((match) => match[1]?.trim())
     .filter((value): value is string => Boolean(value));
 
   const objectCandidates: string[] = [];
   let depth = 0;
   let start = -1;
-  for (let index = 0; index < raw.length; index += 1) {
-    const ch = raw[index];
+  let inString = false;
+  let escaping = false;
+  for (let index = 0; index < normalized.length; index += 1) {
+    const ch = normalized[index];
+    if (!ch) {
+      continue;
+    }
+
+    if (inString) {
+      if (escaping) {
+        escaping = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaping = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+
     if (ch === "{") {
       if (depth === 0) {
         start = index;
@@ -33,13 +143,13 @@ function parseJsonCandidates(raw: string): string[] {
     if (ch === "}" && depth > 0) {
       depth -= 1;
       if (depth === 0 && start >= 0) {
-        objectCandidates.push(raw.slice(start, index + 1).trim());
+        objectCandidates.push(normalized.slice(start, index + 1).trim());
         start = -1;
       }
     }
   }
 
-  return [...codeBlocks, ...objectCandidates, raw.trim()];
+  return [...codeBlocks, ...objectCandidates, normalized.trim()];
 }
 
 function normalizeClaim(value: unknown): ResearchClaimOutput | null {
@@ -143,17 +253,16 @@ export function parseResearchOutput(stdout: string): ResearchModelOutput {
   const candidates = parseJsonCandidates(stdout);
 
   for (const candidate of candidates) {
-    if (!candidate) {
-      continue;
-    }
-    try {
-      const parsed = JSON.parse(candidate);
-      const normalized = normalizeOutput(parsed);
-      if (normalized) {
-        return normalized;
+    for (const variant of buildCandidateVariants(candidate)) {
+      try {
+        const parsed = JSON.parse(variant);
+        const normalized = normalizeOutput(parsed);
+        if (normalized) {
+          return normalized;
+        }
+      } catch {
+        continue;
       }
-    } catch {
-      continue;
     }
   }
 
