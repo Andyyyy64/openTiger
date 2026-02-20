@@ -6,23 +6,21 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
     },
     "./schema": {
       "types": "./dist/schema.d.ts",
-      "import": "./dist/schema.js"
-    },
-    "./plugins/tiger-research": {
-      "types": "./dist/plugins/tiger-research.d.ts",
-      "import": "./dist/plugins/tiger-research.js"
+      "import": "./dist/schema.js",
+      "require": "./dist/schema.js"
     }
   },
   "scripts": {
     "build": "tsup",
     "dev": "tsc --watch",
     "generate": "drizzle-kit generate",
-    "migrate": "drizzle-kit migrate",
-    "push": "drizzle-kit push",
+    "migrate": "drizzle-kit migrate && tsx src/plugin-migrations/runner.ts",
+    "push": "drizzle-kit push && tsx src/plugin-migrations/runner.ts",
     "studio": "drizzle-kit studio",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
@@ -39,6 +37,7 @@
   },
   "devDependencies": {
     "drizzle-kit": "^0.30.4",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vitest": "^3.0.4"
   }

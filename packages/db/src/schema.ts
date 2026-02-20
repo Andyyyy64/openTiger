@@ -147,6 +147,7 @@ export const config = pgTable("config", {
   docserCount: text("docser_count").default("4").notNull(),
   judgeCount: text("judge_count").default("4").notNull(),
   plannerCount: text("planner_count").default("1").notNull(),
+  enabledPlugins: text("enabled_plugins").default("").notNull(),
   workerNoChangeRecoveryAttempts: text("worker_no_change_recovery_attempts").default("5").notNull(),
   workerPolicyRecoveryAttempts: text("worker_policy_recovery_attempts").default("5").notNull(),
   workerVerifyRecoveryAttempts: text("worker_verify_recovery_attempts").default("5").notNull(),
@@ -249,30 +250,3 @@ export type NewCycleRecord = typeof cycles.$inferInsert;
 
 export type ConfigRecord = typeof config.$inferSelect;
 export type NewConfigRecord = typeof config.$inferInsert;
-
-export {
-  tigerResearchJobs as researchJobs,
-  tigerResearchClaims as researchClaims,
-  tigerResearchEvidence as researchEvidence,
-  tigerResearchReports as researchReports,
-  tigerResearchJobs,
-  tigerResearchClaims,
-  tigerResearchEvidence,
-  tigerResearchReports,
-  type TigerResearchJobRecord as ResearchJobRecord,
-  type NewTigerResearchJobRecord as NewResearchJobRecord,
-  type TigerResearchClaimRecord as ResearchClaimRecord,
-  type NewTigerResearchClaimRecord as NewResearchClaimRecord,
-  type TigerResearchEvidenceRecord as ResearchEvidenceRecord,
-  type NewTigerResearchEvidenceRecord as NewResearchEvidenceRecord,
-  type TigerResearchReportRecord as ResearchReportRecord,
-  type NewTigerResearchReportRecord as NewResearchReportRecord,
-  type TigerResearchJobRecord,
-  type NewTigerResearchJobRecord,
-  type TigerResearchClaimRecord,
-  type NewTigerResearchClaimRecord,
-  type TigerResearchEvidenceRecord,
-  type NewTigerResearchEvidenceRecord,
-  type TigerResearchReportRecord,
-  type NewTigerResearchReportRecord,
-} from "./plugins/tiger-research";

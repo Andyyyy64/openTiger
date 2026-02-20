@@ -1,7 +1,7 @@
 import { createNodeConfig } from "../../tsup.config.base";
 
 export default createNodeConfig({
-  entry: ["src/index.ts", "src/schema.ts", "src/plugins/tiger-research.ts"],
+  entry: ["src/index.ts", "src/schema.ts"],
   dts: true,
   externalizeDeps: true,
 });

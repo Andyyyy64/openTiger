@@ -1,0 +1,2 @@
+-- Reserved for tiger-research plugin specific migrations.
+-- Existing research tables are currently provided by legacy core migrations.
