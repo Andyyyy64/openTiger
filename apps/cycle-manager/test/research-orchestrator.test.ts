@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   evaluateResearchQualityGate,
   normalizeResearchStage,
-} from "../src/main/research-orchestrator";
+} from "../../../plugins/tiger-research/src/cycle/orchestrator";
 
 describe("normalizeResearchStage", () => {
   it("normalizes stage aliases", () => {
