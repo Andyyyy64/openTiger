@@ -4,8 +4,13 @@ import { db, closeDb } from "@openTiger/db";
 import { agents } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
 import { setupProcessLogging } from "@openTiger/core/process-logging";
+import { loadPlugins, registerPlugin } from "@openTiger/plugin-sdk";
 import { DEFAULT_CONFIG } from "./planner-config";
 import { planFromRequirement, planFromResearchJob } from "./planner-runner";
+import { tigerResearchPluginManifest } from "@openTiger/plugin-tiger-research";
+
+registerPlugin(tigerResearchPluginManifest);
+
 import { preparePlannerWorkdir } from "./planner-workdir";
 import { startHeartbeat } from "./planner-heartbeat";
 
@@ -132,6 +137,12 @@ async function main(): Promise<void> {
   }
 
   const researchJobId = parseOptionValue(args, "--research-job");
+  const pluginResult = loadPlugins({
+    enabledPluginsCsv: process.env.ENABLED_PLUGINS,
+  });
+  const researchPlannerEnabled = pluginResult.enabledPlugins.some(
+    (plugin) => plugin.taskKinds.includes("research") && plugin.planner?.mode === "planner-first",
+  );
   const requirementArgPath = findRequirementPathArg(args);
 
   // エージェント登録
@@ -175,6 +186,11 @@ async function main(): Promise<void> {
     const { workdir, cleanup } = await preparePlannerWorkdir(config);
     try {
       if (researchJobId) {
+        if (!researchPlannerEnabled) {
+          throw new Error(
+            "No enabled plugin can handle research-job planning. Update system config ENABLED_PLUGINS and restart managed processes.",
+          );
+        }
         await planFromResearchJob(researchJobId, { ...config, workdir }, agentId);
       } else {
         const requirementPath =

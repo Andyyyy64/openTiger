@@ -5,8 +5,10 @@ import {
   classifyFailure as classifyFailureCore,
   computeQuotaBackoff,
   resolveFailureCategoryRetryLimit,
+  CORE_TASK_LANES,
   type FailureCategory,
 } from "@openTiger/core";
+import { buildPluginRuntimeRegistry } from "@openTiger/plugin-sdk";
 import { db } from "@openTiger/db";
 import { tasks, runs } from "@openTiger/db/schema";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -56,6 +58,8 @@ const taskContextSchema = z.object({
     })
     .optional(),
 });
+
+const pluginRuntimeRegistry = buildPluginRuntimeRegistry(process.env.ENABLED_PLUGINS);
 
 const FAILED_TASK_RETRY_COOLDOWN_MS = Number.parseInt(
   process.env.FAILED_TASK_RETRY_COOLDOWN_MS ?? "30000",
@@ -326,17 +330,34 @@ const createTaskSchema = z.object({
   priority: z.number().int().optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
   role: z.enum(["worker", "tester", "docser"]).optional(),
-  kind: z.enum(["code", "research"]).optional(),
+  kind: z.string().min(1).optional(),
   dependencies: z.array(z.string().uuid()).optional(),
   timeboxMinutes: z.number().int().positive().optional(),
 });
+
+function resolveLaneForTask(params: { kind: string; role: string }): string {
+  if (params.role === "docser") {
+    return "docser";
+  }
+  const pluginLane = pluginRuntimeRegistry.defaultLaneByTaskKind.get(params.kind);
+  if (pluginLane) {
+    return pluginLane;
+  }
+  return "feature";
+}
 
 // Create task
 tasksRoute.post("/", zValidator("json", createTaskSchema), async (c) => {
   const body = c.req.valid("json");
   const role = body.role ?? "worker";
   const kind = body.kind ?? "code";
-  const lane = kind === "research" ? "research" : role === "docser" ? "docser" : "feature";
+  if (!pluginRuntimeRegistry.allowedTaskKinds.has(kind)) {
+    return c.json({ error: `Unsupported task kind: ${kind}` }, 400);
+  }
+  const lane = resolveLaneForTask({ kind, role });
+  if (!pluginRuntimeRegistry.allowedTaskLanes.has(lane)) {
+    return c.json({ error: `Unsupported task lane: ${lane}` }, 400);
+  }
 
   const result = await db
     .insert(tasks)
@@ -371,7 +392,8 @@ const updateTaskSchema = z.object({
   priority: z.number().int().optional(),
   riskLevel: z.enum(["low", "medium", "high"]).optional(),
   role: z.enum(["worker", "tester", "docser"]).optional(),
-  kind: z.enum(["code", "research"]).optional(),
+  kind: z.string().min(1).optional(),
+  lane: z.string().min(1).optional(),
   status: z.enum(["queued", "running", "done", "failed", "blocked", "cancelled"]).optional(),
   blockReason: z.string().optional(),
   dependencies: z.array(z.string().uuid()).optional(),
@@ -382,6 +404,15 @@ const updateTaskSchema = z.object({
 tasksRoute.patch("/:id", zValidator("json", updateTaskSchema), async (c) => {
   const id = c.req.param("id");
   const body = c.req.valid("json");
+  if (body.kind && !pluginRuntimeRegistry.allowedTaskKinds.has(body.kind)) {
+    return c.json({ error: `Unsupported task kind: ${body.kind}` }, 400);
+  }
+  if (body.lane) {
+    const isCoreLane = (CORE_TASK_LANES as readonly string[]).includes(body.lane);
+    if (!isCoreLane && !pluginRuntimeRegistry.allowedTaskLanes.has(body.lane)) {
+      return c.json({ error: `Unsupported task lane: ${body.lane}` }, 400);
+    }
+  }
 
   const result = await db
     .update(tasks)

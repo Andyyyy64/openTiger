@@ -11,6 +11,7 @@ export interface WorkerTaskKindRunParams {
 }
 
 export interface WorkerTaskKindPlugin {
+  id: string;
   kind: string;
   resolveInstructionsPath?: (task: Task, fallbackPath?: string) => string | undefined;
   run: (params: WorkerTaskKindRunParams) => Promise<WorkerResult>;

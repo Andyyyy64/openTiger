@@ -1,11 +1,11 @@
 import { db } from "@openTiger/db";
+import { artifacts } from "@openTiger/db/schema";
 import {
-  artifacts,
   researchClaims,
   researchEvidence,
   researchJobs,
   researchReports,
-} from "@openTiger/db/schema";
+} from "@openTiger/plugin-tiger-research/db";
 import { eq } from "drizzle-orm";
 import type { Task } from "@openTiger/core";
 import type { ResearchInput, ResearchModelOutput, ResearchSearchResult } from "./types";

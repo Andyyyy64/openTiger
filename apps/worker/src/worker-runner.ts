@@ -130,6 +130,31 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
   let worktreePath: string | undefined;
 
   try {
+    if (!taskKindPlugin && taskData.kind !== "code") {
+      const unsupportedKindMessage =
+        `Unsupported task kind without enabled plugin handler: ${taskData.kind}. ` +
+        "Enable the matching plugin via system config ENABLED_PLUGINS and restart processes before dispatch.";
+      await finalizeTaskState({
+        runId,
+        taskId,
+        agentId,
+        runStatus: "failed",
+        taskStatus: "failed",
+        blockReason: null,
+        errorMessage: unsupportedKindMessage,
+        errorMeta: {
+          source: "execution",
+          failureCode: FAILURE_CODE.EXECUTION_FAILED,
+        },
+      });
+      return {
+        success: false,
+        taskId,
+        runId,
+        error: unsupportedKindMessage,
+      };
+    }
+
     if (taskKindPlugin) {
       console.log(`\n[Plugin:${taskKindPlugin.kind}] Running non-git plugin execution path...`);
       return await taskKindPlugin.run({

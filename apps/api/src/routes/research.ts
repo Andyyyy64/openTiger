@@ -3,16 +3,13 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import { db } from "@openTiger/db";
+import { artifacts, leases, runs, tasks } from "@openTiger/db/schema";
 import {
-  artifacts,
-  leases,
   researchClaims,
   researchEvidence,
   researchJobs,
   researchReports,
-  runs,
-  tasks,
-} from "@openTiger/db/schema";
+} from "@openTiger/plugin-tiger-research/db";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { ensureResearchPlannerStarted, ensureResearchRuntimeStarted } from "./research-runtime";
 

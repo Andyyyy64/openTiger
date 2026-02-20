@@ -33,6 +33,7 @@ describe("worker-task-helpers", () => {
       isQuotaFailure("Executor throttled this API request. Please wait 5 minutes, then retry."),
     ).toBe(true);
     expect(isQuotaFailure("Request rate-limited. Reset at 00:00 UTC.")).toBe(true);
+    expect(isQuotaFailure("You've hit your usage limit. Please try again at 4:11 PM.")).toBe(true);
   });
 
   it("does not over-classify non-quota failures", () => {

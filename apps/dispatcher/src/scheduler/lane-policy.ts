@@ -1,6 +1,6 @@
 import type { AvailableTask } from "./priority";
 
-export type DispatcherLane = "feature" | "conflict_recovery" | "docser" | "research";
+export type DispatcherLane = string;
 
 export type LaneLimits = {
   conflictMaxSlots: number;
@@ -9,10 +9,7 @@ export type LaneLimits = {
 };
 
 export function normalizeLane(task: Pick<AvailableTask, "lane">): DispatcherLane {
-  if (task.lane === "conflict_recovery" || task.lane === "docser" || task.lane === "research") {
-    return task.lane;
-  }
-  return "feature";
+  return task.lane || "feature";
 }
 
 function incrementLaneCount(counter: Map<DispatcherLane, number>, lane: DispatcherLane): void {
@@ -20,15 +17,10 @@ function incrementLaneCount(counter: Map<DispatcherLane, number>, lane: Dispatch
 }
 
 export function countTasksByLane(taskList: AvailableTask[]): Record<DispatcherLane, number> {
-  const counts: Record<DispatcherLane, number> = {
-    feature: 0,
-    conflict_recovery: 0,
-    docser: 0,
-    research: 0,
-  };
+  const counts: Record<DispatcherLane, number> = {};
   for (const task of taskList) {
     const lane = normalizeLane(task);
-    counts[lane] += 1;
+    counts[lane] = (counts[lane] ?? 0) + 1;
   }
   return counts;
 }

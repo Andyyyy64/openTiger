@@ -84,11 +84,11 @@ We want a minimal but production-ready bot that can be self-hosted and verified 
 
 ## Risk Assessment
 
-| Risk                                           | Impact | Mitigation                                      |
-| ---------------------------------------------- | ------ | ----------------------------------------------- |
-| GitHub webhook delivery failure                 | medium | Idempotent handling; optional polling fallback  |
-| Standup digest timezone confusion              | medium | Document TZ; single env for all                 |
-| Reminder drift when bot is down                | low    | Reconcile DB on startup                         |
+| Risk                              | Impact | Mitigation                                     |
+| --------------------------------- | ------ | ---------------------------------------------- |
+| GitHub webhook delivery failure   | medium | Idempotent handling; optional polling fallback |
+| Standup digest timezone confusion | medium | Document TZ; single env for all                |
+| Reminder drift when bot is down   | low    | Reconcile DB on startup                        |
 
 ## Notes
 

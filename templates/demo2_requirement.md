@@ -112,12 +112,12 @@ We want to develop an OS on RISC-V with a workflow that can be continuously driv
 
 | Risk                                                                   | Impact | Mitigation                                                               |
 | ---------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------ |
-| Boot sequence instability causes non-deterministic failures in QEMU   | high   | Keep early boot logging explicit and add smoke tests for boot markers    |
-| Trap/interrupt misconfiguration blocks progress in later kernel stages| high   | Implement trap setup with incremental verification and isolated tests    |
-| Scheduler bugs create hidden starvation or deadlock                    | medium | Start with minimal round-robin behavior and add deterministic task tests  |
+| Boot sequence instability causes non-deterministic failures in QEMU    | high   | Keep early boot logging explicit and add smoke tests for boot markers    |
+| Trap/interrupt misconfiguration blocks progress in later kernel stages | high   | Implement trap setup with incremental verification and isolated tests    |
+| Scheduler bugs create hidden starvation or deadlock                    | medium | Start with minimal round-robin behavior and add deterministic task tests |
 | Memory allocator corruption causes cascading failures                  | high   | Add allocator invariants and targeted allocation/free test cases         |
-| Window/event handling becomes too complex for incremental delivery     | medium | Implement in phases: pixel -> single window -> multi-window -> shell      |
-| File system bugs corrupt disk image                                   | high   | Use deterministic disk images in tests; add fsck or consistency checks    |
+| Window/event handling becomes too complex for incremental delivery     | medium | Implement in phases: pixel -> single window -> multi-window -> shell     |
+| File system bugs corrupt disk image                                    | high   | Use deterministic disk images in tests; add fsck or consistency checks   |
 | Scope expansion slows autonomous iteration                             | medium | Use milestone-first delivery; defer advanced features to later phases    |
 
 ## Notes

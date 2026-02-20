@@ -35,7 +35,11 @@ export function formatRequirementMarkdown(requirement: Requirement): string {
   lines.push("## Scope", "");
   pushListSection(lines, "### In Scope", requirement.scope.inScope);
   pushListSection(lines, "### Out of Scope", requirement.scope.outOfScope);
-  pushListSection(lines, "### Allowed Paths", requirement.allowedPaths.map((path) => `\`${path}\``));
+  pushListSection(
+    lines,
+    "### Allowed Paths",
+    requirement.allowedPaths.map((path) => `\`${path}\``),
+  );
 
   lines.push("## Risk Assessment", "");
   if (requirement.riskAssessment.length === 0) {

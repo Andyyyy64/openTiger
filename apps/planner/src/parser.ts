@@ -122,10 +122,7 @@ function resolveGoal(goalSection: string, rawContent: string): string {
   return fallbackGoal && fallbackGoal.length > 0 ? fallbackGoal : DEFAULT_GOAL;
 }
 
-function resolveAcceptanceCriteria(
-  acceptanceSection: string,
-  goal: string,
-): string[] {
+function resolveAcceptanceCriteria(acceptanceSection: string, goal: string): string[] {
   const listed = extractListItems(acceptanceSection);
   if (listed.length > 0) {
     return listed;

@@ -33,6 +33,10 @@ import {
   type DispatcherLane,
   type LaneLimits,
 } from "./scheduler/lane-policy";
+import { buildPluginRuntimeRegistry, registerPlugin } from "@openTiger/plugin-sdk";
+import { tigerResearchPluginManifest } from "@openTiger/plugin-tiger-research";
+
+registerPlugin(tigerResearchPluginManifest);
 
 // Dispatcher config
 interface DispatcherConfig {
@@ -105,6 +109,7 @@ const LANE_LIMITS: LaneLimits = {
   featureMinSlots: DISPATCH_FEATURE_LANE_MIN_SLOTS,
   docserMaxSlots: DISPATCH_DOCSER_LANE_MAX_SLOTS,
 };
+const pluginRuntimeRegistry = buildPluginRuntimeRegistry(process.env.ENABLED_PLUGINS);
 
 function parseMaxConcurrentWorkers(value: string | undefined): number {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -156,12 +161,13 @@ async function getActiveRunningByLane(): Promise<Map<DispatcherLane, number>> {
 
   const counts = new Map<DispatcherLane, number>();
   for (const task of running) {
-    const lane =
-      task.lane === "research" || task.kind === "research"
-        ? "research"
-        : normalizeLane({
-            lane: task.lane ?? "feature",
-          });
+    const fallbackLane =
+      task.kind && pluginRuntimeRegistry.allowedTaskKinds.has(task.kind)
+        ? (pluginRuntimeRegistry.defaultLaneByTaskKind.get(task.kind) ?? "feature")
+        : "feature";
+    const lane = normalizeLane({
+      lane: task.lane ?? fallbackLane,
+    });
     counts.set(lane, (counts.get(lane) ?? 0) + 1);
   }
   return counts;
@@ -420,7 +426,6 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
             feature: activeRunningByLane.get("feature") ?? 0,
             conflict_recovery: activeRunningByLane.get("conflict_recovery") ?? 0,
             docser: activeRunningByLane.get("docser") ?? 0,
-            research: activeRunningByLane.get("research") ?? 0,
           };
           const availableByLane = countTasksByLane(availableTasks);
           const selectedByLane = countTasksByLane(tasksToDispatch);
@@ -428,12 +433,15 @@ async function runDispatchLoop(config: DispatcherConfig): Promise<void> {
             `[Dispatch] Found ${availableTasks.length} available tasks, ${availableSlots} slots available, selected=${tasksToDispatch.length}, active_by_lane=${JSON.stringify(laneSummary)}`,
           );
 
-          const availableFeatureLike = availableByLane.feature + availableByLane.research;
-          const selectedFeatureLike = selectedByLane.feature + selectedByLane.research;
+          const availableFeatureLike =
+            (availableByLane.feature ?? 0) + (availableByLane.research ?? 0);
+          const selectedFeatureLike =
+            (selectedByLane.feature ?? 0) + (selectedByLane.research ?? 0);
           if (
             tasksToDispatch.length === 0 ||
             (availableFeatureLike > 0 && selectedFeatureLike === 0) ||
-            (availableByLane.conflict_recovery > 0 && selectedByLane.conflict_recovery === 0)
+            ((availableByLane.conflict_recovery ?? 0) > 0 &&
+              (selectedByLane.conflict_recovery ?? 0) === 0)
           ) {
             await db.insert(events).values({
               type: "dispatcher.lane_throttled",

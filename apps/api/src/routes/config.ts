@@ -16,6 +16,7 @@ const ALLOWED_KEYS = new Set(CONFIG_KEYS);
 const updateSchema = z.object({
   updates: z.record(z.string()),
 });
+const RESTART_REQUIRED_KEYS = new Set(["ENABLED_PLUGINS"]);
 
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (typeof value !== "string") {
@@ -96,6 +97,9 @@ configRoute.patch("/", zValidator("json", updateSchema), async (c) => {
     const configRow = await ensureConfigRow();
     const currentConfig = rowToConfig(configRow);
     const nextConfig = { ...currentConfig, ...updates };
+    const requiresRestart = Object.entries(updates).some(
+      ([key, value]) => RESTART_REQUIRED_KEYS.has(key) && value !== currentConfig[key],
+    );
 
     const autoReplanEnabled = parseBoolean(nextConfig.AUTO_REPLAN, true);
     if (autoReplanEnabled && !nextConfig.REPLAN_REQUIREMENT_PATH?.trim()) {
@@ -129,7 +133,7 @@ configRoute.patch("/", zValidator("json", updateSchema), async (c) => {
 
     return c.json({
       config: rowToConfig(updated[0] ?? configRow),
-      requiresRestart: false,
+      requiresRestart,
       warnings,
     });
   } catch (error) {

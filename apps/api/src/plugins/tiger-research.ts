@@ -1,13 +1,12 @@
 import type { ApiPlugin } from "./types";
 import { researchRoute } from "../routes/research";
+import { tigerResearchPluginManifest } from "@openTiger/plugin-tiger-research";
 
 export const tigerResearchApiPlugin: ApiPlugin = {
-  id: "tiger-research",
-  name: "TigerResearch",
-  description: "Claim-evidence-convergence research workflow plugin",
+  id: tigerResearchPluginManifest.id,
+  name: tigerResearchPluginManifest.name,
+  description: tigerResearchPluginManifest.description,
   registerRoutes: (app) => {
     app.route("/plugins/tiger-research", researchRoute);
-    // Backward compatibility for existing clients
-    app.route("/research", researchRoute);
   },
 };

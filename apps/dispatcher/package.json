@@ -18,6 +18,8 @@
   "dependencies": {
     "@openTiger/core": "workspace:*",
     "@openTiger/db": "workspace:*",
+    "@openTiger/plugin-sdk": "workspace:*",
+    "@openTiger/plugin-tiger-research": "workspace:^",
     "@openTiger/queue": "workspace:*",
     "bullmq": "^5.34.8",
     "dotenv": "^17.3.1",

@@ -27,6 +27,8 @@
     "@openTiger/core": "workspace:*",
     "@openTiger/db": "workspace:*",
     "@openTiger/llm": "workspace:*",
+    "@openTiger/plugin-sdk": "workspace:*",
+    "@openTiger/plugin-tiger-research": "workspace:*",
     "@openTiger/queue": "workspace:*",
     "@openTiger/vcs": "workspace:*",
     "bullmq": "^5.66.5",

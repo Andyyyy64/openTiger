@@ -30,7 +30,7 @@ import {
   triggerReplan,
 } from "./replan";
 import { syncIssueBacklogViaPreflight } from "./backlog-preflight";
-import { runCycleManagerPluginMonitorTicks } from "../plugins";
+import { hasCycleManagerPluginBacklog, runCycleManagerPluginMonitorTicks } from "../plugins";
 
 const CYCLE_ENDING_CRITICAL_ANOMALIES = new Set(["stuck_task"]);
 const CRITICAL_ANOMALY_RESTART_COOLDOWN_MS = (() => {
@@ -178,8 +178,9 @@ export async function runMonitorLoop(config: CycleManagerConfig): Promise<void> 
       // Do nothing while planner runs
     } else {
       let systemState = await captureSystemState();
+      let pluginHasBacklog = await hasCycleManagerPluginBacklog();
 
-      if (!hasTaskBacklog(systemState)) {
+      if (!hasTaskBacklog(systemState) && !pluginHasBacklog) {
         const issueSyncResult = await syncIssueBacklogViaPreflight(config);
         if (!issueSyncResult.success) {
           console.warn(
@@ -204,9 +205,14 @@ export async function runMonitorLoop(config: CycleManagerConfig): Promise<void> 
 
         // Re-fetch state in case preflight created tasks
         systemState = await captureSystemState();
-        if (hasTaskBacklog(systemState)) {
+        pluginHasBacklog = await hasCycleManagerPluginBacklog();
+        if (hasTaskBacklog(systemState) || pluginHasBacklog) {
           return;
         }
+      }
+
+      if (pluginHasBacklog) {
+        return;
       }
 
       const replanDecision = await shouldTriggerReplan(systemState, config);

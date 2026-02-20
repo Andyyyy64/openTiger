@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { db } from "@openTiger/db";
-import { researchClaims, researchEvidence, runs } from "@openTiger/db/schema";
+import { runs } from "@openTiger/db/schema";
+import { researchClaims, researchEvidence } from "@openTiger/plugin-tiger-research/db";
 import { desc, eq } from "drizzle-orm";
 import { runOpenCode } from "@openTiger/llm";
 import { buildOpenCodeEnv } from "../env";

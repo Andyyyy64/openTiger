@@ -1,6 +1,7 @@
 import { db } from "@openTiger/db";
 import { tasks, leases, runs, artifacts } from "@openTiger/db/schema";
 import { resolveDeterministicTargetArea } from "@openTiger/core";
+import { buildPluginRuntimeRegistry } from "@openTiger/plugin-sdk";
 import { eq, and, inArray, gt, count, isNull, desc } from "drizzle-orm";
 
 // Task selection result
@@ -33,6 +34,7 @@ const JUDGE_ARTIFACT_TYPES: string[] = [
 let lastObservedJudgeBacklog = -1;
 let lastObservedPendingJudgeRun = false;
 let lastObservedJudgeBacklogBlocked = false;
+const pluginRuntimeRegistry = buildPluginRuntimeRegistry(process.env.ENABLED_PLUGINS);
 
 function resolveEffectiveTargetArea(task: {
   id: string;
@@ -240,6 +242,13 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
 
   // Filter: no lease, deps resolved, no targetArea conflict
   const available = dispatchableQueuedTasks.filter((task) => {
+    if (!pluginRuntimeRegistry.allowedTaskKinds.has(task.kind ?? "code")) {
+      console.log(
+        `[Priority] Task ${task.id} blocked by unsupported kind: ${task.kind ?? "unknown"}`,
+      );
+      return false;
+    }
+
     // Cooldown recent failures before redispatch
     if (cooldownBlockedIds.has(task.id)) {
       console.log(`[Priority] Task ${task.id} blocked by cooldown`);
@@ -289,7 +298,11 @@ export async function getAvailableTasks(): Promise<AvailableTask[]> {
     priority: task.priority ?? 0,
     riskLevel: task.riskLevel ?? "low",
     role: task.role ?? "worker",
-    lane: task.lane ?? (task.kind === "research" ? "research" : "feature"),
+    lane:
+      task.lane ??
+      (task.kind
+        ? (pluginRuntimeRegistry.defaultLaneByTaskKind.get(task.kind) ?? "feature")
+        : "feature"),
     timeboxMinutes: task.timeboxMinutes ?? 60,
     dependencies: task.dependencies ?? [],
     allowedPaths: task.allowedPaths ?? [],

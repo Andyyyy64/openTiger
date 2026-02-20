@@ -22,6 +22,7 @@ export const CONFIG_FIELDS: ConfigField[] = [
   { key: "DOCSER_COUNT", column: "docserCount", defaultValue: "4" },
   { key: "JUDGE_COUNT", column: "judgeCount", defaultValue: "4" },
   { key: "PLANNER_COUNT", column: "plannerCount", defaultValue: "1" },
+  { key: "ENABLED_PLUGINS", column: "enabledPlugins", defaultValue: "" },
   {
     key: "WORKER_NO_CHANGE_RECOVERY_ATTEMPTS",
     column: "workerNoChangeRecoveryAttempts",

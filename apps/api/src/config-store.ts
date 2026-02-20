@@ -379,6 +379,9 @@ async function ensureConfigColumns(): Promise<void> {
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "planner_count" text DEFAULT '1' NOT NULL`,
   );
   await db.execute(
+    sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "enabled_plugins" text DEFAULT '' NOT NULL`,
+  );
+  await db.execute(
     sql`ALTER TABLE "config" ADD COLUMN IF NOT EXISTS "worker_no_change_recovery_attempts" text DEFAULT '5' NOT NULL`,
   );
   await db.execute(
