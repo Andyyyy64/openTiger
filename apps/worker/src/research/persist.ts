@@ -118,6 +118,7 @@ export async function persistResearchArtifacts(params: {
     );
 
     const resolvedClaims: Array<{ id: string; claimText: string }> = [];
+    const allowClaimInsert = stage === "plan";
     for (const claim of params.output.claims) {
       const normalized = normalizeClaimText(claim.text);
       if (!normalized) {
@@ -151,6 +152,10 @@ export async function persistResearchArtifacts(params: {
             metadata,
           });
         }
+        continue;
+      }
+
+      if (!allowClaimInsert) {
         continue;
       }
 

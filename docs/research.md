@@ -142,6 +142,7 @@ When `task.kind=research`, worker:
   - target query/stage/claim
   - existing claims/evidence snapshot
   - seed URLs from query text
+- Only `plan` stage can add new claims; `collect/challenge/write` stages update existing claim/evidence/report state
 - Persists:
   - claim stance/confidence updates
   - evidence rows
