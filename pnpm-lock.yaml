@@ -54,6 +54,9 @@ importers:
       '@openTiger/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@openTiger/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
       '@openTiger/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk

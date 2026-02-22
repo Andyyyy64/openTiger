@@ -11,6 +11,7 @@ import { JudgementsPage } from "./pages/Judgements";
 import { AgentDetailsPage } from "./pages/AgentDetails";
 import { SettingsPage } from "./pages/Settings";
 import { StartPage } from "./pages/Start";
+import { ChatPage } from "./pages/Chat";
 import { LogsPage } from "./pages/Logs";
 import { PluginsPage } from "./pages/Plugins";
 import { useEnabledDashboardPlugins } from "./plugins/registry";
@@ -22,7 +23,9 @@ function App() {
     <BrowserRouter>
       <Layout>
         <Routes>
-          <Route path="/" element={<Navigate to="/start" replace />} />
+          <Route path="/" element={<Navigate to="/chat" replace />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/chat/:conversationId" element={<ChatPage />} />
           <Route path="/overview" element={<OverviewPage />} />
           <Route path="/tasks" element={<TasksPage />} />
           <Route path="/tasks/:id" element={<TaskDetailsPage />} />
@@ -43,7 +46,7 @@ function App() {
           <Route path="/requirement" element={<StartPage />} />
           <Route path="/system" element={<SettingsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
-          <Route path="*" element={<Navigate to="/start" replace />} />
+          <Route path="*" element={<Navigate to="/chat" replace />} />
         </Routes>
       </Layout>
     </BrowserRouter>
