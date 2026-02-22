@@ -1,6 +1,6 @@
 # Goal
 
-Build a minimal but extensible 2D game engine baseline called "TigerEngine" in C or C++ that runs as a native desktop application.
+Build a minimal but extensible 2D game engine baseline called "TigerEngine" in C++ that runs as a native desktop application.
 The engine must provide a core loop, entity-component architecture, rendering pipeline, input handling, and a basic scene/asset system.
 Additionally, it must include a GUI-based editor that allows visual manipulation of scenes, entities, and assets—similar to typical game engines (Unity, Godot, Unreal).
 
