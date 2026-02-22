@@ -47,6 +47,7 @@ function spawnClaudeCode(
     prompt,
     "--output-format",
     "stream-json",
+    "--verbose",
     "--model",
     model,
     "--permission-mode",
