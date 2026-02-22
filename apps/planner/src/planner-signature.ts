@@ -109,7 +109,7 @@ export async function computePlanSignature(params: {
   return { signature, requirementHash, repoHeadSha };
 }
 
-const DEFAULT_PLAN_DEDUPE_WINDOW_MS = 10 * 60 * 1000; // 10分
+const DEFAULT_PLAN_DEDUPE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 type DbLike = typeof db;
 
 export function resolvePlanDedupeWindowMs(): number {
@@ -183,7 +183,7 @@ export async function tryAcquirePlanSaveLock(
   signature: string,
   database: DbLike = db,
 ): Promise<boolean> {
-  // 同一署名の保存を単一トランザクションに限定して、二重起動時の競合と重複保存を防ぐ
+  // Restrict saving of the same signature to a single transaction to prevent conflicts and duplicate saves on concurrent launches
   const result = await database.execute(
     sql`SELECT pg_try_advisory_xact_lock(hashtext(${signature})) AS locked`,
   );

@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 
 export const agentsRoute = new Hono();
 
-// エージェント一覧取得
+// Get agent list
 agentsRoute.get("/", async (c) => {
   const role = c.req.query("role");
   const status = c.req.query("status");
@@ -25,7 +25,7 @@ agentsRoute.get("/", async (c) => {
   return c.json({ agents: result });
 });
 
-// エージェント詳細取得
+// Get agent details
 agentsRoute.get("/:id", async (c) => {
   const id = c.req.param("id");
 
@@ -38,7 +38,7 @@ agentsRoute.get("/:id", async (c) => {
   return c.json({ agent: result[0] });
 });
 
-// エージェント登録リクエストのスキーマ
+// Schema for agent registration request
 const registerAgentSchema = z.object({
   id: z.string(),
   role: z.enum(["planner", "worker", "judge", "tester"]),
@@ -51,11 +51,11 @@ const registerAgentSchema = z.object({
     .optional(),
 });
 
-// エージェント登録
+// Register agent
 agentsRoute.post("/", zValidator("json", registerAgentSchema), async (c) => {
   const body = c.req.valid("json");
 
-  // 既存エージェントの確認
+  // Check for existing agent
   const existing = await db.select().from(agents).where(eq(agents.id, body.id));
 
   if (existing.length > 0) {
@@ -74,7 +74,7 @@ agentsRoute.post("/", zValidator("json", registerAgentSchema), async (c) => {
     return c.json({ agent: result[0] });
   }
 
-  // 新規登録
+  // New registration
   const result = await db
     .insert(agents)
     .values({
@@ -89,13 +89,13 @@ agentsRoute.post("/", zValidator("json", registerAgentSchema), async (c) => {
   return c.json({ agent: result[0] }, 201);
 });
 
-// ハートビート更新スキーマ
+// Heartbeat update schema
 const heartbeatSchema = z.object({
   status: z.enum(["idle", "busy", "offline"]).optional(),
   currentTaskId: z.string().uuid().nullable().optional(),
 });
 
-// ハートビート更新
+// Update heartbeat
 agentsRoute.post("/:id/heartbeat", zValidator("json", heartbeatSchema), async (c) => {
   const id = c.req.param("id");
   const body = c.req.valid("json");
@@ -117,7 +117,7 @@ agentsRoute.post("/:id/heartbeat", zValidator("json", heartbeatSchema), async (c
   return c.json({ agent: result[0] });
 });
 
-// エージェント削除
+// Delete agent
 agentsRoute.delete("/:id", async (c) => {
   const id = c.req.param("id");
 

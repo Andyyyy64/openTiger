@@ -3,7 +3,7 @@ import { tasks } from "@openTiger/db/schema";
 import { eq, or } from "drizzle-orm";
 import type { CreateTaskInput } from "@openTiger/core";
 
-// 依存関係の推定結果
+// Dependency inference result
 export interface DependencyResolution {
   taskIndex: number;
   dependsOnIndices: number[];
@@ -12,7 +12,7 @@ export interface DependencyResolution {
   reason: string;
 }
 
-// タスク間の依存関係を推定
+// Infer dependencies between tasks
 export function inferDependencies(tasks: CreateTaskInput[]): DependencyResolution[] {
   const resolutions: DependencyResolution[] = [];
 
@@ -27,9 +27,9 @@ export function inferDependencies(tasks: CreateTaskInput[]): DependencyResolutio
       const prevTask = tasks[j];
       if (!prevTask) continue;
 
-      // 依存関係の推定ルール
+      // Dependency inference rules
 
-      // 1. ファイルパスの重複: 前のタスクが変更するファイルを後のタスクが参照
+      // 1. File path overlap: a later task references files modified by an earlier task
       const prevPaths = prevTask.allowedPaths;
       const currPaths = task.allowedPaths;
       const pathOverlap = prevPaths.some((p) => currPaths.some((c) => pathsOverlap(p, c)));
@@ -40,7 +40,7 @@ export function inferDependencies(tasks: CreateTaskInput[]): DependencyResolutio
         continue;
       }
 
-      // 2. context.filesの参照関係
+      // 2. context.files reference relationship
       const prevFiles = prevTask.context?.files ?? [];
       const currFiles = task.context?.files ?? [];
       const fileOverlap = prevFiles.some((f) => currFiles.includes(f));
@@ -51,7 +51,7 @@ export function inferDependencies(tasks: CreateTaskInput[]): DependencyResolutio
         continue;
       }
 
-      // 3. タイトルや説明からのキーワードマッチング
+      // 3. Keyword matching from titles and descriptions
       const prevKeywords = extractKeywords(prevTask.title + " " + prevTask.goal);
       const currKeywords = extractKeywords(task.title + " " + task.goal);
       const keywordOverlap = prevKeywords.filter((k) => currKeywords.includes(k));
@@ -62,13 +62,13 @@ export function inferDependencies(tasks: CreateTaskInput[]): DependencyResolutio
       }
     }
 
-    // 信頼度を計算
+    // Calculate confidence
     const confidence = dependsOnIndices.length > 0 ? 0.7 : 1.0;
 
     resolutions.push({
       taskIndex: i,
       dependsOnIndices,
-      dependsOnIds: [], // 後でIDに変換
+      dependsOnIds: [], // converted to IDs later
       confidence,
       reason: reasons.join("; ") || "No dependencies detected",
     });
@@ -89,7 +89,7 @@ function normalizePathForOverlap(path: string): string {
     .replace(/\/$/u, "");
 }
 
-// パスが重複するかチェック（glob対応）
+// Check if paths overlap (glob-aware)
 export function pathsOverlap(path1: string, path2: string): boolean {
   const trimmed1 = path1.trim();
   const trimmed2 = path2.trim();
@@ -110,9 +110,9 @@ export function pathsOverlap(path1: string, path2: string): boolean {
   );
 }
 
-// テキストからキーワードを抽出
+// Extract keywords from text
 function extractKeywords(text: string): string[] {
-  // 一般的な単語を除外
+  // Exclude common stop words
   const stopWords = new Set([
     "the",
     "a",
@@ -173,7 +173,7 @@ function extractKeywords(text: string): string[] {
     .filter((word) => word.length > 2 && !stopWords.has(word));
 }
 
-// インデックスからタスクIDへの変換
+// Convert indices to task IDs
 export async function resolveIndicesToIds(
   resolutions: DependencyResolution[],
   taskIds: string[],
@@ -186,7 +186,7 @@ export async function resolveIndicesToIds(
   }));
 }
 
-// 重複タスクの検出
+// Duplicate task detection
 export interface DuplicateDetection {
   taskIndex: number;
   duplicateOfId?: string;
@@ -195,11 +195,11 @@ export interface DuplicateDetection {
   reason: string;
 }
 
-// 新規タスクと既存タスクの重複をチェック
+// Check for duplicates between new tasks and existing tasks
 export async function detectDuplicates(newTasks: CreateTaskInput[]): Promise<DuplicateDetection[]> {
   const detections: DuplicateDetection[] = [];
 
-  // 既存のキュー済み・実行中タスクを取得
+  // Fetch existing queued and running tasks
   const existingTasks = await db
     .select()
     .from(tasks)
@@ -211,7 +211,7 @@ export async function detectDuplicates(newTasks: CreateTaskInput[]): Promise<Dup
     const newTask = newTasks[i];
     if (!newTask) continue;
 
-    // 同一タイトルチェック
+    // Check for identical title
     const sameTitleTask = existingTasks.find(
       (t) => t.title.toLowerCase() === newTask.title.toLowerCase(),
     );
@@ -226,7 +226,7 @@ export async function detectDuplicates(newTasks: CreateTaskInput[]): Promise<Dup
       continue;
     }
 
-    // 類似ゴールチェック
+    // Check for similar goal
     const similarGoalTask = existingTasks.find((t) => {
       const similarity = calculateSimilarity(t.goal, newTask.goal);
       return similarity > 0.8;
@@ -243,7 +243,7 @@ export async function detectDuplicates(newTasks: CreateTaskInput[]): Promise<Dup
       continue;
     }
 
-    // 同一ファイルパスと類似タイトルの組み合わせ
+    // Combination of identical file paths and similar title
     const pathOverlapTask = existingTasks.find((t) => {
       const pathMatch = t.allowedPaths.some((p) =>
         newTask.allowedPaths.some((np) => pathsOverlap(p, np)),
@@ -263,7 +263,7 @@ export async function detectDuplicates(newTasks: CreateTaskInput[]): Promise<Dup
       continue;
     }
 
-    // 重複なし
+    // No duplicate
     detections.push({
       taskIndex: i,
       similarity: 0,
@@ -271,7 +271,7 @@ export async function detectDuplicates(newTasks: CreateTaskInput[]): Promise<Dup
     });
   }
 
-  // 新規タスク間での重複もチェック
+  // Also check for duplicates among new tasks
   for (let i = 0; i < newTasks.length; i++) {
     const task1 = newTasks[i];
     if (!task1) continue;
@@ -286,7 +286,7 @@ export async function detectDuplicates(newTasks: CreateTaskInput[]): Promise<Dup
       );
 
       if (similarity > 0.8) {
-        // 後のタスクを重複としてマーク
+        // Mark the later task as a duplicate
         const existing = detections.find((d) => d.taskIndex === j);
         if (existing && (!existing.duplicateOfIndex || existing.similarity < similarity)) {
           existing.duplicateOfIndex = i;
@@ -300,7 +300,7 @@ export async function detectDuplicates(newTasks: CreateTaskInput[]): Promise<Dup
   return detections;
 }
 
-// 文字列の類似度を計算（Jaccard係数ベース）
+// Calculate string similarity (Jaccard coefficient based)
 function calculateSimilarity(str1: string, str2: string): number {
   const words1 = new Set(extractKeywords(str1));
   const words2 = new Set(extractKeywords(str2));
@@ -315,7 +315,7 @@ function calculateSimilarity(str1: string, str2: string): number {
   return intersection.size / union.size;
 }
 
-// 重複を除外したタスクリストを返す
+// Return a task list with duplicates removed
 export function filterDuplicateTasks(
   tasks: CreateTaskInput[],
   detections: DuplicateDetection[],

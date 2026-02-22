@@ -1,6 +1,6 @@
-# pnpmワークスペース設定
-# apps/: アプリケーション（API, Worker, Planner, Judge, Dispatcher）
-# packages/: 共有パッケージ（core, db, llm, vcs, queue, policies）
+# pnpm workspace configuration
+# apps/: Applications (API, Worker, Planner, Judge, Dispatcher)
+# packages/: Shared packages (core, db, llm, vcs, queue, policies)
 packages:
   - "apps/*"
   - "packages/*"

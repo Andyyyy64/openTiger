@@ -207,8 +207,6 @@ async function main() {
   console.log(`Base branch: ${baseBranch}`);
   console.log("Waiting for tasks...");
 
-  // TODO: Implement task receipt from BullMQ
-  // For now treat TASK_ID from env as one-shot execution
   const taskId = process.env.TASK_ID;
 
   if (taskId) {
@@ -348,7 +346,7 @@ async function main() {
         return;
       }
 
-      // ジョブがstallした場合は running 固着を防ぐため、run/task/leaseを明示的に回復状態へ戻す。
+      // When a job stalls, explicitly reset run/task/lease to a recoverable state to prevent stuck running status.
       await db
         .update(runs)
         .set({

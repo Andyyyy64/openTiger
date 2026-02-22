@@ -12,7 +12,7 @@ function isTaskPayload(value: unknown): value is TaskPayload {
 }
 
 describe("extractJsonObjectFromText", () => {
-  it("jsonコードブロックを抽出できる", () => {
+  it("can extract a JSON code block", () => {
     const input = `
 analysis...
 \`\`\`json
@@ -23,7 +23,7 @@ analysis...
     expect(parsed.tasks).toHaveLength(1);
   });
 
-  it("先頭の無関係コードブロックをスキップして抽出できる", () => {
+  it("can skip irrelevant leading code blocks and extract", () => {
     const input = `
 \`\`\`text
 not json
@@ -36,7 +36,7 @@ not json
     expect(parsed.tasks[0]?.title).toBe("b");
   });
 
-  it("コードブロックが無くてもJSONオブジェクトを抽出できる", () => {
+  it("can extract a JSON object even without a code block", () => {
     const input = `prefix {"tasks":[{"title":"c"}]} suffix`;
     const parsed = extractJsonObjectFromText(input, isTaskPayload);
     expect(parsed.tasks[0]?.title).toBe("c");

@@ -1,7 +1,7 @@
 import type { Policy } from "@openTiger/core";
 import { getOctokit, getRepoInfo } from "@openTiger/vcs";
 
-// ポリシー評価結果
+// Policy evaluation result
 export interface PolicyEvaluationResult {
   pass: boolean;
   reasons: string[];
@@ -9,7 +9,7 @@ export interface PolicyEvaluationResult {
   violations: PolicyViolation[];
 }
 
-// ポリシー違反の詳細
+// Policy violation details
 export interface PolicyViolation {
   type: "lines" | "files" | "path" | "command" | "pattern";
   severity: "error" | "warning";
@@ -18,7 +18,7 @@ export interface PolicyViolation {
   line?: number;
 }
 
-// PRのdiff統計を取得
+// Get PR diff statistics
 export async function getPRDiffStats(prNumber: number): Promise<{
   additions: number;
   deletions: number;
@@ -59,9 +59,9 @@ export async function getPRDiffStats(prNumber: number): Promise<{
   };
 }
 
-// パスがパターンにマッチするか
+// Check if a path matches a pattern
 function matchPath(path: string, pattern: string): boolean {
-  // globのワイルドカードを正規表現に安全に変換する
+  // Safely convert glob wildcards to regular expressions
   let regexPattern = "";
 
   for (let i = 0; i < pattern.length; i++) {
@@ -101,16 +101,16 @@ function isPackageManifest(path: string): boolean {
   );
 }
 
-// パスが許可されているか
+// Check if a path is allowed
 function isPathAllowed(path: string, allowedPaths: string[], forbiddenPaths: string[]): boolean {
-  // 禁止パスに該当する場合は不許可
+  // Deny if the path matches a forbidden path
   for (const forbidden of forbiddenPaths) {
     if (matchPath(path, forbidden)) {
       return false;
     }
   }
 
-  // 許可パスが指定されている場合は、いずれかにマッチする必要がある
+  // If allowed paths are specified, the path must match at least one
   if (allowedPaths.length > 0) {
     return allowedPaths.some((allowed) => matchPath(path, allowed));
   }
@@ -118,7 +118,7 @@ function isPathAllowed(path: string, allowedPaths: string[], forbiddenPaths: str
   return true;
 }
 
-// ポリシーを評価
+// Evaluate policy
 export async function evaluatePolicy(
   prNumber: number,
   policy: Policy,
@@ -132,13 +132,13 @@ export async function evaluatePolicy(
     const diffStats = await getPRDiffStats(prNumber);
     const hasManifestChanges = diffStats.files.some((file) => isPackageManifest(file.filename));
 
-    // ファイルパスのチェック
+    // Check file paths
     for (const file of diffStats.files) {
-      // 依存更新に伴うロックファイル変更は許容する
+      // Allow lockfile changes that accompany dependency updates
       if (isLockfile(file.filename) && hasManifestChanges) {
         continue;
       }
-      // 禁止パスへの変更
+      // Changes to forbidden paths
       if (!isPathAllowed(file.filename, allowedPaths, policy.deniedPaths)) {
         violations.push({
           type: "path",
@@ -149,7 +149,7 @@ export async function evaluatePolicy(
       }
     }
 
-    // 違反を理由に変換
+    // Convert violations to reasons
     for (const violation of violations) {
       if (violation.severity === "error") {
         reasons.push(violation.message);
@@ -172,7 +172,7 @@ export async function evaluatePolicy(
   };
 }
 
-// リスクレベルを評価
+// Evaluate risk level
 export function evaluateRiskLevel(
   diffStats: {
     additions: number;
@@ -184,7 +184,7 @@ export function evaluateRiskLevel(
 ): "low" | "medium" | "high" {
   const totalChanges = diffStats.additions + diffStats.deletions;
 
-  // 1. 変更量によるベースリスク
+  // 1. Base risk determined by change volume
   let risk: "low" | "medium" | "high" = "low";
 
   if (
@@ -199,7 +199,7 @@ export function evaluateRiskLevel(
     risk = "medium";
   }
 
-  // 2. 機微なファイルパスによるリスク格上げ
+  // 2. Escalate risk based on sensitive file paths
   const sensitivePatterns = [
     "**/auth/**",
     "**/security/**",
@@ -214,11 +214,11 @@ export function evaluateRiskLevel(
   );
 
   if (touchesSensitiveFile) {
-    // 機微なファイルを触っている場合は最低でも medium
+    // If sensitive files are touched, set minimum risk to medium
     if (risk === "low") {
       risk = "medium";
     }
-    // すでに medium なら high に格上げ
+    // If already medium, escalate to high
     else if (risk === "medium") {
       risk = "high";
     }

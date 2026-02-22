@@ -27,7 +27,7 @@ function tokenizeCommand(command: string): string[] | null {
       if (quote === "'") {
         current += char;
       } else if (quote === '"') {
-        // ダブルクオート内では ", \, $, `, 改行 だけをエスケープとして扱う
+        // Inside double quotes, only treat ", \, $, `, and newline as escape sequences
         if (next === '"' || next === "\\" || next === "$" || next === "`" || next === "\n") {
           escaped = true;
         } else {

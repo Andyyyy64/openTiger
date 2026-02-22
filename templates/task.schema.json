@@ -1,19 +1,19 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "openTiger Task",
-  "description": "エージェントが実行するタスクの定義",
+  "description": "Definition of a task executed by an agent",
   "type": "object",
   "required": ["title", "goal", "allowedPaths", "commands"],
   "properties": {
     "title": {
       "type": "string",
       "minLength": 1,
-      "description": "タスクの簡潔な説明"
+      "description": "Brief description of the task"
     },
     "goal": {
       "type": "string",
       "minLength": 1,
-      "description": "完了条件（機械判定可能な形式）"
+      "description": "Completion criteria (in a machine-evaluable format)"
     },
     "context": {
       "type": "object",
@@ -21,15 +21,15 @@
         "files": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "関連ファイルパス"
+          "description": "Related file paths"
         },
         "specs": {
           "type": "string",
-          "description": "詳細仕様"
+          "description": "Detailed specifications"
         },
         "notes": {
           "type": "string",
-          "description": "補足情報"
+          "description": "Supplementary notes"
         }
       }
     },
@@ -37,24 +37,24 @@
       "type": "array",
       "items": { "type": "string" },
       "minItems": 1,
-      "description": "変更を許可するパス（glob）"
+      "description": "Paths allowed for modification (glob)"
     },
     "commands": {
       "type": "array",
       "items": { "type": "string" },
       "minItems": 1,
-      "description": "検証コマンド（全て成功で完了）"
+      "description": "Verification commands (task completes when all succeed)"
     },
     "priority": {
       "type": "integer",
       "default": 0,
-      "description": "優先度（高いほど先に実行）"
+      "description": "Priority (higher values are executed first)"
     },
     "riskLevel": {
       "type": "string",
       "enum": ["low", "medium", "high"],
       "default": "low",
-      "description": "リスクレベル"
+      "description": "Risk level"
     },
     "dependencies": {
       "type": "array",
@@ -63,13 +63,13 @@
         "format": "uuid"
       },
       "default": [],
-      "description": "先行タスクのID"
+      "description": "IDs of prerequisite tasks"
     },
     "timeboxMinutes": {
       "type": "integer",
       "minimum": 1,
       "default": 60,
-      "description": "想定作業時間（分）"
+      "description": "Expected working time (minutes)"
     }
   }
 }

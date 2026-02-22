@@ -57,12 +57,12 @@ function inferMimeType(path: string): string {
   return "application/octet-stream";
 }
 
-// 統計情報取得
+// Get statistics
 runsRoute.get("/stats", async (c) => {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // 本日の消費トークン合計
+  // Total tokens consumed today
   const result = await db
     .select({
       totalTokens: sql<number>`sum(COALESCE(${runs.costTokens}, 0))`,
@@ -76,7 +76,7 @@ runsRoute.get("/stats", async (c) => {
   });
 });
 
-// 実行履歴一覧取得
+// Get run history list
 runsRoute.get("/", async (c) => {
   const taskId = c.req.query("taskId");
   const status = c.req.query("status");
@@ -94,7 +94,7 @@ runsRoute.get("/", async (c) => {
   return c.json({ runs: result });
 });
 
-// 実行詳細取得
+// Get run details
 runsRoute.get("/:id", async (c) => {
   const id = c.req.param("id");
 
@@ -105,16 +105,16 @@ runsRoute.get("/:id", async (c) => {
     return c.json({ error: "Run not found" }, 404);
   }
 
-  // 関連する成果物も取得
+  // Also fetch related artifacts
   const artifactResult = await db.select().from(artifacts).where(eq(artifacts.runId, id));
 
-  // ログファイルの内容を取得
+  // Retrieve log file contents
   let logContent: string | null = null;
   const logPath = runData.logPath;
   if (logPath) {
     try {
       const stats = await stat(logPath);
-      // 1MB制限
+      // 1MB limit
       if (stats.size > 1024 * 1024) {
         // Could implement reading last 1MB, but for now handle with partial read
         const { open } = await import("node:fs/promises");
@@ -187,13 +187,13 @@ runsRoute.get("/:id/artifacts/:artifactId/content", async (c) => {
   }
 });
 
-// 実行開始リクエストのスキーマ
+// Schema for start run request
 const startRunSchema = z.object({
   taskId: z.string().uuid(),
   agentId: z.string(),
 });
 
-// 実行開始
+// Start run
 runsRoute.post("/", zValidator("json", startRunSchema), async (c) => {
   const body = c.req.valid("json");
 
@@ -209,14 +209,14 @@ runsRoute.post("/", zValidator("json", startRunSchema), async (c) => {
   return c.json({ run: result[0] }, 201);
 });
 
-// 実行完了リクエストのスキーマ
+// Schema for complete run request
 const completeRunSchema = z.object({
   status: z.enum(["success", "failed", "cancelled"]),
   costTokens: z.number().int().nonnegative().optional(),
   errorMessage: z.string().optional(),
 });
 
-// 実行完了
+// Complete run
 runsRoute.patch("/:id", zValidator("json", completeRunSchema), async (c) => {
   const id = c.req.param("id");
   const body = c.req.valid("json");
@@ -239,7 +239,7 @@ runsRoute.patch("/:id", zValidator("json", completeRunSchema), async (c) => {
   return c.json({ run: result[0] });
 });
 
-// 実行キャンセル
+// Cancel run
 runsRoute.post("/:id/cancel", async (c) => {
   const id = c.req.param("id");
 
@@ -259,7 +259,7 @@ runsRoute.post("/:id/cancel", async (c) => {
   return c.json({ run: result[0] });
 });
 
-// 成果物作成リクエストのスキーマ
+// Schema for create artifact request
 const createArtifactSchema = z.object({
   type: z.enum([
     "pr",
@@ -277,7 +277,7 @@ const createArtifactSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
-// 成果物追加
+// Add artifact
 runsRoute.post("/:id/artifacts", zValidator("json", createArtifactSchema), async (c) => {
   const runId = c.req.param("id");
   const body = c.req.valid("json");

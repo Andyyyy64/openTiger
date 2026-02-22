@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 
-// PlannerのLLMはプロンプト内の情報だけで判断できるためツールを無効化する
+// Disable tools since the Planner LLM can make decisions based solely on prompt information
 export const PLANNER_OPENCODE_CONFIG_PATH = resolve(
   import.meta.dirname,
   "../opencode.planner.json",
@@ -12,7 +12,7 @@ function resolvePlannerQuotaWaits(): string {
     return fromPlannerEnv;
   }
 
-  // Plannerはクォータ待機で長時間停止しないよう、既定では即返す
+  // Return immediately by default to prevent the Planner from stalling on quota waits
   return "0";
 }
 
@@ -22,7 +22,7 @@ export function getPlannerOpenCodeEnv(
   const env: Record<string, string> = {
     OPENCODE_CONFIG: PLANNER_OPENCODE_CONFIG_PATH,
     OPENCODE_MAX_QUOTA_WAITS: resolvePlannerQuotaWaits(),
-    // PlannerはJSON抽出が目的のため、既定では生のLLM出力を抑制してログノイズを防ぐ
+    // Suppress raw LLM output by default to reduce log noise since the Planner's purpose is JSON extraction
     OPENCODE_ECHO_STDOUT: "false",
     CLAUDE_CODE_ECHO_STDOUT: "false",
   };

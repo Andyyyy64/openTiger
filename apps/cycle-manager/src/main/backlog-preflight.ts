@@ -159,8 +159,8 @@ export async function syncIssueBacklogViaPreflight(
     const endpoint = new URL("/system/preflight", config.systemApiBaseUrl).toString();
     const body = JSON.stringify({
       autoCreateIssueTasks: true,
-      // PRバックログ取り込みは Start フローからの明示操作に限定する。
-      // Cycle 同期では既定で無効にして、意図しない Judge 起動を防ぐ。
+      // PR backlog ingestion is limited to explicit operations from the Start flow.
+      // Disabled by default in cycle sync to prevent unintended Judge invocations.
       autoCreatePrJudgeTasks: AUTO_CREATE_PR_JUDGE_TASKS_IN_CYCLE_SYNC,
     });
     const timeoutMs = parsePositiveInt(

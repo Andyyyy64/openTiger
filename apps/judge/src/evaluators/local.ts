@@ -32,7 +32,7 @@ export async function getLocalDiffText(
   return result.success ? result.stdout : "";
 }
 
-// ローカルはCIの代わりにWorker検証を通過している前提で扱う
+// In local mode, assume worker verification has passed in place of CI
 export function evaluateLocalCI(): CIEvaluationResult {
   return {
     pass: true,
@@ -50,7 +50,7 @@ export function evaluateLocalCI(): CIEvaluationResult {
   };
 }
 
-// パスがパターンにマッチするか
+// Check if a path matches a pattern
 function matchPath(path: string, pattern: string): boolean {
   let regexPattern = "";
 

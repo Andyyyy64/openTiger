@@ -1,37 +1,37 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "openTiger Policy",
-  "description": "エージェントの行動制約を定義するポリシー",
+  "description": "Policy defining behavioral constraints for agents",
   "type": "object",
   "properties": {
     "allowedPaths": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "変更を許可するパス（glob）",
+      "description": "Paths allowed for modification (glob)",
       "default": ["**/*"]
     },
     "deniedPaths": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "変更を禁止するパス（glob）",
+      "description": "Paths denied for modification (glob)",
       "default": []
     },
     "maxLinesChanged": {
       "type": "integer",
       "minimum": 1,
-      "description": "変更行数の上限",
+      "description": "Maximum number of changed lines",
       "default": 500
     },
     "maxFilesChanged": {
       "type": "integer",
       "minimum": 1,
-      "description": "変更ファイル数の上限",
+      "description": "Maximum number of changed files",
       "default": 20
     },
     "deniedCommands": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "禁止コマンド（正規表現）",
+      "description": "Denied commands (regular expressions)",
       "default": []
     },
     "autoMerge": {
@@ -39,19 +39,19 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "自動マージを有効にするか",
+          "description": "Whether to enable auto-merge",
           "default": false
         },
         "maxRiskLevel": {
           "type": "string",
           "enum": ["low", "medium", "high"],
-          "description": "自動マージを許可する最大リスクレベル",
+          "description": "Maximum risk level allowed for auto-merge",
           "default": "low"
         },
         "requiredChecks": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "必須のCIチェック名",
+          "description": "Required CI check names",
           "default": []
         }
       }
@@ -62,7 +62,7 @@
         "level": {
           "type": "string",
           "enum": ["low", "medium", "high"],
-          "description": "ローカルベースリポジトリ復旧の厳しさ（lowほど緩く、highほど厳しい）",
+          "description": "Strictness of local base repository recovery (low is lenient, high is strict)",
           "default": "medium"
         }
       }
@@ -73,13 +73,13 @@
         "perTask": {
           "type": "integer",
           "minimum": 1,
-          "description": "1タスクあたりのトークン上限",
+          "description": "Token limit per task",
           "default": 1000000
         },
         "perDay": {
           "type": "integer",
           "minimum": 1,
-          "description": "1日あたりのトークン上限",
+          "description": "Token limit per day",
           "default": 50000000
         }
       }

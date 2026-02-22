@@ -1,8 +1,8 @@
-// system系の操作が許可されているか判定する
+// Determine whether system-level operations are permitted
 export function canControlSystem(method: string): boolean {
   if (method === "api-key" || method === "bearer") {
     return true;
   }
-  // ローカル運用時の安全弁として明示的に無効化できるようにする
+  // Allow explicit disabling as a safety valve for local operation
   return process.env.OPENTIGER_ALLOW_INSECURE_SYSTEM_CONTROL !== "false";
 }

@@ -1,4 +1,4 @@
-// スケジューラーモジュールのエクスポート
+// Scheduler module exports
 
 export {
   acquireLease,

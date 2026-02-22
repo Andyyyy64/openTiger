@@ -114,7 +114,7 @@ async function detectBootstrapLlmExecutor(): Promise<ExecutorKind> {
 }
 
 export async function getBootstrapLlmExecutor(): Promise<ExecutorKind> {
-  // 初回判定を使い回して、起動時の外部コマンド実行を最小化する。
+  // Cache the initial detection result to minimize external command execution at startup.
   if (!bootstrapLlmExecutorPromise) {
     bootstrapLlmExecutorPromise = detectBootstrapLlmExecutor();
   }

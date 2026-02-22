@@ -110,7 +110,7 @@ export const SettingsPage: React.FC = () => {
     mutationFn: (updates: Record<string, string>) => configApi.update(updates),
     onSuccess: (res) => {
       if (res?.config) {
-        // APIで正規化された設定値を同期し、保存直後の差分表示を防ぐ
+        // Sync with API-normalized config values to prevent diff display immediately after saving
         setValues(res.config);
         lastSavedConfigRef.current = { ...res.config };
       }
@@ -208,7 +208,7 @@ export const SettingsPage: React.FC = () => {
     mutationFn: (updates: Record<string, string>) => configApi.update(updates),
     onSuccess: (res) => {
       if (res?.config) {
-        // 自動同期でもUI状態を保存済み設定と一致させる
+        // Keep UI state in sync with saved config even during auto-sync
         setValues(res.config);
         lastSavedConfigRef.current = { ...res.config };
       }

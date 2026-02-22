@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import dotenv from "dotenv";
 import { getRepoMode, getLocalRepoPath } from "@openTiger/core";
 
-// Plannerの設定
+// Planner configuration
 export interface PlannerConfig {
   workdir: string;
   instructionsPath: string;
@@ -36,11 +36,11 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
 function resolvePlannerWorkdir(): string {
   const repoMode = getRepoMode();
   const localRepoPath = getLocalRepoPath();
-  // local modeでは実リポジトリを点検対象にする
+  // In local mode, use the actual repository as the inspection target
   if (repoMode === "local" && localRepoPath) {
     return localRepoPath;
   }
-  // 起動ディレクトリがapps配下でもリポジトリルートを参照する
+  // Reference the repository root even if the startup directory is under apps
   const gitRoot = resolveGitRoot(process.cwd());
   return gitRoot ?? process.cwd();
 }
@@ -61,7 +61,7 @@ function resolveGitRoot(cwd: string): string | undefined {
   return root.length > 0 ? root : undefined;
 }
 
-// デフォルト設定
+// Default configuration
 export const DEFAULT_CONFIG: PlannerConfig = {
   workdir: resolvePlannerWorkdir(),
   instructionsPath: resolve(import.meta.dirname, "../instructions/planning.md"),

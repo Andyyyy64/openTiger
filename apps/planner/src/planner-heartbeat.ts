@@ -2,10 +2,10 @@ import { db } from "@openTiger/db";
 import { agents } from "@openTiger/db/schema";
 import { eq } from "drizzle-orm";
 
-// ハートビートの間隔（ミリ秒）
-const HEARTBEAT_INTERVAL = 30000; // 30秒
+// Heartbeat interval (milliseconds)
+const HEARTBEAT_INTERVAL = 30000; // 30 seconds
 
-// ハートビートを送信する関数
+// Function to send heartbeat
 export function startHeartbeat(agentId: string): NodeJS.Timeout {
   return setInterval(async () => {
     try {

@@ -1,2 +1,2 @@
-// ルート登録関数の公開窓口
+// Public entry point for route registration
 export { registerProcessManagerRoutes } from "./system-process-manager/routes";

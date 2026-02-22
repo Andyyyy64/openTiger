@@ -456,7 +456,7 @@ export async function stageChanges(cwd: string, paths: string[] = ["."]): Promis
     const samePathset =
       retryPaths.length === pendingPaths.length &&
       retryPaths.every((path, index) => path === pendingPaths[index]);
-    // 同じ pathset でも、まだ -A を試していない段階では一度だけフォールバックを許可する。
+    // Even with the same pathset, allow one fallback attempt if -A has not been tried yet.
     if (samePathset && useAddAll) {
       return {
         success: false,

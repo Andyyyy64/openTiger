@@ -39,7 +39,7 @@ export function getCycleState(): CycleState {
   return { ...currentState };
 }
 
-// 状態スナップショットを取得
+// Capture state snapshot
 export async function captureStateSnapshot(): Promise<StateSnapshot> {
   const [pendingResult] = await db
     .select({ count: count() })

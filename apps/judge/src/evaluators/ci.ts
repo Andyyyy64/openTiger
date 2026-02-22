@@ -1,6 +1,6 @@
 import { getOctokit, getRepoInfo } from "@openTiger/vcs";
 
-// CI評価結果
+// CI evaluation result
 export interface CIEvaluationResult {
   pass: boolean;
   status: "success" | "failure" | "pending" | "error";
@@ -9,7 +9,7 @@ export interface CIEvaluationResult {
   details: CICheckDetail[];
 }
 
-// 個別のCIチェック詳細
+// Individual CI check detail
 export interface CICheckDetail {
   name: string;
   status: "success" | "failure" | "pending" | "skipped";
@@ -17,7 +17,7 @@ export interface CICheckDetail {
   url: string | null;
 }
 
-// PRのCIステータスを取得
+// Get CI status for a PR
 export async function getCIStatus(prNumber: number): Promise<{
   status: "success" | "failure" | "pending" | "error";
   checks: CICheckDetail[];
@@ -28,7 +28,7 @@ export async function getCIStatus(prNumber: number): Promise<{
   let checks: CICheckDetail[] = [];
 
   try {
-    // PRの情報を取得
+    // Get PR information
     const pr = await octokit.pulls.get({
       owner,
       repo,
@@ -37,7 +37,7 @@ export async function getCIStatus(prNumber: number): Promise<{
 
     const headSha = pr.data.head.sha;
 
-    // Check Runsを取得
+    // Get Check Runs
     try {
       const checkRuns = await octokit.checks.listForRef({
         owner,
@@ -45,7 +45,7 @@ export async function getCIStatus(prNumber: number): Promise<{
         ref: headSha,
       });
 
-      // Check Runsの詳細を収集
+      // Collect Check Run details
       checks = checkRuns.data.check_runs.map((run) => ({
         name: run.name,
         status: mapCheckStatus(run.status, run.conclusion),
@@ -56,14 +56,14 @@ export async function getCIStatus(prNumber: number): Promise<{
       console.warn("Failed to list check runs, falling back to combined status.", error);
     }
 
-    // Combined Statusも取得（古いステータスAPI用）
+    // Also get Combined Status (for the legacy status API)
     const combinedStatus = await octokit.repos.getCombinedStatusForRef({
       owner,
       repo,
       ref: headSha,
     });
 
-    // Combined Statusのステータスも追加
+    // Add statuses from the Combined Status
     for (const status of combinedStatus.data.statuses) {
       checks.push({
         name: status.context,
@@ -73,7 +73,7 @@ export async function getCIStatus(prNumber: number): Promise<{
       });
     }
 
-    // 全体のステータスを判定
+    // Determine overall status
     const hasFailure = checks.some((c) => c.status === "failure");
     const hasPending = checks.some((c) => c.status === "pending");
 
@@ -83,7 +83,7 @@ export async function getCIStatus(prNumber: number): Promise<{
     } else if (hasPending) {
       overallStatus = "pending";
     } else if (checks.length === 0) {
-      // チェックがない場合は成功扱い
+      // Treat as success when there are no checks
       overallStatus = "success";
     } else {
       overallStatus = "success";
@@ -99,7 +99,7 @@ export async function getCIStatus(prNumber: number): Promise<{
   }
 }
 
-// Check Runのステータスをマッピング
+// Map Check Run status
 function mapCheckStatus(
   status: string,
   conclusion: string | null,
@@ -123,7 +123,7 @@ function mapCheckStatus(
   }
 }
 
-// Combined Statusのステータスをマッピング
+// Map Combined Status state
 function mapCombinedStatus(state: string): "success" | "failure" | "pending" | "skipped" {
   switch (state) {
     case "success":
@@ -138,7 +138,7 @@ function mapCombinedStatus(state: string): "success" | "failure" | "pending" | "
   }
 }
 
-// CI結果を評価
+// Evaluate CI results
 export async function evaluateCI(prNumber: number): Promise<CIEvaluationResult> {
   const { status, checks } = await getCIStatus(prNumber);
 
@@ -153,7 +153,7 @@ export async function evaluateCI(prNumber: number): Promise<CIEvaluationResult> 
 
     case "failure":
       reasons.push("CI checks have failed");
-      // 失敗したチェックの詳細を追加
+      // Add details of failed checks
       const failedChecks = checks.filter((c) => c.status === "failure");
       for (const check of failedChecks) {
         reasons.push(`  - ${check.name}: ${check.conclusion}`);

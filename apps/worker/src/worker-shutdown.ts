@@ -26,7 +26,7 @@ export function setupWorkerShutdownHandlers(params: {
     try {
       const queueWorker = getQueueWorker();
       if (queueWorker) {
-        // STOP要求時は実行中ジョブの完了待ちをせず、即時に終了して再キューへ回す
+        // On STOP request, exit immediately without waiting for running jobs to complete; they will be requeued
         await queueWorker.close(true);
       }
     } catch (error) {

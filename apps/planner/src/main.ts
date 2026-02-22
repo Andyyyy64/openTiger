@@ -57,7 +57,7 @@ function resolvePlannerExecutor(): "opencode" | "claude_code" | "codex" {
   return "codex";
 }
 
-// ヘルプを表示
+// Show help
 function showHelp(): void {
   console.log(`
 openTiger Planner - Generate tasks from requirements
@@ -70,7 +70,7 @@ Usage:
 Options:
   --help          Show this help message
   --dry-run       Generate tasks but don't save to database
-  --no-llm        差分点検が必須のため初期化以外では利用不可
+  --no-llm        Not available except during initialization since diff inspection is mandatory
   --research-job  Run planner in TigerResearch mode for the target research job
 
 Environment Variables:
@@ -78,9 +78,9 @@ Environment Variables:
   DRY_RUN=true          Enable dry run mode
   PLANNER_TIMEOUT=1200   LLM timeout in seconds
   PLANNER_MODEL=xxx     Planner LLM model
-  PLANNER_INSPECT=false 差分点検は必須のため無視される
-  PLANNER_INSPECT_TIMEOUT=1200  LLM inspection timeout in seconds (<=0で無制限)
-  PLANNER_INSPECT_MAX_RETRIES=-1  Inspection retry limit (-1で無制限)
+  PLANNER_INSPECT=false Ignored because diff inspection is mandatory
+  PLANNER_INSPECT_TIMEOUT=1200  LLM inspection timeout in seconds (<=0 for unlimited)
+  PLANNER_INSPECT_MAX_RETRIES=-1  Inspection retry limit (-1 for unlimited)
   PLANNER_INSPECT_QUOTA_RETRY_DELAY_MS=30000  Quota wait before retry
 
 Example:
@@ -115,17 +115,17 @@ function findRequirementPathArg(args: string[]): string | undefined {
   return undefined;
 }
 
-// メイン処理
+// Main process
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
 
-  // ヘルプ
+  // Help
   if (args.includes("--help") || args.includes("-h")) {
     showHelp();
     process.exit(0);
   }
 
-  // 設定を構築
+  // Build configuration
   const config = { ...DEFAULT_CONFIG };
 
   if (args.includes("--dry-run")) {
@@ -145,7 +145,7 @@ async function main(): Promise<void> {
   );
   const requirementArgPath = findRequirementPathArg(args);
 
-  // エージェント登録
+  // Register agent
   const agentId = process.env.AGENT_ID ?? "planner-1";
   setupProcessLogging(agentId, { label: "Planner" });
   const plannerExecutor = resolvePlannerExecutor();
@@ -162,11 +162,11 @@ async function main(): Promise<void> {
     .values({
       id: agentId,
       role: "planner",
-      // 再計画の重複起動を避けるため、起動直後からbusyとして扱う
+      // Treat as busy immediately on startup to avoid duplicate replan launches
       status: "busy",
       lastHeartbeat: new Date(),
       metadata: {
-        model: plannerModel, // Plannerは高精度モデルで計画品質を優先する
+        model: plannerModel, // Planner prioritizes plan quality with a high-accuracy model
         provider: plannerExecutor,
       },
     })
@@ -178,10 +178,10 @@ async function main(): Promise<void> {
       },
     });
 
-  // ハートビート開始
+  // Start heartbeat
   const heartbeatTimer = startHeartbeat(agentId);
 
-  // 引数がない場合は環境変数の要件パスを利用する
+  // If no arguments are provided, use the requirement path from environment variables
   try {
     const { workdir, cleanup } = await preparePlannerWorkdir(config);
     try {
@@ -202,7 +202,7 @@ async function main(): Promise<void> {
           throw new Error("Requirement file path is required");
         }
 
-        // ファイルの存在確認
+        // Verify file exists
         try {
           await stat(requirementPath);
         } catch {
@@ -221,7 +221,7 @@ async function main(): Promise<void> {
       .set({ status: "idle", lastHeartbeat: new Date() })
       .where(eq(agents.id, agentId));
     clearInterval(heartbeatTimer);
-    // 単発実行の終了でDB接続を閉じる
+    // Close DB connection on single-run completion
     await closeDb();
   }
 }

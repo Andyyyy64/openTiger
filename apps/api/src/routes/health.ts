@@ -60,7 +60,7 @@ async function checkRedisReady(): Promise<{ ok: boolean; error?: string }> {
 
 export const healthRoute = new Hono();
 
-// ヘルスチェックエンドポイント
+// Health check endpoint
 healthRoute.get("/", (c) => {
   return c.json({
     status: "ok",

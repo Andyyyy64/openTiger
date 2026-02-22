@@ -4,15 +4,15 @@ import { HTTPException } from "hono/http-exception";
 
 // Rate limit configuration
 interface RateLimitConfig {
-  // ウィンドウ時間（ミリ秒）
+  // Window duration (milliseconds)
   windowMs: number;
-  // ウィンドウ内の最大リクエスト数
+  // Maximum number of requests per window
   maxRequests: number;
-  // レート制限をスキップするパス
+  // Paths to skip rate limiting
   skipPaths?: RegExp[];
-  // クライアント識別子の取得方法
+  // Method for obtaining the client identifier
   keyGenerator?: (c: Context) => string;
-  // 制限超過時のメッセージ
+  // Message when limit is exceeded
   message?: string;
 }
 
@@ -126,8 +126,8 @@ async function incrementRateLimit(key: string, windowMs: number): Promise<RateLi
 
 // Default configuration
 const defaultConfig: RateLimitConfig = {
-  windowMs: 60 * 1000, // 1分
-  maxRequests: 100, // 1分あたり100リクエスト
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 100, // 100 requests per minute
   skipPaths: [/^\/health/],
   message: "Too many requests, please try again later",
 };

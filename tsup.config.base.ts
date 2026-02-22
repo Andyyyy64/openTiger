@@ -20,7 +20,7 @@ const readPackageJson = (): PackageJson => {
 };
 
 const getExternalDeps = (): string[] => {
-  // 依存を外部化してバンドルの差分を抑える
+  // Externalize dependencies to minimize bundle diff
   const pkg = readPackageJson();
   return [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.peerDependencies ?? {})];
 };

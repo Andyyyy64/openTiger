@@ -184,7 +184,7 @@ export const BrailleSpinner: React.FC<BrailleSpinnerProps> = ({
     <span
       ref={elRef}
       className={`inline-block tabular-nums align-middle ${colorClass} ${normalizedClassName}`}
-      // Tailwind 任意値クラスに依存せず、読み込み色の継承を常に確実にする。
+      // Ensure reliable color inheritance without relying on arbitrary Tailwind value classes.
       style={{ fontFamily: "sans-serif", ...(shouldInheritColor ? { color: "inherit" } : {}) }}
       aria-hidden
     >

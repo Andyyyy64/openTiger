@@ -10,11 +10,11 @@ import {
 describe("verifyGitHubWebhookSignature", () => {
   const secret = "test-webhook-secret";
 
-  it("有効な署名を検証できる", () => {
-    // sha256=で始まる署名を検証
+  it("can verify a valid signature", () => {
+    // Verify a signature starting with sha256=
     const payload = '{"action":"opened"}';
 
-    // 正しい署名を生成するためのテスト
+    // Test to generate a correct signature
     const crypto = require("node:crypto");
     const hmac = crypto.createHmac("sha256", secret);
     hmac.update(payload);
@@ -23,34 +23,34 @@ describe("verifyGitHubWebhookSignature", () => {
     expect(verifyGitHubWebhookSignature(payload, correctSignature, secret)).toBe(true);
   });
 
-  it("無効な署名を拒否する", () => {
+  it("rejects an invalid signature", () => {
     const payload = '{"action":"opened"}';
     const invalidSignature = "sha256=invalid_signature_that_does_not_match";
 
     expect(verifyGitHubWebhookSignature(payload, invalidSignature, secret)).toBe(false);
   });
 
-  it("署名がundefinedの場合はfalseを返す", () => {
+  it("returns false when signature is undefined", () => {
     const payload = '{"action":"opened"}';
 
     expect(verifyGitHubWebhookSignature(payload, undefined, secret)).toBe(false);
   });
 
-  it("sha256=プレフィックスがない場合はfalseを返す", () => {
+  it("returns false when sha256= prefix is missing", () => {
     const payload = '{"action":"opened"}';
     const signature = "md5=somehash";
 
     expect(verifyGitHubWebhookSignature(payload, signature, secret)).toBe(false);
   });
 
-  it("署名部分が空の場合はfalseを返す", () => {
+  it("returns false when the signature part is empty", () => {
     const payload = '{"action":"opened"}';
     const signature = "sha256=";
 
     expect(verifyGitHubWebhookSignature(payload, signature, secret)).toBe(false);
   });
 
-  it("Bufferペイロードを処理できる", () => {
+  it("can handle a Buffer payload", () => {
     const payload = Buffer.from('{"action":"opened"}');
     const crypto = require("node:crypto");
     const hmac = crypto.createHmac("sha256", secret);
@@ -60,14 +60,14 @@ describe("verifyGitHubWebhookSignature", () => {
     expect(verifyGitHubWebhookSignature(payload, correctSignature, secret)).toBe(true);
   });
 
-  it("改ざんされたペイロードを検出する", () => {
+  it("detects a tampered payload", () => {
     const originalPayload = '{"action":"opened"}';
     const crypto = require("node:crypto");
     const hmac = crypto.createHmac("sha256", secret);
     hmac.update(originalPayload);
     const signature = "sha256=" + hmac.digest("hex");
 
-    // ペイロードを改ざん
+    // Tamper with the payload
     const tamperedPayload = '{"action":"closed"}';
     expect(verifyGitHubWebhookSignature(tamperedPayload, signature, secret)).toBe(false);
   });
@@ -75,7 +75,7 @@ describe("verifyGitHubWebhookSignature", () => {
 
 describe("isOpenTigerRelatedEvent", () => {
   describe("Pull Request events", () => {
-    it("agent/で始まるブランチのPRを検出する", () => {
+    it("detects a PR from a branch starting with agent/", () => {
       const payload: PullRequestPayload = {
         action: "opened",
         number: 42,
@@ -102,7 +102,7 @@ describe("isOpenTigerRelatedEvent", () => {
       expect(isOpenTigerRelatedEvent(payload)).toBe(true);
     });
 
-    it("通常のブランチのPRは検出しない", () => {
+    it("does not detect a PR from a regular branch", () => {
       const payload: PullRequestPayload = {
         action: "opened",
         number: 43,
@@ -131,7 +131,7 @@ describe("isOpenTigerRelatedEvent", () => {
   });
 
   describe("Issue events", () => {
-    it("openTigerラベル付きのIssueを検出する", () => {
+    it("detects an issue with the openTiger label", () => {
       const payload: IssuePayload = {
         action: "opened",
         issue: {
@@ -149,7 +149,7 @@ describe("isOpenTigerRelatedEvent", () => {
       expect(isOpenTigerRelatedEvent(payload)).toBe(true);
     });
 
-    it("auto-taskラベル付きのIssueを検出する", () => {
+    it("detects an issue with the auto-task label", () => {
       const payload: IssuePayload = {
         action: "labeled",
         issue: {
@@ -167,7 +167,7 @@ describe("isOpenTigerRelatedEvent", () => {
       expect(isOpenTigerRelatedEvent(payload)).toBe(true);
     });
 
-    it("関連ラベルなしのIssueは検出しない", () => {
+    it("does not detect an issue without a related label", () => {
       const payload: IssuePayload = {
         action: "opened",
         issue: {
@@ -185,7 +185,7 @@ describe("isOpenTigerRelatedEvent", () => {
       expect(isOpenTigerRelatedEvent(payload)).toBe(false);
     });
 
-    it("ラベルなしのIssueは検出しない", () => {
+    it("does not detect an issue with no labels", () => {
       const payload: IssuePayload = {
         action: "opened",
         issue: {
@@ -205,7 +205,7 @@ describe("isOpenTigerRelatedEvent", () => {
   });
 
   describe("Other events", () => {
-    it("PRでもIssueでもないイベントはfalseを返す", () => {
+    it("returns false for events that are neither PR nor Issue", () => {
       const payload: WebhookPayload = {
         action: "created",
         sender: {

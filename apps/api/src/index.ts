@@ -29,13 +29,13 @@ setupProcessLogging(process.env.OPENTIGER_LOG_NAME ?? "api", { label: "API" });
 
 const app = new Hono();
 
-// ミドルウェア
+// Middleware
 app.use("*", logger());
 app.use("*", cors());
 app.use("*", rateLimitMiddleware());
 app.use("*", authMiddleware());
 
-// ルート
+// Routes
 app.route("/health", healthRoute);
 app.route("/tasks", tasksRoute);
 app.route("/runs", runsRoute);
@@ -48,7 +48,7 @@ app.route("/config", configRoute);
 app.route("/system", systemRoute);
 registerApiPlugins(app);
 
-// ルートパス
+// Root path
 app.get("/", (c) => {
   return c.json({
     name: "openTiger",
@@ -104,7 +104,7 @@ async function stopManagedProcessesOnShutdown(): Promise<void> {
     stopManagedProcess(definition);
   }
 
-  // SIGTERM を送った直後に終了すると detached 子プロセスが残るため、短く待ってから孤児掃除を行う
+  // Exiting immediately after sending SIGTERM may leave detached child processes, so wait briefly then clean up orphans
   await new Promise((resolve) => setTimeout(resolve, 1200));
   await forceTerminateUnmanagedSystemProcesses().catch((error) => {
     console.error("[System] Failed to terminate unmanaged processes during shutdown:", error);

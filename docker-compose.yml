@@ -1,20 +1,20 @@
-# openTiger 開発環境用 Docker Compose
+# openTiger Development Environment Docker Compose
 
-# ネットワーク定義
+# Network definitions
 networks:
-  # 内部ネットワーク（DB、Redis）
+  # Internal network (DB, Redis)
   internal:
     driver: bridge
     internal: true
-  # 外部アクセス用ネットワーク（API通信）
+  # External access network (API communication)
   external:
     driver: bridge
-  # Worker用制限ネットワーク（必要な外部のみ許可）
+  # Restricted network for Workers (allows only required external access)
   worker-net:
     driver: bridge
 
 services:
-  # PostgreSQL データベース
+  # PostgreSQL database
   postgres:
     image: postgres:16-alpine
     container_name: opentiger-postgres
@@ -36,7 +36,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Redis キュー/キャッシュ
+  # Redis queue/cache
   redis:
     image: redis:7-alpine
     container_name: opentiger-redis
@@ -53,8 +53,8 @@ services:
       timeout: 5s
       retries: 5
 
-  # Worker（必要に応じて複数起動可能）
-  # 使用例: docker compose up -d worker --scale worker=5
+  # Worker (can scale to multiple instances as needed)
+  # Usage example: docker compose up -d worker --scale worker=5
   worker:
     build:
       context: ../..
@@ -64,7 +64,7 @@ services:
       REDIS_URL: redis://redis:6379
       WORKSPACE_PATH: /workspace
       LOG_FORMAT: json
-      # 以下は実行時に指定
+      # The following are specified at runtime
       # REPO_URL: https://github.com/owner/repo.git
       # TASK_ID: uuid-of-task
       # AGENT_ID: worker-1
@@ -80,7 +80,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # デフォルトでは起動しない（明示的にスケール指定）
+    # Not started by default (requires explicit scale specification)
     profiles:
       - worker
     deploy:
@@ -90,7 +90,7 @@ services:
           cpus: "2"
         reservations:
           memory: 1G
-    # セキュリティ設定
+    # Security settings
     security_opt:
       - no-new-privileges:true
     cap_drop:

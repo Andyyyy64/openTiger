@@ -2,10 +2,10 @@ import { db } from "@openTiger/db";
 import { leases, tasks, agents, runs } from "@openTiger/db/schema";
 import { eq, lt, and } from "drizzle-orm";
 
-// リースのデフォルト期限（分）
+// Default lease duration (minutes)
 const DEFAULT_LEASE_DURATION_MINUTES = 60;
 
-// リース取得結果
+// Lease acquisition result
 export interface LeaseResult {
   success: boolean;
   leaseId?: string;
@@ -43,7 +43,7 @@ async function markAgentIdleIfNoActiveWork(agentId: string): Promise<void> {
     .where(eq(agents.id, agentId));
 }
 
-// リースを取得
+// Acquire a lease
 export async function acquireLease(
   taskId: string,
   agentId: string,
@@ -52,7 +52,7 @@ export async function acquireLease(
   const expiresAt = new Date(Date.now() + durationMinutes * 60 * 1000);
 
   try {
-    // 既存のリースがないか確認
+    // Check if an existing lease already exists
     const existingLease = await db.select().from(leases).where(eq(leases.taskId, taskId));
 
     if (existingLease.length > 0) {
@@ -62,7 +62,7 @@ export async function acquireLease(
       };
     }
 
-    // リースを作成
+    // Create the lease
     const result = await db
       .insert(leases)
       .values({
@@ -85,7 +85,7 @@ export async function acquireLease(
       leaseId: created.id,
     };
   } catch (error) {
-    // 一意制約違反（他のエージェントが先にリースを取得）
+    // Unique constraint violation (another agent acquired the lease first)
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",
@@ -93,7 +93,7 @@ export async function acquireLease(
   }
 }
 
-// リースを解放
+// Release a lease
 export async function releaseLease(taskId: string): Promise<boolean> {
   const [lease] = await db
     .select({ agentId: leases.agentId })
@@ -107,7 +107,7 @@ export async function releaseLease(taskId: string): Promise<boolean> {
   return true;
 }
 
-// リースを延長
+// Extend a lease
 export async function extendLease(
   taskId: string,
   additionalMinutes: number = DEFAULT_LEASE_DURATION_MINUTES,
@@ -123,22 +123,22 @@ export async function extendLease(
   return result.length > 0;
 }
 
-// 期限切れリースをクリーンアップ
+// Clean up expired leases
 export async function cleanupExpiredLeases(): Promise<number> {
   const now = new Date();
 
-  // 期限切れリースを取得
+  // Retrieve expired leases
   const expiredLeases = await db.select().from(leases).where(lt(leases.expiresAt, now));
 
   if (expiredLeases.length === 0) {
     return 0;
   }
 
-  // 期限切れリースのタスクをqueuedに戻す
+  // Reset tasks with expired leases back to queued
   for (const lease of expiredLeases) {
-    // 失敗回数をカウント（context.retryCount などに持たせることも検討できるが、
-    // 現状はシンプルに status を queued に戻す。
-    // ただし、何度も失敗している場合は blocked にするなどのロジックをここに追加可能）
+    // Count failure occurrences (could be tracked via context.retryCount, but
+    // for now we simply reset status to queued.
+    // Logic to block tasks after repeated failures could be added here.)
 
     await db
       .update(tasks)
@@ -152,14 +152,14 @@ export async function cleanupExpiredLeases(): Promise<number> {
     await markAgentIdleIfNoActiveWork(lease.agentId);
   }
 
-  // 期限切れリースを削除
+  // Delete expired leases
   await db.delete(leases).where(lt(leases.expiresAt, now));
 
   return expiredLeases.length;
 }
 
-// queuedタスクに残留したダングリングleaseを回収する
-// 例: worker再起動などでrun未生成のままleaseだけ残るケース
+// Reclaim dangling leases left on queued tasks
+// Example: lease remains without a run being created due to worker restart
 export async function cleanupDanglingLeases(): Promise<number> {
   const allLeases = await db
     .select({ id: leases.id, taskId: leases.taskId, agentId: leases.agentId })
@@ -202,8 +202,8 @@ export async function cleanupDanglingLeases(): Promise<number> {
   return reclaimed;
 }
 
-// running のまま固着したタスクを回復する
-// 例: run は failed/cancelled なのに task.status=running, lease だけ残っているケース
+// Recover tasks stuck in running status
+// Example: run is failed/cancelled but task.status=running with only the lease remaining
 export async function recoverOrphanedRunningTasks(graceMs: number = 120000): Promise<number> {
   const threshold = new Date(Date.now() - graceMs);
 
@@ -249,16 +249,16 @@ export async function recoverOrphanedRunningTasks(graceMs: number = 120000): Pro
   return recovered;
 }
 
-// 特定エージェントのリースを取得
+// Get leases for a specific agent
 export async function getAgentLeases(agentId: string) {
   return db.select().from(leases).where(eq(leases.agentId, agentId));
 }
 
-// 全アクティブリースを取得（有効期限が現在より後のもの）
+// Get all active leases (those with expiration after the current time)
 export async function getAllActiveLeases() {
   const now = new Date();
-  // now < expiresAt => expiresAtがnowより大きい
-  // gt(leases.expiresAt, now) を使用
+  // now < expiresAt => expiresAt is greater than now
+  // Use gt(leases.expiresAt, now)
   const { gt } = await import("drizzle-orm");
   return db.select().from(leases).where(gt(leases.expiresAt, now));
 }

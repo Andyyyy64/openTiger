@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 
-// 要件定義の構造
+// Requirement definition structure
 export interface Requirement {
   goal: string;
   background: string;
@@ -16,7 +16,7 @@ export interface Requirement {
   rawContent: string;
 }
 
-// リスク項目
+// Risk item
 export interface RiskItem {
   risk: string;
   impact: "high" | "medium" | "low";
@@ -37,7 +37,7 @@ const DEFAULT_GOAL =
   "Implement the requested outcome described in this requirement in small, verifiable steps.";
 const DEFAULT_ALLOWED_PATHS = ["**"];
 
-// Markdownセクションを抽出
+// Extract Markdown section
 function extractSection(content: string, sectionName: string): string {
   const lines = content.split("\n");
   const collected: string[] = [];
@@ -56,7 +56,7 @@ function extractSection(content: string, sectionName: string): string {
         continue;
       }
       if (inSection) {
-        // レベル1見出し配下では、次のレベル2見出しを別セクションとして扱う。
+        // Under a level-1 heading, treat the next level-2 heading as a separate section.
         const boundaryLevel = sectionLevel === 1 ? 2 : sectionLevel;
         if (level <= boundaryLevel) {
           break;
@@ -74,7 +74,7 @@ function extractSection(content: string, sectionName: string): string {
   return collected.join("\n").trim();
 }
 
-// リストアイテムを抽出
+// Extract list items
 function extractListItems(content: string): string[] {
   const lines = content.split("\n");
   const items: string[] = [];
@@ -91,7 +91,7 @@ function extractListItems(content: string): string[] {
 }
 
 function normalizePathPattern(path: string): string {
-  // Markdown内でエスケープされたワイルドカードを元に戻す
+  // Restore escaped wildcards from Markdown
   return path.replace(/\\([*?])/g, "$1");
 }
 
@@ -134,13 +134,13 @@ function resolveAcceptanceCriteria(acceptanceSection: string, goal: string): str
   return [`Deliver a verifiable first increment toward: ${goal}`];
 }
 
-// コードブロック内のパスを抽出
+// Extract paths from code blocks
 function extractPaths(content: string): string[] {
   const paths: string[] = [];
   const lines = content.split("\n");
 
   for (const line of lines) {
-    // バッククォートで囲まれたパス
+    // Path enclosed in backticks
     const codeMatch = line.match(/`([^`]+)`/);
     const codeCapture = codeMatch?.[1];
     if (codeCapture) {
@@ -148,7 +148,7 @@ function extractPaths(content: string): string[] {
       continue;
     }
 
-    // リストアイテムのパス
+    // Path from list item
     const listMatch = line.match(/^\s*[-*]\s+(.+)/);
     const listCapture = listMatch?.[1];
     if (listCapture) {
@@ -162,13 +162,13 @@ function extractPaths(content: string): string[] {
   return paths;
 }
 
-// リスクテーブルをパース
+// Parse risk table
 function parseRiskTable(content: string): RiskItem[] {
   const risks: RiskItem[] = [];
   const lines = content.split("\n");
 
   for (const line of lines) {
-    // テーブル行をパース（| リスク | 影響度 | 対策 |）
+    // Parse table row (| Risk | Impact | Mitigation |)
     const match = line.match(/\|\s*([^|]+)\s*\|\s*(高|中|低|high|medium|low)\s*\|\s*([^|]+)\s*\|/i);
     const riskCapture = match?.[1];
     const impactCapture = match?.[2];
@@ -179,7 +179,7 @@ function parseRiskTable(content: string): RiskItem[] {
       const impactRaw = impactCapture.toLowerCase();
       const mitigation = mitigationCapture.trim();
 
-      // ヘッダー行をスキップ
+      // Skip header row
       if (risk === "リスク" || risk.toLowerCase() === "risk") {
         continue;
       }
@@ -204,13 +204,13 @@ function parseRiskTable(content: string): RiskItem[] {
   return risks;
 }
 
-// 要件ファイルをパース
+// Parse requirement file
 export async function parseRequirementFile(filePath: string): Promise<Requirement> {
   const content = await readFile(filePath, "utf-8");
   return parseRequirementContent(content);
 }
 
-// 要件テキストをパース
+// Parse requirement text
 export function parseRequirementContent(content: string): Requirement {
   const goalSection = extractSection(content, "Goal");
   const backgroundSection = extractSection(content, "Background");
@@ -286,7 +286,7 @@ export function detectMissingRequirementFields(content: string): RequirementFiel
   return missing;
 }
 
-// 要件の検証
+// Validate requirement
 export function validateRequirement(requirement: Requirement): string[] {
   const errors: string[] = [];
 

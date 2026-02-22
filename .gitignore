@@ -1,18 +1,18 @@
-# 依存関係
+# Dependencies
 node_modules/
 .pnpm-store/
 
-# ビルド成果物
+# Build artifacts
 dist/
 build/
 .turbo/
 *.tsbuildinfo
 
-# テスト・カバレッジ
+# Test and coverage
 coverage/
 .vitest/
 
-# 環境変数
+# Environment variables
 .env
 .env.local
 .env.*.local
@@ -29,7 +29,7 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# ログ
+# Logs
 logs/
 *.log
 npm-debug.log*
@@ -38,7 +38,7 @@ pnpm-debug.log*
 # Docker
 .docker/
 
-# 一時ファイル
+# Temporary files
 tmp/
 temp/
 .cache/
@@ -47,7 +47,7 @@ temp/
 .opentiger/context/*.json
 !.opentiger/context/.gitkeep
 
-# データベース（ローカル開発用）
+# Database (local development)
 *.db
 *.sqlite
 *.sqlite3

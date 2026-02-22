@@ -1,4 +1,4 @@
-// 評価器モジュールのエクスポート
+// Evaluator module exports
 
 export { evaluateCI, getCIStatus, type CIEvaluationResult, type CICheckDetail } from "./ci";
 

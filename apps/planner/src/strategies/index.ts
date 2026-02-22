@@ -1,4 +1,4 @@
-// ストラテジーモジュールのエクスポート
+// Strategy module exports
 
 export {
   generateTasksFromRequirement,

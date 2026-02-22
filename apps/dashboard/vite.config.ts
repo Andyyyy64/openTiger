@@ -2,9 +2,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-// openTigerダッシュボードのポートを固定して衝突を避ける
+// Fix the openTiger dashboard port to avoid conflicts
 const dashboardPort = Number.parseInt(process.env.OPENTIGER_DASHBOARD_PORT ?? "5190", 10);
-// ダッシュボードが参照するAPIポートを環境変数で揃える
+// Align the API port referenced by the dashboard via environment variables
 const apiPort = Number.parseInt(
   process.env.OPENTIGER_API_PORT ?? process.env.API_PORT ?? "4301",
   10,

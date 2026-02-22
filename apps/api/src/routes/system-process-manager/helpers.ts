@@ -3,7 +3,7 @@ import { resolveOpenTigerLogDir } from "../log-dir";
 import { resolveRepoRoot } from "../system-requirements";
 import type { StartCommand } from "./types";
 
-// ログ出力先は環境変数を優先して決定する
+// Log output directory is determined with environment variable taking priority
 export function resolveLogDir(): string {
   return resolveOpenTigerLogDir(join(resolveRepoRoot(), "raw-logs"));
 }

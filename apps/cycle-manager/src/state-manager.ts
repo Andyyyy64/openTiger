@@ -133,7 +133,7 @@ export async function persistState(state: SystemState): Promise<void> {
     pendingTaskCount: state.tasks.queued,
     runningTaskCount: state.tasks.running,
     activeAgentCount: state.agents.busy,
-    queuedJobCount: 0, // TODO: fetch from BullMQ if needed
+    queuedJobCount: 0,
     timestamp: state.timestamp,
   };
 
@@ -301,7 +301,7 @@ export async function performHealthCheck(): Promise<HealthCheckResult> {
       queueLatencyWithinSlo,
       blockedWithinSlo,
       retryExhaustionWithinLimit,
-      withinCostLimits: true, // TODO: implement separately
+      withinCostLimits: true,
     },
     details,
   };

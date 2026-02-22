@@ -48,5 +48,5 @@ const buildGroupedSettings = (): [string, SettingField[]][] => {
     );
 };
 
-// 表示順は固定のため初期化時に一度だけ構築する
+// Display order is fixed, so build only once at initialization
 export const GROUPED_SETTINGS = buildGroupedSettings();

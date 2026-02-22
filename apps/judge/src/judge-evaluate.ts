@@ -27,22 +27,22 @@ export async function judgeSinglePR(
   console.log(`\n[Evaluating PR #${pr.prNumber}]`);
   const evaluationPolicy = config.policy;
 
-  // 1. CI評価
+  // 1. CI evaluation
   console.log("  - Checking CI status...");
   const ciResult = await evaluateCI(pr.prNumber);
   console.log(`    CI: ${ciResult.pass ? "PASS" : "FAIL"}`);
 
-  // 2. ポリシー評価
+  // 2. Policy evaluation
   console.log("  - Checking policy compliance...");
   const diffStats = await getPRDiffStats(pr.prNumber);
   const policyResult = await evaluatePolicy(pr.prNumber, evaluationPolicy, pr.allowedPaths);
   console.log(`    Policy: ${policyResult.pass ? "PASS" : "FAIL"}`);
 
-  // 計算されたリスクレベル
+  // Computed risk level
   const computedRisk = evaluateRiskLevel(diffStats, evaluationPolicy);
   console.log(`    Computed Risk: ${computedRisk} (Task Risk: ${pr.taskRiskLevel})`);
 
-  // 3. LLM評価
+  // 3. LLM evaluation
   let llmResult;
   if (config.useLlm && ciResult.pass && policyResult.pass) {
     const precheck = await precheckPRMergeability(pr.prNumber);
@@ -74,7 +74,7 @@ export async function judgeSinglePR(
     llm: llmResult,
   };
 
-  // 判定（計算されたリスクと自己申告リスクのうち、高い方を採用）
+  // Judgement (use the higher of computed risk and self-reported risk)
   const riskPriority = { low: 0, medium: 1, high: 2 };
   const effectiveRisk =
     riskPriority[computedRisk] > riskPriority[pr.taskRiskLevel] ? computedRisk : pr.taskRiskLevel;

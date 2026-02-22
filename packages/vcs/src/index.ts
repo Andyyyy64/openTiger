@@ -1,4 +1,4 @@
-// @openTiger/vcs パッケージのエントリポイント
+// @openTiger/vcs package entry point
 export * from "./client";
 export * from "./pr";
 export * from "./issue";

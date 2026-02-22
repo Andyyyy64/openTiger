@@ -142,7 +142,7 @@ export function computeQuotaBackoff(options: QuotaBackoffOptions): QuotaBackoffR
 
   const retryHintMs = parseQuotaRetryDelayMs(options.errorMessage ?? null, options.referenceDate);
   const exponentialMs = Math.min(maxDelayMs, Math.ceil(baseDelayMs * Math.pow(factor, retryCount)));
-  // 提供元が明示した再開時刻はジッターを加えず優先する。
+  // Prioritize the explicit retry time from the provider without adding jitter.
   if (retryHintMs !== null && retryHintMs > 0) {
     const cooldownMs = Math.max(exponentialMs, retryHintMs);
     return {

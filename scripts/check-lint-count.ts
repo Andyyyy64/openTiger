@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 
-// 除外するディレクトリのパターン
+// Directory patterns to exclude
 const EXCLUDED_DIRS = [
   "node_modules",
   ".git",
@@ -16,7 +16,7 @@ const EXCLUDED_DIRS = [
   "app/components/ui",
 ];
 
-// チェック対象のファイル拡張子
+// File extensions to check
 const TARGET_EXTENSIONS = [
   ".ts",
   ".tsx",
@@ -30,7 +30,7 @@ const TARGET_EXTENSIONS = [
   ".less",
 ];
 
-// デフォルトの行数閾値
+// Default line count threshold
 const DEFAULT_LINE_THRESHOLD = 500;
 
 interface FileInfo {
@@ -44,7 +44,7 @@ interface CliOptions {
 }
 
 /**
- * ファイルの行数をカウントする
+ * Count the number of lines in a file
  */
 function countLines(filePath: string): number {
   try {
@@ -57,35 +57,35 @@ function countLines(filePath: string): number {
 }
 
 /**
- * ディレクトリが除外対象かどうかをチェック
+ * Check whether a directory should be excluded
  */
 function isExcludedDir(dirPath: string, projectRoot: string): boolean {
   const dirName = path.basename(dirPath);
   const relativePath = path.relative(projectRoot, dirPath);
 
   return EXCLUDED_DIRS.some((excluded) => {
-    // ディレクトリ名での完全一致
+    // Exact match on directory name
     if (dirName === excluded) {
       return true;
     }
 
-    // 相対パスでの完全一致
+    // Exact match on relative path
     if (relativePath === excluded) {
       return true;
     }
 
-    // 相対パスが除外パスで始まる場合（サブディレクトリも除外）
+    // If relative path starts with excluded path (also excludes subdirectories)
     if (relativePath.startsWith(excluded + path.sep) || relativePath.startsWith(excluded + "/")) {
       return true;
     }
 
-    // フルパスに除外パスが含まれる場合
+    // If full path contains the excluded path
     return dirPath.includes(`/${excluded}/`) || dirPath.includes(`\\${excluded}\\`);
   });
 }
 
 /**
- * ファイルがチェック対象かどうかをチェック
+ * Check whether a file is a target for checking
  */
 function isTargetFile(filePath: string): boolean {
   const ext = path.extname(filePath).toLowerCase();
@@ -93,11 +93,11 @@ function isTargetFile(filePath: string): boolean {
 }
 
 /**
- * パス除外（-I/--ignore）の判定
+ * Determine path exclusion (-I/--ignore)
  *
- * - 「相対パス（/区切りに正規化）」に、指定された文字列が含まれるかで判定する
- * - OS差分を吸収するため、パス区切りは常に "/" として扱う
- * - 文字大小の差で意図せず漏れないよう、比較は小文字化して行う
+ * - Checks whether the relative path (normalized to "/" separators) contains the specified substring
+ * - Path separators are always treated as "/" to absorb OS differences
+ * - Comparison is case-insensitive to avoid unintentional misses
  */
 function isIgnoredPath(
   absolutePath: string,
@@ -115,7 +115,7 @@ function isIgnoredPath(
 }
 
 /**
- * ディレクトリを再帰的に走査してファイル情報を取得
+ * Recursively scan a directory and collect file information
  */
 function scanDirectory(
   dirPath: string,
@@ -132,17 +132,17 @@ function scanDirectory(
       const stat = fs.statSync(fullPath);
 
       if (stat.isDirectory()) {
-        // 指定文字列を含むパスは、その配下ごとスキップする
+        // Skip paths containing the specified substring, including all descendants
         if (isIgnoredPath(fullPath, projectRoot, ignorePathSubstrings)) {
           continue;
         }
 
-        // 除外ディレクトリをスキップ
+        // Skip excluded directories
         if (!isExcludedDir(fullPath, projectRoot)) {
           results.push(...scanDirectory(fullPath, ignorePathSubstrings, projectRoot));
         }
       } else if (stat.isFile() && isTargetFile(fullPath)) {
-        // 指定文字列を含むファイルはスキップする
+        // Skip files whose path contains the specified substring
         if (isIgnoredPath(fullPath, projectRoot, ignorePathSubstrings)) {
           continue;
         }
@@ -162,9 +162,9 @@ function scanDirectory(
 }
 
 /**
- * コマンドライン引数を解釈する
+ * Parse command-line arguments
  *
- * 例:
+ * Examples:
  * - npm run line -- -I prisma
  * - npm run line -- --ignore app/components --ignore server/api/domain
  * - npm run line -- 600 -I docs
@@ -217,7 +217,7 @@ function parseCliOptions(args: string[]): CliOptions {
       continue;
     }
 
-    // 互換性: 最初の「フラグではない数値」を閾値として扱う（従来の `npm run line 600`）
+    // Backward compatibility: treat the first non-flag numeric argument as the threshold (legacy `npm run line 600`)
     if (!arg.startsWith("-") && lineThreshold === undefined) {
       const threshold = parseInt(arg, 10);
       if (!isNaN(threshold) && threshold > 0) {
@@ -234,21 +234,21 @@ function parseCliOptions(args: string[]): CliOptions {
 }
 
 /**
- * 行数閾値を取得
+ * Get the line count threshold
  */
 function getLineThreshold(cliLineThreshold?: number): number {
   if (cliLineThreshold && cliLineThreshold > 0) {
     return cliLineThreshold;
   }
 
-  // npm_lifecycle_event からスクリプト名を取得して :以降の数値を抽出
-  // 例: "line:500" → 500
+  // Extract the script name from npm_lifecycle_event and parse the number after ":"
+  // Example: "line:500" -> 500
   const lifecycleEvent = process.env.npm_lifecycle_event;
   if (lifecycleEvent) {
     const scriptName = lifecycleEvent.split(":")[0];
     const thresholdPart = lifecycleEvent.split(":")[1];
 
-    // "line" スクリプトで:以降に数値が指定されている場合
+    // If a number is specified after ":" in the "line" script
     if (scriptName === "line" && thresholdPart) {
       const threshold = parseInt(thresholdPart, 10);
       if (!isNaN(threshold) && threshold > 0) {
@@ -261,7 +261,7 @@ function getLineThreshold(cliLineThreshold?: number): number {
 }
 
 /**
- * メイン処理
+ * Main process
  */
 function main() {
   const cliOptions = parseCliOptions(process.argv.slice(2));
@@ -272,13 +272,13 @@ function main() {
   const projectRoot = process.cwd();
   const allFiles = scanDirectory(projectRoot, cliOptions.ignorePathSubstrings, projectRoot);
 
-  // 閾値以上のファイルをフィルタリング
+  // Filter files that meet or exceed the threshold
   const largeFiles = allFiles.filter((file) => file.lineCount >= lineThreshold);
 
-  // 結果を行数でソート（降順）
+  // Sort results by line count (descending)
   largeFiles.sort((a, b) => b.lineCount - a.lineCount);
 
-  // ファイルをカテゴリ別に分類
+  // Categorize files by type
   const frontendFiles = largeFiles.filter((file) => {
     const relativePath = path.relative(projectRoot, file.filePath);
     return relativePath.startsWith("app/");
@@ -299,9 +299,9 @@ function main() {
   } else {
     console.log(`⚠️  Found ${largeFiles.length} file(s) with ${lineThreshold}+ lines:\n`);
 
-    // フロントエンドファイルの表示
+    // Display frontend files
     if (frontendFiles.length > 0) {
-      console.log(`🌐 フロントエンド (${frontendFiles.length} files):`);
+      console.log(`🌐 Frontend (${frontendFiles.length} files):`);
       frontendFiles.forEach((file) => {
         const relativePath = path.relative(projectRoot, file.filePath);
         console.log(`📄 ${relativePath}: ${file.lineCount} lines`);
@@ -309,9 +309,9 @@ function main() {
       console.log("");
     }
 
-    // サーバーファイルの表示
+    // Display server files
     if (serverFiles.length > 0) {
-      console.log(`🖥️  サーバー (${serverFiles.length} files):`);
+      console.log(`🖥️  Server (${serverFiles.length} files):`);
       serverFiles.forEach((file) => {
         const relativePath = path.relative(projectRoot, file.filePath);
         console.log(`📄 ${relativePath}: ${file.lineCount} lines`);
@@ -319,9 +319,9 @@ function main() {
       console.log("");
     }
 
-    // その他のファイルの表示
+    // Display other files
     if (otherFiles.length > 0) {
-      console.log(`📁 その他 (${otherFiles.length} files):`);
+      console.log(`📁 Other (${otherFiles.length} files):`);
       otherFiles.forEach((file) => {
         const relativePath = path.relative(projectRoot, file.filePath);
         console.log(`📄 ${relativePath}: ${file.lineCount} lines`);
@@ -334,7 +334,7 @@ function main() {
     );
   }
 
-  // 統計情報
+  // Statistics
   const totalFiles = allFiles.length;
   const averageLines = Math.round(
     allFiles.reduce((sum, file) => sum + file.lineCount, 0) / totalFiles,
@@ -345,7 +345,7 @@ function main() {
   console.log(`   Average lines per file: ${averageLines}`);
   console.log(`   Files over ${lineThreshold} lines: ${largeFiles.length}`);
 
-  // カテゴリ別の統計
+  // Statistics by category
   if (largeFiles.length > 0) {
     if (frontendFiles.length > 0) {
       const frontendTotalLines = frontendFiles.reduce((sum, file) => sum + file.lineCount, 0);
@@ -369,5 +369,5 @@ function main() {
   }
 }
 
-// スクリプト実行
+// Run script
 main();
