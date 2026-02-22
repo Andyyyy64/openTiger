@@ -7,33 +7,18 @@ import type { MessageRecord, ConfigRecord } from "@openTiger/db/schema";
 export type ConversationPhase =
   | "greeting"
   | "requirement_gathering"
-  | "clarification"
   | "plan_proposal"
-  | "repo_prompt"
   | "execution"
   | "monitoring";
 
-const GIT_KEYWORDS = /\b(github|git|pr|pull\s*request|issue|merge|branch|commit|repository|repo|push|clone)\b/i;
-
-export function requiresGitSetup(
-  messages: Pick<MessageRecord, "content" | "role">[],
-  configRow: ConfigRecord | null,
-): boolean {
-  if (configRow) {
-    const repoMode = configRow.repoMode?.toLowerCase();
-    if (repoMode === "local") return false;
-    if (configRow.githubOwner?.trim() && configRow.githubRepo?.trim()) return false;
-  }
-  return messages.some((msg) => msg.role === "user" && GIT_KEYWORDS.test(msg.content));
-}
+/** Marker the LLM appends when its plan is complete. */
+export const PLAN_READY_MARKER = "---PLAN_READY---";
 
 export function resolvePhase(
   messages: Pick<MessageRecord, "role" | "content" | "messageType">[],
   metadata: Record<string, unknown> | null,
 ): ConversationPhase {
-  // Only honour metadata.phase for terminal states that are explicitly set via
-  // user actions (confirm-plan → execution, configure-repo → repo_prompt).
-  // Otherwise, derive the phase from actual message history so it progresses naturally.
+  // Honour metadata.phase for terminal states set via user actions.
   const metaPhase = metadata?.phase;
   if (metaPhase === "execution" || metaPhase === "monitoring") {
     return metaPhase;
@@ -46,17 +31,21 @@ export function resolvePhase(
   const hasExecution = messages.some((m) => m.messageType === "execution_status");
   if (hasExecution) return "monitoring";
 
-  // Check for plan_proposal messages
+  // Check for mode_selection messages (plan was ready, waiting for user to pick mode)
+  const hasModeSelection = messages.some((m) => m.messageType === "mode_selection");
+  if (hasModeSelection) return "plan_proposal";
+
+  // Check if any assistant message contains the PLAN_READY marker
+  const hasPlanReady = messages.some(
+    (m) => m.role === "assistant" && m.content.includes(PLAN_READY_MARKER),
+  );
+  if (hasPlanReady) return "plan_proposal";
+
+  // Check for legacy plan_proposal messages
   const hasPlan = messages.some((m) => m.messageType === "plan_proposal");
   if (hasPlan) return "plan_proposal";
 
-  // Check for repo_prompt messages
-  const hasRepoPrompt = messages.some((m) => m.messageType === "repo_prompt");
-  if (hasRepoPrompt) return "repo_prompt";
-
-  if (userMessages.length === 1) return "requirement_gathering";
-  if (userMessages.length <= 3) return "clarification";
-  return "plan_proposal";
+  return "requirement_gathering";
 }
 
 const SYSTEM_PROMPTS: Record<ConversationPhase, string> = {
@@ -68,46 +57,31 @@ You can help with:
 - Research tasks
 - Bug fixes and feature development
 
-Ask what they need help with. Do NOT ask about Git/GitHub setup unless the user mentions it.`,
+Ask what they need help with. Do NOT ask about Git/GitHub setup — that is handled separately by the UI.`,
 
-  requirement_gathering: `You are openTiger's planning assistant. The user is describing what they want to build or fix.
+  requirement_gathering: `You are openTiger's autonomous planning engine. The user is describing what they want to build or fix.
 
-Your job:
-1. Understand the requirement clearly
-2. Ask clarifying questions if needed
-3. When you have enough info, propose a task breakdown
+CRITICAL RULES:
+1. Make technical decisions yourself. If something is ambiguous (language version, build tool, architecture pattern, library choice), pick the best option and state your choice confidently. Do NOT ask the user to choose between technical alternatives.
+2. Only ask a question if you literally cannot proceed without user input (e.g. the domain is completely unclear, or there are mutually exclusive business requirements). Maximum 1 question per response.
+3. Produce a concrete task plan within 1-2 turns. Do not drag the conversation out.
+4. NEVER ask "shall I proceed?", "does this look good?", "would you like me to start?", or any confirmation question. The UI handles execution confirmation separately.
 
-Keep responses concise. Use markdown for structure when helpful.
-Do NOT ask about Git/GitHub setup unless the user explicitly mentions needing PR/GitHub integration.`,
-
-  clarification: `You are openTiger's planning assistant. You're clarifying requirements with the user.
-
-Ask specific questions about unclear aspects. Focus on:
-- Scope boundaries
-- Acceptance criteria
-- Risk areas
-- Dependencies
-
-Keep it conversational and concise.`,
-
-  plan_proposal: `You are openTiger's planning assistant. Based on the conversation, propose a concrete task breakdown.
-
-Format your response as a plan with:
-- Clear task titles
-- Brief descriptions
+When you have enough information (which may be immediately from the first message), output a plan in this format:
+- Clear task titles with brief descriptions
 - Estimated risk levels (low/medium/high)
 - Suggested execution order
 
-After presenting the plan, ask the user to confirm or adjust it.`,
+When your plan is complete, append this exact marker on its own line at the very end:
+---PLAN_READY---
 
-  repo_prompt: `You are openTiger's configuration assistant. The user's task requires Git/GitHub integration.
+Do NOT ask for confirmation after the plan. The marker triggers the next step automatically.
+Use markdown for structure. Keep responses concise.`,
 
-Ask them to configure:
-1. GitHub owner (organization or username)
-2. Repository name
-3. Base branch (default: main)
+  plan_proposal: `You are openTiger's planning assistant. A plan has been proposed and the user may want adjustments.
 
-Keep it brief and helpful.`,
+If the user asks for changes, revise the plan and include the ---PLAN_READY--- marker again at the end.
+Keep responses concise. Do not ask for confirmation — the UI handles that.`,
 
   execution: `You are openTiger's execution monitor. Tasks are being executed.
 

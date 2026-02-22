@@ -18,7 +18,7 @@ import {
   buildSystemPrompt,
   resolveExecutorFromConfig,
   resolveModelFromConfig,
-  requiresGitSetup,
+  PLAN_READY_MARKER,
 } from "./chat-orchestrator";
 
 export const chatRoute = new Hono();
@@ -180,18 +180,6 @@ chatRoute.post("/conversations/:id/messages", async (c) => {
       // Config not available, use defaults
     }
 
-    // Check if git setup is needed
-    const needsGit = requiresGitSetup(allMessages, configRow);
-    if (needsGit && phase !== "repo_prompt" && phase !== "execution" && phase !== "monitoring") {
-      // Insert a repo_prompt system message
-      await db.insert(messages).values({
-        conversationId: id,
-        role: "system",
-        content: "Git/GitHub configuration may be needed for this task. You can configure it in the repo settings card below.",
-        messageType: "repo_prompt",
-      });
-    }
-
     // Start LLM execution
     const executor = resolveExecutorFromConfig(configRow);
     const model = resolveModelFromConfig(configRow, executor);
@@ -220,7 +208,16 @@ chatRoute.post("/conversations/:id/messages", async (c) => {
     handle.onDone(async (result) => {
       // Save assistant response to DB
       try {
-        const responseContent = result.content || (result.success ? "(Empty response)" : "(LLM execution failed — check server logs for details)");
+        let responseContent = result.content || (result.success ? "(Empty response)" : "(LLM execution failed — check server logs for details)");
+
+        // Check if LLM produced PLAN_READY marker
+        const hasPlanMarker = responseContent.includes(PLAN_READY_MARKER);
+
+        // Strip the marker from saved content
+        if (hasPlanMarker) {
+          responseContent = responseContent.replace(PLAN_READY_MARKER, "").trimEnd();
+        }
+
         await db.insert(messages).values({
           conversationId: id,
           role: "assistant",
@@ -228,11 +225,23 @@ chatRoute.post("/conversations/:id/messages", async (c) => {
           messageType: "text",
         });
 
-        // Update conversation phase and timestamp
-        const newPhase = resolvePhase(
-          [...allMessages, { role: "assistant", content: result.content, messageType: "text" }],
-          metadata,
-        );
+        // If plan is ready, insert mode_selection system message
+        if (hasPlanMarker) {
+          await db.insert(messages).values({
+            conversationId: id,
+            role: "system",
+            content: "Plan complete. Select execution mode to begin.",
+            messageType: "mode_selection",
+          });
+        }
+
+        // Resolve new phase: if marker present we know it's plan_proposal
+        const newPhase = hasPlanMarker
+          ? "plan_proposal" as const
+          : resolvePhase(
+              [...allMessages, { role: "assistant" as const, content: result.content, messageType: "text" }],
+              metadata,
+            );
         await db
           .update(conversations)
           .set({
@@ -310,7 +319,86 @@ chatRoute.get("/conversations/:id/stream", async (c) => {
   });
 });
 
-// POST /conversations/:id/confirm-plan — confirm plan and start execution
+// POST /conversations/:id/start-execution — unified mode selection + execution start
+chatRoute.post("/conversations/:id/start-execution", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const body = await c.req.json();
+    const mode = body.mode === "git" ? "git" : "local";
+    const githubOwner = typeof body.githubOwner === "string" ? body.githubOwner.trim() : "";
+    const githubRepo = typeof body.githubRepo === "string" ? body.githubRepo.trim() : "";
+    const baseBranch = typeof body.baseBranch === "string" ? body.baseBranch.trim() || "main" : "main";
+
+    const [conversation] = await db
+      .select()
+      .from(conversations)
+      .where(eq(conversations.id, id));
+
+    if (!conversation) {
+      return c.json({ error: "Conversation not found" }, 404);
+    }
+
+    const metadata = (conversation.metadata ?? {}) as Record<string, unknown>;
+
+    // Update global config for git mode
+    if (mode === "git" && githubOwner && githubRepo) {
+      try {
+        const configRow = await ensureConfigRow();
+        const { config: configTable } = await import("@openTiger/db/schema");
+        await db
+          .update(configTable)
+          .set({
+            repoMode: "git",
+            githubOwner,
+            githubRepo,
+            baseBranch,
+            updatedAt: new Date(),
+          })
+          .where(eq(configTable.id, configRow.id));
+      } catch {
+        // Config update is best-effort
+      }
+    }
+
+    // Update conversation to execution phase
+    await db
+      .update(conversations)
+      .set({
+        metadata: {
+          ...metadata,
+          phase: "execution",
+          repoMode: mode,
+          ...(mode === "git" ? { githubOwner, githubRepo, baseBranch } : {}),
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(conversations.id, id));
+
+    // Insert execution_status system message
+    const modeLabel = mode === "git" ? `git (${githubOwner}/${githubRepo}:${baseBranch})` : "local";
+    const [statusMessage] = await db
+      .insert(messages)
+      .values({
+        conversationId: id,
+        role: "system",
+        content: `Execution started in ${modeLabel} mode.`,
+        messageType: "execution_status",
+        metadata: { repoMode: mode, githubOwner, githubRepo, baseBranch },
+      })
+      .returning();
+
+    return c.json({
+      started: true,
+      mode,
+      message: statusMessage,
+    });
+  } catch (error) {
+    console.warn("[Chat] Failed to start execution:", error);
+    return c.json({ error: "Failed to start execution" }, 500);
+  }
+});
+
+// POST /conversations/:id/confirm-plan — legacy: confirm plan and start execution
 chatRoute.post("/conversations/:id/confirm-plan", async (c) => {
   try {
     const id = c.req.param("id");
@@ -363,7 +451,7 @@ chatRoute.post("/conversations/:id/confirm-plan", async (c) => {
   }
 });
 
-// POST /conversations/:id/configure-repo — configure Git/repo settings
+// POST /conversations/:id/configure-repo — legacy: configure Git/repo settings
 chatRoute.post("/conversations/:id/configure-repo", async (c) => {
   try {
     const id = c.req.param("id");
