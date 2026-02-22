@@ -12,6 +12,7 @@ import {
   markDone,
   markError,
   addListener,
+  removeSession,
 } from "./chat-state";
 import {
   resolvePhase,
@@ -110,6 +111,9 @@ chatRoute.get("/conversations/:id", async (c) => {
 chatRoute.delete("/conversations/:id", async (c) => {
   try {
     const id = c.req.param("id");
+
+    // Abort active LLM session if any
+    removeSession(id);
 
     // Delete messages first (foreign key)
     await db.delete(messages).where(eq(messages.conversationId, id));
