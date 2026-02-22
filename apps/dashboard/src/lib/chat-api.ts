@@ -130,20 +130,29 @@ export function subscribeToChatStream(
         buffer = lines.pop() ?? "";
 
         let currentEvent = "";
+        let dataLines: string[] = [];
         for (const line of lines) {
           if (line.startsWith("event: ")) {
             currentEvent = line.slice(7).trim();
+            dataLines = [];
           } else if (line.startsWith("data: ")) {
-            const data = line.slice(6);
-            if (currentEvent === "chunk") {
-              onChunk(data);
-            } else if (currentEvent === "done") {
-              onDone(data);
-              return;
-            } else if (currentEvent === "error") {
-              onError(data);
-              return;
+            dataLines.push(line.slice(6));
+          } else if (line === "") {
+            // Empty line = end of SSE event block — dispatch accumulated data
+            if (currentEvent && dataLines.length > 0) {
+              const data = dataLines.join("\n");
+              if (currentEvent === "chunk") {
+                onChunk(data);
+              } else if (currentEvent === "done") {
+                onDone(data);
+                return;
+              } else if (currentEvent === "error") {
+                onError(data);
+                return;
+              }
             }
+            currentEvent = "";
+            dataLines = [];
           }
         }
       }
