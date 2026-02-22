@@ -179,7 +179,8 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
       } catch {
         // Ignore
       }
-      emitter.emit("done", { content: lastCumulativeText, success: false });
+      const timeoutContent = options.executor === "claude_code" ? lastCumulativeText : rawStdout;
+      emitter.emit("done", { content: timeoutContent, success: false });
     }
   }, timeoutMs);
 
