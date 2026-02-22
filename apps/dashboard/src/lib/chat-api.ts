@@ -71,6 +71,23 @@ export const chatApi = {
         body: JSON.stringify(config),
       },
     ),
+
+  startExecution: (
+    id: string,
+    config: {
+      mode: "local" | "git";
+      githubOwner?: string;
+      githubRepo?: string;
+      baseBranch?: string;
+    },
+  ) =>
+    fetchApi<{ started: boolean; mode: string; message: ChatMessage }>(
+      `/chat/conversations/${id}/start-execution`,
+      {
+        method: "POST",
+        body: JSON.stringify(config),
+      },
+    ),
 };
 
 const API_BASE_URL = "/api";

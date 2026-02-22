@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import type { ChatMessage as ChatMessageType } from "../../lib/chat-api";
+import type { GitHubRepoListItem } from "../../lib/api";
+import type { ModeSelectionStartConfig } from "./ModeSelectionCard";
 import { ChatMessage } from "./ChatMessage";
 import { BrailleSpinner } from "../BrailleSpinner";
 
@@ -14,6 +16,15 @@ interface ChatMessageListProps {
     githubRepo: string;
     baseBranch: string;
   }) => void;
+  onStartExecution?: (config: ModeSelectionStartConfig) => void;
+  modeSelectionProps?: {
+    currentRepo?: { owner: string; repo: string; url?: string; branch?: string } | null;
+    githubRepos?: GitHubRepoListItem[];
+    isLoadingRepos?: boolean;
+    onRefreshRepos?: () => void;
+    onCreateRepo?: (owner: string, repo: string) => Promise<void>;
+    isCreatingRepo?: boolean;
+  };
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -22,6 +33,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   isStreaming,
   onConfirmPlan,
   onConfigureRepo,
+  onStartExecution,
+  modeSelectionProps,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -42,6 +55,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
           message={msg}
           onConfirmPlan={onConfirmPlan}
           onConfigureRepo={onConfigureRepo}
+          onStartExecution={onStartExecution}
+          modeSelectionProps={modeSelectionProps}
         />
       ))}
 

@@ -104,6 +104,70 @@ export const ChatPage: React.FC = () => {
     refetchInterval: 120000,
   });
 
+  // --- GitHub repos for ModeSelectionCard ---
+
+  const requiresGithubToken = githubAuthMode === "token";
+  const hasGithubAuth = requiresGithubToken ? Boolean(configValues.GITHUB_TOKEN?.trim()) : true;
+  const repoListOwnerFilter =
+    githubAuthMode === "gh" ? undefined : configValues.GITHUB_OWNER?.trim() || undefined;
+
+  const githubReposQuery = useQuery({
+    queryKey: ["system", "github-repos", repoListOwnerFilter ?? ""],
+    queryFn: () => systemApi.listGithubRepos({ owner: repoListOwnerFilter }),
+    enabled: hasGithubAuth,
+  });
+  const githubRepos = useMemo(() => githubReposQuery.data?.repos ?? [], [githubReposQuery.data]);
+
+  const currentRepo = useMemo(() => {
+    const owner = configValues.GITHUB_OWNER?.trim();
+    const repo = configValues.GITHUB_REPO?.trim();
+    if (!owner || !repo) return null;
+    return {
+      owner,
+      repo,
+      url: configValues.REPO_URL?.trim() || undefined,
+      branch: configValues.BASE_BRANCH?.trim() || "main",
+    };
+  }, [configValues.GITHUB_OWNER, configValues.GITHUB_REPO, configValues.REPO_URL, configValues.BASE_BRANCH]);
+
+  const createRepoMutation = useMutation({
+    mutationFn: async ({ owner, repo }: { owner: string; repo: string }) => {
+      const created = await systemApi.createGithubRepo({ owner, repo, private: true });
+      // Also update global config
+      await configApi.update({
+        REPO_MODE: "git",
+        GITHUB_OWNER: created.owner,
+        GITHUB_REPO: created.name,
+        REPO_URL: created.url,
+        BASE_BRANCH: created.defaultBranch,
+      });
+      return created;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["config"] });
+      queryClient.invalidateQueries({ queryKey: ["system", "github-repos"] });
+    },
+  });
+
+  const handleCreateRepo = useCallback(
+    async (owner: string, repo: string) => {
+      await createRepoMutation.mutateAsync({ owner, repo });
+    },
+    [createRepoMutation],
+  );
+
+  const modeSelectionProps = useMemo(
+    () => ({
+      currentRepo,
+      githubRepos,
+      isLoadingRepos: githubReposQuery.isLoading,
+      onRefreshRepos: () => githubReposQuery.refetch(),
+      onCreateRepo: handleCreateRepo,
+      isCreatingRepo: createRepoMutation.isPending,
+    }),
+    [currentRepo, githubRepos, githubReposQuery.isLoading, githubReposQuery, handleCreateRepo, createRepoMutation.isPending],
+  );
+
   // --- Neofetch ---
 
   useEffect(() => {
@@ -241,6 +305,23 @@ export const ChatPage: React.FC = () => {
     }) => {
       if (!activeConversationId) throw new Error("No active conversation");
       return chatApi.configureRepo(activeConversationId, repoConfig);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["chat", "conversation", activeConversationId],
+      });
+    },
+  });
+
+  const startExecutionMutation = useMutation({
+    mutationFn: (config: {
+      mode: "local" | "git";
+      githubOwner?: string;
+      githubRepo?: string;
+      baseBranch?: string;
+    }) => {
+      if (!activeConversationId) throw new Error("No active conversation");
+      return chatApi.startExecution(activeConversationId, config);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -415,6 +496,8 @@ export const ChatPage: React.FC = () => {
                 isStreaming={isStreaming}
                 onConfirmPlan={() => confirmPlanMutation.mutate()}
                 onConfigureRepo={(c) => configureRepoMutation.mutate(c)}
+                onStartExecution={(c) => startExecutionMutation.mutate(c)}
+                modeSelectionProps={modeSelectionProps}
               />
               <ChatInput
                 onSend={handleSend}
@@ -427,15 +510,23 @@ export const ChatPage: React.FC = () => {
               <div className="text-center space-y-4">
                 <div className="text-2xl font-bold text-term-tiger">openTiger</div>
                 <p className="text-sm">Start a new conversation to begin.</p>
-                <button
-                  onClick={() => createMutation.mutate()}
-                  disabled={createMutation.isPending}
-                  className="bg-term-tiger text-black px-6 py-2 text-sm font-bold uppercase hover:opacity-90 disabled:opacity-50"
-                >
-                  {createMutation.isPending ? "CREATING..." : "NEW CONVERSATION"}
-                </button>
-                <div className="mt-6 text-xs text-zinc-700 max-w-md">
+                <div className="text-xs text-zinc-700 max-w-md">
                   <p>Describe what you want to build, fix, or research.</p>
+                </div>
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    onClick={() => createMutation.mutate()}
+                    disabled={createMutation.isPending}
+                    className="bg-term-tiger text-black px-6 py-2 text-sm font-bold uppercase hover:opacity-90 disabled:opacity-50"
+                  >
+                    {createMutation.isPending ? "CREATING..." : "NEW CONVERSATION"}
+                  </button>
+                  <button
+                    onClick={() => navigate("/start")}
+                    className="text-xs text-zinc-600 hover:text-term-tiger uppercase tracking-wide transition-colors cursor-pointer"
+                  >
+                    &gt; start without chat
+                  </button>
                 </div>
               </div>
             </div>

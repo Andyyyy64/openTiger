@@ -1,8 +1,10 @@
 import React from "react";
 import type { ChatMessage as ChatMessageType } from "../../lib/chat-api";
+import type { GitHubRepoListItem } from "../../lib/api";
 import { PlanProposalCard } from "./PlanProposalCard";
 import { RepoPromptCard } from "./RepoPromptCard";
 import { ExecutionStatusCard } from "./ExecutionStatusCard";
+import { ModeSelectionCard, type ModeSelectionStartConfig } from "./ModeSelectionCard";
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -13,14 +15,39 @@ interface ChatMessageProps {
     githubRepo: string;
     baseBranch: string;
   }) => void;
+  onStartExecution?: (config: ModeSelectionStartConfig) => void;
+  /** Props forwarded to ModeSelectionCard */
+  modeSelectionProps?: {
+    currentRepo?: { owner: string; repo: string; url?: string; branch?: string } | null;
+    githubRepos?: GitHubRepoListItem[];
+    isLoadingRepos?: boolean;
+    onRefreshRepos?: () => void;
+    onCreateRepo?: (owner: string, repo: string) => Promise<void>;
+    isCreatingRepo?: boolean;
+  };
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({
   message,
   onConfirmPlan,
   onConfigureRepo,
+  onStartExecution,
+  modeSelectionProps,
 }) => {
   // Special message types
+  if (message.messageType === "mode_selection") {
+    return (
+      <ModeSelectionCard
+        onStartExecution={onStartExecution}
+        currentRepo={modeSelectionProps?.currentRepo}
+        githubRepos={modeSelectionProps?.githubRepos}
+        isLoadingRepos={modeSelectionProps?.isLoadingRepos}
+        onRefreshRepos={modeSelectionProps?.onRefreshRepos}
+        onCreateRepo={modeSelectionProps?.onCreateRepo}
+        isCreatingRepo={modeSelectionProps?.isCreatingRepo}
+      />
+    );
+  }
   if (message.messageType === "plan_proposal") {
     return <PlanProposalCard content={message.content} onConfirm={onConfirmPlan} />;
   }
