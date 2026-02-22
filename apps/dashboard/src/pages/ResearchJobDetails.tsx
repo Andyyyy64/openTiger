@@ -47,6 +47,73 @@ export const ResearchJobDetailsPage: React.FC = () => {
   }
 
   const latestReport = data.reports[0];
+
+  const exportAsMarkdown = () => {
+    const lines: string[] = [];
+    lines.push(`# ${data.job.query}`);
+    lines.push("");
+    lines.push(`- **Job ID:** ${data.job.id}`);
+    lines.push(`- **Status:** ${data.job.status}`);
+    lines.push(`- **Updated:** ${new Date(data.job.updatedAt).toLocaleString()}`);
+    lines.push("");
+
+    if (latestReport) {
+      lines.push("## Report");
+      lines.push("");
+      lines.push(`- **Confidence:** ${latestReport.confidence}`);
+      lines.push(`- **Created:** ${new Date(latestReport.createdAt).toLocaleString()}`);
+      lines.push("");
+      lines.push(latestReport.summary);
+      lines.push("");
+      if (latestReport.limitations) {
+        lines.push("### Limitations");
+        lines.push("");
+        lines.push(latestReport.limitations);
+        lines.push("");
+      }
+    }
+
+    if (data.claims.length > 0) {
+      lines.push("## Claims");
+      lines.push("");
+      for (const claim of data.claims) {
+        lines.push(`### ${claim.claimText}`);
+        lines.push("");
+        lines.push(`- **Stance:** ${claim.stance}`);
+        lines.push(`- **Confidence:** ${claim.confidence}`);
+        lines.push("");
+      }
+    }
+
+    if (data.evidence.length > 0) {
+      lines.push("## Evidence");
+      lines.push("");
+      for (const item of data.evidence) {
+        const title = item.sourceTitle ?? "(untitled source)";
+        lines.push(`### ${title}`);
+        lines.push("");
+        lines.push(`- **Reliability:** ${item.reliability}`);
+        lines.push(`- **Stance:** ${item.stance}`);
+        if (item.sourceUrl) {
+          lines.push(`- **Source:** [${title}](${item.sourceUrl})`);
+        }
+        lines.push("");
+        if (item.snippet) {
+          lines.push("> " + item.snippet.split("\n").join("\n> "));
+          lines.push("");
+        }
+      }
+    }
+
+    const blob = new Blob([lines.join("\n")], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `research-${data.job.id.slice(0, 8)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const orchestratorStage = (() => {
     const metadata = data.job.metadata;
     if (!metadata || typeof metadata !== "object") {
@@ -87,6 +154,12 @@ export const ResearchJobDetailsPage: React.FC = () => {
           status={data.job.status} updated={new Date(data.job.updatedAt).toLocaleString()}
         </div>
         <div className="mt-1 text-xs text-zinc-500">orchestrator_stage={orchestratorStage}</div>
+        <button
+          onClick={exportAsMarkdown}
+          className="mt-3 text-term-tiger border border-term-tiger hover:bg-term-tiger hover:text-black px-4 py-1.5 text-xs font-bold uppercase"
+        >
+          [EXPORT .MD]
+        </button>
       </div>
 
       <section className="border border-term-border mb-6">
