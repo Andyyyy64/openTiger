@@ -62,8 +62,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <nav className="flex-1 overflow-y-auto font-pixel text-sm">
             <div className="px-2 space-y-px">
               <NavItem to="/overview" label="overview" />
-              <NavItem to="/chat" label="chat" />
-              <NavItem to="/start" label="start" />
+              <NavItem to="/chat" label="start" />
               <NavItem to="/tasks" label="tasks" />
               <NavItem to="/runs" label="runs" />
               <NavCollapsible

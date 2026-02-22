@@ -10,7 +10,6 @@ import { PlansPage } from "./pages/Plans";
 import { JudgementsPage } from "./pages/Judgements";
 import { AgentDetailsPage } from "./pages/AgentDetails";
 import { SettingsPage } from "./pages/Settings";
-import { StartPage } from "./pages/Start";
 import { ChatPage } from "./pages/Chat";
 import { LogsPage } from "./pages/Logs";
 import { PluginsPage } from "./pages/Plugins";
@@ -42,8 +41,8 @@ function App() {
               <Route key={`${plugin.id}:${route.path}`} path={route.path} element={route.element} />
             )),
           )}
-          <Route path="/start" element={<StartPage />} />
-          <Route path="/requirement" element={<StartPage />} />
+          <Route path="/start" element={<Navigate to="/chat" replace />} />
+          <Route path="/requirement" element={<Navigate to="/chat" replace />} />
           <Route path="/system" element={<SettingsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/chat" replace />} />
