@@ -13,6 +13,7 @@ export interface ActiveChatSession {
   listeners: Set<(event: ChatSSEEvent) => void>;
   done: boolean;
   finalContent: string;
+  error: string | null;
   abortFn: (() => void) | null;
 }
 
@@ -34,6 +35,7 @@ export function createSession(conversationId: string): ActiveChatSession {
     listeners: new Set(),
     done: false,
     finalContent: "",
+    error: null,
     abortFn: null,
   };
   activeSessions.set(conversationId, session);
@@ -78,6 +80,7 @@ export function markError(conversationId: string, error: string): void {
   const session = activeSessions.get(conversationId);
   if (!session) return;
   session.done = true;
+  session.error = error;
   const event: ChatSSEEvent = { type: "error", data: error };
   for (const listener of session.listeners) {
     listener(event);

@@ -288,10 +288,17 @@ chatRoute.get("/conversations/:id/stream", async (c) => {
       }
 
       if (session.done) {
-        await stream.writeSSE({
-          event: "done",
-          data: session.finalContent,
-        });
+        if (session.error) {
+          await stream.writeSSE({
+            event: "error",
+            data: session.error,
+          });
+        } else {
+          await stream.writeSSE({
+            event: "done",
+            data: session.finalContent,
+          });
+        }
         return;
       }
     }
