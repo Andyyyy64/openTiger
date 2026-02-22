@@ -31,9 +31,12 @@ export function resolvePhase(
   messages: Pick<MessageRecord, "role" | "content" | "messageType">[],
   metadata: Record<string, unknown> | null,
 ): ConversationPhase {
-  // If explicitly set in metadata, use that
-  if (metadata?.phase && typeof metadata.phase === "string") {
-    return metadata.phase as ConversationPhase;
+  // Only honour metadata.phase for terminal states that are explicitly set via
+  // user actions (confirm-plan → execution, configure-repo → repo_prompt).
+  // Otherwise, derive the phase from actual message history so it progresses naturally.
+  const metaPhase = metadata?.phase;
+  if (metaPhase === "execution" || metaPhase === "monitoring") {
+    return metaPhase;
   }
 
   const userMessages = messages.filter((m) => m.role === "user");

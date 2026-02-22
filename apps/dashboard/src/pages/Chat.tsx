@@ -6,63 +6,20 @@ import {
   subscribeToChatStream,
   type ChatMessage,
 } from "../lib/chat-api";
-import { configApi, systemApi, type SystemProcess } from "../lib/api";
+import { configApi, systemApi } from "../lib/api";
 import { collectConfiguredExecutors } from "../lib/llm-executor";
 import { ChatMessageList } from "../components/chat/ChatMessageList";
 import { ChatInput } from "../components/chat/ChatInput";
 import { NeofetchPanel } from "../components/NeofetchPanel";
 import { BrailleSpinner } from "../components/BrailleSpinner";
-
-// --- Status helpers (from Start.tsx) ---
-
-const HOSTINFO_CACHE_KEY = "opentiger:hostinfo";
-
-function getHostinfoFromStorage(): string {
-  try {
-    return localStorage.getItem(HOSTINFO_CACHE_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function setHostinfoToStorage(output: string): void {
-  try {
-    if (output) {
-      localStorage.setItem(HOSTINFO_CACHE_KEY, output);
-    } else {
-      localStorage.removeItem(HOSTINFO_CACHE_KEY);
-    }
-  } catch {
-    // ignore
-  }
-}
-
-const STATUS_LABELS: Record<SystemProcess["status"], string> = {
-  idle: "IDLE",
-  running: "RUNNING",
-  completed: "DONE",
-  failed: "FAILED",
-  stopped: "STOPPED",
-};
-
-const STATUS_COLORS: Record<SystemProcess["status"], string> = {
-  idle: "text-zinc-500",
-  running: "text-term-tiger animate-pulse",
-  completed: "text-zinc-300",
-  failed: "text-red-500",
-  stopped: "text-yellow-500",
-};
-
-type ExecutionEnvironment = "host" | "sandbox";
-
-function normalizeExecutionEnvironment(value: string | undefined): ExecutionEnvironment {
-  return value?.trim().toLowerCase() === "sandbox" ? "sandbox" : "host";
-}
-
-function parseCount(value: string | undefined, fallback: number): number {
-  const parsed = value ? parseInt(value, 10) : NaN;
-  return Number.isFinite(parsed) ? Math.max(0, parsed) : fallback;
-}
+import {
+  getHostinfoFromStorage,
+  setHostinfoToStorage,
+  STATUS_LABELS,
+  STATUS_COLORS,
+  normalizeExecutionEnvironment,
+  parseCount,
+} from "../lib/status-helpers";
 
 // --- Component ---
 
@@ -178,10 +135,10 @@ export const ChatPage: React.FC = () => {
 
   // --- Process status ---
 
-  const workerCount = parseCount(configValues.WORKER_COUNT, 4);
-  const testerCount = parseCount(configValues.TESTER_COUNT, 4);
-  const judgeCount = parseCount(configValues.JUDGE_COUNT, 4);
-  const plannerCount = parseCount(configValues.PLANNER_COUNT, 1);
+  const workerCount = parseCount(configValues.WORKER_COUNT, 4).count;
+  const testerCount = parseCount(configValues.TESTER_COUNT, 4).count;
+  const judgeCount = parseCount(configValues.JUDGE_COUNT, 4).count;
+  const plannerCount = parseCount(configValues.PLANNER_COUNT, 1).count;
 
   const runningWorkers =
     processes?.filter((p) => p.name.startsWith("worker-") && p.status === "running").length ?? 0;

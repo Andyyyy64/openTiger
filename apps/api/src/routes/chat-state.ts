@@ -50,6 +50,18 @@ export function pushChunk(conversationId: string, text: string): void {
   }
 }
 
+/** Auto-remove session after a delay to allow late-connecting SSE clients to catch up. */
+const SESSION_CLEANUP_DELAY_MS = 60_000;
+
+function scheduleCleanup(conversationId: string): void {
+  setTimeout(() => {
+    const session = activeSessions.get(conversationId);
+    if (session?.done) {
+      activeSessions.delete(conversationId);
+    }
+  }, SESSION_CLEANUP_DELAY_MS);
+}
+
 export function markDone(conversationId: string, finalContent: string): void {
   const session = activeSessions.get(conversationId);
   if (!session) return;
@@ -59,6 +71,7 @@ export function markDone(conversationId: string, finalContent: string): void {
   for (const listener of session.listeners) {
     listener(event);
   }
+  scheduleCleanup(conversationId);
 }
 
 export function markError(conversationId: string, error: string): void {
@@ -69,6 +82,7 @@ export function markError(conversationId: string, error: string): void {
   for (const listener of session.listeners) {
     listener(event);
   }
+  scheduleCleanup(conversationId);
 }
 
 export function addListener(

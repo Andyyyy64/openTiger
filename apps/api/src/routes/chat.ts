@@ -220,10 +220,11 @@ chatRoute.post("/conversations/:id/messages", async (c) => {
     handle.onDone(async (result) => {
       // Save assistant response to DB
       try {
+        const responseContent = result.content || (result.success ? "(Empty response)" : "(LLM execution failed — check server logs for details)");
         await db.insert(messages).values({
           conversationId: id,
           role: "assistant",
-          content: result.content || "(No response generated)",
+          content: responseContent,
           messageType: "text",
         });
 
@@ -244,7 +245,11 @@ chatRoute.post("/conversations/:id/messages", async (c) => {
         console.warn("[Chat] Failed to save assistant message:", dbError);
       }
 
-      markDone(id, result.content);
+      if (result.success) {
+        markDone(id, result.content);
+      } else {
+        markError(id, result.content || "LLM execution failed");
+      }
     });
 
     return c.json({

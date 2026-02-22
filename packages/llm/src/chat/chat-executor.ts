@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { EventEmitter } from "node:events";
+import { parseClaudeCodeStreamJson } from "../claude-code/parse";
 
 export interface ChatExecutorOptions {
   executor: "claude_code" | "codex" | "opencode";
@@ -97,29 +98,39 @@ function spawnOpencode(
   });
 }
 
-function extractTextFromClaudeStreamLine(line: string): string {
+/**
+ * Extract assistant text from a Claude CLI stream-json line.
+ * Claude CLI `assistant` events contain CUMULATIVE text (the full response so far),
+ * NOT incremental deltas. The caller must track previous text to compute deltas.
+ */
+function extractAssistantTextFromStreamLine(line: string): string {
   const trimmed = line.trim();
   if (!trimmed) {
     return "";
   }
   try {
     const event = JSON.parse(trimmed);
+    // `assistant` events contain cumulative message content
     if (event?.type === "assistant" && event?.message?.content) {
       const content = event.message.content;
       if (Array.isArray(content)) {
         return content
-          .filter((item: { type?: string; text?: string }) => item?.type === "text" && typeof item?.text === "string")
+          .filter(
+            (item: { type?: string; text?: string }) =>
+              item?.type === "text" && typeof item?.text === "string",
+          )
           .map((item: { text: string }) => item.text)
-          .join("");
+          .join("\n")
+          .trim();
       }
     }
-    // Handle content_block_delta for streaming
-    if (event?.type === "content_block_delta" && event?.delta?.text) {
-      return event.delta.text;
+    // `result` events contain the final response text
+    if (event?.type === "result" && typeof event?.result === "string") {
+      return event.result.trim();
     }
   } catch {
-    // Non-JSON line, return as-is for non-claude executors
-    return trimmed;
+    // Non-JSON line — ignore for claude executor
+    return "";
   }
   return "";
 }
@@ -151,10 +162,15 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
       break;
   }
 
-  let fullOutput = "";
-  let streamBuffer = "";
-  let lastEmittedText = "";
   let aborted = false;
+  // For claude_code: raw stdout for final parsing via parseClaudeCodeStreamJson
+  let rawStdout = "";
+  let stderr = "";
+  let streamBuffer = "";
+  // Track cumulative assistant text to compute streaming deltas
+  let lastCumulativeText = "";
+  // Track what we've emitted so far for non-claude executors
+  let emittedLength = 0;
 
   const timeout = setTimeout(() => {
     if (!aborted) {
@@ -164,68 +180,112 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
       } catch {
         // Ignore
       }
-      emitter.emit("done", { content: fullOutput, success: false });
+      emitter.emit("done", { content: lastCumulativeText, success: false });
     }
   }, timeoutMs);
 
-  const processLine = (line: string): void => {
-    let text: string;
-    if (options.executor === "claude_code") {
-      text = extractTextFromClaudeStreamLine(line);
-    } else {
-      text = line.trim();
-    }
-    if (text) {
-      fullOutput += text;
-      // Emit only new text delta
-      if (fullOutput.length > lastEmittedText.length) {
-        const delta = fullOutput.slice(lastEmittedText.length);
-        lastEmittedText = fullOutput;
+  const processClaudeLine = (line: string): void => {
+    const text = extractAssistantTextFromStreamLine(line);
+    if (!text) return;
+
+    // assistant events are CUMULATIVE — text is the full response so far
+    // Compute delta from previous cumulative text
+    if (text.length > lastCumulativeText.length && text.startsWith(lastCumulativeText)) {
+      const delta = text.slice(lastCumulativeText.length);
+      if (delta.length > 0) {
         emitter.emit("chunk", delta);
       }
+    } else if (text !== lastCumulativeText) {
+      // Text changed in a non-cumulative way (e.g. result event) — emit as delta
+      const delta = text.slice(lastCumulativeText.length > 0 ? lastCumulativeText.length : 0);
+      if (delta.length > 0) {
+        emitter.emit("chunk", delta);
+      } else if (text.length > 0 && lastCumulativeText.length === 0) {
+        emitter.emit("chunk", text);
+      }
     }
+    lastCumulativeText = text;
   };
 
   if (child.stdout) {
     child.stdout.on("data", (data: Buffer) => {
       const chunk = data.toString();
-      streamBuffer += chunk;
 
-      // For non-claude executors, emit raw chunks directly
-      if (options.executor !== "claude_code") {
-        fullOutput += chunk;
+      if (options.executor === "claude_code") {
+        rawStdout += chunk;
+        streamBuffer += chunk;
+        // Parse stream-json line by line
+        while (true) {
+          const newlineIndex = streamBuffer.indexOf("\n");
+          if (newlineIndex < 0) break;
+          const line = streamBuffer.slice(0, newlineIndex);
+          streamBuffer = streamBuffer.slice(newlineIndex + 1);
+          processClaudeLine(line);
+        }
+      } else {
+        // For non-claude executors, emit raw chunks directly
+        rawStdout += chunk;
         emitter.emit("chunk", chunk);
-        lastEmittedText = fullOutput;
-        return;
+        emittedLength += chunk.length;
       }
+    });
+  }
 
-      // For claude, parse stream-json line by line
-      while (true) {
-        const newlineIndex = streamBuffer.indexOf("\n");
-        if (newlineIndex < 0) break;
-        const line = streamBuffer.slice(0, newlineIndex);
-        streamBuffer = streamBuffer.slice(newlineIndex + 1);
-        processLine(line);
-      }
+  // Capture stderr for debugging
+  if (child.stderr) {
+    child.stderr.on("data", (data: Buffer) => {
+      const chunk = data.toString();
+      stderr += chunk;
     });
   }
 
   child.on("close", (code) => {
     clearTimeout(timeout);
     if (aborted) return;
+
     // Flush remaining buffer
     if (streamBuffer.length > 0 && options.executor === "claude_code") {
-      processLine(streamBuffer);
+      processClaudeLine(streamBuffer);
       streamBuffer = "";
     }
-    emitter.emit("done", { content: fullOutput, success: (code ?? 1) === 0 });
+
+    let finalContent: string;
+
+    if (options.executor === "claude_code") {
+      // Use the proven parseClaudeCodeStreamJson for authoritative final text
+      const parsed = parseClaudeCodeStreamJson(rawStdout);
+      finalContent = parsed.assistantText || parsed.resultText || lastCumulativeText;
+
+      if (parsed.errors.length > 0) {
+        console.error("[ChatExecutor] Claude errors:", parsed.errors.join("; "));
+      }
+      if (parsed.isError) {
+        console.error("[ChatExecutor] Claude result is_error=true:", parsed.resultText);
+      }
+    } else {
+      finalContent = rawStdout;
+    }
+
+    if (stderr.trim().length > 0) {
+      console.error(`[ChatExecutor] stderr (${options.executor}):`, stderr.trim());
+    }
+
+    const success = (code ?? 1) === 0 && finalContent.length > 0;
+
+    if (!success && finalContent.length === 0) {
+      console.error(
+        `[ChatExecutor] Empty output. executor=${options.executor}, exitCode=${code}, stderrLength=${stderr.length}`,
+      );
+    }
+
+    emitter.emit("done", { content: finalContent, success });
   });
 
   child.on("error", (error) => {
     clearTimeout(timeout);
     if (aborted) return;
-    console.error("[ChatExecutor] Process error:", error.message);
-    emitter.emit("done", { content: fullOutput, success: false });
+    console.error("[ChatExecutor] Process spawn error:", error.message);
+    emitter.emit("done", { content: "", success: false });
   });
 
   return {

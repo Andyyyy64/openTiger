@@ -75,6 +75,10 @@ export const chatApi = {
 
 const API_BASE_URL = "/api";
 
+/**
+ * Subscribe to chat SSE stream using fetch (not EventSource) to avoid
+ * automatic reconnection which would replay buffered chunks and duplicate text.
+ */
 export function subscribeToChatStream(
   conversationId: string,
   onChunk: (text: string) => void,
@@ -83,33 +87,54 @@ export function subscribeToChatStream(
 ): () => void {
   const controller = new AbortController();
 
-  const connect = () => {
-    const eventSource = new EventSource(
-      `${API_BASE_URL}/chat/conversations/${conversationId}/stream`,
-    );
+  (async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/chat/conversations/${conversationId}/stream`,
+        { signal: controller.signal, headers: { Accept: "text/event-stream" } },
+      );
 
-    eventSource.addEventListener("chunk", (event) => {
-      onChunk(event.data);
-    });
-
-    eventSource.addEventListener("done", (event) => {
-      onDone(event.data);
-      eventSource.close();
-    });
-
-    eventSource.addEventListener("error", () => {
-      // EventSource auto-reconnects on error, but we want to handle it
-      if (eventSource.readyState === EventSource.CLOSED) {
-        onError("Stream connection closed");
+      if (!response.ok || !response.body) {
+        onError(`Stream connection failed: ${response.status}`);
+        return;
       }
-    });
 
-    controller.signal.addEventListener("abort", () => {
-      eventSource.close();
-    });
-  };
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-  connect();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        // Keep the last incomplete line in the buffer
+        buffer = lines.pop() ?? "";
+
+        let currentEvent = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith("data: ")) {
+            const data = line.slice(6);
+            if (currentEvent === "chunk") {
+              onChunk(data);
+            } else if (currentEvent === "done") {
+              onDone(data);
+              return;
+            } else if (currentEvent === "error") {
+              onError(data);
+              return;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      onError(err instanceof Error ? err.message : "Stream error");
+    }
+  })();
 
   return () => {
     controller.abort();
