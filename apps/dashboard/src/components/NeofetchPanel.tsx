@@ -308,19 +308,21 @@ export const NeofetchPanel: React.FC<NeofetchPanelProps> = ({
           </button>
         )}
       </div>
-      <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6">
+      <div className="p-4 flex flex-col gap-2">
         {output ? (
           <>
-            <div className="font-mono text-xs leading-5 text-zinc-300 overflow-x-auto">
+            <div className="font-mono text-xs leading-5 text-zinc-300 overflow-hidden text-ellipsis">
               {parsed.infoLines.map((chunks, index) =>
                 renderAnsiLine(chunks, `host-info-${index}`),
               )}
             </div>
-            <div className="font-mono text-xs leading-5 text-zinc-300 overflow-x-auto lg:justify-self-end">
-              {parsed.logoLines.map((chunks, index) =>
-                renderAnsiLine(chunks, `host-logo-${index}`),
-              )}
-            </div>
+            {parsed.logoLines.length > 0 && (
+              <div className="font-mono text-xs leading-5 text-zinc-300 overflow-hidden text-center">
+                {parsed.logoLines.map((chunks, index) =>
+                  renderAnsiLine(chunks, `host-logo-${index}`),
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div className="font-mono text-xs text-zinc-500 col-span-full">

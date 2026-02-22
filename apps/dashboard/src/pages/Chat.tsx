@@ -406,7 +406,7 @@ export const ChatPage: React.FC = () => {
         </div>
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
           {activeConversationId ? (
             <>
               <ChatMessageList
@@ -443,7 +443,7 @@ export const ChatPage: React.FC = () => {
         </div>
 
         {/* Right sidebar - Status Monitor + Neofetch */}
-        <div className="w-72 border-l border-term-border flex flex-col shrink-0 overflow-y-auto">
+        <div className="w-80 border-l border-term-border flex flex-col shrink-0 min-h-0 overflow-y-auto">
           {/* Status Monitor */}
           <div className="border-b border-term-border">
             <div className="bg-term-border/10 px-3 py-1.5 border-b border-term-border">
