@@ -91,8 +91,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-hidden bg-term-bg relative">
-          <div className="h-full">{children}</div>
+        <main className="flex-1 overflow-auto bg-term-bg relative">
+          <div className="min-h-full">{children}</div>
         </main>
       </div>
 
