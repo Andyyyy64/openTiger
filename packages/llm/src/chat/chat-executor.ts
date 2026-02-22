@@ -170,8 +170,6 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
   let streamBuffer = "";
   // Track cumulative assistant text to compute streaming deltas
   let lastCumulativeText = "";
-  // Track what we've emitted so far for non-claude executors
-  let emittedLength = 0;
 
   const timeout = setTimeout(() => {
     if (!aborted) {
@@ -227,7 +225,6 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
         // For non-claude executors, emit raw chunks directly
         rawStdout += chunk;
         emitter.emit("chunk", chunk);
-        emittedLength += chunk.length;
       }
     });
   }
