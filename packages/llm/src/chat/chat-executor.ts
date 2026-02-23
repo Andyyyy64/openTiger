@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { parseClaudeCodeStreamJson } from "../claude-code/parse";
+import { parseCodexExecJson, extractCodexAssistantTextFromEventLine } from "../codex/parse";
 
 export interface ChatExecutorOptions {
   executor: "claude_code" | "codex" | "opencode";
@@ -215,8 +216,9 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
     child.stdout.on("data", (data: Buffer) => {
       const chunk = data.toString();
 
+      rawStdout += chunk;
+
       if (options.executor === "claude_code") {
-        rawStdout += chunk;
         streamBuffer += chunk;
         // Parse stream-json line by line
         while (true) {
@@ -226,9 +228,21 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
           streamBuffer = streamBuffer.slice(newlineIndex + 1);
           processClaudeLine(line);
         }
+      } else if (options.executor === "codex") {
+        streamBuffer += chunk;
+        // Parse NDJSON line by line
+        while (true) {
+          const newlineIndex = streamBuffer.indexOf("\n");
+          if (newlineIndex < 0) break;
+          const line = streamBuffer.slice(0, newlineIndex);
+          streamBuffer = streamBuffer.slice(newlineIndex + 1);
+          const text = extractCodexAssistantTextFromEventLine(line);
+          if (text) {
+            emitter.emit("chunk", text);
+          }
+        }
       } else {
-        // For non-claude executors, emit raw chunks directly
-        rawStdout += chunk;
+        // For opencode or other executors, emit raw chunks
         emitter.emit("chunk", chunk);
       }
     });
@@ -247,8 +261,11 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
     if (aborted || emitted) return;
 
     // Flush remaining buffer
-    if (streamBuffer.length > 0 && options.executor === "claude_code") {
-      processClaudeLine(streamBuffer);
+    if (streamBuffer.length > 0) {
+      if (options.executor === "claude_code") {
+        processClaudeLine(streamBuffer);
+      }
+      // codex remaining buffer is handled by parseCodexExecJson below
       streamBuffer = "";
     }
 
@@ -264,6 +281,16 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
       }
       if (parsed.isError) {
         console.error("[ChatExecutor] Claude result is_error=true:", parsed.resultText);
+      }
+    } else if (options.executor === "codex") {
+      const parsed = parseCodexExecJson(rawStdout);
+      finalContent = parsed.assistantText;
+
+      if (parsed.errors.length > 0) {
+        console.error("[ChatExecutor] Codex errors:", parsed.errors.join("; "));
+      }
+      if (parsed.isError) {
+        console.error("[ChatExecutor] Codex turn failed");
       }
     } else {
       finalContent = rawStdout;
