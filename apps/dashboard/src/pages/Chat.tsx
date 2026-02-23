@@ -517,6 +517,7 @@ export const ChatPage: React.FC = () => {
     setIsStreaming(false);
     setStreamingText("");
     setChatMessages([]);
+    startExecutionMutation.reset();
     setActiveConversationId(id);
     navigate(`/chat/${id}`, { replace: true });
   };

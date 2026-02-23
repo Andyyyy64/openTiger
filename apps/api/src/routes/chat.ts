@@ -188,10 +188,12 @@ chatRoute.post("/conversations/:id/messages", async (c) => {
     const executor = resolveExecutorFromConfig(configRow);
     const model = resolveModelFromConfig(configRow, executor);
 
-    const chatMessages = allMessages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    const chatMessages = allMessages
+      .filter((m) => m.messageType === "text")
+      .map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
 
     const session = createSession(id);
 
@@ -352,11 +354,11 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
 
     const metadata = (conversation.metadata ?? {}) as Record<string, unknown>;
 
-    // Update global config for git mode
-    if (mode === "git" && githubOwner && githubRepo) {
-      try {
-        const configRow = await ensureConfigRow();
-        const { config: configTable } = await import("@openTiger/db/schema");
+    // Update global config to match selected mode
+    try {
+      const configRow = await ensureConfigRow();
+      const { config: configTable } = await import("@openTiger/db/schema");
+      if (mode === "git" && githubOwner && githubRepo) {
         const repoUrl = `https://github.com/${githubOwner}/${githubRepo}`;
         await db
           .update(configTable)
@@ -369,9 +371,17 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
             updatedAt: new Date(),
           })
           .where(eq(configTable.id, configRow.id));
-      } catch {
-        // Config update is best-effort
+      } else {
+        await db
+          .update(configTable)
+          .set({
+            repoMode: "local",
+            updatedAt: new Date(),
+          })
+          .where(eq(configTable.id, configRow.id));
       }
+    } catch {
+      // Config update is best-effort
     }
 
     // Update conversation to execution phase
