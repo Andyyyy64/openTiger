@@ -1,8 +1,10 @@
 import React, { useEffect, useRef } from "react";
 import type { ChatMessage as ChatMessageType } from "../../lib/chat-api";
-import type { GitHubRepoListItem } from "../../lib/api";
+import type { GitHubRepoListItem, SystemProcess } from "../../lib/api";
+import type { Agent } from "@openTiger/core";
 import type { ModeSelectionStartConfig } from "./ModeSelectionCard";
 import { ChatMessage } from "./ChatMessage";
+import { ExecutionProgressCard } from "./ExecutionProgressCard";
 import { BrailleSpinner } from "../BrailleSpinner";
 
 interface ChatMessageListProps {
@@ -26,6 +28,12 @@ interface ChatMessageListProps {
     isCreatingRepo?: boolean;
     executionStatus?: "idle" | "pending" | "success" | "error";
   };
+  /** Live process data for execution progress */
+  processes?: SystemProcess[];
+  /** Live agent data for busy/idle status */
+  agents?: Agent[];
+  /** Callback to navigate to full dashboard */
+  onViewDetails?: () => void;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -36,6 +44,9 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   onConfigureRepo,
   onStartExecution,
   modeSelectionProps,
+  processes,
+  agents,
+  onViewDetails,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -45,21 +56,33 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     }
   }, [messages, streamingText]);
 
+  const hasExecution = messages.some((m) => m.messageType === "execution_status");
+  const showLiveProgress = hasExecution && processes && processes.length > 0;
+
   return (
     <div
       ref={containerRef}
       className="flex-1 overflow-y-auto px-2 py-4 space-y-1"
     >
-      {messages.map((msg) => (
-        <ChatMessage
-          key={msg.id}
-          message={msg}
-          onConfirmPlan={onConfirmPlan}
-          onConfigureRepo={onConfigureRepo}
-          onStartExecution={onStartExecution}
-          modeSelectionProps={modeSelectionProps}
-        />
-      ))}
+      {messages.map((msg) => {
+        // Hide execution_status card when live progress replaces it
+        if (msg.messageType === "execution_status" && showLiveProgress) return null;
+        return (
+          <ChatMessage
+            key={msg.id}
+            message={msg}
+            onConfirmPlan={onConfirmPlan}
+            onConfigureRepo={onConfigureRepo}
+            onStartExecution={onStartExecution}
+            modeSelectionProps={modeSelectionProps}
+          />
+        );
+      })}
+
+      {/* Live execution progress */}
+      {showLiveProgress && (
+        <ExecutionProgressCard processes={processes} agents={agents} onViewDetails={onViewDetails} />
+      )}
 
       {/* Streaming response */}
       {isStreaming && (

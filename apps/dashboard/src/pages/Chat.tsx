@@ -6,7 +6,7 @@ import {
   subscribeToChatStream,
   type ChatMessage,
 } from "../lib/chat-api";
-import { configApi, systemApi } from "../lib/api";
+import { agentsApi, configApi, systemApi } from "../lib/api";
 import { collectConfiguredExecutors } from "../lib/llm-executor";
 import { ChatMessageList } from "../components/chat/ChatMessageList";
 import { ChatInput } from "../components/chat/ChatInput";
@@ -49,6 +49,12 @@ export const ChatPage: React.FC = () => {
   const { data: processes } = useQuery({
     queryKey: ["system", "processes"],
     queryFn: () => systemApi.processes(),
+    refetchInterval: 5000,
+  });
+
+  const { data: agents } = useQuery({
+    queryKey: ["agents"],
+    queryFn: () => agentsApi.list(),
     refetchInterval: 5000,
   });
 
@@ -223,6 +229,26 @@ export const ChatPage: React.FC = () => {
       setActiveConversationId(conversationId);
     }
   }, [conversationId, activeConversationId]);
+
+  // Auto-select the most recent executing conversation when landing on /chat with no id
+  useEffect(() => {
+    if (conversationId || activeConversationId) return;
+    const conversations = conversationsQuery.data;
+    if (!conversations || conversations.length === 0) return;
+
+    const executing = conversations
+      .filter((c) => {
+        const phase = (c.metadata as Record<string, unknown> | null)?.phase;
+        return phase === "execution" || phase === "monitoring";
+      })
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+    if (executing.length > 0 && executing[0]) {
+      const id = executing[0].id;
+      setActiveConversationId(id);
+      navigate(`/chat/${id}`, { replace: true });
+    }
+  }, [conversationId, activeConversationId, conversationsQuery.data, navigate]);
 
   // --- Mutations ---
 
@@ -602,6 +628,9 @@ export const ChatPage: React.FC = () => {
                 onConfigureRepo={(c) => configureRepoMutation.mutate(c)}
                 onStartExecution={(c) => startExecutionMutation.mutate(c)}
                 modeSelectionProps={modeSelectionProps}
+                processes={processes}
+                agents={agents}
+                onViewDetails={() => navigate("/agents")}
               />
               <ChatInput
                 onSend={handleSend}
