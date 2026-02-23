@@ -366,8 +366,10 @@ export const ChatPage: React.FC = () => {
       await chatApi.startExecution(activeConversationId, execConfig);
 
       // 2. Extract plan content from conversation messages for requirement sync
+      //    Skip assistant messages before the first user message (e.g. greeting)
+      const firstUserIdx = chatMessages.findIndex((m) => m.role === "user");
       const planContent = chatMessages
-        .filter((m) => m.role === "assistant")
+        .filter((m, i) => m.role === "assistant" && i > firstUserIdx)
         .map((m) => m.content)
         .join("\n\n");
 
