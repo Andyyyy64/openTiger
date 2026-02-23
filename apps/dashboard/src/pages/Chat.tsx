@@ -395,6 +395,7 @@ export const ChatPage: React.FC = () => {
     }
     setIsStreaming(false);
     setStreamingText("");
+    setChatMessages([]);
     setActiveConversationId(id);
     navigate(`/chat/${id}`, { replace: true });
   };
