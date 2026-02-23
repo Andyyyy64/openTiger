@@ -350,16 +350,20 @@ export const ChatPage: React.FC = () => {
     };
   }, []);
 
+  const [isCreatingSend, setIsCreatingSend] = useState(false);
+
   const handleSend = useCallback(
     (content: string) => {
       if (!activeConversationId) {
+        if (isCreatingSend) return;
+        setIsCreatingSend(true);
         chatApi.createConversation().then((data) => {
           const id = data.conversation.id;
           setActiveConversationId(id);
           setChatMessages(data.messages);
           navigate(`/chat/${id}`, { replace: true });
           queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
-          chatApi.sendMessage(id, content).then((sendData) => {
+          return chatApi.sendMessage(id, content).then((sendData) => {
             setChatMessages((prev) => [...prev, sendData.userMessage]);
             setStreamingText("");
             setIsStreaming(true);
@@ -380,12 +384,16 @@ export const ChatPage: React.FC = () => {
             );
             streamCleanupRef.current = cleanup;
           });
+        }).catch((err) => {
+          console.warn("[Chat] Failed to create conversation and send:", err);
+        }).finally(() => {
+          setIsCreatingSend(false);
         });
       } else {
         sendMutation.mutate(content);
       }
     },
-    [activeConversationId, sendMutation, navigate, queryClient],
+    [activeConversationId, isCreatingSend, sendMutation, navigate, queryClient],
   );
 
   const handleSelectConversation = (id: string) => {
@@ -502,7 +510,7 @@ export const ChatPage: React.FC = () => {
               />
               <ChatInput
                 onSend={handleSend}
-                disabled={isStreaming || sendMutation.isPending}
+                disabled={isStreaming || sendMutation.isPending || isCreatingSend}
                 placeholder={isStreaming ? "Waiting for response..." : "Type a message..."}
               />
             </>
