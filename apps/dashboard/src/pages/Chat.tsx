@@ -280,7 +280,7 @@ export const ChatPage: React.FC = () => {
         const cleanup = subscribeToChatStream(
           activeConversationId,
           (chunk) => setStreamingText((prev) => prev + chunk),
-          (_content) => {
+          () => {
             setIsStreaming(false);
             setStreamingText("");
             queryClient.invalidateQueries({
@@ -450,7 +450,7 @@ export const ChatPage: React.FC = () => {
       isCreatingRepo: createRepoMutation.isPending,
       executionStatus,
     }),
-    [currentRepo, githubRepos, githubReposQuery.isLoading, githubReposQuery, handleCreateRepo, createRepoMutation.isPending, executionStatus],
+    [currentRepo, githubRepos, githubReposQuery, handleCreateRepo, createRepoMutation.isPending, executionStatus],
   );
 
   const deleteMutation = useMutation({
