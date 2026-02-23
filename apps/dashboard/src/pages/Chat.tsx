@@ -267,6 +267,34 @@ export const ChatPage: React.FC = () => {
     },
   });
 
+  const startStream = useCallback(
+    (conversationId: string) => {
+      setStreamingText("");
+      setIsStreaming(true);
+      const cleanup = subscribeToChatStream(
+        conversationId,
+        (chunk) => setStreamingText((prev) => prev + chunk),
+        () => {
+          setIsStreaming(false);
+          setStreamingText("");
+          queryClient.invalidateQueries({
+            queryKey: ["chat", "conversation", conversationId],
+          });
+          queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
+        },
+        () => {
+          setIsStreaming(false);
+          setStreamingText("");
+          queryClient.invalidateQueries({
+            queryKey: ["chat", "conversation", conversationId],
+          });
+        },
+      );
+      streamCleanupRef.current = cleanup;
+    },
+    [queryClient],
+  );
+
   const sendMutation = useMutation({
     mutationFn: (content: string) => {
       if (!activeConversationId) throw new Error("No active conversation");
@@ -274,29 +302,8 @@ export const ChatPage: React.FC = () => {
     },
     onSuccess: (data) => {
       setChatMessages((prev) => [...prev, data.userMessage]);
-      setStreamingText("");
-      setIsStreaming(true);
       if (activeConversationId) {
-        const cleanup = subscribeToChatStream(
-          activeConversationId,
-          (chunk) => setStreamingText((prev) => prev + chunk),
-          () => {
-            setIsStreaming(false);
-            setStreamingText("");
-            queryClient.invalidateQueries({
-              queryKey: ["chat", "conversation", activeConversationId],
-            });
-            queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
-          },
-          () => {
-            setIsStreaming(false);
-            setStreamingText("");
-            queryClient.invalidateQueries({
-              queryKey: ["chat", "conversation", activeConversationId],
-            });
-          },
-        );
-        streamCleanupRef.current = cleanup;
+        startStream(activeConversationId);
       }
     },
   });
@@ -366,7 +373,7 @@ export const ChatPage: React.FC = () => {
       const sandboxExecution = executionEnvironment === "sandbox";
       const workerCount = parseCount(settings.WORKER_COUNT, 4, "Worker");
       const judgeCount = parseCount(settings.JUDGE_COUNT, 4, "Judge");
-      const plannerCount = parseCount(settings.PLANNER_COUNT, 1, "Planner", 4);
+      const plannerCount = parseCount(settings.PLANNER_COUNT, 1, "Planner", 1);
 
       const started: string[] = [];
       const errors: string[] = [];
@@ -488,24 +495,7 @@ export const ChatPage: React.FC = () => {
           queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
           return chatApi.sendMessage(id, content).then((sendData) => {
             setChatMessages((prev) => [...prev, sendData.userMessage]);
-            setStreamingText("");
-            setIsStreaming(true);
-            const cleanup = subscribeToChatStream(
-              id,
-              (chunk) => setStreamingText((prev) => prev + chunk),
-              () => {
-                setIsStreaming(false);
-                setStreamingText("");
-                queryClient.invalidateQueries({ queryKey: ["chat", "conversation", id] });
-                queryClient.invalidateQueries({ queryKey: ["chat", "conversations"] });
-              },
-              () => {
-                setIsStreaming(false);
-                setStreamingText("");
-                queryClient.invalidateQueries({ queryKey: ["chat", "conversation", id] });
-              },
-            );
-            streamCleanupRef.current = cleanup;
+            startStream(id);
           });
         }).catch((err) => {
           console.warn("[Chat] Failed to create conversation and send:", err);
@@ -516,7 +506,7 @@ export const ChatPage: React.FC = () => {
         sendMutation.mutate(content);
       }
     },
-    [activeConversationId, isCreatingSend, sendMutation, navigate, queryClient],
+    [activeConversationId, isCreatingSend, sendMutation, navigate, queryClient, startStream],
   );
 
   const handleSelectConversation = (id: string) => {

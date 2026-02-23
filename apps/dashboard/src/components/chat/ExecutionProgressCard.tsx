@@ -34,12 +34,10 @@ function summarize(
   const busy = roleAgents.filter((a) => a.status === "busy").length;
   const idle = roleAgents.filter((a) => a.status === "idle").length;
   const failed = procs.filter((p) => p.status === "failed").length;
-  const completed = procs.filter((p) => p.status === "completed").length;
 
   let status: GroupStatus;
   if (failed > 0) status = "failed";
   else if (busy > 0) status = "busy";
-  else if (completed > 0 && running.length === 0) status = "completed";
   else status = "idle";
 
   return {
@@ -106,8 +104,6 @@ function describeActivity(summaries: GroupSummary[]): string | null {
 
   if (planners?.status === "busy") {
     parts.push("Planner is generating tasks from your requirements");
-  } else if (planners?.status === "completed") {
-    parts.push("Planner finished — tasks queued");
   }
 
   if (workers) {

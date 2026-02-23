@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, primaryKey, uuid, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 // Tasks table: work unit management
 export const tasks = pgTable("tasks", {
@@ -245,6 +245,17 @@ export const config = pgTable("config", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+// Plugin migration history (managed by plugin-migrations/runner.ts, declared here so drizzle-kit doesn't drop it)
+export const pluginMigrationHistory = pgTable(
+  "plugin_migration_history",
+  {
+    pluginId: text("plugin_id").notNull(),
+    migrationName: text("migration_name").notNull(),
+    appliedAt: timestamp("applied_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.pluginId, table.migrationName] })],
+);
 
 // Type exports
 export type TaskRecord = typeof tasks.$inferSelect;
