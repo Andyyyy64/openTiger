@@ -285,10 +285,18 @@ export const ChatPage: React.FC = () => {
       const cleanup = subscribeToChatStream(
         conversationId,
         (chunk) => setStreamingText((prev) => {
+          const marker = "---PLAN_READY---";
           const next = prev + chunk;
-          // Strip PLAN_READY control marker so it never appears in the UI
-          const idx = next.indexOf("---PLAN_READY---");
-          return idx >= 0 ? next.slice(0, idx).trimEnd() : next;
+          // Strip full marker and everything after it
+          const idx = next.indexOf(marker);
+          if (idx >= 0) return next.slice(0, idx).trimEnd();
+          // Hide trailing partial marker (e.g. "---PLAN_" at end of accumulated text)
+          for (let i = Math.min(marker.length - 1, next.length); i > 0; i--) {
+            if (next.endsWith(marker.slice(0, i))) {
+              return next.slice(0, next.length - i);
+            }
+          }
+          return next;
         }),
         () => {
           setIsStreaming(false);
@@ -390,6 +398,8 @@ export const ChatPage: React.FC = () => {
       const executionEnvironment = normalizeExecutionEnvironment(settings.EXECUTION_ENVIRONMENT);
       const sandboxExecution = executionEnvironment === "sandbox";
       const workerCount = parseCount(settings.WORKER_COUNT, 4, "Worker");
+      const testerCount = parseCount(settings.TESTER_COUNT, 4, "Tester");
+      const docserCount = parseCount(settings.DOCSER_COUNT, 4, "Docser");
       const judgeCount = parseCount(settings.JUDGE_COUNT, 4, "Judge");
       const plannerCount = parseCount(settings.PLANNER_COUNT, 1, "Planner", 1);
 
@@ -440,6 +450,16 @@ export const ChatPage: React.FC = () => {
         ? 0
         : Math.min(workerCount.count, recommendations.workerCount);
       for (let i = 1; i <= workerStartCount; i += 1) await startProcess(`worker-${i}`);
+
+      const testerStartCount = sandboxExecution
+        ? 0
+        : Math.min(testerCount.count, recommendations.testerCount);
+      for (let i = 1; i <= testerStartCount; i += 1) await startProcess(`tester-${i}`);
+
+      const docserStartCount = sandboxExecution
+        ? 0
+        : Math.min(docserCount.count, recommendations.docserCount);
+      for (let i = 1; i <= docserStartCount; i += 1) await startProcess(`docser-${i}`);
 
       return { started, errors };
     },
