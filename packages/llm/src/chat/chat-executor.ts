@@ -164,6 +164,7 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
   }
 
   let aborted = false;
+  let emitted = false;
   // For claude_code: raw stdout for final parsing via parseClaudeCodeStreamJson
   let rawStdout = "";
   let stderr = "";
@@ -179,8 +180,11 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
       } catch {
         // Ignore
       }
-      const timeoutContent = options.executor === "claude_code" ? lastCumulativeText : rawStdout;
-      emitter.emit("done", { content: timeoutContent, success: false });
+      if (!emitted) {
+        emitted = true;
+        const timeoutContent = options.executor === "claude_code" ? lastCumulativeText : rawStdout;
+        emitter.emit("done", { content: timeoutContent, success: false });
+      }
     }
   }, timeoutMs);
 
@@ -240,7 +244,7 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
 
   child.on("close", (code) => {
     clearTimeout(timeout);
-    if (aborted) return;
+    if (aborted || emitted) return;
 
     // Flush remaining buffer
     if (streamBuffer.length > 0 && options.executor === "claude_code") {
@@ -277,12 +281,14 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
       );
     }
 
+    emitted = true;
     emitter.emit("done", { content: finalContent, success });
   });
 
   child.on("error", (error) => {
     clearTimeout(timeout);
-    if (aborted) return;
+    if (aborted || emitted) return;
+    emitted = true;
     console.error("[ChatExecutor] Process spawn error:", error.message);
     emitter.emit("done", { content: "", success: false });
   });
