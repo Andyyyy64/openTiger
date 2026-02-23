@@ -910,6 +910,30 @@ export async function getWorkingTreeDiff(cwd: string): Promise<GitResult> {
   return execGit(["diff", "HEAD", "--no-color"], cwd);
 }
 
+/**
+ * Check which paths are covered by .gitignore rules.
+ * Uses `git check-ignore` which respects the repo's .gitignore hierarchy.
+ * Returns the set of paths that ARE ignored (even if they were force-committed).
+ * This is a generic mechanism — any build system's output directories are detected
+ * as long as the project's .gitignore lists them.
+ */
+export async function checkGitIgnored(cwd: string, paths: string[]): Promise<Set<string>> {
+  if (paths.length === 0) {
+    return new Set();
+  }
+  // git check-ignore returns ignored paths (one per line), exit code 1 means none ignored
+  const result = await execGit(["check-ignore", "--no-index", ...paths], cwd);
+  if (!result.success) {
+    return new Set();
+  }
+  return new Set(
+    result.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
+  );
+}
+
 // Get untracked files
 export async function getUntrackedFiles(cwd: string): Promise<string[]> {
   const result = await execGit(["ls-files", "--others", "--exclude-standard"], cwd);

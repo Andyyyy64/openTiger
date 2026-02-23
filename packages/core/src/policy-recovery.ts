@@ -278,17 +278,49 @@ function normalizeCommandDrivenRules(
   return normalized;
 }
 
-function buildCommandDrivenAllowedPathSet(config: PolicyRecoveryConfig): Set<string> {
-  const set = new Set<string>();
+interface CommandDrivenAllowedPathIndex {
+  /** Exact file matches (lowercased) */
+  exactPaths: Set<string>;
+  /** Directory prefix matches (lowercased, guaranteed to end with "/") */
+  dirPrefixes: string[];
+}
+
+/**
+ * Build an index of command-driven allowed paths.
+ * Paths ending with "/" are treated as directory prefixes.
+ * All other paths are treated as exact file matches.
+ */
+function buildCommandDrivenAllowedPathIndex(config: PolicyRecoveryConfig): CommandDrivenAllowedPathIndex {
+  const exactPaths = new Set<string>();
+  const dirPrefixes: string[] = [];
+  const seenPrefixes = new Set<string>();
+
   for (const rule of config.commandDrivenAllowedPathRules) {
     for (const path of rule.paths) {
       const normalized = normalizePathForMatch(path).toLowerCase();
-      if (normalized.length > 0) {
-        set.add(normalized);
+      if (!normalized) continue;
+
+      if (normalized.endsWith("/")) {
+        // Explicit directory prefix
+        if (!seenPrefixes.has(normalized)) {
+          seenPrefixes.add(normalized);
+          dirPrefixes.push(normalized);
+        }
+      } else {
+        exactPaths.add(normalized);
       }
     }
   }
-  return set;
+  return { exactPaths, dirPrefixes };
+}
+
+function matchesCommandDrivenPath(
+  normalizedPath: string,
+  index: CommandDrivenAllowedPathIndex,
+): boolean {
+  const lower = normalizedPath.toLowerCase();
+  if (index.exactPaths.has(lower)) return true;
+  return index.dirPrefixes.some((prefix) => lower.startsWith(prefix) || lower === prefix.slice(0, -1));
 }
 
 export async function loadPolicyRecoveryConfig(repoPath: string): Promise<PolicyRecoveryConfig> {
@@ -482,7 +514,7 @@ export function resolvePolicyViolationAutoAllowPaths(
   const allowRootLevelOnInfraTask = config.mode === "aggressive";
   const allowInfraFilesOnInfraTask = config.mode !== "conservative";
   const allowCommandDrivenPathsInAggressiveMode = config.mode === "aggressive";
-  const commandDrivenAllowedPathSet = buildCommandDrivenAllowedPathSet(config);
+  const commandDrivenIndex = buildCommandDrivenAllowedPathIndex(config);
   const candidates: string[] = [];
 
   for (const path of outsidePaths) {
@@ -497,7 +529,7 @@ export function resolvePolicyViolationAutoAllowPaths(
     if (
       allowCommandDrivenPathsInAggressiveMode &&
       isSafePath(normalizedPath) &&
-      commandDrivenAllowedPathSet.has(normalizedPath.toLowerCase())
+      matchesCommandDrivenPath(normalizedPath, commandDrivenIndex)
     ) {
       candidates.push(path);
       continue;

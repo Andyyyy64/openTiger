@@ -3,7 +3,7 @@ import {
   type Policy,
   type Task,
 } from "@openTiger/core";
-import { discardChangesForPaths, getUntrackedFiles } from "@openTiger/vcs";
+import { discardChangesForPaths, getUntrackedFiles, checkGitIgnored } from "@openTiger/vcs";
 import { executeTask, verifyChanges, type VerifyResult } from "./steps/index";
 import {
   isLikelyGeneratedArtifactPath,
@@ -77,10 +77,13 @@ export function resolveVerificationCommands(taskData: Task): string[] {
 export function selectGeneratedArtifactRecoveryCandidates(params: {
   violatingPaths: string[];
   untrackedFiles: string[];
+  /** Paths that match .gitignore rules — definitionally generated artifacts */
+  gitIgnoredFiles?: Set<string>;
 }): {
   discardPaths: string[];
   generatedPaths: string[];
   untrackedOutsidePaths: string[];
+  gitIgnoredPaths: string[];
 } {
   const normalizedViolating = Array.from(
     new Set(
@@ -94,20 +97,25 @@ export function selectGeneratedArtifactRecoveryCandidates(params: {
       .map((path) => normalizePathForMatch(path))
       .filter((path) => path.length > 0),
   );
+  const gitIgnoredSet = params.gitIgnoredFiles ?? new Set<string>();
 
   const discardPaths: string[] = [];
   const generatedPaths: string[] = [];
   const untrackedOutsidePaths: string[] = [];
+  const gitIgnoredPaths: string[] = [];
 
   for (const path of normalizedViolating) {
     const generatedPath = isLikelyGeneratedArtifactPath(path);
     const untrackedPath = untrackedSet.has(path);
-    if (!generatedPath && !untrackedPath) {
+    const gitIgnoredPath = gitIgnoredSet.has(path);
+    if (!generatedPath && !untrackedPath && !gitIgnoredPath) {
       continue;
     }
     discardPaths.push(path);
     if (generatedPath) {
       generatedPaths.push(path);
+    } else if (gitIgnoredPath) {
+      gitIgnoredPaths.push(path);
     } else if (untrackedPath) {
       untrackedOutsidePaths.push(path);
     }
@@ -117,6 +125,7 @@ export function selectGeneratedArtifactRecoveryCandidates(params: {
     discardPaths,
     generatedPaths,
     untrackedOutsidePaths,
+    gitIgnoredPaths,
   };
 }
 
@@ -136,10 +145,14 @@ export async function attemptGeneratedArtifactRecovery(params: {
     return null;
   }
 
-  const untrackedFiles = await getUntrackedFiles(params.repoPath);
+  const [untrackedFiles, gitIgnoredFiles] = await Promise.all([
+    getUntrackedFiles(params.repoPath),
+    checkGitIgnored(params.repoPath, violatingPaths),
+  ]);
   const recoveryCandidates = selectGeneratedArtifactRecoveryCandidates({
     violatingPaths,
     untrackedFiles,
+    gitIgnoredFiles,
   });
   if (recoveryCandidates.discardPaths.length === 0) {
     return null;
@@ -147,6 +160,11 @@ export async function attemptGeneratedArtifactRecovery(params: {
   if (recoveryCandidates.untrackedOutsidePaths.length > 0) {
     console.log(
       `[Worker] Auto-discarding untracked outside-allowed paths: ${recoveryCandidates.untrackedOutsidePaths.join(", ")}`,
+    );
+  }
+  if (recoveryCandidates.gitIgnoredPaths.length > 0) {
+    console.log(
+      `[Worker] Auto-discarding gitignored outside-allowed paths: ${recoveryCandidates.gitIgnoredPaths.join(", ")}`,
     );
   }
 
