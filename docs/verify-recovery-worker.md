@@ -73,9 +73,11 @@ Behavior:
   commands have already passed, treat it as non-blocking and continue
 - For setup/bootstrap failures, attempt inline dependency bootstrap and replacement verification commands
   before promoting to rework.
-- For outside-allowed policy violations, generated artifacts are discarded in-place and re-verified.
-  Unknown file types are also discarded when they are untracked and outside allowed paths, so
-  verification byproducts do not stall convergence.
+- For outside-allowed policy violations, files covered by `.gitignore` are filtered before the
+  policy check via `git check-ignore --stdin`, preventing violations from build artifacts without
+  hardcoding knowledge of specific build systems. Remaining generated artifacts are discarded
+  in-place and re-verified. Unknown file types are also discarded when they are untracked and
+  outside allowed paths, so verification byproducts do not stall convergence.
 - During checkout, worker derives build/test output directories from verification commands
   (for example `cmake -B build-headless`, `cmake --build build-headless`,
   `ctest --test-dir build-headless`) and writes them to local `.git/info/exclude`.
@@ -139,5 +141,6 @@ This structured metadata is consumed by shared classifier and Cycle Manager reco
 - `apps/worker/src/steps/verify/types.ts`
 - `apps/worker/src/worker-runner-verification.ts`
 - `apps/worker/src/worker-runner-utils.ts`
+- `packages/vcs/src/git.ts` (`checkGitIgnored`)
 - `packages/core/src/failure-codes.ts`
 - `packages/core/src/failure-classifier.ts`

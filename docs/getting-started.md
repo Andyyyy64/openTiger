@@ -116,14 +116,14 @@ These checks help detect initial misconfig quickly:
    - Confirm no auth/connection/config errors in `GET /logs/all`
 
 For detailed operation checks, see [operations](operations.md).  
-For state transitions that stall, start with the initial diagnosis table in [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis).
+For state transitions that stall, start with the initial diagnosis table in [state-model](state-model.md#8-patterns-prone-to-stalls-initial-diagnosis).
 
 ### 8.1 Common Lookup Path (State Vocabulary -> Transition -> Owner -> Implementation, for First-Time Users)
 
 First-time users can triage by:
 
 1. Confirm state vocabulary
-   - [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis)
+   - [state-model](state-model.md#8-patterns-prone-to-stalls-initial-diagnosis)
 2. Check where it stalls via transitions
    - [flow](flow.md)
 3. Run API check sequence

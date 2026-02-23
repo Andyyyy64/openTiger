@@ -18,6 +18,7 @@ For startup preflight rules and full pattern matrix, see [startup-patterns](star
 - [10. Why `Failed` and `Retry` Coexist](#10-why-failed-and-retry-coexist)
 - [Related Agent Specifications](#related-agent-specifications)
 - [11. TigerResearch Lifecycle (Planner-First)](#11-tigerresearch-lifecycle-planner-first)
+- [13. Chat Conversational Flow](#13-chat-conversational-flow)
 
 ## 0.1 Entry Point from State Model
 
@@ -273,3 +274,43 @@ Failure handling:
 
 - Incompatible plugin manifest -> `incompatible` status, plugin skipped, core continues
 - Plugin load/runtime initialization error -> `error` status with explicit reason
+
+## 13. Chat Conversational Flow
+
+The chat interface provides a conversational path from requirement to execution.
+
+Phase progression: `greeting` → `requirement_gathering` → `plan_proposal` → `execution` → `monitoring`
+
+### 13.1 Requirement to Plan
+
+1. User sends message describing what they want to build
+2. LLM generates a plan autonomously (minimal clarification questions)
+3. When plan is complete, LLM appends `---PLAN_READY---` marker
+4. Backend detects marker, strips it from saved content, inserts `mode_selection` system message
+5. Conversation phase transitions to `plan_proposal`
+
+### 13.2 Plan to Execution
+
+1. UI renders mode selection card (Local Mode / Git Mode)
+2. User selects execution mode via `POST /chat/conversations/:id/start-execution`
+3. Backend updates global config, sets conversation to `execution` phase
+4. Frontend triggers preflight → process startup (planner, dispatcher, workers, judge, cycle-manager)
+
+### 13.3 SSE Streaming
+
+LLM responses are streamed via Server-Sent Events:
+
+1. `POST /messages` starts LLM execution and returns immediately
+2. Chunks are buffered in an in-memory session (`chat-state.ts`)
+3. `GET /stream` replays buffered chunks, then listens for new events
+4. Terminal events: `done` (success) or `error` (failure)
+5. Session cleanup after 60s post-completion
+
+### 13.4 Implementation Reference
+
+- `apps/api/src/routes/chat.ts` — endpoints
+- `apps/api/src/routes/chat-orchestrator.ts` — phase resolution, system prompts
+- `apps/api/src/routes/chat-state.ts` — SSE session management
+- `packages/llm/src/chat/chat-executor.ts` — LLM process execution
+- `apps/dashboard/src/pages/Chat.tsx` — frontend orchestration
+- `apps/dashboard/src/lib/chat-api.ts` — API client and SSE subscriber

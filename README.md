@@ -27,6 +27,7 @@ all under explicit runtime state transitions.
 - PR and local-worktree judgement (`judge`)
 - Recovery-first operation (`quota_wait`, `awaiting_judge`, `needs_rework`)
 - Backlog-first startup (Issue/PR backlog is processed before new planning)
+- Conversational chat interface for requirement input and execution control
 - Dashboard + API for process control, logs, and system config
 - Runtime switch between host process and docker sandbox execution
 
@@ -115,7 +116,9 @@ pnpm run up
 4. Open the Dashboard:
    - Dashboard: `http://localhost:5190`
    - API: `http://localhost:4301`
-5. Enter requirement on the Start page and run
+5. Enter requirement in the Chat page and run
+   - Describe what you want to build; the LLM generates a plan autonomously
+   - Select execution mode (Local or Git) to start
    - default canonical requirement path: [docs/requirement.md](docs/requirement.md)
 6. Monitor progress:
    - `tasks`

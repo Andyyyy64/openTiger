@@ -44,7 +44,9 @@ Worker verification proceeds in this recovery-priority sequence:
 2. On policy violation, try deterministic path recovery
    - Extract outside path from violation
    - Generate auto-allow candidates from task context and policy recovery config
-   - In `aggressive` mode, violating paths matching `commandDrivenAllowedPathRules[].paths` (e.g. `Makefile`) are also in-run auto-allow candidates
+   - In `aggressive` mode, violating paths matching `commandDrivenAllowedPathRules[].paths` are also in-run auto-allow candidates
+     - Exact file matches (e.g. `Makefile`)
+     - Directory prefix matches: paths ending with `/` match all files under that directory (e.g. `target/` matches `target/debug/foo`)
    - Add command-driven paths from shared policy rules
 3. Adjust `allowedPaths` and re-verify
 4. If violation remains, optionally run LLM recovery (`allow` / `discard` / `deny`)
@@ -86,20 +88,29 @@ Deterministic auto-allow scope varies by mode:
     - Root-level infra path recovery
     - Command-driven rule path recovery (e.g. `Makefile` for make rules)
 
-### 2.4 Generated Artifact Path Auto-Learning
+### 2.4 Gitignore-Aware Pre-Filtering
+
+Before policy checking, `verifyChanges` filters out files covered by the repository's `.gitignore` rules using `git check-ignore --stdin`. This is a generic mechanism — any build system's output directories (e.g. `target/`, `build/`, `dist/`, `node_modules/`) are automatically excluded as long as the project's `.gitignore` lists them.
+
+This prevents policy violations from ever occurring for build artifacts, without hardcoding knowledge of specific build tools.
+
+### 2.5 Generated Artifact Path Auto-Learning
 
 When violation remains after LLM recovery, Worker attempts final recovery by discarding likely-generated paths:
 
-1. Extract violating paths via `isLikelyGeneratedArtifactPath()`
+1. Check violating paths against `.gitignore` rules via `git check-ignore --stdin`
+   - Any gitignored path is definitionally a generated artifact
+2. Check remaining paths via `isLikelyGeneratedArtifactPath()`
    - e.g. `.dump`, `.log`, `.tmp`, `.trace`
    - Path segments like `coverage`, `report`, `artifact`, `build`, `dist`
-2. Discard extracted files and re-verify
-3. Save learning to `.opentiger/generated-paths.auto.txt`; treat as generated in future `verifyChanges`
+3. Check remaining paths against untracked file list
+4. Discard all identified artifacts and re-verify
+5. Save learning to `.opentiger/generated-paths.auto.txt`; treat as generated in future `verifyChanges`
 
-No manual editing of `generated-paths.txt` needed.  
+No manual editing of `generated-paths.txt` needed.
 `GENERATED_PATHS` / `WORKER_EXTRA_GENERATED_PATHS` / `.opentiger/generated-paths.auto.txt` are merged for verification.
 
-### 2.5 Docser Constraints
+### 2.6 Docser Constraints
 
 Docser has intentional constraints:
 
@@ -215,7 +226,7 @@ Worker recovery:
 
 Cycle Manager rework suppression:
 
-- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES` (default: 2)
+- `BLOCKED_POLICY_SUPPRESSION_MAX_RETRIES` (default: 5)
   - Max suppression retries when no safe path found
 - `AUTO_REWORK_MAX_DEPTH` (default: 2)
   - Max rework chain depth; cancel when exceeded
