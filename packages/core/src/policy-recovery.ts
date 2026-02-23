@@ -320,7 +320,8 @@ function matchesCommandDrivenPath(
 ): boolean {
   const lower = normalizedPath.toLowerCase();
   if (index.exactPaths.has(lower)) return true;
-  return index.dirPrefixes.some((prefix) => lower.startsWith(prefix) || lower === prefix.slice(0, -1));
+  // Match paths under configured directory prefixes (e.g. "target/" matches "target/debug/foo")
+  return index.dirPrefixes.some((prefix) => lower.startsWith(prefix));
 }
 
 export async function loadPolicyRecoveryConfig(repoPath: string): Promise<PolicyRecoveryConfig> {
@@ -522,7 +523,7 @@ export function resolvePolicyViolationAutoAllowPaths(
     if (!normalizedPath) {
       continue;
     }
-    if (contextFiles.has(path)) {
+    if (contextFiles.has(normalizedPath)) {
       candidates.push(path);
       continue;
     }

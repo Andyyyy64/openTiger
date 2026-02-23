@@ -57,7 +57,8 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   }, [messages, streamingText]);
 
   const hasExecution = messages.some((m) => m.messageType === "execution_status");
-  const showLiveProgress = hasExecution && processes && processes.length > 0;
+  const hasRunningProcesses = processes?.some((p) => p.status === "running") ?? false;
+  const showLiveProgress = hasExecution && hasRunningProcesses;
 
   return (
     <div
@@ -80,7 +81,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
       })}
 
       {/* Live execution progress */}
-      {showLiveProgress && (
+      {showLiveProgress && processes && (
         <ExecutionProgressCard processes={processes} agents={agents} onViewDetails={onViewDetails} />
       )}
 

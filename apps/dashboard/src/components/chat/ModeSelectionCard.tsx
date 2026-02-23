@@ -41,6 +41,11 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
   const [clicked, setClicked] = useState(false);
   const userHasSelected = useRef(false);
 
+  // Reset clicked state when execution mutation is reset (e.g. conversation switch)
+  useEffect(() => {
+    if (executionStatus === "idle") setClicked(false);
+  }, [executionStatus]);
+
   // Auto-select on initial load only: current configured repo > first in list
   useEffect(() => {
     // Skip auto-select if user has manually picked a repo

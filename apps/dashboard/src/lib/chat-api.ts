@@ -122,6 +122,8 @@ export function subscribeToChatStream(
       let currentEvent = "";
       let dataLines: string[] = [];
 
+      let receivedTerminalEvent = false;
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -144,9 +146,11 @@ export function subscribeToChatStream(
               if (currentEvent === "chunk") {
                 onChunk(data);
               } else if (currentEvent === "done") {
+                receivedTerminalEvent = true;
                 onDone(data);
                 return;
               } else if (currentEvent === "error") {
+                receivedTerminalEvent = true;
                 onError(data);
                 return;
               }
@@ -155,6 +159,11 @@ export function subscribeToChatStream(
             dataLines = [];
           }
         }
+      }
+
+      // Server closed connection without sending done/error event
+      if (!receivedTerminalEvent) {
+        onError("Stream ended unexpectedly");
       }
     } catch (err) {
       if (controller.signal.aborted) return;

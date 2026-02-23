@@ -228,6 +228,13 @@ export const ChatPage: React.FC = () => {
 
   useEffect(() => {
     if (conversationId && conversationId !== activeConversationId) {
+      // Clean up any active stream from the previous conversation
+      if (streamCleanupRef.current) {
+        streamCleanupRef.current();
+        streamCleanupRef.current = null;
+      }
+      setIsStreaming(false);
+      setStreamingText("");
       setActiveConversationId(conversationId);
     }
   }, [conversationId, activeConversationId]);
@@ -269,11 +276,20 @@ export const ChatPage: React.FC = () => {
 
   const startStream = useCallback(
     (conversationId: string) => {
+      if (streamCleanupRef.current) {
+        streamCleanupRef.current();
+        streamCleanupRef.current = null;
+      }
       setStreamingText("");
       setIsStreaming(true);
       const cleanup = subscribeToChatStream(
         conversationId,
-        (chunk) => setStreamingText((prev) => prev + chunk),
+        (chunk) => setStreamingText((prev) => {
+          const next = prev + chunk;
+          // Strip PLAN_READY control marker so it never appears in the UI
+          const idx = next.indexOf("---PLAN_READY---");
+          return idx >= 0 ? next.slice(0, idx).trimEnd() : next;
+        }),
         () => {
           setIsStreaming(false);
           setStreamingText("");
@@ -480,13 +496,13 @@ export const ChatPage: React.FC = () => {
     };
   }, []);
 
-  const [isCreatingSend, setIsCreatingSend] = useState(false);
+  const isCreatingSendRef = useRef(false);
 
   const handleSend = useCallback(
     (content: string) => {
       if (!activeConversationId) {
-        if (isCreatingSend) return;
-        setIsCreatingSend(true);
+        if (isCreatingSendRef.current) return;
+        isCreatingSendRef.current = true;
         chatApi.createConversation().then((data) => {
           const id = data.conversation.id;
           setActiveConversationId(id);
@@ -500,13 +516,13 @@ export const ChatPage: React.FC = () => {
         }).catch((err) => {
           console.warn("[Chat] Failed to create conversation and send:", err);
         }).finally(() => {
-          setIsCreatingSend(false);
+          isCreatingSendRef.current = false;
         });
       } else {
         sendMutation.mutate(content);
       }
     },
-    [activeConversationId, isCreatingSend, sendMutation, navigate, queryClient, startStream],
+    [activeConversationId, sendMutation, navigate, queryClient, startStream],
   );
 
   const handleSelectConversation = (id: string) => {
@@ -627,7 +643,7 @@ export const ChatPage: React.FC = () => {
               />
               <ChatInput
                 onSend={handleSend}
-                disabled={isStreaming || sendMutation.isPending || isCreatingSend}
+                disabled={isStreaming || sendMutation.isPending || isCreatingSendRef.current}
                 placeholder={isStreaming ? "Waiting for response..." : "Type a message..."}
               />
             </>

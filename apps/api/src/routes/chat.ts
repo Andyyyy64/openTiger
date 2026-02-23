@@ -5,6 +5,9 @@ import { conversations, messages } from "@openTiger/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { startChatExecution } from "@openTiger/llm";
 import { ensureConfigRow } from "../config-store";
+const SAFE_GIT_NAME_RE = /^[a-zA-Z0-9._-]+$/;
+const SAFE_GIT_REF_RE = /^[a-zA-Z0-9._\/-]+$/;
+
 import {
   createSession,
   getSession,
@@ -343,6 +346,15 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
     const githubRepo = typeof body.githubRepo === "string" ? body.githubRepo.trim() : "";
     const baseBranch = typeof body.baseBranch === "string" ? body.baseBranch.trim() || "main" : "main";
 
+    if (mode === "git") {
+      if (!SAFE_GIT_NAME_RE.test(githubOwner) || !SAFE_GIT_NAME_RE.test(githubRepo)) {
+        return c.json({ error: "Invalid owner or repo name" }, 400);
+      }
+      if (baseBranch && (!SAFE_GIT_REF_RE.test(baseBranch) || baseBranch.includes(".."))) {
+        return c.json({ error: "Invalid branch name" }, 400);
+      }
+    }
+
     const [conversation] = await db
       .select()
       .from(conversations)
@@ -493,12 +505,21 @@ chatRoute.post("/conversations/:id/configure-repo", async (c) => {
     const metadata = (conversation.metadata ?? {}) as Record<string, unknown>;
 
     // Update conversation metadata with repo config
+    const rawRepoMode = body.repoMode;
     const repoConfig = {
-      repoMode: body.repoMode || "git",
-      githubOwner: body.githubOwner || "",
-      githubRepo: body.githubRepo || "",
-      baseBranch: body.baseBranch || "main",
+      repoMode: rawRepoMode === "git" || rawRepoMode === "local" ? rawRepoMode : "git",
+      githubOwner: typeof body.githubOwner === "string" ? body.githubOwner.trim() : "",
+      githubRepo: typeof body.githubRepo === "string" ? body.githubRepo.trim() : "",
+      baseBranch: typeof body.baseBranch === "string" ? body.baseBranch.trim() || "main" : "main",
     };
+    if (repoConfig.repoMode === "git" && repoConfig.githubOwner && repoConfig.githubRepo) {
+      if (!SAFE_GIT_NAME_RE.test(repoConfig.githubOwner) || !SAFE_GIT_NAME_RE.test(repoConfig.githubRepo)) {
+        return c.json({ error: "Invalid owner or repo name" }, 400);
+      }
+      if (repoConfig.baseBranch && (!SAFE_GIT_REF_RE.test(repoConfig.baseBranch) || repoConfig.baseBranch.includes(".."))) {
+        return c.json({ error: "Invalid branch name" }, 400);
+      }
+    }
 
     await db
       .update(conversations)
@@ -533,7 +554,7 @@ chatRoute.post("/conversations/:id/configure-repo", async (c) => {
       conversationId: id,
       role: "system",
       content: `Repository configured: ${repoConfig.githubOwner}/${repoConfig.githubRepo} (${repoConfig.baseBranch})`,
-      messageType: "text",
+      messageType: "repo_config",
     });
 
     return c.json({ configured: true, repoConfig });

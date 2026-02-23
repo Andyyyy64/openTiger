@@ -97,7 +97,11 @@ export function selectGeneratedArtifactRecoveryCandidates(params: {
       .map((path) => normalizePathForMatch(path))
       .filter((path) => path.length > 0),
   );
-  const gitIgnoredSet = params.gitIgnoredFiles ?? new Set<string>();
+  const gitIgnoredSet = new Set(
+    [...(params.gitIgnoredFiles ?? [])]
+      .map((path) => normalizePathForMatch(path))
+      .filter((path) => path.length > 0),
+  );
 
   const discardPaths: string[] = [];
   const generatedPaths: string[] = [];
@@ -145,9 +149,10 @@ export async function attemptGeneratedArtifactRecovery(params: {
     return null;
   }
 
+  const normalizedViolating = violatingPaths.map(normalizePathForMatch).filter((p) => p.length > 0);
   const [untrackedFiles, gitIgnoredFiles] = await Promise.all([
     getUntrackedFiles(params.repoPath),
-    checkGitIgnored(params.repoPath, violatingPaths),
+    checkGitIgnored(params.repoPath, normalizedViolating),
   ]);
   const recoveryCandidates = selectGeneratedArtifactRecoveryCandidates({
     violatingPaths,
