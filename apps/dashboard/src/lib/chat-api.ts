@@ -119,6 +119,8 @@ export function subscribeToChatStream(
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let currentEvent = "";
+      let dataLines: string[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -129,8 +131,6 @@ export function subscribeToChatStream(
         // Keep the last incomplete line in the buffer
         buffer = lines.pop() ?? "";
 
-        let currentEvent = "";
-        let dataLines: string[] = [];
         for (const line of lines) {
           if (line.startsWith("event: ")) {
             currentEvent = line.slice(7).trim();
