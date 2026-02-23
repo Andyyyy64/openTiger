@@ -219,10 +219,12 @@ export const ChatPage: React.FC = () => {
   // --- Sync messages from query ---
 
   useEffect(() => {
+    // Don't overwrite optimistically-added messages while streaming
+    if (isStreaming) return;
     if (conversationQuery.data?.messages) {
       setChatMessages(conversationQuery.data.messages);
     }
-  }, [conversationQuery.data]);
+  }, [conversationQuery.data, isStreaming]);
 
   useEffect(() => {
     if (conversationId && conversationId !== activeConversationId) {
