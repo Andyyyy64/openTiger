@@ -183,7 +183,14 @@ export function startChatExecution(options: ChatExecutorOptions): ChatExecutorHa
       }
       if (!emitted) {
         emitted = true;
-        const timeoutContent = options.executor === "claude_code" ? lastCumulativeText : rawStdout;
+        let timeoutContent: string;
+        if (options.executor === "claude_code") {
+          timeoutContent = lastCumulativeText;
+        } else if (options.executor === "codex") {
+          timeoutContent = parseCodexExecJson(rawStdout).assistantText;
+        } else {
+          timeoutContent = rawStdout;
+        }
         emitter.emit("done", { content: timeoutContent, success: false });
       }
     }

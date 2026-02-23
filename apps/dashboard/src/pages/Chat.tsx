@@ -453,8 +453,11 @@ export const ChatPage: React.FC = () => {
   const conversationPhase = (conversationQuery.data?.conversation?.metadata as Record<string, unknown> | null)?.phase;
   const alreadyExecuting = conversationPhase === "execution" || conversationPhase === "monitoring";
 
+  const hasAnyProcesses = (processes?.length ?? 0) > 0;
   const executionStatus: "idle" | "pending" | "success" | "error" = alreadyExecuting
-    ? "success"
+    ? hasAnyProcesses
+      ? "success"
+      : "idle" // execution phase set but no processes launched (partial failure)
     : startExecutionMutation.isSuccess
       ? "success"
       : startExecutionMutation.isError
