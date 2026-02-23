@@ -249,7 +249,7 @@ chatRoute.post("/conversations/:id/messages", async (c) => {
         const newPhase = hasPlanMarker
           ? "plan_proposal" as const
           : resolvePhase(
-              [...allMessages, { role: "assistant" as const, content: result.content, messageType: "text" }],
+              [...allMessages, { role: "assistant" as const, content: responseContent, messageType: "text" }],
               metadata,
             );
         await db
