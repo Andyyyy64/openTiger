@@ -500,12 +500,14 @@ export const ChatPage: React.FC = () => {
   }, []);
 
   const isCreatingSendRef = useRef(false);
+  const [isCreatingSend, setIsCreatingSend] = useState(false);
 
   const handleSend = useCallback(
     (content: string) => {
       if (!activeConversationId) {
         if (isCreatingSendRef.current) return;
         isCreatingSendRef.current = true;
+        setIsCreatingSend(true);
         chatApi.createConversation().then((data) => {
           const id = data.conversation.id;
           setActiveConversationId(id);
@@ -520,6 +522,7 @@ export const ChatPage: React.FC = () => {
           console.warn("[Chat] Failed to create conversation and send:", err);
         }).finally(() => {
           isCreatingSendRef.current = false;
+          setIsCreatingSend(false);
         });
       } else {
         sendMutation.mutate(content);
@@ -646,7 +649,7 @@ export const ChatPage: React.FC = () => {
               />
               <ChatInput
                 onSend={handleSend}
-                disabled={isStreaming || sendMutation.isPending || isCreatingSendRef.current}
+                disabled={isStreaming || sendMutation.isPending || isCreatingSend}
                 placeholder={isStreaming ? "Waiting for response..." : "Type a message..."}
               />
             </>
