@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import type { GitHubRepoListItem } from "../../lib/api";
 import { BrailleSpinner } from "../BrailleSpinner";
 
@@ -19,6 +19,8 @@ interface ModeSelectionCardProps {
   onRefreshRepos?: () => void;
   onCreateRepo?: (owner: string, repo: string) => Promise<void>;
   isCreatingRepo?: boolean;
+  /** Mutation state from parent */
+  executionStatus?: "idle" | "pending" | "success" | "error";
 }
 
 export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
@@ -29,47 +31,46 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
   onRefreshRepos,
   onCreateRepo,
   isCreatingRepo,
+  executionStatus = "idle",
 }) => {
   const [expanded, setExpanded] = useState<"git" | null>(null);
   const [selectedFullName, setSelectedFullName] = useState("");
   const [createOwner, setCreateOwner] = useState("");
   const [createName, setCreateName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [started, setStarted] = useState(false);
+  const [clicked, setClicked] = useState(false);
+  const userHasSelected = useRef(false);
 
-  // Auto-select: current configured repo > first in list
+  // Auto-select on initial load only: current configured repo > first in list
   useEffect(() => {
+    // Skip auto-select if user has manually picked a repo
+    if (userHasSelected.current) return;
+
     if (currentRepo?.owner && currentRepo?.repo) {
       const configFullName = `${currentRepo.owner}/${currentRepo.repo}`;
       if (githubRepos.some((r) => r.fullName === configFullName)) {
-        // Always sync with config (covers create-new updating config)
-        if (selectedFullName !== configFullName) {
-          setSelectedFullName(configFullName);
-        }
+        setSelectedFullName(configFullName);
         return;
       }
     }
-    // If current selection is valid, keep it
-    if (selectedFullName && githubRepos.some((r) => r.fullName === selectedFullName)) {
-      return;
-    }
-    // Otherwise pick first available
     if (githubRepos.length > 0 && githubRepos[0]) {
       setSelectedFullName(githubRepos[0].fullName);
     }
-  }, [currentRepo, githubRepos, selectedFullName]);
+  }, [currentRepo, githubRepos]);
 
   const selectedRepo = githubRepos.find((r) => r.fullName === selectedFullName);
 
+  const busy = clicked || executionStatus === "pending";
+
   const handleLocal = () => {
-    if (!onStartExecution || started) return;
-    setStarted(true);
+    if (!onStartExecution || busy) return;
+    setClicked(true);
     onStartExecution({ mode: "local" });
   };
 
   const handleGitStart = () => {
-    if (!onStartExecution || started || !selectedRepo) return;
-    setStarted(true);
+    if (!onStartExecution || busy || !selectedRepo) return;
+    setClicked(true);
     onStartExecution({
       mode: "git",
       githubOwner: selectedRepo.owner,
@@ -85,11 +86,36 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
     await onCreateRepo(owner, name);
     // After creation succeeds, select the new repo and close create form
     const newFullName = `${owner}/${name}`;
+    userHasSelected.current = true;
     setSelectedFullName(newFullName);
     setShowCreate(false);
   };
 
-  if (started) {
+  if (executionStatus === "success") {
+    return (
+      <div className="py-2 px-3">
+        <div className="border border-green-700/40 bg-green-900/10 p-4 flex items-center gap-2">
+          <span className="text-green-500 text-xs font-bold uppercase tracking-wider">
+            EXECUTION STARTED
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (executionStatus === "error") {
+    return (
+      <div className="py-2 px-3">
+        <div className="border border-red-700/40 bg-red-900/10 p-4 flex items-center gap-2">
+          <span className="text-red-400 text-xs font-bold uppercase tracking-wider">
+            FAILED TO START EXECUTION
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (clicked || executionStatus === "pending") {
     return (
       <div className="py-2 px-3">
         <div className="border border-term-tiger/30 bg-term-tiger/5 p-4 flex items-center gap-2">
@@ -146,7 +172,7 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
             <div className="flex gap-2">
               <select
                 value={selectedFullName}
-                onChange={(e) => setSelectedFullName(e.target.value)}
+                onChange={(e) => { userHasSelected.current = true; setSelectedFullName(e.target.value); }}
                 disabled={isLoadingRepos || githubRepos.length === 0}
                 className="flex-1 bg-black border border-term-border px-2 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none disabled:opacity-50"
               >

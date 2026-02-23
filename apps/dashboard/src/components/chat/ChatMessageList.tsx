@@ -24,6 +24,7 @@ interface ChatMessageListProps {
     onRefreshRepos?: () => void;
     onCreateRepo?: (owner: string, repo: string) => Promise<void>;
     isCreatingRepo?: boolean;
+    executionStatus?: "idle" | "pending" | "success" | "error";
   };
 }
 

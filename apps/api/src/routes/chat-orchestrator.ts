@@ -72,10 +72,12 @@ When you have enough information (which may be immediately from the first messag
 - Estimated risk levels (low/medium/high)
 - Suggested execution order
 
-When your plan is complete, append this exact marker on its own line at the very end:
+EXTREMELY IMPORTANT — PLAN COMPLETION:
+When your plan is complete, you MUST append the following marker on its own line at the VERY END of your response, and then STOP IMMEDIATELY. Do NOT write ANYTHING after this marker. No summary, no next steps, no additional text. The marker MUST be the absolute last thing in your output:
+
 ---PLAN_READY---
 
-Do NOT ask for confirmation after the plan. The marker triggers the next step automatically.
+The marker triggers the next step automatically. Any text after the marker will be discarded.
 Use markdown for structure. Keep responses concise.`,
 
   plan_proposal: `You are openTiger's planning assistant. A plan has been proposed and the user may want adjustments.

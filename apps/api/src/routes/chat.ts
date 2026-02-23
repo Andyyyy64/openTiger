@@ -210,18 +210,19 @@ chatRoute.post("/conversations/:id/messages", async (c) => {
     });
 
     handle.onDone(async (result) => {
+      let responseContent = result.content || (result.success ? "(Empty response)" : "(LLM execution failed — check server logs for details)");
+
+      // Check if LLM produced PLAN_READY marker
+      const markerIndex = responseContent.indexOf(PLAN_READY_MARKER);
+      const hasPlanMarker = markerIndex >= 0;
+
+      // Strip the marker AND everything after it from saved content
+      if (hasPlanMarker) {
+        responseContent = responseContent.slice(0, markerIndex).trimEnd();
+      }
+
       // Save assistant response to DB
       try {
-        let responseContent = result.content || (result.success ? "(Empty response)" : "(LLM execution failed — check server logs for details)");
-
-        // Check if LLM produced PLAN_READY marker
-        const hasPlanMarker = responseContent.includes(PLAN_READY_MARKER);
-
-        // Strip the marker from saved content
-        if (hasPlanMarker) {
-          responseContent = responseContent.replace(PLAN_READY_MARKER, "").trimEnd();
-        }
-
         await db.insert(messages).values({
           conversationId: id,
           role: "assistant",
@@ -259,9 +260,9 @@ chatRoute.post("/conversations/:id/messages", async (c) => {
       }
 
       if (result.success) {
-        markDone(id, result.content);
+        markDone(id, responseContent);
       } else {
-        markError(id, result.content || "LLM execution failed");
+        markError(id, responseContent || "LLM execution failed");
       }
     });
 
@@ -356,10 +357,12 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
       try {
         const configRow = await ensureConfigRow();
         const { config: configTable } = await import("@openTiger/db/schema");
+        const repoUrl = `https://github.com/${githubOwner}/${githubRepo}`;
         await db
           .update(configTable)
           .set({
             repoMode: "git",
+            repoUrl,
             githubOwner,
             githubRepo,
             baseBranch,

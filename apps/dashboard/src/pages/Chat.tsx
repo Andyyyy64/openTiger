@@ -156,17 +156,6 @@ export const ChatPage: React.FC = () => {
     [createRepoMutation],
   );
 
-  const modeSelectionProps = useMemo(
-    () => ({
-      currentRepo,
-      githubRepos,
-      isLoadingRepos: githubReposQuery.isLoading,
-      onRefreshRepos: () => githubReposQuery.refetch(),
-      onCreateRepo: handleCreateRepo,
-      isCreatingRepo: createRepoMutation.isPending,
-    }),
-    [currentRepo, githubRepos, githubReposQuery.isLoading, githubReposQuery, handleCreateRepo, createRepoMutation.isPending],
-  );
 
   // --- Neofetch ---
 
@@ -314,21 +303,127 @@ export const ChatPage: React.FC = () => {
   });
 
   const startExecutionMutation = useMutation({
-    mutationFn: (config: {
+    mutationFn: async (execConfig: {
       mode: "local" | "git";
       githubOwner?: string;
       githubRepo?: string;
       baseBranch?: string;
     }) => {
       if (!activeConversationId) throw new Error("No active conversation");
-      return chatApi.startExecution(activeConversationId, config);
+
+      // 1. Update conversation metadata (existing chat API)
+      await chatApi.startExecution(activeConversationId, execConfig);
+
+      // 2. Extract plan content from conversation messages for requirement sync
+      const planContent = chatMessages
+        .filter((m) => m.role === "assistant")
+        .map((m) => m.content)
+        .join("\n\n");
+
+      // 3. Sync requirement content
+      if (planContent.trim().length > 0) {
+        await systemApi.syncRequirement({ content: planContent });
+      }
+
+      // 4. Run preflight to get process recommendations
+      const preflight = await systemApi.preflight({
+        content: planContent,
+        autoCreateIssueTasks: true,
+      });
+      const recommendations = preflight.recommendations;
+
+      // 5. Read config counts
+      const settings = config?.config ?? {};
+      const executionEnvironment = normalizeExecutionEnvironment(settings.EXECUTION_ENVIRONMENT);
+      const sandboxExecution = executionEnvironment === "sandbox";
+      const workerCount = parseCount(settings.WORKER_COUNT, 4, "Worker");
+      const judgeCount = parseCount(settings.JUDGE_COUNT, 4, "Judge");
+      const plannerCount = parseCount(settings.PLANNER_COUNT, 1, "Planner", 4);
+
+      const started: string[] = [];
+      const errors: string[] = [];
+
+      const startProcess = async (
+        name: string,
+        payload?: { content?: string },
+      ) => {
+        try {
+          await systemApi.startProcess(name, payload);
+          started.push(name);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unknown error";
+          errors.push(`${name}: ${message}`);
+        }
+      };
+
+      // 6. Start processes based on recommendations
+      const plannerStartCount = Math.min(
+        plannerCount.count,
+        recommendations.plannerCount ?? (recommendations.startPlanner ? 1 : 0),
+      );
+      for (let i = 1; i <= plannerStartCount; i += 1) {
+        const plannerName = i === 1 ? "planner" : `planner-${i}`;
+        await startProcess(plannerName, { content: planContent });
+      }
+
+      if (recommendations.startDispatcher) {
+        await startProcess("dispatcher");
+      }
+
+      const judgeStartCount = Math.min(
+        judgeCount.count,
+        recommendations.judgeCount ?? (recommendations.startJudge ? 1 : 0),
+      );
+      for (let i = 1; i <= judgeStartCount; i += 1) {
+        const judgeName = i === 1 ? "judge" : `judge-${i}`;
+        await startProcess(judgeName);
+      }
+
+      if (recommendations.startCycleManager) {
+        await startProcess("cycle-manager");
+      }
+
+      const workerStartCount = sandboxExecution
+        ? 0
+        : Math.min(workerCount.count, recommendations.workerCount);
+      for (let i = 1; i <= workerStartCount; i += 1) await startProcess(`worker-${i}`);
+
+      return { started, errors };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["chat", "conversation", activeConversationId],
       });
+      queryClient.invalidateQueries({ queryKey: ["system", "processes"] });
+      queryClient.invalidateQueries({ queryKey: ["config"] });
     },
   });
+
+  const conversationPhase = (conversationQuery.data?.conversation?.metadata as Record<string, unknown> | null)?.phase;
+  const alreadyExecuting = conversationPhase === "execution" || conversationPhase === "monitoring";
+
+  const executionStatus: "idle" | "pending" | "success" | "error" = alreadyExecuting
+    ? "success"
+    : startExecutionMutation.isSuccess
+      ? "success"
+      : startExecutionMutation.isError
+        ? "error"
+        : startExecutionMutation.isPending
+          ? "pending"
+          : "idle";
+
+  const modeSelectionProps = useMemo(
+    () => ({
+      currentRepo,
+      githubRepos,
+      isLoadingRepos: githubReposQuery.isLoading,
+      onRefreshRepos: () => githubReposQuery.refetch(),
+      onCreateRepo: handleCreateRepo,
+      isCreatingRepo: createRepoMutation.isPending,
+      executionStatus,
+    }),
+    [currentRepo, githubRepos, githubReposQuery.isLoading, githubReposQuery, handleCreateRepo, createRepoMutation.isPending, executionStatus],
+  );
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => chatApi.deleteConversation(id),

@@ -24,6 +24,7 @@ interface ChatMessageProps {
     onRefreshRepos?: () => void;
     onCreateRepo?: (owner: string, repo: string) => Promise<void>;
     isCreatingRepo?: boolean;
+    executionStatus?: "idle" | "pending" | "success" | "error";
   };
 }
 
@@ -45,6 +46,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
         onRefreshRepos={modeSelectionProps?.onRefreshRepos}
         onCreateRepo={modeSelectionProps?.onCreateRepo}
         isCreatingRepo={modeSelectionProps?.isCreatingRepo}
+        executionStatus={modeSelectionProps?.executionStatus}
       />
     );
   }
