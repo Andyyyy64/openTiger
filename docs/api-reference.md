@@ -51,6 +51,7 @@ Main targets:
 | Startup control      | `POST /system/processes/:name/start`, `POST /system/processes/:name/stop`, `POST /system/processes/stop-all`    |
 | Pre-start validation | `POST /system/preflight`                                                                                        |
 | Recovery/maintenance | `POST /system/cleanup`, `POST /logs/clear`                                                                      |
+| Directory browser    | `GET /system/browse-directories`                                                                                 |
 | GitHub integration   | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github`       |
 | Requirement updates  | `GET /system/requirements`, `POST /system/requirements`                                                         |
 | Chat (conversational)| `POST /chat/conversations`, `GET /chat/conversations/:id`, `POST /chat/conversations/:id/messages`, `POST /chat/conversations/:id/start-execution` |
@@ -264,8 +265,9 @@ Conversations progress through phases: `greeting` â†’ `requirement_gathering` â†
 
 - `POST /chat/conversations/:id/start-execution`
   - Unified mode selection and execution start
-  - Body: `{ mode: "local" | "git", githubOwner?: string, githubRepo?: string, baseBranch?: string }`
+  - Body: `{ mode: "direct" | "local-git" | "github", githubOwner?: string, githubRepo?: string, baseBranch?: string, localRepoPath?: string }`
   - Updates global config, sets conversation to execution phase, inserts `execution_status` message
+  - In `direct`/`local-git` mode, `localRepoPath` sets `LOCAL_REPO_PATH` and worker count is forced to 1
   - Input validation: owner/repo must match `[a-zA-Z0-9._-]+`, branch must match `[a-zA-Z0-9._/-]+` (no `..`)
 
 - `POST /chat/conversations/:id/confirm-plan` (legacy)
@@ -336,6 +338,14 @@ Planner research start payload:
   - Create repository + config sync
 - `GET /system/github/repos`
   - List repos accessible to authenticated user
+
+### Directory Browser
+
+- `GET /system/browse-directories`
+  - Query param: `?path=` (optional, default: `os.homedir()`)
+  - Returns `{ currentPath, parentPath, entries: [{name, path, isGitRepo}], homePath }`
+  - Security: path must be under `$HOME` (no traversal above home directory)
+  - Excludes dot-directories and `node_modules`
 
 ### Host Info
 

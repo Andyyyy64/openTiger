@@ -70,9 +70,10 @@ Exact formulas and all combinations are in [startup-patterns](startup-patterns.m
      - Failure delta (`.opentiger/context/context-delta.json`)
    - Context injection uses a fixed character budget to avoid prompt bloat
 4. On success:
-   - Usually `blocked(awaiting_judge)` if review needed
+   - `github`/`local-git` mode: usually `blocked(awaiting_judge)` if review needed
+   - `direct` mode: tasks transition directly to `done` (no judge review)
    - Otherwise `done`
-5. Judge evaluates successful run
+5. Judge evaluates successful run (skipped in `direct` mode)
 6. Task transitions to:
    - `done`
    - `blocked(awaiting_judge)` (retry/recovery)
@@ -291,7 +292,7 @@ Phase progression: `greeting` → `requirement_gathering` → `plan_proposal` �
 
 ### 13.2 Plan to Execution
 
-1. UI renders mode selection card (Local Mode / Git Mode)
+1. UI renders mode selection card (Direct / Local Git / GitHub)
 2. User selects execution mode via `POST /chat/conversations/:id/start-execution`
 3. Backend updates global config, sets conversation to `execution` phase
 4. Frontend triggers preflight → process startup (planner, dispatcher, workers, judge, cycle-manager)

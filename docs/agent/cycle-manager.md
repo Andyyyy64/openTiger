@@ -61,6 +61,7 @@ Research orchestrator loop:
 - Replan is deferred while issue backlog exists
 - Replan only when backlog is empty and conditions such as planner idle are met
 - Requirement hash + repo head are signed to suppress no-diff replan per config
+- In `direct` mode, replan signature uses requirement hash only (no git HEAD); `replanWorkdir` stays as openTiger root for pnpm spawn CWD while requirement path resolves against `LOCAL_REPO_PATH`
 
 Research-specific backlog note:
 
@@ -117,5 +118,5 @@ Research-specific backlog note:
 
 Replan requirement path note:
 
-- Relative `REPLAN_REQUIREMENT_PATH` (for example `docs/requirement.md`) is resolved under `REPLAN_WORKDIR`.
-- If not found and git-mode remote is configured, Cycle Manager falls back to managed repo cache (`~/.opentiger/repos/<owner>/<repo>`).
+- Relative `REPLAN_REQUIREMENT_PATH` (for example `docs/requirement.md`) is resolved under `REPLAN_WORKDIR` (or `LOCAL_REPO_PATH` in direct/local-git modes).
+- If not found and github-mode remote is configured, Cycle Manager falls back to managed repo cache (`~/.opentiger/repos/<owner>/<repo>`).

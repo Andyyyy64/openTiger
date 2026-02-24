@@ -27,14 +27,28 @@ Out of scope:
 
 ## 2. Standard Execution Flow
 
+### github / local-git mode
+
 1. Acquire runtime lock
 2. Checkout / branch prep
 3. LLM execution (`opencode`, `claude_code`, or `codex`)
 4. Expected-file verification
 5. Run verification phase
-6. Commit/push + PR creation (git mode)
+6. Commit/push + PR creation (github mode) or local diff (local-git mode)
 7. Update run/task/artifact
 8. Release lease and return agent to idle
+
+### direct mode
+
+1. Acquire runtime lock
+2. Snapshot pre-execution filesystem state (mtime + size)
+3. LLM execution (writes directly to `LOCAL_REPO_PATH`)
+4. Snapshot post-execution filesystem state
+5. Compute diff (changed/added/removed files via snapshot comparison)
+6. Run verification commands (spawn-safe, `&&` chains expanded)
+7. Create `direct_edit` artifact with change summary
+8. Task transitions directly to `done` (no judge review)
+9. Release lease and return agent to idle
 
 Research flow (`task.kind=research`):
 
@@ -66,7 +80,8 @@ When unresolvable:
 
 Success:
 
-- Review required -> `blocked(awaiting_judge)`
+- `github`/`local-git` mode with review required -> `blocked(awaiting_judge)`
+- `direct` mode -> `done` (always, no judge review)
 - No review required -> `done`
 
 Failure:
@@ -103,7 +118,7 @@ Notes:
 ## 7. Implementation Reference (Source of Truth)
 
 - Startup entrypoint and role resolution: `apps/worker/src/start.ts`, `apps/worker/src/main.ts`
-- Execution body: `apps/worker/src/worker-runner.ts`
+- Execution body: `apps/worker/src/worker-runner.ts` (github/local-git), `apps/worker/src/worker-runner-direct.ts` (direct)
 - Verification phase: `apps/worker/src/worker-runner-verification.ts`
 - Role-specific helper behavior: `apps/worker/src/worker-task-helpers.ts`
 - Runtime lock: `apps/worker/src/worker-runtime-lock.ts`

@@ -49,7 +49,7 @@ Notes:
 
 Notes:
 
-- `code` follows git/local implementation pipeline.
+- `code` follows github/local-git/direct implementation pipeline depending on `REPO_MODE`.
 - Plugin kinds are validated against runtime plugin registry before task creation/dispatch.
 - Unknown/unregistered kinds are rejected at API validation time.
 
@@ -204,7 +204,7 @@ Notes:
 ### 6.1 Chat Message Types
 
 - `text` — standard conversation messages (user/assistant), included in LLM context
-- `mode_selection` — system card for execution mode selection (local/git)
+- `mode_selection` — system card for execution mode selection (direct/local-git/github)
 - `execution_status` — system card showing execution start and mode
 - `repo_config` — system message for repository configuration changes
 
