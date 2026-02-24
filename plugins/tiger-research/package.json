@@ -37,7 +37,7 @@
     "@openTiger/llm": "workspace:^",
     "@openTiger/plugin-sdk": "workspace:^",
     "@openTiger/vcs": "workspace:^",
-    "drizzle-orm": "^0.38.4"
+    "drizzle-orm": "^0.45.1"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

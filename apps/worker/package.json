@@ -33,7 +33,7 @@
     "@openTiger/vcs": "workspace:*",
     "bullmq": "^5.66.5",
     "dotenv": "^17.3.1",
-    "drizzle-orm": "^0.38.4",
+    "drizzle-orm": "^0.45.1",
     "minimatch": "^10.2.0",
     "pngjs": "^7.0.0"
   },
