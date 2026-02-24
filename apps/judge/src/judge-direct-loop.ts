@@ -1,6 +1,6 @@
 import { db } from "@openTiger/db";
 import { tasks } from "@openTiger/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { JudgeConfig } from "./judge-config";
 
 /**
@@ -24,7 +24,7 @@ export async function runDirectJudgeLoop(config: JudgeConfig): Promise<void> {
       const stuckTasks = await db
         .select({ id: tasks.id, title: tasks.title })
         .from(tasks)
-        .where(eq(tasks.blockReason, "awaiting_judge"))
+        .where(and(eq(tasks.status, "blocked"), eq(tasks.blockReason, "awaiting_judge")))
         .limit(10);
 
       if (stuckTasks.length > 0) {

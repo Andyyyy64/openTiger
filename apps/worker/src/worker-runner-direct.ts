@@ -201,24 +201,46 @@ export async function runDirectModeWorker(
     if (allAffectedFiles.length === 0) {
       if (shouldAllowNoChanges(taskData)) {
         console.log("[Worker] No changes detected, but task allows no-op completion.");
-      } else {
-        console.log("[Worker] No changes detected. Marking as no-op success.");
+        await finalizeTaskState({
+          runId,
+          taskId,
+          agentId,
+          runStatus: "success",
+          taskStatus: "done",
+          blockReason: null,
+          costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+        });
+
+        return {
+          success: true,
+          taskId,
+          runId,
+        };
       }
+
+      const noChangeError = "No file changes detected after execution";
+      console.warn(`[Worker] ${noChangeError}. Marking task as failed.`);
 
       await finalizeTaskState({
         runId,
         taskId,
         agentId,
-        runStatus: "success",
-        taskStatus: "done",
+        runStatus: "failed",
+        taskStatus: "failed",
         blockReason: null,
+        errorMessage: noChangeError,
         costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+        errorMeta: {
+          source: "verification",
+          failureCode: FAILURE_CODE.EXECUTION_FAILED,
+        },
       });
 
       return {
-        success: true,
+        success: false,
         taskId,
         runId,
+        error: noChangeError,
       };
     }
 
