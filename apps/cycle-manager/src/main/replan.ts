@@ -229,15 +229,20 @@ async function computeReplanSignature(
     return;
   }
 
-  // In direct mode (no repoUrl), skip git HEAD — signature is based purely on requirement hash.
-  // The target project may not be a git repo, and replanWorkdir is the openTiger root (not the target).
+  // Resolve repo HEAD for signature:
+  // - github mode (repoUrl set): fetch remote HEAD via ls-remote
+  // - local-git mode: fetch local HEAD from LOCAL_REPO_PATH (has git)
+  // - direct mode: no git, use static placeholder (signature based on requirement hash only)
   let repoHeadSha: string | undefined;
   if (config.replanRepoUrl) {
     repoHeadSha = await fetchRepoHeadSha(config.replanRepoUrl, config.replanBaseBranch);
   } else {
     const repoMode = process.env.REPO_MODE?.trim().toLowerCase();
-    if (repoMode === "direct" || repoMode === "local-git" || repoMode === "local") {
+    if (repoMode === "direct") {
       repoHeadSha = "__DIRECT_MODE__";
+    } else if (repoMode === "local-git" || repoMode === "local") {
+      const localPath = process.env.LOCAL_REPO_PATH?.trim();
+      repoHeadSha = await fetchLocalHeadSha(localPath || config.replanWorkdir);
     } else {
       repoHeadSha = await fetchLocalHeadSha(config.replanWorkdir);
     }

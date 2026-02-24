@@ -512,21 +512,19 @@ export const ChatPage: React.FC = () => {
   const alreadyExecuting = conversationPhase === "execution" || conversationPhase === "monitoring";
 
   const hasAnyProcesses = processes?.some((p) => p.status === "running") ?? false;
-  // Mutation state takes priority within the current session to prevent
-  // the card from flashing back to "idle" between mutation success and
-  // processes actually starting (which caused duplicate execution clicks).
+  // Derive execution status: prefer conversation DB state (alreadyExecuting)
+  // over mutation state to avoid stale isSuccess leaking across conversation switches.
+  // Mutation pending/error are still used for immediate UI feedback within the same session.
   const executionStatus: "idle" | "pending" | "success" | "error" =
-    startExecutionMutation.isSuccess
-      ? "success"
-      : startExecutionMutation.isPending
-        ? "pending"
-        : startExecutionMutation.isError
-          ? "error"
-          : alreadyExecuting
-            ? hasAnyProcesses
-              ? "success"
-              : "idle"
-            : "idle";
+    startExecutionMutation.isPending
+      ? "pending"
+      : startExecutionMutation.isError
+        ? "error"
+        : alreadyExecuting || startExecutionMutation.isSuccess
+          ? hasAnyProcesses
+            ? "success"
+            : "idle"
+          : "idle";
 
   const localRepoPath = configValues.LOCAL_REPO_PATH?.trim() || undefined;
 
