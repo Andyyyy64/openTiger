@@ -19,6 +19,8 @@ import { isQuotaFailure } from "./worker-task-helpers";
 import type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 import { and, desc, inArray, isNotNull, ne } from "drizzle-orm";
 import { resolveWorkerTaskKindPlugin } from "./plugins";
+import { expandVerificationCommandsWithCwd } from "./steps/verify/verify-command-context";
+import { runCommand } from "./steps/verify/command-runner";
 
 const DEFAULT_LOG_DIR = resolve(import.meta.dirname, "../../../raw-logs");
 
@@ -253,28 +255,23 @@ export async function runDirectModeWorker(
 
     // Step 5: Run verification commands (if any)
     console.log("\n[5/5] Running verification commands...");
-    const verificationCommands = taskData.commands ?? [];
+    const rawVerificationCommands = taskData.commands ?? [];
     const commandResults: Array<{ command: string; success: boolean }> = [];
 
-    if (verificationCommands.length > 0) {
-      const { spawnSync } = await import("node:child_process");
-      for (const command of verificationCommands) {
-        const parts = command.split(/\s+/);
-        const cmd = parts[0] ?? command;
-        const args = parts.slice(1);
+    if (rawVerificationCommands.length > 0) {
+      const expandedCommands = expandVerificationCommandsWithCwd(
+        rawVerificationCommands.map((command) => ({ command, source: "explicit" as const })),
+        projectPath,
+      );
+      for (const { command, cwd } of expandedCommands) {
         console.log(`  Running: ${command}`);
-        const result = spawnSync(cmd, args, {
-          cwd: projectPath,
-          timeout: 300_000,
-          encoding: "utf-8",
-          env: { ...process.env },
-        });
-        const success = result.status === 0;
-        commandResults.push({ command, success });
-        if (!success) {
-          console.warn(`  FAILED: ${command} (exit ${result.status})`);
-          if (result.stderr) {
-            console.warn(`  stderr: ${result.stderr.slice(0, 500)}`);
+        const result = await runCommand(command, cwd);
+        commandResults.push({ command, success: result.success });
+        if (!result.success) {
+          console.warn(`  FAILED: ${command} (exit ${result.exitCode})`);
+          const output = result.stderr || result.stdout;
+          if (output) {
+            console.warn(`  stderr: ${output.slice(0, 500)}`);
           }
         } else {
           console.log(`  PASSED: ${command}`);
