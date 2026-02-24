@@ -35,6 +35,7 @@ export const ChatPage: React.FC = () => {
   const [streamingText, setStreamingText] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const streamCleanupRef = useRef<(() => void) | null>(null);
+  const rawStreamTextRef = useRef("");
   const [cachedHostinfo, setCachedHostinfo] = useState("");
   const hasFetchedHostinfoRef = useRef(false);
 
@@ -280,24 +281,32 @@ export const ChatPage: React.FC = () => {
         streamCleanupRef.current();
         streamCleanupRef.current = null;
       }
+      rawStreamTextRef.current = "";
       setStreamingText("");
       setIsStreaming(true);
       const cleanup = subscribeToChatStream(
         conversationId,
-        (chunk) => setStreamingText((prev) => {
+        (chunk) => {
           const marker = "---PLAN_READY---";
-          const next = prev + chunk;
+          rawStreamTextRef.current += chunk;
+          const raw = rawStreamTextRef.current;
+          let display: string;
           // Strip full marker and everything after it
-          const idx = next.indexOf(marker);
-          if (idx >= 0) return next.slice(0, idx).trimEnd();
-          // Hide trailing partial marker (e.g. "---PLAN_" at end of accumulated text)
-          for (let i = Math.min(marker.length - 1, next.length); i > 0; i--) {
-            if (next.endsWith(marker.slice(0, i))) {
-              return next.slice(0, next.length - i);
+          const idx = raw.indexOf(marker);
+          if (idx >= 0) {
+            display = raw.slice(0, idx).trimEnd();
+          } else {
+            // Hide trailing partial marker (e.g. "---PLAN_" at end of accumulated text)
+            display = raw;
+            for (let i = Math.min(marker.length - 1, raw.length); i > 0; i--) {
+              if (raw.endsWith(marker.slice(0, i))) {
+                display = raw.slice(0, raw.length - i);
+                break;
+              }
             }
           }
-          return next;
-        }),
+          setStreamingText(display);
+        },
         () => {
           setIsStreaming(false);
           setStreamingText("");
