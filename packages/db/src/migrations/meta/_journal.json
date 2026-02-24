@@ -204,6 +204,13 @@
       "when": 1771758724136,
       "tag": "0028_vengeful_mariko_yashida",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1771936471077,
+      "tag": "0029_flashy_obadiah_stane",
+      "breakpoints": true
     }
   ]
 }
