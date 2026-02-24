@@ -155,27 +155,33 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
 
         {!expanded && (
           <div className="flex gap-3">
-            <button
-              onClick={handleDirect}
-              className="bg-term-tiger text-black px-5 py-2 text-xs font-bold uppercase hover:opacity-90"
-              title="Edit files directly, no git"
-            >
-              DIRECT MODE
-            </button>
-            <button
-              onClick={handleLocalGit}
-              className="border border-term-tiger text-term-tiger px-5 py-2 text-xs font-bold uppercase hover:bg-term-tiger/10"
-              title="Worktree + local commits"
-            >
-              LOCAL GIT
-            </button>
-            <button
-              onClick={() => setExpanded("github")}
-              className="border border-term-tiger text-term-tiger px-5 py-2 text-xs font-bold uppercase hover:bg-term-tiger/10"
-              title="Clone, branch, PR"
-            >
-              GITHUB
-            </button>
+            <div className="flex flex-col items-start">
+              <button
+                onClick={handleDirect}
+                className="border border-term-tiger text-term-tiger px-5 py-2 text-xs font-bold uppercase hover:bg-term-tiger/10"
+              >
+                DIRECT
+              </button>
+              <span className="text-[10px] text-zinc-600 mt-1 px-1">Edit files in-place, no git</span>
+            </div>
+            <div className="flex flex-col items-start">
+              <button
+                onClick={handleLocalGit}
+                className="border border-term-tiger text-term-tiger px-5 py-2 text-xs font-bold uppercase hover:bg-term-tiger/10"
+              >
+                LOCAL GIT
+              </button>
+              <span className="text-[10px] text-zinc-600 mt-1 px-1">Worktree + local commits</span>
+            </div>
+            <div className="flex flex-col items-start">
+              <button
+                onClick={() => setExpanded("github")}
+                className="border border-term-tiger text-term-tiger px-5 py-2 text-xs font-bold uppercase hover:bg-term-tiger/10"
+              >
+                GITHUB
+              </button>
+              <span className="text-[10px] text-zinc-600 mt-1 px-1">Clone, branch, PR</span>
+            </div>
           </div>
         )}
 
