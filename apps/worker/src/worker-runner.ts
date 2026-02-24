@@ -33,7 +33,7 @@ import {
   sanitizeRetryHint,
   validateExpectedFiles,
 } from "./worker-task-helpers";
-import { buildTaskLogPath, setTaskLogPath } from "./worker-logging";
+import { buildTaskLogPath, setTaskLogPath, resolveLogDir } from "./worker-logging";
 import { finalizeTaskState } from "./worker-runner-state";
 import {
   getRuntimeExecutorDisplayName,
@@ -49,25 +49,12 @@ import { resolveWorkerTaskKindPlugin } from "./plugins";
 
 export type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 const DEFAULT_LOG_DIR = resolve(import.meta.dirname, "../../../raw-logs");
-const LEGACY_LOG_DIR_PLACEHOLDER_MARKER = "/absolute/path/to/opentiger";
-
-function resolveLogDir(fallbackDir: string): string {
-  const candidate =
-    process.env.OPENTIGER_LOG_DIR?.trim() || process.env.OPENTIGER_RAW_LOG_DIR?.trim();
-  if (
-    candidate &&
-    !candidate.trim().replace(/\\/gu, "/").toLowerCase().includes(LEGACY_LOG_DIR_PLACEHOLDER_MARKER)
-  ) {
-    return resolve(candidate);
-  }
-  return resolve(fallbackDir);
-}
 
 // Main task execution
 export async function runWorker(taskData: Task, config: WorkerConfig): Promise<WorkerResult> {
   const repoMode = getRepoMode();
 
-  // Route direct mode to dedicated runner
+  // Route direct mode to dedicated runner (plugin kinds are handled inside)
   if (repoMode === "direct") {
     const { runDirectModeWorker } = await import("./worker-runner-direct");
     return runDirectModeWorker(taskData, config);

@@ -31,18 +31,71 @@ const DEFAULT_IGNORE = [
   ".claude",
 ];
 
-function parseGitignorePatterns(content: string): string[] {
-  return content
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith("#"))
-    .map((line) => (line.endsWith("/") ? line.slice(0, -1) : line));
+interface IgnoreRule {
+  /** Exact directory/file name match (e.g. "node_modules") */
+  type: "exact";
+  pattern: string;
 }
 
-function shouldIgnore(relativePath: string, ignoreSet: Set<string>): boolean {
+interface IgnoreGlobRule {
+  /** Glob extension match (e.g. "*.log" → ".log") */
+  type: "ext";
+  ext: string;
+}
+
+interface IgnorePathRule {
+  /** Path prefix match (e.g. "build/output" matches "build/output/foo.js") */
+  type: "path";
+  prefix: string;
+}
+
+type ParsedIgnoreRule = IgnoreRule | IgnoreGlobRule | IgnorePathRule;
+
+function parseGitignorePatterns(content: string): ParsedIgnoreRule[] {
+  const rules: ParsedIgnoreRule[] = [];
+  for (const raw of content.split("\n")) {
+    const line = raw.trim();
+    if (line.length === 0 || line.startsWith("#") || line.startsWith("!")) continue;
+    const cleaned = line.endsWith("/") ? line.slice(0, -1) : line;
+    if (!cleaned) continue;
+
+    if (cleaned.startsWith("*.") && !cleaned.includes("/")) {
+      // Extension glob: "*.log" → match files ending with ".log"
+      rules.push({ type: "ext", ext: cleaned.slice(1) });
+    } else if (cleaned.includes("/")) {
+      // Path-based pattern: "build/output" → prefix match
+      rules.push({ type: "path", prefix: cleaned });
+    } else {
+      // Exact name match against any path component
+      rules.push({ type: "exact", pattern: cleaned });
+    }
+  }
+  return rules;
+}
+
+function shouldIgnore(
+  relativePath: string,
+  exactSet: Set<string>,
+  rules: ParsedIgnoreRule[],
+): boolean {
   const parts = relativePath.split("/");
   for (const part of parts) {
-    if (ignoreSet.has(part)) return true;
+    if (exactSet.has(part)) return true;
+  }
+  for (const rule of rules) {
+    switch (rule.type) {
+      case "exact":
+        for (const part of parts) {
+          if (part === rule.pattern) return true;
+        }
+        break;
+      case "ext":
+        if (relativePath.endsWith(rule.ext)) return true;
+        break;
+      case "path":
+        if (relativePath.startsWith(rule.prefix + "/") || relativePath === rule.prefix) return true;
+        break;
+    }
   }
   return false;
 }
@@ -51,18 +104,24 @@ export async function takeSnapshot(
   root: string,
   options?: { ignore?: string[] },
 ): Promise<FileSnapshot> {
-  const ignoreList = [...DEFAULT_IGNORE, ...(options?.ignore ?? [])];
+  const exactIgnores = new Set([...DEFAULT_IGNORE, ...(options?.ignore ?? [])]);
+  const gitignoreRules: ParsedIgnoreRule[] = [];
 
   // Read .gitignore if exists
   try {
     const gitignoreContent = await readFile(join(root, ".gitignore"), "utf-8");
-    const gitignorePatterns = parseGitignorePatterns(gitignoreContent);
-    ignoreList.push(...gitignorePatterns);
+    const parsed = parseGitignorePatterns(gitignoreContent);
+    for (const rule of parsed) {
+      if (rule.type === "exact") {
+        exactIgnores.add(rule.pattern);
+      } else {
+        gitignoreRules.push(rule);
+      }
+    }
   } catch {
     // No .gitignore, continue
   }
 
-  const ignoreSet = new Set(ignoreList);
   const entries = new Map<string, FileEntry>();
 
   const dirEntries = await readdir(root, { recursive: true, withFileTypes: true });
@@ -74,7 +133,7 @@ export async function takeSnapshot(
     const fullPath = join(parentPath, entry.name);
     const relativePath = relative(root, fullPath);
 
-    if (shouldIgnore(relativePath, ignoreSet)) continue;
+    if (shouldIgnore(relativePath, exactIgnores, gitignoreRules)) continue;
 
     try {
       const fileStat = await stat(fullPath);

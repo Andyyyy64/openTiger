@@ -8,14 +8,6 @@ export function resolveRepoMode(value?: string): RepoMode {
   return "github";
 }
 
-export function isDirectMode(env: NodeJS.ProcessEnv = process.env): boolean {
-  return getRepoMode(env) === "direct";
-}
-
-export function requiresGit(mode: RepoMode): boolean {
-  return mode !== "direct";
-}
-
 export function getRepoMode(env: NodeJS.ProcessEnv = process.env): RepoMode {
   return resolveRepoMode(env.REPO_MODE);
 }

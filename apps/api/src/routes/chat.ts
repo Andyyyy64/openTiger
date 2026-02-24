@@ -374,6 +374,8 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
     try {
       const configRow = await ensureConfigRow();
       const { config: configTable } = await import("@openTiger/db/schema");
+      // Resolve workerCount: direct mode forces 1, others restore default
+      const defaultWorkerCount = "4";
       if (mode === "github" && githubOwner && githubRepo) {
         const repoUrl = `https://github.com/${githubOwner}/${githubRepo}`;
         await db
@@ -384,6 +386,7 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
             githubOwner,
             githubRepo,
             baseBranch,
+            workerCount: configRow.workerCount === "1" ? defaultWorkerCount : configRow.workerCount,
             updatedAt: new Date(),
           })
           .where(eq(configTable.id, configRow.id));
@@ -401,6 +404,7 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
           .update(configTable)
           .set({
             repoMode: "local-git",
+            workerCount: configRow.workerCount === "1" ? defaultWorkerCount : configRow.workerCount,
             updatedAt: new Date(),
           })
           .where(eq(configTable.id, configRow.id));

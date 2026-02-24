@@ -12,27 +12,15 @@ import {
 import { takeSnapshot, diffSnapshots } from "@openTiger/vcs";
 import { executeTask } from "./steps/index";
 import { validateExpectedFiles, shouldAllowNoChanges, sanitizeRetryHint } from "./worker-task-helpers";
-import { buildTaskLogPath, setTaskLogPath } from "./worker-logging";
+import { buildTaskLogPath, setTaskLogPath, resolveLogDir } from "./worker-logging";
 import { finalizeTaskState } from "./worker-runner-state";
 import { getRuntimeExecutorDisplayName, isExecutionTimeout } from "./worker-runner-utils";
 import { isQuotaFailure } from "./worker-task-helpers";
 import type { WorkerConfig, WorkerResult } from "./worker-runner-types";
 import { and, desc, inArray, isNotNull, ne } from "drizzle-orm";
+import { resolveWorkerTaskKindPlugin } from "./plugins";
 
 const DEFAULT_LOG_DIR = resolve(import.meta.dirname, "../../../raw-logs");
-const LEGACY_LOG_DIR_PLACEHOLDER_MARKER = "/absolute/path/to/opentiger";
-
-function resolveLogDir(fallbackDir: string): string {
-  const candidate =
-    process.env.OPENTIGER_LOG_DIR?.trim() || process.env.OPENTIGER_RAW_LOG_DIR?.trim();
-  if (
-    candidate &&
-    !candidate.trim().replace(/\\/gu, "/").toLowerCase().includes(LEGACY_LOG_DIR_PLACEHOLDER_MARKER)
-  ) {
-    return resolve(candidate);
-  }
-  return resolve(fallbackDir);
-}
 
 export async function runDirectModeWorker(
   taskData: Task,
@@ -49,6 +37,9 @@ export async function runDirectModeWorker(
   } = config;
   const effectivePolicy = applyRepoModePolicyOverrides(policy);
   const projectPath = getLocalRepoPath();
+
+  // Resolve plugin for non-code task kinds (e.g., research)
+  const taskKindPlugin = resolveWorkerTaskKindPlugin(taskData.kind);
 
   if (!projectPath) {
     return {
@@ -89,6 +80,46 @@ export async function runDirectModeWorker(
   await db.update(runs).set({ logPath: taskLogPath }).where(eq(runs.id, runId));
 
   try {
+    // Handle plugin-based task kinds (e.g., research)
+    if (!taskKindPlugin && taskData.kind !== "code") {
+      const unsupportedKindMessage =
+        `Unsupported task kind without enabled plugin handler: ${taskData.kind}. ` +
+        "Enable the matching plugin via system config ENABLED_PLUGINS and restart processes before dispatch.";
+      await finalizeTaskState({
+        runId,
+        taskId,
+        agentId,
+        runStatus: "failed",
+        taskStatus: "failed",
+        blockReason: null,
+        errorMessage: unsupportedKindMessage,
+        errorMeta: {
+          source: "execution",
+          failureCode: FAILURE_CODE.EXECUTION_FAILED,
+        },
+      });
+      return {
+        success: false,
+        taskId,
+        runId,
+        error: unsupportedKindMessage,
+      };
+    }
+
+    if (taskKindPlugin) {
+      console.log(`\n[Plugin:${taskKindPlugin.kind}] Running plugin execution path (direct mode)...`);
+      return await taskKindPlugin.run({
+        task: taskData,
+        runId,
+        agentId,
+        workspacePath: projectPath,
+        model,
+        instructionsPath: taskKindPlugin.resolveInstructionsPath
+          ? taskKindPlugin.resolveInstructionsPath(taskData, config.instructionsPath)
+          : config.instructionsPath,
+      });
+    }
+
     // Step 1: Take pre-execution snapshot
     console.log("\n[1/5] Taking pre-execution snapshot...");
     const beforeSnapshot = await takeSnapshot(projectPath);
@@ -229,6 +260,9 @@ export async function runDirectModeWorker(
       }
     }
 
+    // Check if any verification commands failed
+    const hasVerificationFailure = commandResults.some((r) => !r.success);
+
     // Record artifact
     await db.insert(artifacts).values({
       runId,
@@ -241,6 +275,37 @@ export async function runDirectModeWorker(
         verificationResults: commandResults,
       },
     });
+
+    if (hasVerificationFailure) {
+      const failedCommands = commandResults
+        .filter((r) => !r.success)
+        .map((r) => r.command)
+        .join(", ");
+      const errorMessage = `Verification commands failed: ${failedCommands}`;
+      console.error(`[Worker] ${errorMessage}`);
+
+      await finalizeTaskState({
+        runId,
+        taskId,
+        agentId,
+        runStatus: "failed",
+        taskStatus: "failed",
+        blockReason: null,
+        errorMessage,
+        costTokens: executeResult.openCodeResult.tokenUsage?.totalTokens ?? null,
+        errorMeta: {
+          source: "verification",
+          failureCode: FAILURE_CODE.EXECUTION_FAILED,
+        },
+      });
+
+      return {
+        success: false,
+        taskId,
+        runId,
+        error: errorMessage,
+      };
+    }
 
     // Direct mode: task goes directly to done (no judge review)
     await finalizeTaskState({
