@@ -31,7 +31,7 @@
     "@openTiger/plugin-tiger-research": "workspace:*",
     "@openTiger/queue": "workspace:*",
     "@openTiger/vcs": "workspace:*",
-    "bullmq": "^5.66.5",
+    "bullmq": "^5.70.1",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.38.4",
     "minimatch": "^10.2.0",
