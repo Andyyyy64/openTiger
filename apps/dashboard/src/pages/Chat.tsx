@@ -6,7 +6,7 @@ import {
   subscribeToChatStream,
   type ChatMessage,
 } from "../lib/chat-api";
-import { agentsApi, configApi, systemApi } from "../lib/api";
+import { agentsApi, configApi, logsApi, systemApi } from "../lib/api";
 import { collectConfiguredExecutors } from "../lib/llm-executor";
 import { ChatMessageList } from "../components/chat/ChatMessageList";
 import { ChatInput } from "../components/chat/ChatInput";
@@ -180,6 +180,17 @@ export const ChatPage: React.FC = () => {
         setHostinfoToStorage(data.output);
         setCachedHostinfo(data.output);
       }
+    },
+  });
+  const [clearLogMessage, setClearLogMessage] = useState("");
+  const clearLogsMutation = useMutation({
+    mutationFn: () => logsApi.clear(),
+    onSuccess: (data) => {
+      const count = data.removed + data.truncated;
+      setClearLogMessage(`CLEARED: ${count}`);
+    },
+    onError: () => {
+      setClearLogMessage("CLEAR_FAIL");
     },
   });
 
@@ -383,6 +394,7 @@ export const ChatPage: React.FC = () => {
       githubOwner?: string;
       githubRepo?: string;
       baseBranch?: string;
+      localRepoPath?: string;
     }) => {
       if (!activeConversationId) throw new Error("No active conversation");
 
@@ -400,9 +412,14 @@ export const ChatPage: React.FC = () => {
               .join("\n\n")
           : "";
 
-      // 3. Sync requirement content
+      // 3. Sync requirement content (best-effort — non-git repos or missing
+      //    LOCAL_REPO_PATH should not block execution startup)
       if (planContent.trim().length > 0) {
-        await systemApi.syncRequirement({ content: planContent });
+        try {
+          await systemApi.syncRequirement({ content: planContent });
+        } catch {
+          // Requirement sync is non-fatal; direct mode repos may lack git
+        }
       }
 
       // 4. Run preflight to get process recommendations
@@ -495,17 +512,21 @@ export const ChatPage: React.FC = () => {
   const alreadyExecuting = conversationPhase === "execution" || conversationPhase === "monitoring";
 
   const hasAnyProcesses = processes?.some((p) => p.status === "running") ?? false;
-  const executionStatus: "idle" | "pending" | "success" | "error" = alreadyExecuting
-    ? hasAnyProcesses
+  // Mutation state takes priority within the current session to prevent
+  // the card from flashing back to "idle" between mutation success and
+  // processes actually starting (which caused duplicate execution clicks).
+  const executionStatus: "idle" | "pending" | "success" | "error" =
+    startExecutionMutation.isSuccess
       ? "success"
-      : "idle" // execution phase set but no processes launched (partial failure)
-    : startExecutionMutation.isSuccess
-      ? "success"
-      : startExecutionMutation.isError
-        ? "error"
-        : startExecutionMutation.isPending
-          ? "pending"
-          : "idle";
+      : startExecutionMutation.isPending
+        ? "pending"
+        : startExecutionMutation.isError
+          ? "error"
+          : alreadyExecuting
+            ? hasAnyProcesses
+              ? "success"
+              : "idle"
+            : "idle";
 
   const localRepoPath = configValues.LOCAL_REPO_PATH?.trim() || undefined;
 
@@ -705,8 +726,20 @@ export const ChatPage: React.FC = () => {
         <div className="w-80 border-l border-term-border flex flex-col shrink-0 min-h-0 overflow-y-auto">
           {/* Status Monitor */}
           <div className="border-b border-term-border">
-            <div className="bg-term-border/10 px-3 py-1.5 border-b border-term-border">
+            <div className="bg-term-border/10 px-3 py-1.5 border-b border-term-border flex justify-between items-center">
               <h2 className="text-[11px] font-bold uppercase tracking-wider">Status_Monitor</h2>
+              <div className="flex items-center gap-1.5">
+                {clearLogMessage && (
+                  <span className="text-[9px] text-zinc-500 font-mono">{clearLogMessage}</span>
+                )}
+                <button
+                  onClick={() => clearLogsMutation.mutate()}
+                  disabled={clearLogsMutation.isPending}
+                  className="border border-term-border hover:bg-term-fg hover:text-black px-1.5 py-0 text-[10px] uppercase transition-colors disabled:opacity-50 cursor-pointer font-mono"
+                >
+                  {clearLogsMutation.isPending ? "..." : "CLEAR_LOG"}
+                </button>
+              </div>
             </div>
             <div className="p-3 font-mono text-xs space-y-2">
               <div className="grid grid-cols-2 gap-y-1">

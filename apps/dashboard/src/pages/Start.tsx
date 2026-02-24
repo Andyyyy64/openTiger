@@ -692,9 +692,21 @@ export const StartPage: React.FC = () => {
           <section className="border border-term-border p-0 h-full">
             <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between items-center">
               <h2 className="text-sm font-bold uppercase tracking-wider">Status_Monitor</h2>
-              <span className="text-xs text-zinc-500">
-                {isHealthy ? "[API: ONLINE]" : "[API: OFFLINE]"}
-              </span>
+              <div className="flex items-center gap-2">
+                {clearLogMessage && (
+                  <span className="text-[10px] text-zinc-500 font-mono">{clearLogMessage}</span>
+                )}
+                <button
+                  onClick={() => clearLogsMutation.mutate()}
+                  disabled={clearLogsMutation.isPending}
+                  className="border border-term-border hover:bg-term-fg hover:text-black px-2 py-0.5 text-[11px] uppercase transition-colors disabled:opacity-50 cursor-pointer font-mono"
+                >
+                  {clearLogsMutation.isPending ? "clearing..." : "[ CLEAR_LOG ]"}
+                </button>
+                <span className="text-xs text-zinc-500">
+                  {isHealthy ? "[API: ONLINE]" : "[API: OFFLINE]"}
+                </span>
+              </div>
             </div>
 
             <div className="p-4 space-y-4 font-mono text-sm">
