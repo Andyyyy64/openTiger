@@ -158,11 +158,12 @@ export const ChatPage: React.FC = () => {
     },
   });
 
+  const createRepoMutateAsync = createRepoMutation.mutateAsync;
   const handleCreateRepo = useCallback(
     async (owner: string, repo: string) => {
-      await createRepoMutation.mutateAsync({ owner, repo });
+      await createRepoMutateAsync({ owner, repo });
     },
-    [createRepoMutation],
+    [createRepoMutateAsync],
   );
 
 
@@ -188,7 +189,8 @@ export const ChatPage: React.FC = () => {
       hasFetchedHostinfoRef.current = true;
       hostinfoReloadMutation.mutate();
     }
-  }, [hostinfoReloadMutation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only run once on mount, ref guards re-entry
+  }, []);
 
   const hostinfoOutput =
     hostinfoReloadMutation.data?.available && hostinfoReloadMutation.data?.output
@@ -238,8 +240,11 @@ export const ChatPage: React.FC = () => {
       }
       setIsStreaming(false);
       setStreamingText("");
+      setChatMessages([]);
+      startExecutionMutation.reset();
       setActiveConversationId(conversationId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startExecutionMutation.reset is stable
   }, [conversationId, activeConversationId]);
 
   // Auto-select the most recent executing conversation when landing on /chat with no id
