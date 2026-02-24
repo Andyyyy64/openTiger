@@ -55,10 +55,10 @@ export function pushChunk(conversationId: string, text: string): void {
 /** Auto-remove session after a delay to allow late-connecting SSE clients to catch up. */
 const SESSION_CLEANUP_DELAY_MS = 60_000;
 
-function scheduleCleanup(conversationId: string): void {
+function scheduleCleanup(conversationId: string, session: ActiveChatSession): void {
   setTimeout(() => {
-    const session = activeSessions.get(conversationId);
-    if (session?.done) {
+    // Only delete if the map still holds the same session instance
+    if (activeSessions.get(conversationId) === session) {
       activeSessions.delete(conversationId);
     }
   }, SESSION_CLEANUP_DELAY_MS);
@@ -73,7 +73,7 @@ export function markDone(conversationId: string, finalContent: string): void {
   for (const listener of session.listeners) {
     listener(event);
   }
-  scheduleCleanup(conversationId);
+  scheduleCleanup(conversationId, session);
 }
 
 export function markError(conversationId: string, error: string): void {
@@ -85,7 +85,7 @@ export function markError(conversationId: string, error: string): void {
   for (const listener of session.listeners) {
     listener(event);
   }
-  scheduleCleanup(conversationId);
+  scheduleCleanup(conversationId, session);
 }
 
 export function addListener(
