@@ -124,6 +124,8 @@ export const ChatPage: React.FC = () => {
     enabled: hasGithubAuth,
   });
   const githubRepos = useMemo(() => githubReposQuery.data?.repos ?? [], [githubReposQuery.data]);
+  const isLoadingRepos = githubReposQuery.isLoading;
+  const refreshRepos = githubReposQuery.refetch;
 
   const currentRepo = useMemo(() => {
     const owner = configValues.GITHUB_OWNER?.trim();
@@ -504,13 +506,13 @@ export const ChatPage: React.FC = () => {
     () => ({
       currentRepo,
       githubRepos,
-      isLoadingRepos: githubReposQuery.isLoading,
-      onRefreshRepos: () => githubReposQuery.refetch(),
+      isLoadingRepos,
+      onRefreshRepos: refreshRepos,
       onCreateRepo: handleCreateRepo,
       isCreatingRepo: createRepoMutation.isPending,
       executionStatus,
     }),
-    [currentRepo, githubRepos, githubReposQuery, handleCreateRepo, createRepoMutation.isPending, executionStatus],
+    [currentRepo, githubRepos, isLoadingRepos, refreshRepos, handleCreateRepo, createRepoMutation.isPending, executionStatus],
   );
 
   const deleteMutation = useMutation({
