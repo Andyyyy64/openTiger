@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, primaryKey, uuid, text, integer, timestamp, jsonb } from "drizzle-orm/pg-core";
 
 // Tasks table: work unit management
 export const tasks = pgTable("tasks", {
@@ -131,6 +131,29 @@ export const cycles = pgTable("cycles", {
   metadata: jsonb("metadata"),
 });
 
+// Conversations table: chat sessions
+export const conversations = pgTable("conversations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title"),
+  status: text("status").default("active").notNull(), // active/completed/archived
+  metadata: jsonb("metadata"), // { phase, repoMode, githubOwner, githubRepo, ... }
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Messages table: chat messages within conversations
+export const messages = pgTable("messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  conversationId: uuid("conversation_id")
+    .references(() => conversations.id)
+    .notNull(),
+  role: text("role").notNull(), // user/assistant/system
+  content: text("content").notNull(),
+  messageType: text("message_type").default("text").notNull(), // text/plan_proposal/execution_status/repo_prompt/error
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // Config table: persist system config in DB
 export const config = pgTable("config", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -223,6 +246,17 @@ export const config = pgTable("config", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// Plugin migration history (managed by plugin-migrations/runner.ts, declared here so drizzle-kit doesn't drop it)
+export const pluginMigrationHistory = pgTable(
+  "plugin_migration_history",
+  {
+    pluginId: text("plugin_id").notNull(),
+    migrationName: text("migration_name").notNull(),
+    appliedAt: timestamp("applied_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.pluginId, table.migrationName] })],
+);
+
 // Type exports
 export type TaskRecord = typeof tasks.$inferSelect;
 export type NewTaskRecord = typeof tasks.$inferInsert;
@@ -250,3 +284,9 @@ export type NewCycleRecord = typeof cycles.$inferInsert;
 
 export type ConfigRecord = typeof config.$inferSelect;
 export type NewConfigRecord = typeof config.$inferInsert;
+
+export type ConversationRecord = typeof conversations.$inferSelect;
+export type NewConversationRecord = typeof conversations.$inferInsert;
+
+export type MessageRecord = typeof messages.$inferSelect;
+export type NewMessageRecord = typeof messages.$inferInsert;

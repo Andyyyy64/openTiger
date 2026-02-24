@@ -21,6 +21,7 @@
     "@hono/zod-validator": "^0.4.2",
     "@openTiger/core": "workspace:*",
     "@openTiger/db": "workspace:*",
+    "@openTiger/llm": "workspace:*",
     "@openTiger/plugin-sdk": "workspace:*",
     "@openTiger/plugin-tiger-research": "workspace:*",
     "@openTiger/queue": "workspace:*",

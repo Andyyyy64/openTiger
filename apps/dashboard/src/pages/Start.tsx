@@ -5,16 +5,22 @@ import {
   logsApi,
   systemApi,
   type GitHubRepoListItem,
-  type SystemProcess,
 } from "../lib/api";
 import { BrailleSpinner } from "../components/BrailleSpinner";
 import { NeofetchPanel } from "../components/NeofetchPanel";
 import { collectConfiguredExecutors } from "../lib/llm-executor";
+import {
+  getHostinfoFromStorage,
+  setHostinfoToStorage,
+  STATUS_LABELS,
+  STATUS_COLORS,
+  normalizeExecutionEnvironment,
+  parseCount,
+} from "../lib/status-helpers";
 
 const MAX_PLANNERS = 1;
 
 const LAST_SELECTED_REPO_KEY = "opentiger:lastSelectedRepo";
-const HOSTINFO_CACHE_KEY = "opentiger:hostinfo";
 
 function getLastSelectedRepo(): string {
   if (typeof window === "undefined") return "";
@@ -38,44 +44,6 @@ function setLastSelectedRepo(fullName: string): void {
   }
 }
 
-function getHostinfoFromStorage(): string {
-  if (typeof window === "undefined") return "";
-  try {
-    return localStorage.getItem(HOSTINFO_CACHE_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function setHostinfoToStorage(output: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    if (output) {
-      localStorage.setItem(HOSTINFO_CACHE_KEY, output);
-    } else {
-      localStorage.removeItem(HOSTINFO_CACHE_KEY);
-    }
-  } catch {
-    // ignore
-  }
-}
-
-const STATUS_LABELS: Record<SystemProcess["status"], string> = {
-  idle: "IDLE",
-  running: "RUNNING",
-  completed: "DONE",
-  failed: "FAILED",
-  stopped: "STOPPED",
-};
-
-const STATUS_COLORS: Record<SystemProcess["status"], string> = {
-  idle: "text-zinc-500",
-  running: "text-term-tiger animate-pulse",
-  completed: "text-zinc-300",
-  failed: "text-red-500",
-  stopped: "text-yellow-500",
-};
-
 type StartResult = {
   started: string[];
   errors: string[];
@@ -88,38 +56,13 @@ type StartConfirmation = {
   openPrCount: number;
 };
 
-type ExecutionEnvironment = "host" | "sandbox";
-
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (!value) return fallback;
   return value.toLowerCase() !== "false";
 }
 
-function parseCount(
-  value: string | undefined,
-  fallback: number,
-  label: string,
-  max?: number,
-): { count: number; warning?: string } {
-  const parsed = value ? parseInt(value, 10) : NaN;
-  const normalized = Number.isFinite(parsed) ? parsed : fallback;
-  const base = Math.max(0, normalized);
-  if (typeof max !== "number") {
-    return { count: base };
-  }
-  const clamped = Math.min(base, max);
-  if (base > max) {
-    return { count: clamped, warning: `${label} max limit ${max}` };
-  }
-  return { count: clamped };
-}
-
 const formatTimestamp = (value?: string) =>
   value ? new Date(value).toLocaleTimeString() : "--:--:--";
-
-function normalizeExecutionEnvironment(value: string | undefined): ExecutionEnvironment {
-  return value?.trim().toLowerCase() === "sandbox" ? "sandbox" : "host";
-}
 
 export const StartPage: React.FC = () => {
   const queryClient = useQueryClient();

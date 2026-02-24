@@ -53,6 +53,7 @@ Main targets:
 | Recovery/maintenance | `POST /system/cleanup`, `POST /logs/clear`                                                                      |
 | GitHub integration   | `GET /system/github/auth`, `GET /system/github/repos`, `POST /system/github/repo`, `POST /webhook/github`       |
 | Requirement updates  | `GET /system/requirements`, `POST /system/requirements`                                                         |
+| Chat (conversational)| `POST /chat/conversations`, `GET /chat/conversations/:id`, `POST /chat/conversations/:id/messages`, `POST /chat/conversations/:id/start-execution` |
 | TigerResearch plugin | `GET /plugins/tiger-research/jobs`, `GET /plugins/tiger-research/jobs/:id`, `POST /plugins/tiger-research/jobs` |
 | Plugin inventory     | `GET /plugins`                                                                                                  |
 
@@ -82,10 +83,10 @@ Common path when tracing from state vocabulary to transition to owner to impleme
 
 | Starting point (API/symptom)                      | State vocabulary ref                                                                                                                      | Transition ref (flow)                                                                                                                                                 | Owner agent ref                                                     | Implementation ref                            |
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------- |
-| `queued`/`running` stuck in `GET /tasks`          | [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis)                                                                | [flow](flow.md#2-basic-lifecycle), [flow](flow.md#5-dispatcher-recovery-layer), [flow](flow.md#6-worker-failure-handling)                                             | [Dispatcher/Worker](agent/dispatcher.md), [Worker](agent/worker.md) | `apps/dispatcher/src/`, `apps/worker/src/`    |
-| `awaiting_judge` stuck in `GET /tasks`            | [state-model](state-model.md#2-task-block-reason), [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis)             | [flow](flow.md#3-blocked-reasons-used-for-recovery), [flow](flow.md#4-run-lifecycle-and-judge-idempotency), [flow](flow.md#7-judge-non-approval--merge-failure-paths) | [Judge](agent/judge.md)                                             | `apps/judge/src/`                             |
-| `quota_wait`/`needs_rework` chain in `GET /tasks` | [state-model](state-model.md#22-task-retry-reason-operations), [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis) | [flow](flow.md#3-blocked-reasons-used-for-recovery), [flow](flow.md#6-worker-failure-handling), [flow](flow.md#8-cycle-manager-self-recovery)                         | Worker/Judge/Cycle Manager (each agent spec)                        | "Implementation reference" in each agent spec |
-| `issue_linking` stuck in `GET /tasks`             | [state-model](state-model.md#2-task-block-reason), [state-model](state-model.md#7-patterns-prone-to-stalls-initial-diagnosis)             | [flow](flow.md#3-blocked-reasons-used-for-recovery)                                                                                                                   | [Planner](agent/planner.md)                                         | `apps/planner/src/`                           |
+| `queued`/`running` stuck in `GET /tasks`          | [state-model](state-model.md#8-patterns-prone-to-stalls-initial-diagnosis)                                                                | [flow](flow.md#2-basic-lifecycle), [flow](flow.md#5-dispatcher-recovery-layer), [flow](flow.md#6-worker-failure-handling)                                             | [Dispatcher/Worker](agent/dispatcher.md), [Worker](agent/worker.md) | `apps/dispatcher/src/`, `apps/worker/src/`    |
+| `awaiting_judge` stuck in `GET /tasks`            | [state-model](state-model.md#2-task-block-reason), [state-model](state-model.md#8-patterns-prone-to-stalls-initial-diagnosis)             | [flow](flow.md#3-blocked-reasons-used-for-recovery), [flow](flow.md#4-run-lifecycle-and-judge-idempotency), [flow](flow.md#7-judge-non-approval--merge-failure-paths) | [Judge](agent/judge.md)                                             | `apps/judge/src/`                             |
+| `quota_wait`/`needs_rework` chain in `GET /tasks` | [state-model](state-model.md#22-task-retry-reason-operations), [state-model](state-model.md#8-patterns-prone-to-stalls-initial-diagnosis) | [flow](flow.md#3-blocked-reasons-used-for-recovery), [flow](flow.md#6-worker-failure-handling), [flow](flow.md#8-cycle-manager-self-recovery)                         | Worker/Judge/Cycle Manager (each agent spec)                        | "Implementation reference" in each agent spec |
+| `issue_linking` stuck in `GET /tasks`             | [state-model](state-model.md#2-task-block-reason), [state-model](state-model.md#8-patterns-prone-to-stalls-initial-diagnosis)             | [flow](flow.md#3-blocked-reasons-used-for-recovery)                                                                                                                   | [Planner](agent/planner.md)                                         | `apps/planner/src/`                           |
 
 Note:
 
@@ -229,6 +230,59 @@ Current implementation behavior:
 - Handles `issues` / `pull_request` / `push` / `check_run` / `check_suite`
 - When PR is closed+merged with `[task:<uuid>]` in body, updates task to `done`
 - Otherwise mainly for recording/notification; planner/dispatcher drive via `/system/preflight` etc.
+
+### Chat (Conversational Interface)
+
+The chat API provides a conversational interface for requirement gathering and execution triggering.
+Conversations progress through phases: `greeting` → `requirement_gathering` → `plan_proposal` → `execution` → `monitoring`.
+
+- `POST /chat/conversations`
+  - Creates a new conversation with a greeting message
+  - Body: `{ title?: string }`
+  - Returns: `{ conversation, messages }`
+
+- `GET /chat/conversations`
+  - Lists recent conversations (up to 50, most recent first)
+
+- `GET /chat/conversations/:id`
+  - Returns conversation with all messages
+
+- `DELETE /chat/conversations/:id`
+  - Deletes conversation, all messages, and aborts any active LLM session
+
+- `POST /chat/conversations/:id/messages`
+  - Sends a user message and starts LLM response generation
+  - Body: `{ content: string }`
+  - Returns: `{ userMessage, streaming: true }`
+  - LLM response is streamed via SSE (see stream endpoint)
+
+- `GET /chat/conversations/:id/stream`
+  - SSE stream for LLM response chunks
+  - Events: `chunk` (partial text), `done` (final content), `error` (failure message)
+  - Replays buffered chunks for late-connecting clients
+  - 5-minute timeout
+
+- `POST /chat/conversations/:id/start-execution`
+  - Unified mode selection and execution start
+  - Body: `{ mode: "local" | "git", githubOwner?: string, githubRepo?: string, baseBranch?: string }`
+  - Updates global config, sets conversation to execution phase, inserts `execution_status` message
+  - Input validation: owner/repo must match `[a-zA-Z0-9._-]+`, branch must match `[a-zA-Z0-9._/-]+` (no `..`)
+
+- `POST /chat/conversations/:id/confirm-plan` (legacy)
+- `POST /chat/conversations/:id/configure-repo` (legacy)
+
+Message types:
+
+- `text` — user/assistant conversation messages (included in LLM context)
+- `mode_selection` — system message triggering mode selection UI card
+- `execution_status` — system message showing execution progress
+- `repo_config` — system message for repository configuration (excluded from LLM context)
+
+Phase transitions:
+
+- LLM outputs `---PLAN_READY---` marker when plan is complete
+- Backend strips marker from saved content and inserts `mode_selection` system message
+- `start-execution` transitions conversation to `execution` phase
 
 ---
 

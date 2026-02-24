@@ -910,6 +910,56 @@ export async function getWorkingTreeDiff(cwd: string): Promise<GitResult> {
   return execGit(["diff", "HEAD", "--no-color"], cwd);
 }
 
+/**
+ * Check which paths are covered by .gitignore rules.
+ * Uses `git check-ignore --stdin` to avoid ARG_MAX limits on large file lists.
+ * Returns the set of paths that ARE ignored (even if they were force-committed).
+ * This is a generic mechanism — any build system's output directories are detected
+ * as long as the project's .gitignore lists them.
+ */
+export async function checkGitIgnored(cwd: string, paths: string[]): Promise<Set<string>> {
+  if (paths.length === 0) {
+    return new Set();
+  }
+  const timeoutMs = 30_000;
+  return new Promise((resolve) => {
+    const child = spawn("git", ["check-ignore", "--no-index", "--stdin"], {
+      cwd,
+      env: { ...globalThis.process.env, GIT_TERMINAL_PROMPT: "0" },
+    });
+    let stdout = "";
+    let settled = false;
+    const settle = (result: Set<string>) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      settle(new Set());
+    }, timeoutMs);
+    child.stdout.on("data", (data: Buffer) => {
+      stdout += data.toString();
+    });
+    child.on("close", () => {
+      // exit 0 = some ignored, exit 1 = none ignored, exit 128 = error — all safe
+      settle(
+        new Set(
+          stdout
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0),
+        ),
+      );
+    });
+    child.on("error", () => settle(new Set()));
+    child.stdin.on("error", () => { /* ignore write errors from early child exit */ });
+    child.stdin.write(paths.join("\n"));
+    child.stdin.end();
+  });
+}
+
 // Get untracked files
 export async function getUntrackedFiles(cwd: string): Promise<string[]> {
   const result = await execGit(["ls-files", "--others", "--exclude-standard"], cwd);

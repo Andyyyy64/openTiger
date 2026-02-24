@@ -22,9 +22,10 @@ Related:
 - [4. Agent Status](#4-agent-status)
 - [5. Cycle Status](#5-cycle-status)
 - [5.1 Research Job Status and Stage](#51-research-job-status-and-stage)
-- [6. Usage](#6-usage)
-- [7. Patterns Prone to Stalls (Initial Diagnosis)](#7-patterns-prone-to-stalls-initial-diagnosis)
-- [8. Lookup: State Vocabulary to Transition to Owner to Implementation (Shortest Path)](#8-lookup-state-vocabulary-to-transition-to-owner-to-implementation-shortest-path)
+- [6. Conversation Phase (Chat)](#6-conversation-phase-chat)
+- [7. Usage](#7-usage)
+- [8. Patterns Prone to Stalls (Initial Diagnosis)](#8-patterns-prone-to-stalls-initial-diagnosis)
+- [9. Lookup: State Vocabulary to Transition to Owner to Implementation (Shortest Path)](#9-lookup-state-vocabulary-to-transition-to-owner-to-implementation-shortest-path)
 
 ## 1. Task Status
 
@@ -184,13 +185,43 @@ Research orchestrator stage (`research_jobs.metadata.orchestrator.stage`) common
 - `reworking`
 - `completed`
 
-## 6. Usage
+## 6. Conversation Phase (Chat)
+
+Conversations in the chat interface progress through phases stored in `conversations.metadata.phase`:
+
+- `greeting` — initial state, assistant greeting shown
+- `requirement_gathering` — user providing requirements, LLM asking minimal clarifications
+- `plan_proposal` — LLM has generated a plan (triggered by `---PLAN_READY---` marker)
+- `execution` — mode selected, execution processes started
+- `monitoring` — execution in progress, tracking completion
+
+Notes:
+
+- Phase transition from `requirement_gathering` → `plan_proposal` is marker-based, not message-count-based
+- `plan_proposal` triggers a `mode_selection` system message for the UI
+- `execution` is set by `POST /chat/conversations/:id/start-execution`
+
+### 6.1 Chat Message Types
+
+- `text` — standard conversation messages (user/assistant), included in LLM context
+- `mode_selection` — system card for execution mode selection (local/git)
+- `execution_status` — system card showing execution start and mode
+- `repo_config` — system message for repository configuration changes
+
+Implementation reference:
+
+- `packages/db/src/schema.ts` (`conversations`, `messages` tables)
+- `apps/api/src/routes/chat-orchestrator.ts` (phase resolution, system prompts)
+- `apps/api/src/routes/chat.ts` (endpoints, marker detection)
+- `apps/api/src/routes/chat-state.ts` (SSE session management)
+
+## 7. Usage
 
 - State definitions: this page
 - Transition conditions: [flow](flow.md)
 - Startup formulas: [startup-patterns](startup-patterns.md)
 
-## 6.1 Implementation Reference (Source of Truth)
+## 7.1 Implementation Reference (Source of Truth)
 
 - Task status / block reason:
   - `packages/core/src/domain/task.ts`
@@ -205,7 +236,7 @@ Research orchestrator stage (`research_jobs.metadata.orchestrator.stage`) common
   - `packages/core/src/domain/cycle.ts`
   - `packages/db/src/schema.ts` (`cycles.status`)
 
-## 7. Patterns Prone to Stalls (Initial Diagnosis)
+## 8. Patterns Prone to Stalls (Initial Diagnosis)
 
 | Symptom                          | First check state/value                                   | Main APIs                                                   | Primary area to check          |
 | -------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------ |
@@ -221,7 +252,7 @@ Notes:
 - For API check sequence, see [operations](operations.md#11-post-change-verification-checklist).
 - For agent triage confusion, see FAQ in [agent/README](agent/README.md).
 
-## 8. Lookup: State Vocabulary to Transition to Owner to Implementation (Shortest Path)
+## 9. Lookup: State Vocabulary to Transition to Owner to Implementation (Shortest Path)
 
 Common path when tracing from state vocabulary:
 

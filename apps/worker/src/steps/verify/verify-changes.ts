@@ -11,6 +11,7 @@ import {
   getDiffFromRoot,
   getDiffStatsFromRoot,
   getWorkingTreeDiff,
+  checkGitIgnored,
 } from "@openTiger/vcs";
 import { FAILURE_CODE } from "@openTiger/core";
 import { runOpenCode } from "@openTiger/llm";
@@ -148,12 +149,20 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
     ? mergeAllowedPaths(effectiveAllowedPaths, ENV_EXAMPLE_PATHS)
     : effectiveAllowedPaths;
   const generatedPathPatterns = await resolveGeneratedPathPatterns(repoPath);
+  // Use the project's .gitignore as a generic generated-artifact signal.
+  // This handles any build system (Cargo target/, Go bin/, etc.) without hardcoding.
+  const gitIgnoredFiles = await checkGitIgnored(repoPath, changedFiles);
   // Exclude artifacts to build policy-check target
   const relevantFiles = [];
   let filteredGeneratedCount = 0;
+  let filteredGitIgnoredCount = 0;
   for (const file of changedFiles) {
     if (isGeneratedPathWithPatterns(file, generatedPathPatterns)) {
       filteredGeneratedCount += 1;
+      continue;
+    }
+    if (gitIgnoredFiles.has(file)) {
+      filteredGitIgnoredCount += 1;
       continue;
     }
     if (await isGeneratedTypeScriptOutput(file, repoPath)) {
@@ -164,6 +173,9 @@ export async function verifyChanges(options: VerifyOptions): Promise<VerifyResul
   console.log(`Changed files: ${changedFiles.length}`);
   if (filteredGeneratedCount > 0) {
     console.log(`Filtered generated files: ${filteredGeneratedCount}`);
+  }
+  if (filteredGitIgnoredCount > 0) {
+    console.log(`Filtered gitignored files: ${filteredGitIgnoredCount}`);
   }
   console.log(`Relevant files: ${relevantFiles.length}`);
   const isDocOnlyChange =
