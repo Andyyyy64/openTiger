@@ -134,11 +134,23 @@ function resolveRequirementPath(
   return resolve(workdir, requirementPath);
 }
 
+// In direct/local-git modes, skip remote repo URL.
+// replanWorkdir stays as openTiger root (for pnpm --filter spawn CWD).
+// Requirement path is resolved against LOCAL_REPO_PATH in local modes.
+const repoMode = readNonEmptyEnv("REPO_MODE")?.toLowerCase();
+const isLocalMode = repoMode === "direct" || repoMode === "local-git" || repoMode === "local";
 const defaultReplanWorkdir = readNonEmptyEnv("REPLAN_WORKDIR") ?? process.cwd();
-const defaultReplanRepoUrl = readNonEmptyEnv("REPLAN_REPO_URL") ?? readNonEmptyEnv("REPO_URL");
+const defaultReplanRepoUrl = isLocalMode
+  ? undefined
+  : (readNonEmptyEnv("REPLAN_REPO_URL") ?? readNonEmptyEnv("REPO_URL"));
+// For requirement resolution, use LOCAL_REPO_PATH in local modes (target project root),
+// NOT replanWorkdir (which is the openTiger monorepo root for pnpm spawning).
+const requirementResolutionBase = isLocalMode
+  ? (readNonEmptyEnv("LOCAL_REPO_PATH") ?? defaultReplanWorkdir)
+  : defaultReplanWorkdir;
 const defaultReplanRequirementPath = resolveRequirementPath(
   readNonEmptyEnv("REPLAN_REQUIREMENT_PATH") ?? readNonEmptyEnv("REQUIREMENT_PATH"),
-  defaultReplanWorkdir,
+  requirementResolutionBase,
   defaultReplanRepoUrl,
 );
 
