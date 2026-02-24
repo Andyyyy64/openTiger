@@ -74,13 +74,18 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
   };
 
   const handleGitStart = () => {
-    if (!onStartExecution || busy || !selectedRepo) return;
+    if (!onStartExecution || busy) return;
+    // Prefer selectedRepo (from fetched list) but fall back to selectedFullName
+    // so a just-created repo is usable before the query refetches.
+    const owner = selectedRepo?.owner ?? selectedFullName.split("/")[0];
+    const repo = selectedRepo?.name ?? selectedFullName.split("/")[1];
+    if (!owner || !repo) return;
     setClicked(true);
     onStartExecution({
       mode: "git",
-      githubOwner: selectedRepo.owner,
-      githubRepo: selectedRepo.name,
-      baseBranch: selectedRepo.defaultBranch || "main",
+      githubOwner: owner,
+      githubRepo: repo,
+      baseBranch: selectedRepo?.defaultBranch || "main",
     });
   };
 
@@ -262,7 +267,7 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
             <div className="flex gap-3 pt-1">
               <button
                 onClick={handleGitStart}
-                disabled={!selectedRepo}
+                disabled={!selectedFullName}
                 className="bg-term-tiger text-black px-5 py-2 text-xs font-bold uppercase hover:opacity-90 disabled:opacity-30 disabled:bg-zinc-800 disabled:text-zinc-500"
               >
                 START EXECUTION
