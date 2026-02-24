@@ -71,6 +71,11 @@ export const DEFAULT_CONFIG: PlannerConfig = {
   inspectCodebase: parseBoolean(process.env.PLANNER_INSPECT, true),
   inspectionTimeoutSeconds: parseInt(process.env.PLANNER_INSPECT_TIMEOUT ?? "1200", 10),
   repoUrl: (() => {
+    // In direct/local-git modes, always use local workdir — never clone remote
+    const repoMode = getRepoMode();
+    if (repoMode === "direct" || repoMode === "local-git") {
+      return undefined;
+    }
     const plannerRepoUrl = process.env.PLANNER_REPO_URL?.trim();
     if (plannerRepoUrl) {
       return plannerRepoUrl;

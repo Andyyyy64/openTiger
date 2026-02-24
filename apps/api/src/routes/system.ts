@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, statSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { homedir } from "node:os";
 import { db } from "@openTiger/db";
 import { config as configTable, events, prMergeQueue, tasks } from "@openTiger/db/schema";
 import { ensureConfigRow } from "../config-store";
@@ -963,6 +964,8 @@ systemRoute.post("/cleanup", async (c) => {
     `);
     await db.execute(sql`
       TRUNCATE
+        messages,
+        conversations,
         artifacts,
         runs,
         leases,
@@ -980,6 +983,65 @@ systemRoute.post("/cleanup", async (c) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Cleanup failed";
     return c.json({ error: message }, 500);
+  }
+});
+
+systemRoute.get("/browse-directories", async (c) => {
+  const auth = getAuthInfo(c);
+  if (!canControlSystem(auth.method)) {
+    return c.json({ error: "Admin access required" }, 403);
+  }
+
+  const home = homedir();
+  const requestedPath = c.req.query("path")?.trim() || home;
+
+  try {
+    const resolved = realpathSync(resolve(requestedPath));
+
+    if (!resolved.startsWith(home)) {
+      return c.json({ error: "Path must be within the home directory" }, 400);
+    }
+
+    const parentPath = resolved === home ? null : resolve(resolved, "..");
+
+    const EXCLUDED_NAMES = new Set(["node_modules", ".git", ".cache", ".npm", ".pnpm-store"]);
+    const entries: Array<{ name: string; path: string; isDir: boolean; isGitRepo: boolean }> = [];
+
+    try {
+      const dirEntries = readdirSync(resolved, { withFileTypes: true });
+      for (const entry of dirEntries) {
+        if (entry.name.startsWith(".")) continue;
+        if (EXCLUDED_NAMES.has(entry.name)) continue;
+
+        const fullPath = join(resolved, entry.name);
+        try {
+          const stat = statSync(fullPath);
+          if (!stat.isDirectory()) continue;
+          const isGitRepo = existsSync(join(fullPath, ".git"));
+          entries.push({
+            name: entry.name,
+            path: fullPath,
+            isDir: true,
+            isGitRepo,
+          });
+        } catch {
+          // Permission denied or broken symlink — skip
+        }
+      }
+    } catch {
+      // Cannot read directory — return empty entries
+    }
+
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+
+    return c.json({
+      currentPath: resolved,
+      parentPath,
+      entries,
+      homePath: home,
+    });
+  } catch {
+    return c.json({ error: "Invalid path" }, 400);
   }
 });
 

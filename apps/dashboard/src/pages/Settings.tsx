@@ -120,6 +120,9 @@ export const SettingsPage: React.FC = () => {
 
   const cleanupMutation = useMutation({
     mutationFn: () => systemApi.cleanup(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["chat"] });
+    },
   });
   const isCleanupSuccess = cleanupMutation.isSuccess;
   const resetCleanup = cleanupMutation.reset;

@@ -541,6 +541,13 @@ export const systemApi = {
     ),
   githubAuthStatus: () => fetchApi<GitHubAuthStatus>("/system/github/auth"),
   neofetch: () => fetchApi<HostNeofetchInfo>("/system/host/neofetch"),
+  browseDirectories: (path?: string) =>
+    fetchApi<{
+      currentPath: string;
+      parentPath: string | null;
+      entries: Array<{ name: string; path: string; isDir: boolean; isGitRepo: boolean }>;
+      homePath: string;
+    }>(`/system/browse-directories${path ? `?path=${encodeURIComponent(path)}` : ""}`),
 };
 
 // Agent-related

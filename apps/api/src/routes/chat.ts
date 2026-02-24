@@ -349,6 +349,7 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
     const githubOwner = typeof body.githubOwner === "string" ? body.githubOwner.trim() : "";
     const githubRepo = typeof body.githubRepo === "string" ? body.githubRepo.trim() : "";
     const baseBranch = typeof body.baseBranch === "string" ? body.baseBranch.trim() || "main" : "main";
+    const localRepoPath = typeof body.localRepoPath === "string" ? body.localRepoPath.trim() : "";
 
     if (mode === "github") {
       if (!SAFE_GIT_NAME_RE.test(githubOwner) || !SAFE_GIT_NAME_RE.test(githubRepo)) {
@@ -395,6 +396,7 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
           .update(configTable)
           .set({
             repoMode: "direct",
+            localRepoPath: localRepoPath || configRow.localRepoPath,
             workerCount: "1",
             updatedAt: new Date(),
           })
@@ -404,6 +406,7 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
           .update(configTable)
           .set({
             repoMode: "local-git",
+            localRepoPath: localRepoPath || configRow.localRepoPath,
             workerCount: configRow.workerCount === "1" ? defaultWorkerCount : configRow.workerCount,
             updatedAt: new Date(),
           })

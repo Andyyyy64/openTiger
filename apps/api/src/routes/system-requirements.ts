@@ -442,8 +442,15 @@ export async function syncRequirementSnapshot(params: {
     CANONICAL_REQUIREMENT_PATH,
     targetRepoRoot,
   );
+  // Non-git directories (e.g. direct mode repos) cannot commit — treat as
+  // non-fatal since the file itself was already written successfully above.
   if (commitResult.error) {
-    throw new Error(commitResult.error);
+    return {
+      requirementPath,
+      canonicalPath,
+      committed: false,
+      commitReason: commitResult.error,
+    };
   }
   return {
     requirementPath,

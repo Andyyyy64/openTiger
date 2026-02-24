@@ -79,6 +79,7 @@ export const chatApi = {
       githubOwner?: string;
       githubRepo?: string;
       baseBranch?: string;
+      localRepoPath?: string;
     },
   ) =>
     fetchApi<{ started: boolean; mode: string; message: ChatMessage }>(
