@@ -507,6 +507,8 @@ export const ChatPage: React.FC = () => {
           ? "pending"
           : "idle";
 
+  const localRepoPath = configValues.LOCAL_REPO_PATH?.trim() || undefined;
+
   const modeSelectionProps = useMemo(
     () => ({
       currentRepo,
@@ -516,8 +518,9 @@ export const ChatPage: React.FC = () => {
       onCreateRepo: handleCreateRepo,
       isCreatingRepo: createRepoMutation.isPending,
       executionStatus,
+      localRepoPath,
     }),
-    [currentRepo, githubRepos, isLoadingRepos, refreshRepos, handleCreateRepo, createRepoMutation.isPending, executionStatus],
+    [currentRepo, githubRepos, isLoadingRepos, refreshRepos, handleCreateRepo, createRepoMutation.isPending, executionStatus, localRepoPath],
   );
 
   const deleteMutation = useMutation({

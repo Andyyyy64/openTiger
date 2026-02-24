@@ -21,6 +21,7 @@ interface ChatMessageListProps {
   onStartExecution?: (config: ModeSelectionStartConfig) => void;
   modeSelectionProps?: {
     currentRepo?: { owner: string; repo: string; url?: string; branch?: string } | null;
+    localRepoPath?: string;
     githubRepos?: GitHubRepoListItem[];
     isLoadingRepos?: boolean;
     onRefreshRepos?: () => void;
