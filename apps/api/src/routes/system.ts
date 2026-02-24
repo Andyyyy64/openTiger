@@ -998,7 +998,7 @@ systemRoute.get("/browse-directories", async (c) => {
   try {
     const resolved = realpathSync(resolve(requestedPath));
 
-    if (!resolved.startsWith(home)) {
+    if (resolved !== home && !resolved.startsWith(home + "/")) {
       return c.json({ error: "Path must be within the home directory" }, 400);
     }
 

@@ -544,7 +544,7 @@ function buildPlannerReplanEnv(config: CycleManagerConfig): Record<string, strin
 
   const repoUrl = config.replanRepoUrl?.trim() || process.env.REPO_URL?.trim() || "";
   if (repoUrl.length > 0) {
-    env.REPO_MODE = "git";
+    env.REPO_MODE = "github";
     env.REPO_URL = repoUrl;
     env.PLANNER_USE_REMOTE = "true";
     env.PLANNER_REPO_URL = repoUrl;
