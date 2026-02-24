@@ -43,7 +43,7 @@ interface DispatcherConfig {
   pollIntervalMs: number;
   maxConcurrentWorkers: number;
   launchMode: LaunchMode;
-  repoMode: "git" | "local";
+  repoMode: "github" | "local-git" | "direct";
   repoUrl: string;
   baseBranch: string;
   workspacePath: string;
@@ -546,13 +546,17 @@ async function main(): Promise<void> {
   config.localWorktreeRoot = resolveLocalWorktreeRoot(config);
 
   // Validate config
-  if (config.repoMode === "git" && !config.repoUrl) {
-    console.error("Error: REPO_URL environment variable is required for git mode");
+  if (config.repoMode === "github" && !config.repoUrl) {
+    console.error("Error: REPO_URL environment variable is required for github mode");
     process.exit(1);
   }
-  if (config.repoMode === "local" && !config.localRepoPath) {
-    console.error("Error: LOCAL_REPO_PATH environment variable is required for local mode");
+  if ((config.repoMode === "local-git" || config.repoMode === "direct") && !config.localRepoPath) {
+    console.error("Error: LOCAL_REPO_PATH environment variable is required for local-git/direct mode");
     process.exit(1);
+  }
+  if (config.repoMode === "direct") {
+    config.maxConcurrentWorkers = 1;
+    console.log("[Dispatcher] Direct mode: forcing maxConcurrentWorkers = 1");
   }
 
   // Set up signal handler

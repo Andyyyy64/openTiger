@@ -111,7 +111,7 @@ function isTaskParseFailure(message: string): boolean {
 }
 
 function canUseGitHubIssueLinking(): boolean {
-  if (getRepoMode() !== "git") {
+  if (getRepoMode() !== "github") {
     return false;
   }
   if (!process.env.GITHUB_OWNER || !process.env.GITHUB_REPO) {

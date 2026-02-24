@@ -334,8 +334,9 @@ export async function buildPreflightSummary(options: {
     },
   };
 
-  if ((options.configRow.repoMode ?? "git").toLowerCase() !== "git") {
-    summary.github.warnings.push("REPO_MODE is not git. Skipping GitHub issue/PR preflight.");
+  const resolvedRepoMode = (options.configRow.repoMode ?? "github").toLowerCase();
+  if (resolvedRepoMode !== "git" && resolvedRepoMode !== "github") {
+    summary.github.warnings.push("REPO_MODE is not github. Skipping GitHub issue/PR preflight.");
     return summary;
   }
 

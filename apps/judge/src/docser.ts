@@ -16,12 +16,12 @@ type DocserSourceBase = {
 };
 
 type DocserSourcePR = DocserSourceBase & {
-  mode: "git";
+  mode: "github";
   prNumber: number;
 };
 
 type DocserSourceLocal = DocserSourceBase & {
-  mode: "local";
+  mode: "local-git";
   worktreePath: string;
   baseBranch: string;
   branchName: string;
@@ -263,7 +263,7 @@ async function createDocserTask(params: {
     `sourceTaskId: ${params.source.taskId}`,
     `sourceRunId: ${params.source.runId}`,
     `sourceMode: ${params.source.mode}`,
-    params.source.mode === "git"
+    params.source.mode === "github"
       ? `prNumber: ${params.source.prNumber}`
       : `worktreePath: ${params.source.worktreePath}`,
     "",
@@ -310,7 +310,7 @@ async function createDocserTask(params: {
       sourceRunId: params.source.runId,
       sourceMode: params.source.mode,
       sourceDetails:
-        params.source.mode === "git"
+        params.source.mode === "github"
           ? { prNumber: params.source.prNumber }
           : {
               worktreePath: params.source.worktreePath,

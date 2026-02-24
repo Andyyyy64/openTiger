@@ -173,8 +173,8 @@ export async function resolveRequirementRepoRoot(
   if (localRepoPath && localRepoPath !== systemRepoRoot) {
     return localRepoPath;
   }
-  const repoMode = (config.repoMode ?? "git").trim().toLowerCase();
-  if (repoMode === "git") {
+  const repoMode = (config.repoMode ?? "github").trim().toLowerCase();
+  if (repoMode === "git" || repoMode === "github") {
     const managedRepoRoot = await ensureGitRepoRootForRequirement(config);
     if (managedRepoRoot && managedRepoRoot !== systemRepoRoot) {
       return managedRepoRoot;

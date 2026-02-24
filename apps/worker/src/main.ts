@@ -150,12 +150,12 @@ async function main() {
   const agentLabel =
     agentRole === "tester" ? "Tester" : agentRole === "docser" ? "Docser" : "Worker";
 
-  if (repoMode === "git" && !repoUrl) {
-    console.error("REPO_URL environment variable is required for git mode");
+  if (repoMode === "github" && !repoUrl) {
+    console.error("REPO_URL environment variable is required for github mode");
     process.exit(1);
   }
-  if (repoMode === "local" && !getLocalRepoPath()) {
-    console.error("LOCAL_REPO_PATH environment variable is required for local mode");
+  if ((repoMode === "local-git" || repoMode === "direct") && !getLocalRepoPath()) {
+    console.error("LOCAL_REPO_PATH environment variable is required for local-git/direct mode");
     process.exit(1);
   }
 

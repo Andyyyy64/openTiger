@@ -37,7 +37,7 @@ function resolvePlannerWorkdir(): string {
   const repoMode = getRepoMode();
   const localRepoPath = getLocalRepoPath();
   // In local mode, use the actual repository as the inspection target
-  if (repoMode === "local" && localRepoPath) {
+  if ((repoMode === "local-git" || repoMode === "direct") && localRepoPath) {
     return localRepoPath;
   }
   // Reference the repository root even if the startup directory is under apps

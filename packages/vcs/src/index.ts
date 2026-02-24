@@ -6,3 +6,4 @@ export * from "./repo";
 export * from "./git";
 export * from "./webhook";
 export * from "./rate-limit";
+export * from "./fs-snapshot";

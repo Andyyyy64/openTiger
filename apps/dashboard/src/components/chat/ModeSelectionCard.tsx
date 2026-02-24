@@ -3,7 +3,7 @@ import type { GitHubRepoListItem } from "../../lib/api";
 import { BrailleSpinner } from "../BrailleSpinner";
 
 export interface ModeSelectionStartConfig {
-  mode: "local" | "git";
+  mode: "direct" | "local-git" | "github";
   githubOwner?: string;
   githubRepo?: string;
   baseBranch?: string;
@@ -33,7 +33,7 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
   isCreatingRepo,
   executionStatus = "idle",
 }) => {
-  const [expanded, setExpanded] = useState<"git" | null>(null);
+  const [expanded, setExpanded] = useState<"github" | null>(null);
   const [selectedFullName, setSelectedFullName] = useState("");
   const [createOwner, setCreateOwner] = useState("");
   const [createName, setCreateName] = useState("");
@@ -67,10 +67,16 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
 
   const busy = clicked || executionStatus === "pending";
 
-  const handleLocal = () => {
+  const handleDirect = () => {
     if (!onStartExecution || busy) return;
     setClicked(true);
-    onStartExecution({ mode: "local" });
+    onStartExecution({ mode: "direct" });
+  };
+
+  const handleLocalGit = () => {
+    if (!onStartExecution || busy) return;
+    setClicked(true);
+    onStartExecution({ mode: "local-git" });
   };
 
   const handleGitStart = () => {
@@ -82,7 +88,7 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
     if (!owner || !repo) return;
     setClicked(true);
     onStartExecution({
-      mode: "git",
+      mode: "github",
       githubOwner: owner,
       githubRepo: repo,
       baseBranch: selectedRepo?.defaultBranch || "main",
@@ -150,21 +156,30 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
         {!expanded && (
           <div className="flex gap-3">
             <button
-              onClick={handleLocal}
+              onClick={handleDirect}
               className="bg-term-tiger text-black px-5 py-2 text-xs font-bold uppercase hover:opacity-90"
+              title="Edit files directly, no git"
             >
-              LOCAL MODE
+              DIRECT MODE
             </button>
             <button
-              onClick={() => setExpanded("git")}
+              onClick={handleLocalGit}
               className="border border-term-tiger text-term-tiger px-5 py-2 text-xs font-bold uppercase hover:bg-term-tiger/10"
+              title="Worktree + local commits"
             >
-              GIT MODE
+              LOCAL GIT
+            </button>
+            <button
+              onClick={() => setExpanded("github")}
+              className="border border-term-tiger text-term-tiger px-5 py-2 text-xs font-bold uppercase hover:bg-term-tiger/10"
+              title="Clone, branch, PR"
+            >
+              GITHUB
             </button>
           </div>
         )}
 
-        {expanded === "git" && (
+        {expanded === "github" && (
           <div className="space-y-3">
             {/* Current repo indicator */}
             {currentRepo?.owner && currentRepo?.repo && (

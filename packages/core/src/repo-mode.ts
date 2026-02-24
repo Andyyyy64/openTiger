@@ -1,7 +1,19 @@
-export type RepoMode = "git" | "local";
+export type RepoMode = "github" | "local-git" | "direct";
 
 export function resolveRepoMode(value?: string): RepoMode {
-  return value === "local" ? "local" : "git";
+  // Backward compatibility: map legacy values
+  if (value === "git" || value === "github") return "github";
+  if (value === "local" || value === "local-git") return "local-git";
+  if (value === "direct") return "direct";
+  return "github";
+}
+
+export function isDirectMode(env: NodeJS.ProcessEnv = process.env): boolean {
+  return getRepoMode(env) === "direct";
+}
+
+export function requiresGit(mode: RepoMode): boolean {
+  return mode !== "direct";
 }
 
 export function getRepoMode(env: NodeJS.ProcessEnv = process.env): RepoMode {

@@ -104,7 +104,7 @@ export async function ensureRemoteBaseBranch(
   baseBranch: string,
   currentBranch: string,
 ): Promise<{ success: boolean; created: boolean; error?: string }> {
-  if (getRepoMode() === "local") {
+  if (getRepoMode() !== "github") {
     return { success: true, created: false };
   }
 
@@ -210,8 +210,8 @@ export async function ensureRemoteBaseBranch(
 // Create or update PR
 export async function createTaskPR(options: CreatePROptions): Promise<CreatePRResult> {
   const repoMode = getRepoMode();
-  if (repoMode === "local") {
-    console.log("Local mode: skipping PR creation");
+  if (repoMode !== "github") {
+    console.log(`${repoMode} mode: skipping PR creation`);
     return {
       success: true,
       isUpdate: false,

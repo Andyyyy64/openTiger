@@ -253,7 +253,7 @@ export async function createIssuesForTasks(params: {
   savedIds: string[];
 }): Promise<void> {
   const repoMode = getRepoMode();
-  if (repoMode !== "git") {
+  if (repoMode !== "github") {
     console.warn(`[Planner] Skipping Issue creation (REPO_MODE=${repoMode}).`);
     return;
   }

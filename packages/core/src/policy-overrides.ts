@@ -7,7 +7,7 @@ export function applyRepoModePolicyOverrides(
 ): Policy {
   const repoMode = getRepoMode(env);
 
-  if (repoMode === "local") {
+  if (repoMode === "local-git" || repoMode === "direct") {
     // Ensure minimum limits so local mode does not hinder iteration during development
     return {
       ...policy,

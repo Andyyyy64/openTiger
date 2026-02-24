@@ -141,7 +141,7 @@ export async function attemptGeneratedArtifactRecovery(params: {
   policy: Policy;
   baseBranch: string;
   headBranch: string;
-  repoMode: "git" | "local";
+  repoMode: "github" | "local-git" | "direct";
   allowNoChanges: boolean;
 }): Promise<VerifyResult | null> {
   const violatingPaths = extractPolicyViolationPaths(params.verifyResult.policyViolations);
@@ -199,7 +199,7 @@ export async function attemptGeneratedArtifactRecovery(params: {
     baseBranch: params.baseBranch,
     headBranch: params.headBranch,
     allowLockfileOutsidePaths: true,
-    allowEnvExampleOutsidePaths: params.repoMode === "local",
+    allowEnvExampleOutsidePaths: params.repoMode !== "github",
     allowNoChanges: params.allowNoChanges,
   });
 }

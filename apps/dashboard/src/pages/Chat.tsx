@@ -144,7 +144,7 @@ export const ChatPage: React.FC = () => {
       const created = await systemApi.createGithubRepo({ owner, repo, private: true });
       // Also update global config
       await configApi.update({
-        REPO_MODE: "git",
+        REPO_MODE: "github",
         GITHUB_OWNER: created.owner,
         GITHUB_REPO: created.name,
         REPO_URL: created.url,
@@ -379,7 +379,7 @@ export const ChatPage: React.FC = () => {
 
   const startExecutionMutation = useMutation({
     mutationFn: async (execConfig: {
-      mode: "local" | "git";
+      mode: "direct" | "local-git" | "github";
       githubOwner?: string;
       githubRepo?: string;
       baseBranch?: string;

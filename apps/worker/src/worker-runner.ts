@@ -65,6 +65,14 @@ function resolveLogDir(fallbackDir: string): string {
 
 // Main task execution
 export async function runWorker(taskData: Task, config: WorkerConfig): Promise<WorkerResult> {
+  const repoMode = getRepoMode();
+
+  // Route direct mode to dedicated runner
+  if (repoMode === "direct") {
+    const { runDirectModeWorker } = await import("./worker-runner-direct");
+    return runDirectModeWorker(taskData, config);
+  }
+
   const {
     agentId,
     role,
@@ -76,11 +84,10 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     policy = DEFAULT_POLICY,
     logPath,
   } = config;
-  const repoMode = getRepoMode();
   const effectivePolicy = applyRepoModePolicyOverrides(policy);
-  const taskPrContext = repoMode === "git" ? resolveTaskPrContext(taskData) : null;
+  const taskPrContext = repoMode === "github" ? resolveTaskPrContext(taskData) : null;
   const shouldReturnConflictAutoFixToJudge =
-    repoMode === "git" &&
+    repoMode === "github" &&
     isConflictAutoFixTaskTitle(taskData.title) &&
     typeof taskPrContext?.number === "number";
   const verificationAllowedPaths = shouldReturnConflictAutoFixToJudge
@@ -167,7 +174,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       });
     }
 
-    const localBranchName = repoMode === "local" ? generateBranchName(agentId, taskId) : undefined;
+    const localBranchName = repoMode === "local-git" ? generateBranchName(agentId, taskId) : undefined;
 
     // Step 1: Checkout repository
     console.log("\n[1/7] Checking out repository...");
@@ -208,7 +215,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       }
 
       branchName = branchResult.branchName;
-    } else if (repoMode === "local") {
+    } else if (repoMode === "local-git") {
       branchName = localBranchName ?? generateBranchName(agentId, taskId);
     } else {
       console.log("\n[2/7] Creating work branch...");
@@ -233,7 +240,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
       ref: branchName,
     });
 
-    if (repoMode === "local" && worktreePath && worktreeBasePath) {
+    if (repoMode === "local-git" && worktreePath && worktreeBasePath) {
       await db.insert(artifacts).values({
         runId,
         type: "worktree",
@@ -488,7 +495,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     // Step 7: Create PR
     console.log("\n[7/7] Creating PR...");
     // Guarantee base branch for empty repo
-    if (repoMode === "git") {
+    if (repoMode === "github") {
       const baseResult = await ensureRemoteBaseBranch(repoPath, baseBranch, branchName);
       if (!baseResult.success) {
         throw new Error(baseResult.error ?? "Failed to ensure base branch on remote");
@@ -545,7 +552,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
           state: prResult.pr.state,
         },
       });
-    } else if (repoMode === "git") {
+    } else if (repoMode === "github") {
       // Record when pushed directly
       await db.insert(artifacts).values({
         runId,
@@ -558,7 +565,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     }
 
     // If PR exists, set to awaiting Judge
-    const needsReview = repoMode === "local" || Boolean(prResult.pr);
+    const needsReview = repoMode === "local-git" || Boolean(prResult.pr);
     const nextStatus = needsReview ? "blocked" : "done";
     await finalizeTaskState({
       runId,
@@ -647,7 +654,7 @@ export async function runWorker(taskData: Task, config: WorkerConfig): Promise<W
     };
   } finally {
     setTaskLogPath();
-    if (repoMode === "local" && worktreeBasePath && worktreePath) {
+    if (repoMode === "local-git" && worktreeBasePath && worktreePath) {
       const { removeWorktree } = await import("@openTiger/vcs");
       await removeWorktree({
         baseRepoPath: worktreeBasePath,
