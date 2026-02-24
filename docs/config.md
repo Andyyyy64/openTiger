@@ -60,7 +60,7 @@ Note:
 
 ### 2.3 Repository / GitHub
 
-- `REPO_MODE` (`git` or `local`)
+- `REPO_MODE` (`github`, `local-git`, or `direct`)
 - `REPO_URL`
 - `LOCAL_REPO_PATH`
 - `LOCAL_WORKTREE_ROOT`
@@ -148,7 +148,7 @@ Resolution note:
 - `PLANNER_LLM_EXECUTOR=inherit`
 - `CODEX_MODEL=gpt-5.3-codex`
 - `BASE_BRANCH=main`
-- `REPO_MODE=git`
+- `REPO_MODE=github`
 - `WORKER_COUNT=4`
 - `TESTER_COUNT=4`
 - `DOCSER_COUNT=4`
