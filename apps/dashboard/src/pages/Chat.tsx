@@ -687,6 +687,7 @@ export const ChatPage: React.FC = () => {
                 processes={processes}
                 agents={agents}
                 onViewDetails={() => navigate("/agents")}
+                conversationId={activeConversationId}
               />
               <ChatInput
                 onSend={handleSend}

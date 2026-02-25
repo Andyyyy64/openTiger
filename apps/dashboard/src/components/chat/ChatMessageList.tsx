@@ -35,6 +35,8 @@ interface ChatMessageListProps {
   agents?: Agent[];
   /** Callback to navigate to full dashboard */
   onViewDetails?: () => void;
+  /** Active conversation ID for timeline persistence */
+  conversationId?: string | null;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -48,6 +50,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   processes,
   agents,
   onViewDetails,
+  conversationId,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -55,7 +58,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [messages, streamingText]);
+  }, [messages, streamingText, processes, agents]);
 
   const hasExecution = messages.some((m) => m.messageType === "execution_status");
   const hasRunningProcesses = processes?.some((p) => p.status === "running") ?? false;
@@ -83,7 +86,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
       {/* Live execution progress */}
       {showLiveProgress && processes && (
-        <ExecutionProgressCard processes={processes} agents={agents} onViewDetails={onViewDetails} />
+        <ExecutionProgressCard processes={processes} agents={agents} onViewDetails={onViewDetails} conversationId={conversationId ?? undefined} />
       )}
 
       {/* Streaming response */}
