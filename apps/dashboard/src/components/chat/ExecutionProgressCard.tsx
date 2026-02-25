@@ -235,19 +235,28 @@ export const ExecutionProgressCard: React.FC<ExecutionProgressCardProps> = ({
   const idCounter = useRef(0);
   const initialized = useRef(false);
 
-  // Restore snapshot from localStorage on mount
+  // Restore snapshot from localStorage on mount or conversation switch
   useEffect(() => {
+    const existing = loadEntries(conversationId);
+    setEntries(existing);
+
     const stored = loadSnapshot(conversationId);
     if (stored) {
       prevProcMap.current = stored.procs;
       prevAgentMap.current = stored.agents;
       agentBusySince.current = stored.busySince;
-      // Set idCounter past existing entries
-      const existing = loadEntries(conversationId);
       if (existing.length > 0) {
         idCounter.current = Math.max(...existing.map((e) => e.id)) + 1;
+      } else {
+        idCounter.current = 0;
       }
       initialized.current = true;
+    } else {
+      prevProcMap.current = null;
+      prevAgentMap.current = null;
+      agentBusySince.current = new Map();
+      idCounter.current = 0;
+      initialized.current = false;
     }
   }, [conversationId]);
 

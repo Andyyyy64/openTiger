@@ -994,7 +994,7 @@ systemRoute.get("/browse-directories", async (c) => {
     return c.json({ error: "Admin access required" }, 403);
   }
 
-  const home = homedir();
+  const home = realpathSync(homedir());
   const requestedPath = c.req.query("path")?.trim() || home;
 
   try {
