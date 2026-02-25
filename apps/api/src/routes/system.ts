@@ -962,6 +962,8 @@ systemRoute.post("/cleanup", async (c) => {
           status = 'idle',
           last_heartbeat = NOW()
     `);
+    // Full purge includes chat history (messages/conversations) — intentional.
+    // Cleanup is a complete state reset for fresh operation.
     await db.execute(sql`
       TRUNCATE
         messages,

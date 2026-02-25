@@ -512,19 +512,21 @@ export const ChatPage: React.FC = () => {
   const alreadyExecuting = conversationPhase === "execution" || conversationPhase === "monitoring";
 
   const hasAnyProcesses = processes?.some((p) => p.status === "running") ?? false;
-  // Derive execution status: prefer conversation DB state (alreadyExecuting)
-  // over mutation state to avoid stale isSuccess leaking across conversation switches.
-  // Mutation pending/error are still used for immediate UI feedback within the same session.
+  // Mutation state takes priority for immediate UI feedback within the current
+  // session. Stale isSuccess across conversation switches is prevented by
+  // startExecutionMutation.reset() called in the conversation-switch useEffect.
   const executionStatus: "idle" | "pending" | "success" | "error" =
-    startExecutionMutation.isPending
-      ? "pending"
-      : startExecutionMutation.isError
-        ? "error"
-        : alreadyExecuting || startExecutionMutation.isSuccess
-          ? hasAnyProcesses
-            ? "success"
-            : "idle"
-          : "idle";
+    startExecutionMutation.isSuccess
+      ? "success"
+      : startExecutionMutation.isPending
+        ? "pending"
+        : startExecutionMutation.isError
+          ? "error"
+          : alreadyExecuting
+            ? hasAnyProcesses
+              ? "success"
+              : "idle"
+            : "idle";
 
   const localRepoPath = configValues.LOCAL_REPO_PATH?.trim() || undefined;
 
