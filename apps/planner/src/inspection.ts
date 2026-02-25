@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
 import { spawn } from "node:child_process";
 import { runOpenCode } from "@openTiger/llm";

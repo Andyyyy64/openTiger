@@ -10,7 +10,7 @@ interface RepoPromptCardProps {
 }
 
 export const RepoPromptCard: React.FC<RepoPromptCardProps> = ({ onConfigure }) => {
-  const [repoMode, setRepoMode] = useState("git");
+  const [repoMode, setRepoMode] = useState("github");
   const [owner, setOwner] = useState("");
   const [repo, setRepo] = useState("");
   const [branch, setBranch] = useState("main");
@@ -29,7 +29,7 @@ export const RepoPromptCard: React.FC<RepoPromptCardProps> = ({ onConfigure }) =
   const handleSkip = () => {
     if (onConfigure) {
       onConfigure({
-        repoMode: "local",
+        repoMode: "local-git",
         githubOwner: "",
         githubRepo: "",
         baseBranch: "main",
@@ -54,12 +54,13 @@ export const RepoPromptCard: React.FC<RepoPromptCardProps> = ({ onConfigure }) =
               onChange={(e) => setRepoMode(e.target.value)}
               className="bg-black border border-term-border px-2 py-1 text-xs text-term-fg focus:border-term-tiger focus:outline-none"
             >
-              <option value="git">git (GitHub)</option>
-              <option value="local">local</option>
+              <option value="github">GitHub</option>
+              <option value="local-git">Local Git</option>
+              <option value="direct">Direct</option>
             </select>
           </div>
 
-          {repoMode === "git" && (
+          {repoMode === "github" && (
             <>
               <div className="flex items-center gap-3">
                 <label className="text-zinc-500 text-xs w-20 shrink-0">OWNER</label>
@@ -97,7 +98,7 @@ export const RepoPromptCard: React.FC<RepoPromptCardProps> = ({ onConfigure }) =
           <div className="flex gap-3 pt-1">
             <button
               onClick={handleSubmit}
-              disabled={repoMode === "git" && (!owner.trim() || !repo.trim())}
+              disabled={repoMode === "github" && (!owner.trim() || !repo.trim())}
               className="bg-term-tiger text-black px-4 py-1.5 text-xs font-bold uppercase hover:opacity-90 disabled:opacity-30 disabled:bg-zinc-800 disabled:text-zinc-500"
             >
               CONFIGURE

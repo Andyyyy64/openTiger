@@ -41,7 +41,7 @@ const CONFIG_FIELDS: ConfigField[] = [
     column: "dispatchDocserLaneMaxSlots",
     defaultValue: "1",
   },
-  { key: "REPO_MODE", column: "repoMode", defaultValue: "git" },
+  { key: "REPO_MODE", column: "repoMode", defaultValue: "github" },
   { key: "REPO_URL", column: "repoUrl", defaultValue: "" },
   { key: "LOCAL_REPO_PATH", column: "localRepoPath", defaultValue: "" },
   { key: "LOCAL_WORKTREE_ROOT", column: "localWorktreeRoot", defaultValue: "" },
