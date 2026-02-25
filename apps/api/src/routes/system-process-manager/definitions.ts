@@ -62,6 +62,7 @@ function buildPlannerDefinition(index: number): ProcessDefinition {
           content: payload.content,
           commitSnapshot: true,
           repoRoot: effectiveRequirementRepoRoot,
+          repoMode: configRow.repoMode,
         });
       }
       return {

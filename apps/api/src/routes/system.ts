@@ -628,6 +628,7 @@ systemRoute.post("/requirements", async (c) => {
       content,
       commitSnapshot: true,
       repoRoot: requirementRepoRoot,
+      repoMode: configRow.repoMode,
     });
     if (configRow.replanRequirementPath.trim() !== CANONICAL_REQUIREMENT_PATH) {
       await db
