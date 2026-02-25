@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@openTiger/db";
 import { artifacts, config as configTable, events, runs, tasks } from "@openTiger/db/schema";
+import { resolveRepoMode } from "@openTiger/core";
 import { access, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
@@ -334,8 +335,8 @@ export async function buildPreflightSummary(options: {
     },
   };
 
-  const resolvedRepoMode = (options.configRow.repoMode ?? "github").toLowerCase();
-  if (resolvedRepoMode !== "git" && resolvedRepoMode !== "github") {
+  const resolvedRepoMode = resolveRepoMode(options.configRow.repoMode ?? undefined);
+  if (resolvedRepoMode !== "github") {
     summary.github.warnings.push("REPO_MODE is not github. Skipping GitHub issue/PR preflight.");
     return summary;
   }
