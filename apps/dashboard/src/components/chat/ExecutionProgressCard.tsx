@@ -260,11 +260,14 @@ export const ExecutionProgressCard: React.FC<ExecutionProgressCardProps> = ({
     }
   }, [conversationId]);
 
-  // Persist entries to localStorage whenever they change
-  const persistEntries = useCallback(
-    (next: TimelineEntry[]) => {
-      setEntries(next);
-      saveEntries(conversationId, next);
+  // Append new entries using functional update to avoid stale closure
+  const appendEntries = useCallback(
+    (newEntries: TimelineEntry[]) => {
+      setEntries((prev) => {
+        const next = [...prev, ...newEntries];
+        saveEntries(conversationId, next);
+        return next;
+      });
     },
     [conversationId],
   );
@@ -311,7 +314,8 @@ export const ExecutionProgressCard: React.FC<ExecutionProgressCardProps> = ({
             state: "info",
           },
         ];
-        persistEntries(seed);
+        setEntries(seed);
+        saveEntries(conversationId, seed);
       }
       return;
     }
@@ -448,9 +452,9 @@ export const ExecutionProgressCard: React.FC<ExecutionProgressCardProps> = ({
     saveSnapshot(conversationId, curProcs, curAgents, agentBusySince.current);
 
     if (newEntries.length > 0) {
-      persistEntries([...entries, ...newEntries]);
+      appendEntries(newEntries);
     }
-  }, [processes, agents, conversationId, entries, persistEntries]);
+  }, [processes, agents, conversationId, appendEntries]);
 
   if (entries.length === 0) return null;
 
