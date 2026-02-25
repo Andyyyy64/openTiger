@@ -131,7 +131,7 @@ type ProcStatus = SystemProcess["status"];
 
 function findProcessName(agentId: string, processes: SystemProcess[]): string | undefined {
   for (const p of processes) {
-    if (agentId.startsWith(p.name) && agentId.charAt(p.name.length) === "-") {
+    if (agentId === p.name || (agentId.startsWith(p.name) && agentId.charAt(p.name.length) === "-")) {
       return p.name;
     }
   }
