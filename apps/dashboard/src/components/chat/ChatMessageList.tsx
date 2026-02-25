@@ -54,11 +54,16 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Derive stable keys so we only scroll when something actually changes,
+  // not on every 5-second poll that returns the same data with new references.
+  const processKey = processes?.map((p) => `${p.name}:${p.status}`).join(",") ?? "";
+  const agentKey = agents?.map((a) => `${a.id}:${a.status}`).join(",") ?? "";
+
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [messages, streamingText, processes, agents]);
+  }, [messages, streamingText, processKey, agentKey]);
 
   const hasExecution = messages.some((m) => m.messageType === "execution_status");
   const hasRunningProcesses = processes?.some((p) => p.status === "running") ?? false;

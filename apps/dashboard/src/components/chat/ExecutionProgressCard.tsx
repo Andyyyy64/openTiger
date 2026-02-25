@@ -40,10 +40,13 @@ function loadEntries(conversationId: string | undefined): TimelineEntry[] {
   }
 }
 
+const MAX_ENTRIES = 500;
+
 function saveEntries(conversationId: string | undefined, entries: TimelineEntry[]): void {
   if (!conversationId) return;
   try {
-    localStorage.setItem(lsKey(conversationId), JSON.stringify(entries));
+    const capped = entries.length > MAX_ENTRIES ? entries.slice(-MAX_ENTRIES) : entries;
+    localStorage.setItem(lsKey(conversationId), JSON.stringify(capped));
   } catch {
     // Storage full or unavailable — ignore
   }
@@ -264,7 +267,8 @@ export const ExecutionProgressCard: React.FC<ExecutionProgressCardProps> = ({
   const appendEntries = useCallback(
     (newEntries: TimelineEntry[]) => {
       setEntries((prev) => {
-        const next = [...prev, ...newEntries];
+        const combined = [...prev, ...newEntries];
+        const next = combined.length > MAX_ENTRIES ? combined.slice(-MAX_ENTRIES) : combined;
         saveEntries(conversationId, next);
         return next;
       });
