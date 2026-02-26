@@ -138,7 +138,7 @@ First-time users can triage by:
 ### Repository Not Configured (GitHub)
 
 - Select existing repo or create new one from Start page repo manager
-- For `REPO_MODE=git`, need `REPO_URL` and `GITHUB_OWNER/REPO`
+- For `REPO_MODE=github`, need `REPO_URL` and `GITHUB_OWNER/REPO`
 
 ### Handling Claude Auth Warning
 

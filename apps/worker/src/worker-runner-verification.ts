@@ -54,7 +54,7 @@ interface RunVerificationPhaseOptions {
   agentId: string;
   branchName: string;
   baseBranch: string;
-  repoMode: "git" | "local";
+  repoMode: "github" | "local-git" | "direct";
   verificationAllowedPaths: string[];
   effectivePolicy: Policy;
   instructionsPath?: string;
@@ -125,7 +125,7 @@ export async function runVerificationPhase(
     // Allow lockfile changes from pnpm install
     allowLockfileOutsidePaths: true,
     // Allow .env.example creation in local mode
-    allowEnvExampleOutsidePaths: repoMode === "local",
+    allowEnvExampleOutsidePaths: repoMode !== "github",
     allowNoChanges: shouldAllowNoChanges(taskData),
     llmInlineRecoveryHandler,
   });
@@ -176,7 +176,7 @@ export async function runVerificationPhase(
         baseBranch,
         headBranch: branchName,
         allowLockfileOutsidePaths: true,
-        allowEnvExampleOutsidePaths: repoMode === "local",
+        allowEnvExampleOutsidePaths: repoMode !== "github",
         allowNoChanges: shouldAllowNoChanges(taskData),
       });
       if (verifyResult.success) {
@@ -203,7 +203,7 @@ export async function runVerificationPhase(
       baseBranch,
       headBranch: branchName,
       allowLockfileOutsidePaths: true,
-      allowEnvExampleOutsidePaths: repoMode === "local",
+      allowEnvExampleOutsidePaths: repoMode !== "github",
       allowNoChanges: true,
     });
 
@@ -242,7 +242,7 @@ export async function runVerificationPhase(
         baseBranch,
         headBranch: branchName,
         allowLockfileOutsidePaths: true,
-        allowEnvExampleOutsidePaths: repoMode === "local",
+        allowEnvExampleOutsidePaths: repoMode !== "github",
         allowNoChanges: shouldAllowNoChanges(taskData),
       });
     }
@@ -377,7 +377,7 @@ export async function runVerificationPhase(
               baseBranch,
               headBranch: branchName,
               allowLockfileOutsidePaths: true,
-              allowEnvExampleOutsidePaths: repoMode === "local",
+              allowEnvExampleOutsidePaths: repoMode !== "github",
               allowNoChanges: shouldAllowNoChanges(taskData),
             });
             if (verifyResult.success) {
@@ -420,7 +420,7 @@ export async function runVerificationPhase(
             baseBranch,
             headBranch: branchName,
             allowLockfileOutsidePaths: true,
-            allowEnvExampleOutsidePaths: repoMode === "local",
+            allowEnvExampleOutsidePaths: repoMode !== "github",
             allowNoChanges: shouldAllowNoChanges(taskData),
           });
           verifyResult = verifyAfterCleanup;
@@ -462,7 +462,7 @@ export async function runVerificationPhase(
           baseBranch,
           headBranch: branchName,
           allowLockfileOutsidePaths: true,
-          allowEnvExampleOutsidePaths: repoMode === "local",
+          allowEnvExampleOutsidePaths: repoMode !== "github",
           allowNoChanges: shouldAllowNoChanges(taskData),
         });
         if (verifyResult.success) {
@@ -566,7 +566,7 @@ export async function runVerificationPhase(
         baseBranch,
         headBranch: branchName,
         allowLockfileOutsidePaths: true,
-        allowEnvExampleOutsidePaths: repoMode === "local",
+        allowEnvExampleOutsidePaths: repoMode !== "github",
         allowNoChanges: shouldAllowNoChanges(taskData),
         llmInlineRecoveryHandler,
       });

@@ -77,7 +77,7 @@ Always use these exact terms when editing state or logic:
 - **Task status:** `queued`, `running`, `done`, `failed`, `blocked`, `cancelled`
 - **Block reasons:** `awaiting_judge`, `quota_wait`, `needs_rework`, `issue_linking`
 - **Task kinds:** `code`, `research`
-- **Modes:** `REPO_MODE` (`git`/`local`), `JUDGE_MODE` (`git`/`local`/`auto`), `EXECUTION_ENVIRONMENT` (`host`/`sandbox`)
+- **Modes:** `REPO_MODE` (`github`/`local-git`/`direct`), `JUDGE_MODE` (`github`/`local-git`/`direct`/`auto`), `EXECUTION_ENVIRONMENT` (`host`/`sandbox`)
 
 ## Key Design Rules
 

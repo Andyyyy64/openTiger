@@ -24,9 +24,9 @@ When tracing stalls from mode config, check in order: state vocabulary -> transi
 
 ## 1. Repository Mode (`REPO_MODE`)
 
-### `git`
+### `github` (formerly `git`)
 
-- Clone/push/PR-based operation
+- Clone/push/PR-based operation (requires GitHub API)
 - Judge mainly evaluates PR artifacts
 
 Required config:
@@ -41,10 +41,11 @@ Note:
 
 - With `GITHUB_AUTH_MODE=gh`, authenticate via GitHub CLI (`gh auth login`)
 - With `GITHUB_AUTH_MODE=token`, set `GITHUB_TOKEN`
+- Legacy value `git` is accepted and mapped to `github`
 
-### `local`
+### `local-git` (formerly `local`)
 
-- Local repository + worktree-based operation
+- Local repository + worktree-based operation (requires git binary)
 - No remote PR creation
 
 Required config:
@@ -53,10 +54,32 @@ Required config:
 - `LOCAL_WORKTREE_ROOT`
 - `BASE_BRANCH`
 
+Note:
+
+- Legacy value `local` is accepted and mapped to `local-git`
+
+### `direct`
+
+- Edit project files directly, no git binary required
+- Changes are written in-place to `LOCAL_REPO_PATH`
+- Change detection uses filesystem snapshots (mtime + size comparison)
+- Single worker constraint enforced by dispatcher (prevents concurrent edits)
+- Tasks transition directly to `done` without judge review
+
+Required config:
+
+- `LOCAL_REPO_PATH`
+
+Constraints:
+
+- `maxConcurrentWorkers` is forced to `1` (same directory, no isolation)
+- Judge runs in auto-approve mode (stuck `awaiting_judge` tasks are cleared)
+
 ## 2. Judge Mode (`JUDGE_MODE`)
 
-- `git`: force PR review path
-- `local`: force local diff path
+- `github`: force PR review path
+- `local-git`: force local diff path
+- `direct`: auto-approve mode (no review)
 - `auto`: follow repository mode
 
 Note:

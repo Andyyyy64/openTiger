@@ -21,6 +21,7 @@ interface ChatMessageListProps {
   onStartExecution?: (config: ModeSelectionStartConfig) => void;
   modeSelectionProps?: {
     currentRepo?: { owner: string; repo: string; url?: string; branch?: string } | null;
+    localRepoPath?: string;
     githubRepos?: GitHubRepoListItem[];
     isLoadingRepos?: boolean;
     onRefreshRepos?: () => void;
@@ -34,6 +35,8 @@ interface ChatMessageListProps {
   agents?: Agent[];
   /** Callback to navigate to full dashboard */
   onViewDetails?: () => void;
+  /** Active conversation ID for timeline persistence */
+  conversationId?: string | null;
 }
 
 export const ChatMessageList: React.FC<ChatMessageListProps> = ({
@@ -47,14 +50,20 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
   processes,
   agents,
   onViewDetails,
+  conversationId,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Derive stable keys so we only scroll when something actually changes,
+  // not on every 5-second poll that returns the same data with new references.
+  const processKey = processes?.map((p) => `${p.name}:${p.status}`).join(",") ?? "";
+  const agentKey = agents?.map((a) => `${a.id}:${a.status}`).join(",") ?? "";
 
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [messages, streamingText]);
+  }, [messages, streamingText, processKey, agentKey]);
 
   const hasExecution = messages.some((m) => m.messageType === "execution_status");
   const hasRunningProcesses = processes?.some((p) => p.status === "running") ?? false;
@@ -82,7 +91,7 @@ export const ChatMessageList: React.FC<ChatMessageListProps> = ({
 
       {/* Live execution progress */}
       {showLiveProgress && processes && (
-        <ExecutionProgressCard processes={processes} agents={agents} onViewDetails={onViewDetails} />
+        <ExecutionProgressCard processes={processes} agents={agents} onViewDetails={onViewDetails} conversationId={conversationId ?? undefined} />
       )}
 
       {/* Streaming response */}

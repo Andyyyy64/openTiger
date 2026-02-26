@@ -92,7 +92,7 @@ export async function runLocalJudgeLoop(config: JudgeConfig): Promise<void> {
 
                 if (mergeResult.success) {
                   const docserResult = await createDocserTaskForLocal({
-                    mode: "local",
+                    mode: "local-git",
                     worktreePath: target.worktreePath,
                     baseBranch: target.baseBranch,
                     branchName: target.branchName,

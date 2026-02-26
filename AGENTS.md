@@ -112,8 +112,8 @@ Task kinds:
 
 Modes:
 
-- `REPO_MODE`: `git` or `local`
-- `JUDGE_MODE`: `git`, `local`, or `auto`
+- `REPO_MODE`: `github`, `local-git`, or `direct`
+- `JUDGE_MODE`: `github`, `local-git`, `direct`, or `auto`
 - `EXECUTION_ENVIRONMENT`: `host` or `sandbox`
 
 ## 7. Environment and Prerequisites
@@ -364,13 +364,15 @@ Runtime convergence pattern:
 
 Repository mode (`REPO_MODE`):
 
-- `git`: PR-oriented flow, remote operations, branch/PR artifacts.
-- `local`: local worktree flow, no remote PR requirement.
+- `github`: PR-oriented flow, remote operations, branch/PR artifacts.
+- `local-git`: local worktree flow, no remote PR requirement.
+- `direct`: edit project files in-place, no git required. Single worker, auto-approve judge.
 
 Judge mode (`JUDGE_MODE`):
 
-- `git`: force PR review path.
-- `local`: force local diff path.
+- `github`: force PR review path.
+- `local-git`: force local diff path.
+- `direct`: auto-approve mode (no LLM review).
 - `auto`: follow repository mode.
 
 Execution environment (`EXECUTION_ENVIRONMENT`):
@@ -429,7 +431,8 @@ Initial incident lookup order:
 `apps/worker`:
 
 - Preserve execution pipeline ordering:
-  - checkout -> branch/worktree -> execute -> verify -> commit -> PR/finish
+  - `github`/`local-git`: checkout -> branch/worktree -> execute -> verify -> commit -> PR/finish
+  - `direct`: snapshot -> execute -> snapshot -> diff -> verify -> artifact -> done
 - Keep no-diff/no-commit paths explicit (do not force fake diffs).
 
 `apps/judge`:
@@ -455,7 +458,7 @@ If you change behavior in any of these areas, update docs in the same PR:
 - Startup/replan gate conditions
 - Retry/requeue/recovery strategy
 - Agent ownership boundaries
-- Mode behavior (`git`/`local`, `host`/`sandbox`)
+- Mode behavior (`github`/`local-git`/`direct`, `host`/`sandbox`)
 - API contract changes
 
 Primary docs to update when relevant:

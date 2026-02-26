@@ -11,7 +11,7 @@ export interface JudgeConfig {
   mergeOnApprove: boolean;
   requeueOnNonApprove: boolean;
   policy: Policy;
-  mode: "git" | "local";
+  mode: "github" | "local-git" | "direct";
   baseRepoRecoveryMode: "none" | "stash" | "llm";
   baseRepoRecoveryConfidence: number;
   baseRepoRecoveryDiffLimit: number;
@@ -27,7 +27,7 @@ export const DEFAULT_CONFIG: JudgeConfig = {
   mergeOnApprove: process.env.JUDGE_MERGE_ON_APPROVE !== "false",
   requeueOnNonApprove: process.env.JUDGE_REQUEUE_ON_NON_APPROVE !== "false",
   policy: DEFAULT_POLICY,
-  mode: "git",
+  mode: "github",
   baseRepoRecoveryMode: "llm",
   baseRepoRecoveryConfidence: 0.7,
   baseRepoRecoveryDiffLimit: 20000,

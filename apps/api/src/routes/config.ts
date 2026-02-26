@@ -113,7 +113,7 @@ configRoute.patch("/", zValidator("json", updateSchema), async (c) => {
       const localRepoPath = nextConfig.LOCAL_REPO_PATH?.trim();
       const replanWorkdir =
         nextConfig.REPLAN_WORKDIR?.trim() ||
-        (repoMode === "local" && localRepoPath ? localRepoPath : process.cwd());
+        ((repoMode === "local" || repoMode === "local-git" || repoMode === "direct") && localRepoPath ? localRepoPath : process.cwd());
       if (requirementPath) {
         const candidate = await resolveRequirementPathCandidate(requirementPath, replanWorkdir);
         if (!candidate.found) {

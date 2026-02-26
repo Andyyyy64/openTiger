@@ -64,7 +64,7 @@ export async function recordLocalReview(
       entityId: target.taskId,
       agentId,
       payload: {
-        mode: "local",
+        mode: "local-git",
         taskId: target.taskId,
         runId: target.runId,
         worktreePath: target.worktreePath,

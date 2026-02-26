@@ -123,12 +123,12 @@ export async function checkoutRepository(options: CheckoutOptions): Promise<Chec
   const repoPath = join(workspacePath, taskId);
 
   try {
-    if (repoMode === "local") {
+    if (repoMode === "local-git") {
       if (!localRepoPath) {
         return {
           success: false,
           repoPath,
-          error: "LOCAL_REPO_PATH is required for local mode",
+          error: "LOCAL_REPO_PATH is required for local-git mode",
         };
       }
       const repoIsGit = await isGitRepo(localRepoPath);

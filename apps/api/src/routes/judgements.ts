@@ -138,7 +138,7 @@ judgementsRoute.get("/:id/diff", async (c) => {
     }
   }
 
-  if (!diff && mode === "local" && worktreePath && baseBranch && branchName) {
+  if (!diff && (mode === "local" || mode === "local-git") && worktreePath && baseBranch && branchName) {
     const diffResult = await getDiffBetweenRefs(worktreePath, baseBranch, branchName);
     if (diffResult.success) {
       diff = diffResult.stdout;

@@ -11,6 +11,7 @@ export const ArtifactType = z.enum([
   "research_claim", // normalized research claim
   "research_source", // external source evidence
   "research_report", // synthesized report
+  "direct_edit", // direct file edit (no git)
 ]);
 export type ArtifactType = z.infer<typeof ArtifactType>;
 

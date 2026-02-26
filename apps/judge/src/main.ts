@@ -195,7 +195,7 @@ Environment Variables:
   GITHUB_AUTH_MODE=gh|token GitHub auth mode (default: gh)
   GITHUB_TOKEN=xxx         GitHub API token (required when mode=token)
   JUDGE_MODEL=xxx          Judge LLM model
-  JUDGE_MODE=git|local|auto Judge execution mode
+  JUDGE_MODE=github|local-git|direct|auto Judge execution mode
   JUDGE_LOCAL_BASE_REPO_RECOVERY=llm|stash|none Recovery strategy for local base repo
   JUDGE_LOCAL_BASE_REPO_RECOVERY_CONFIDENCE=0.7 LLM confidence threshold
   JUDGE_LOCAL_BASE_REPO_RECOVERY_DIFF_LIMIT=20000 Diff size limit for DB storage
@@ -284,16 +284,25 @@ async function main(): Promise<void> {
   const repoMode = getRepoMode();
   const judgeMode = process.env.JUDGE_MODE;
   const effectiveMode =
-    judgeMode === "git" || judgeMode === "local"
-      ? judgeMode
-      : repoMode === "local"
-        ? "local"
-        : "git";
+    judgeMode === "github" || judgeMode === "git"
+      ? "github"
+      : judgeMode === "local-git" || judgeMode === "local"
+        ? "local-git"
+        : judgeMode === "direct"
+          ? "direct"
+          : repoMode === "local-git"
+            ? "local-git"
+            : repoMode === "direct"
+              ? "direct"
+              : "github";
 
-  if (effectiveMode === "local") {
-    await runLocalJudgeLoop({ ...config, mode: "local" });
+  if (effectiveMode === "local-git") {
+    await runLocalJudgeLoop({ ...config, mode: "local-git" });
+  } else if (effectiveMode === "direct") {
+    const { runDirectJudgeLoop } = await import("./judge-direct-loop");
+    await runDirectJudgeLoop({ ...config, mode: "direct" });
   } else {
-    await runJudgeLoop({ ...config, mode: "git" });
+    await runJudgeLoop({ ...config, mode: "github" });
   }
 }
 

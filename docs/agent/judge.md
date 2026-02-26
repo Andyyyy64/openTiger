@@ -19,8 +19,9 @@ Out of scope:
 
 Execution mode is determined by:
 
-- `JUDGE_MODE=git|local|auto`
+- `JUDGE_MODE=github|local-git|direct|auto`
 - When `auto`, it follows `REPO_MODE`
+- `direct` mode: auto-approve loop clears stuck `awaiting_judge` tasks without LLM evaluation
 
 ## 3. Input
 
@@ -65,6 +66,7 @@ Research decision path:
 - Retry and recovery: `apps/judge/src/judge-retry.ts`, `apps/judge/src/judge-pending.ts`
 - Autofix path: `apps/judge/src/judge-autofix.ts`
 - Local operation path: `apps/judge/src/judge-local-loop.ts`, `apps/judge/src/judge-local-merge.ts`
+- Direct mode auto-approve loop: `apps/judge/src/judge-direct-loop.ts`
 - Research evaluator: `apps/judge/src/judge-research.ts`
 
 ## 8. Main Configuration

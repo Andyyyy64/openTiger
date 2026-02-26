@@ -341,12 +341,17 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
   try {
     const id = c.req.param("id");
     const body = await c.req.json();
-    const mode = body.mode === "git" ? "git" : "local";
+    const mode = body.mode === "git" || body.mode === "github"
+      ? "github"
+      : body.mode === "direct"
+        ? "direct"
+        : "local-git";
     const githubOwner = typeof body.githubOwner === "string" ? body.githubOwner.trim() : "";
     const githubRepo = typeof body.githubRepo === "string" ? body.githubRepo.trim() : "";
     const baseBranch = typeof body.baseBranch === "string" ? body.baseBranch.trim() || "main" : "main";
+    const localRepoPath = typeof body.localRepoPath === "string" ? body.localRepoPath.trim() : "";
 
-    if (mode === "git") {
+    if (mode === "github") {
       if (!SAFE_GIT_NAME_RE.test(githubOwner) || !SAFE_GIT_NAME_RE.test(githubRepo)) {
         return c.json({ error: "Invalid owner or repo name" }, 400);
       }
@@ -370,16 +375,29 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
     try {
       const configRow = await ensureConfigRow();
       const { config: configTable } = await import("@openTiger/db/schema");
-      if (mode === "git" && githubOwner && githubRepo) {
+      // Resolve workerCount: direct mode forces 1, others restore default
+      const defaultWorkerCount = "4";
+      if (mode === "github" && githubOwner && githubRepo) {
         const repoUrl = `https://github.com/${githubOwner}/${githubRepo}`;
         await db
           .update(configTable)
           .set({
-            repoMode: "git",
+            repoMode: "github",
             repoUrl,
             githubOwner,
             githubRepo,
             baseBranch,
+            workerCount: configRow.workerCount === "1" ? defaultWorkerCount : configRow.workerCount,
+            updatedAt: new Date(),
+          })
+          .where(eq(configTable.id, configRow.id));
+      } else if (mode === "direct") {
+        await db
+          .update(configTable)
+          .set({
+            repoMode: "direct",
+            localRepoPath: localRepoPath || configRow.localRepoPath,
+            workerCount: "1",
             updatedAt: new Date(),
           })
           .where(eq(configTable.id, configRow.id));
@@ -387,7 +405,9 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
         await db
           .update(configTable)
           .set({
-            repoMode: "local",
+            repoMode: "local-git",
+            localRepoPath: localRepoPath || configRow.localRepoPath,
+            workerCount: configRow.workerCount === "1" ? defaultWorkerCount : configRow.workerCount,
             updatedAt: new Date(),
           })
           .where(eq(configTable.id, configRow.id));
@@ -404,14 +424,18 @@ chatRoute.post("/conversations/:id/start-execution", async (c) => {
           ...metadata,
           phase: "execution",
           repoMode: mode,
-          ...(mode === "git" ? { githubOwner, githubRepo, baseBranch } : {}),
+          ...(mode === "github" ? { githubOwner, githubRepo, baseBranch } : {}),
         },
         updatedAt: new Date(),
       })
       .where(eq(conversations.id, id));
 
     // Insert execution_status system message
-    const modeLabel = mode === "git" ? `git (${githubOwner}/${githubRepo}:${baseBranch})` : "local";
+    const modeLabel = mode === "github"
+      ? `github (${githubOwner}/${githubRepo}:${baseBranch})`
+      : mode === "direct"
+        ? "direct (no git)"
+        : "local-git";
     const [statusMessage] = await db
       .insert(messages)
       .values({
@@ -452,7 +476,7 @@ chatRoute.post("/conversations/:id/confirm-plan", async (c) => {
     // Determine repo mode — default to local if not configured
     let repoMode = metadata.repoMode as string | undefined;
     if (!repoMode) {
-      repoMode = "local";
+      repoMode = "local-git";
     }
 
     // Update conversation to execution phase
@@ -507,12 +531,18 @@ chatRoute.post("/conversations/:id/configure-repo", async (c) => {
     // Update conversation metadata with repo config
     const rawRepoMode = body.repoMode;
     const repoConfig = {
-      repoMode: rawRepoMode === "git" || rawRepoMode === "local" ? rawRepoMode : "git",
+      repoMode: rawRepoMode === "github" || rawRepoMode === "git"
+        ? "github"
+        : rawRepoMode === "direct"
+          ? "direct"
+          : rawRepoMode === "local-git" || rawRepoMode === "local"
+            ? "local-git"
+            : "github",
       githubOwner: typeof body.githubOwner === "string" ? body.githubOwner.trim() : "",
       githubRepo: typeof body.githubRepo === "string" ? body.githubRepo.trim() : "",
       baseBranch: typeof body.baseBranch === "string" ? body.baseBranch.trim() || "main" : "main",
     };
-    if (repoConfig.repoMode === "git" && repoConfig.githubOwner && repoConfig.githubRepo) {
+    if (repoConfig.repoMode === "github" && repoConfig.githubOwner && repoConfig.githubRepo) {
       if (!SAFE_GIT_NAME_RE.test(repoConfig.githubOwner) || !SAFE_GIT_NAME_RE.test(repoConfig.githubRepo)) {
         return c.json({ error: "Invalid owner or repo name" }, 400);
       }

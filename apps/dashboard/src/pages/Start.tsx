@@ -90,8 +90,8 @@ export const StartPage: React.FC = () => {
     queryFn: () => configApi.get(),
   });
   const configValues = config?.config ?? {};
-  const repoMode = (configValues.REPO_MODE ?? "git").toLowerCase();
-  const isGitMode = repoMode === "git";
+  const repoMode = (configValues.REPO_MODE ?? "github").toLowerCase();
+  const isGitMode = repoMode === "git" || repoMode === "github";
   const githubAuthMode = (configValues.GITHUB_AUTH_MODE ?? "gh").trim().toLowerCase();
   const requiresGithubToken = githubAuthMode === "token";
   const hasGithubAuth = requiresGithubToken ? Boolean(configValues.GITHUB_TOKEN?.trim()) : true;
@@ -351,9 +351,9 @@ export const StartPage: React.FC = () => {
     mutationFn: async () => {
       const settings = config?.config;
       if (!settings) throw new Error("Config not loaded");
-      const repoMode = (settings.REPO_MODE ?? "git").toLowerCase();
+      const repoMode = (settings.REPO_MODE ?? "github").toLowerCase();
       const hasRepoUrl = Boolean(settings.REPO_URL?.trim());
-      if (repoMode === "git" && !hasRepoUrl && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
+      if ((repoMode === "git" || repoMode === "github") && !hasRepoUrl && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
         throw new Error("GitHub repo is not configured");
       }
       const { effectiveContent } = resolveEffectiveStartContent();
@@ -384,11 +384,11 @@ export const StartPage: React.FC = () => {
     mutationFn: async () => {
       const settings = config?.config;
       if (!settings) throw new Error("Config not loaded");
-      const repoMode = (settings.REPO_MODE ?? "git").toLowerCase();
+      const repoMode = (settings.REPO_MODE ?? "github").toLowerCase();
       const executionEnvironment = normalizeExecutionEnvironment(settings.EXECUTION_ENVIRONMENT);
       const sandboxExecution = executionEnvironment === "sandbox";
       const hasRepoUrl = Boolean(settings.REPO_URL?.trim());
-      if (repoMode === "git" && !hasRepoUrl && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
+      if ((repoMode === "git" || repoMode === "github") && !hasRepoUrl && (!settings.GITHUB_OWNER || !settings.GITHUB_REPO)) {
         throw new Error("GitHub repo is not configured");
       }
 
@@ -548,7 +548,7 @@ export const StartPage: React.FC = () => {
       setLastSelectedRepo(fullName);
       void configApi
         .update({
-          REPO_MODE: "git",
+          REPO_MODE: "github",
           GITHUB_OWNER: repo.owner,
           GITHUB_REPO: repo.name,
           REPO_URL: repo.url,
@@ -579,7 +579,7 @@ export const StartPage: React.FC = () => {
       },
     ) =>
       configApi.update({
-        REPO_MODE: "git",
+        REPO_MODE: "github",
         GITHUB_OWNER: repo.owner,
         GITHUB_REPO: repo.name,
         REPO_URL: repo.url,
@@ -692,9 +692,21 @@ export const StartPage: React.FC = () => {
           <section className="border border-term-border p-0 h-full">
             <div className="bg-term-border/10 px-4 py-2 border-b border-term-border flex justify-between items-center">
               <h2 className="text-sm font-bold uppercase tracking-wider">Status_Monitor</h2>
-              <span className="text-xs text-zinc-500">
-                {isHealthy ? "[API: ONLINE]" : "[API: OFFLINE]"}
-              </span>
+              <div className="flex items-center gap-2">
+                {clearLogMessage && (
+                  <span className="text-[10px] text-zinc-500 font-mono">{clearLogMessage}</span>
+                )}
+                <button
+                  onClick={() => clearLogsMutation.mutate()}
+                  disabled={clearLogsMutation.isPending}
+                  className="border border-term-border hover:bg-term-fg hover:text-black px-2 py-0.5 text-[11px] uppercase transition-colors disabled:opacity-50 cursor-pointer font-mono"
+                >
+                  {clearLogsMutation.isPending ? "clearing..." : "[ CLEAR_LOG ]"}
+                </button>
+                <span className="text-xs text-zinc-500">
+                  {isHealthy ? "[API: ONLINE]" : "[API: OFFLINE]"}
+                </span>
+              </div>
             </div>
 
             <div className="p-4 space-y-4 font-mono text-sm">

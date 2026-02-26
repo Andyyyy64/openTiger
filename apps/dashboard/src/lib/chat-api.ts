@@ -75,10 +75,11 @@ export const chatApi = {
   startExecution: (
     id: string,
     config: {
-      mode: "local" | "git";
+      mode: "direct" | "local-git" | "github";
       githubOwner?: string;
       githubRepo?: string;
       baseBranch?: string;
+      localRepoPath?: string;
     },
   ) =>
     fetchApi<{ started: boolean; mode: string; message: ChatMessage }>(

@@ -10,7 +10,7 @@ export const ExecutionStatusCard: React.FC<ExecutionStatusCardProps> = ({
   content,
   metadata,
 }) => {
-  const repoMode = (metadata?.repoMode as string) || "local";
+  const repoMode = (metadata?.repoMode as string) || "local-git";
 
   return (
     <div className="py-2 px-3">

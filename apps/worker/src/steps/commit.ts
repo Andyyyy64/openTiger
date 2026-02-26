@@ -193,7 +193,7 @@ export async function commitAndPush(options: CommitOptions): Promise<CommitResul
 
   console.log("Pushing to remote...");
 
-  if (repoMode === "git") {
+  if (repoMode === "github") {
     let pushResult: Awaited<ReturnType<typeof push>> | null = null;
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       pushResult = await push(repoPath, branchName);

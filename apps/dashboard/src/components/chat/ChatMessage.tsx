@@ -19,6 +19,7 @@ interface ChatMessageProps {
   /** Props forwarded to ModeSelectionCard */
   modeSelectionProps?: {
     currentRepo?: { owner: string; repo: string; url?: string; branch?: string } | null;
+    localRepoPath?: string;
     githubRepos?: GitHubRepoListItem[];
     isLoadingRepos?: boolean;
     onRefreshRepos?: () => void;
@@ -41,6 +42,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       <ModeSelectionCard
         onStartExecution={onStartExecution}
         currentRepo={modeSelectionProps?.currentRepo}
+        localRepoPath={modeSelectionProps?.localRepoPath}
         githubRepos={modeSelectionProps?.githubRepos}
         isLoadingRepos={modeSelectionProps?.isLoadingRepos}
         onRefreshRepos={modeSelectionProps?.onRefreshRepos}

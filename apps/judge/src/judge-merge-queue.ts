@@ -551,7 +551,7 @@ async function processQueueRow(params: {
 
     try {
       await createDocserTaskForPR({
-        mode: "git",
+        mode: "github",
         prNumber: params.queueRow.prNumber,
         taskId: params.queueRow.taskId,
         runId: params.queueRow.runId,

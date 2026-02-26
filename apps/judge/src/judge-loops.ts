@@ -157,7 +157,7 @@ export async function runJudgeLoop(config: JudgeConfig): Promise<void> {
                   console.log(`  Task ${pr.taskId} marked as done`);
 
                   const docserResult = await createDocserTaskForPR({
-                    mode: "git",
+                    mode: "github",
                     prNumber: pr.prNumber,
                     taskId: pr.taskId,
                     runId: pr.runId,

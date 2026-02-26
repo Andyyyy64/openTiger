@@ -173,8 +173,8 @@ export async function resolveRequirementRepoRoot(
   if (localRepoPath && localRepoPath !== systemRepoRoot) {
     return localRepoPath;
   }
-  const repoMode = (config.repoMode ?? "git").trim().toLowerCase();
-  if (repoMode === "git") {
+  const repoMode = (config.repoMode ?? "github").trim().toLowerCase();
+  if (repoMode === "git" || repoMode === "github") {
     const managedRepoRoot = await ensureGitRepoRootForRequirement(config);
     if (managedRepoRoot && managedRepoRoot !== systemRepoRoot) {
       return managedRepoRoot;
@@ -400,6 +400,8 @@ export async function syncRequirementSnapshot(params: {
   content: string;
   commitSnapshot?: boolean;
   repoRoot?: string;
+  /** Current repo mode from DB config — used instead of process.env for accuracy */
+  repoMode?: string;
 }): Promise<{
   requirementPath: string;
   canonicalPath: string;
@@ -443,6 +445,17 @@ export async function syncRequirementSnapshot(params: {
     targetRepoRoot,
   );
   if (commitResult.error) {
+    // In non-github modes, git commit may fail (non-git directory, no remote, etc.)
+    // — treat as non-fatal since the file itself was already written successfully above.
+    const effectiveMode = (params.repoMode ?? process.env.REPO_MODE ?? "").trim().toLowerCase();
+    if (effectiveMode === "direct" || effectiveMode === "local-git" || effectiveMode === "local") {
+      return {
+        requirementPath,
+        canonicalPath,
+        committed: false,
+        commitReason: commitResult.error,
+      };
+    }
     throw new Error(commitResult.error);
   }
   return {

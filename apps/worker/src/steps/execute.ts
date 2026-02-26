@@ -91,6 +91,7 @@ function summarizeRecoveryError(stderr: string | undefined, maxChars = 400): str
 
 function buildTaskPrompt(
   task: Task,
+  repoPath: string,
   retryHints: string[] = [],
   verificationRecovery?: VerificationRecoveryContext,
   runtimeContext?: {
@@ -99,6 +100,13 @@ function buildTaskPrompt(
   },
 ): string {
   const lines: string[] = [`# Task: ${task.title}`, "", "## Goal", task.goal, ""];
+
+  lines.push(
+    "## Working Directory",
+    `Your working directory is: ${repoPath}`,
+    "All file operations MUST be relative to this directory. Do not create or modify files outside this directory.",
+    "",
+  );
 
   if (runtimeContext?.hostContextSummary) {
     lines.push("## Host Context", runtimeContext.hostContextSummary, "");
@@ -316,7 +324,7 @@ export async function executeTask(options: ExecuteOptions): Promise<ExecuteResul
     task,
     failedCommand: verificationRecovery?.failedCommand,
   });
-  const prompt = buildTaskPrompt(task, retryHints, verificationRecovery, runtimeContext);
+  const prompt = buildTaskPrompt(task, repoPath, retryHints, verificationRecovery, runtimeContext);
   const workerModel =
     model ??
     process.env.WORKER_MODEL ??

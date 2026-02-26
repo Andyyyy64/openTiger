@@ -1,5 +1,5 @@
 // Settings form definitions and display order
-export const REPO_MODE_OPTIONS = ["git", "local"] as const;
+export const REPO_MODE_OPTIONS = ["github", "local-git", "direct"] as const;
 export const GITHUB_AUTH_MODE_OPTIONS = ["gh", "token"] as const;
 export const LLM_EXECUTOR_OPTIONS = ["codex", "claude_code", "opencode"] as const;
 export const AGENT_LLM_EXECUTOR_OPTIONS = ["inherit", ...LLM_EXECUTOR_OPTIONS] as const;
@@ -264,7 +264,7 @@ export const SETTINGS: SettingField[] = [
   {
     key: "REPO_MODE",
     label: "Repo_Mode",
-    description: "git or local mode",
+    description: "github, local-git, or direct mode",
     group: "Repo",
     type: "select",
     options: REPO_MODE_OPTIONS,

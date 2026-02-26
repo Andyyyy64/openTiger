@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { extname, join, relative } from "node:path";
 import { spawn } from "node:child_process";
 import { runOpenCode } from "@openTiger/llm";
 import type { Requirement } from "./parser";
@@ -61,7 +61,58 @@ async function readOptionalFile(path: string, maxChars: number): Promise<string 
   }
 }
 
+const WALK_SKIP_DIRS = new Set([
+  ".git",
+  "node_modules",
+  ".cache",
+  ".next",
+  ".nuxt",
+  "dist",
+  "build",
+  ".turbo",
+  ".vercel",
+  "coverage",
+  "__pycache__",
+  ".venv",
+  "venv",
+]);
+
+async function walkDirectory(dir: string, rootDir: string, limit: number): Promise<string[]> {
+  const results: string[] = [];
+  const queue: string[] = [dir];
+  while (queue.length > 0 && results.length < limit) {
+    const current = queue.shift()!;
+    let entries;
+    try {
+      entries = await readdir(current, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      if (results.length >= limit) break;
+      if (entry.name.startsWith(".") && entry.isDirectory()) continue;
+      if (WALK_SKIP_DIRS.has(entry.name) && entry.isDirectory()) continue;
+      const fullPath = join(current, entry.name);
+      if (entry.isDirectory()) {
+        queue.push(fullPath);
+      } else {
+        results.push(relative(rootDir, fullPath));
+      }
+    }
+  }
+  return results;
+}
+
 async function listTrackedFiles(workdir: string, limit: number): Promise<string[]> {
+  const gitFiles = await listGitTrackedFiles(workdir, limit);
+  if (gitFiles.length > 0) {
+    return gitFiles;
+  }
+  // Fallback: walk filesystem when git ls-files fails (non-git repo, e.g. direct mode)
+  return walkDirectory(workdir, workdir, limit);
+}
+
+async function listGitTrackedFiles(workdir: string, limit: number): Promise<string[]> {
   return new Promise((resolveResult) => {
     const child = spawn("git", ["ls-files"], {
       cwd: workdir,

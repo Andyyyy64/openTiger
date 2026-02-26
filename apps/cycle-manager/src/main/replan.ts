@@ -229,9 +229,24 @@ async function computeReplanSignature(
     return;
   }
 
-  const repoHeadSha = config.replanRepoUrl
-    ? await fetchRepoHeadSha(config.replanRepoUrl, config.replanBaseBranch)
-    : await fetchLocalHeadSha(config.replanWorkdir);
+  // Resolve repo HEAD for signature:
+  // - github mode (repoUrl set): fetch remote HEAD via ls-remote
+  // - local-git mode: fetch local HEAD from LOCAL_REPO_PATH (has git)
+  // - direct mode: no git, use static placeholder (signature based on requirement hash only)
+  let repoHeadSha: string | undefined;
+  if (config.replanRepoUrl) {
+    repoHeadSha = await fetchRepoHeadSha(config.replanRepoUrl, config.replanBaseBranch);
+  } else {
+    const repoMode = process.env.REPO_MODE?.trim().toLowerCase();
+    if (repoMode === "direct") {
+      repoHeadSha = "__DIRECT_MODE__";
+    } else if (repoMode === "local-git" || repoMode === "local") {
+      const localPath = process.env.LOCAL_REPO_PATH?.trim();
+      repoHeadSha = await fetchLocalHeadSha(localPath || config.replanWorkdir);
+    } else {
+      repoHeadSha = await fetchLocalHeadSha(config.replanWorkdir);
+    }
+  }
   if (!repoHeadSha) {
     console.warn("[CycleManager] Failed to resolve repo HEAD for replan signature.");
     return;
@@ -239,7 +254,7 @@ async function computeReplanSignature(
 
   const repoIdentity = config.replanRepoUrl
     ? config.replanRepoUrl
-    : `local:${resolve(config.replanWorkdir)}`;
+    : `local:${resolve(process.env.LOCAL_REPO_PATH?.trim() || config.replanWorkdir)}`;
   const signaturePayload = {
     requirementHash,
     repoHeadSha,
@@ -518,9 +533,7 @@ function buildReplanCommand(config: CycleManagerConfig): ParsedCommand | null {
 }
 
 function buildPlannerReplanEnv(config: CycleManagerConfig): Record<string, string> {
-  const repoUrl = config.replanRepoUrl?.trim() || process.env.REPO_URL?.trim() || "";
   const baseBranch = config.replanBaseBranch?.trim() || process.env.BASE_BRANCH?.trim() || "main";
-  const useRemote = repoUrl.length > 0;
 
   const env: Record<string, string> = {
     ...process.env,
@@ -528,8 +541,15 @@ function buildPlannerReplanEnv(config: CycleManagerConfig): Record<string, strin
     BASE_BRANCH: baseBranch,
   };
 
-  if (useRemote) {
-    env.REPO_MODE = "git";
+  // In direct/local-git modes, never override to remote git — use local workdir
+  const repoMode = process.env.REPO_MODE?.trim().toLowerCase();
+  if (repoMode === "direct" || repoMode === "local-git" || repoMode === "local") {
+    return env;
+  }
+
+  const repoUrl = config.replanRepoUrl?.trim() || process.env.REPO_URL?.trim() || "";
+  if (repoUrl.length > 0) {
+    env.REPO_MODE = "github";
     env.REPO_URL = repoUrl;
     env.PLANNER_USE_REMOTE = "true";
     env.PLANNER_REPO_URL = repoUrl;

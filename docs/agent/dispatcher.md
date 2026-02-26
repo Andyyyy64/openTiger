@@ -21,7 +21,7 @@ Out of scope:
 - Current state of `tasks` / `runs` / `leases` / `agents`
 - Task `priority`, `dependencies`, `targetArea`, `lane`, `role`
 - Execution mode (`LAUNCH_MODE=process|docker`)
-- Repository execution mode (`REPO_MODE=git|local`)
+- Repository execution mode (`REPO_MODE=github|local-git|direct`)
 
 ## 3. Dispatch Pipeline
 

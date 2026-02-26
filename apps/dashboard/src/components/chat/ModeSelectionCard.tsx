@@ -1,18 +1,23 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { GitHubRepoListItem } from "../../lib/api";
+import { systemApi } from "../../lib/api";
 import { BrailleSpinner } from "../BrailleSpinner";
 
 export interface ModeSelectionStartConfig {
-  mode: "local" | "git";
+  mode: "direct" | "local-git" | "github";
   githubOwner?: string;
   githubRepo?: string;
   baseBranch?: string;
+  localRepoPath?: string;
 }
 
 interface ModeSelectionCardProps {
   onStartExecution?: (config: ModeSelectionStartConfig) => void;
   /** Current configured repo from global config */
   currentRepo?: { owner: string; repo: string; url?: string; branch?: string } | null;
+  /** LOCAL_REPO_PATH from config — shown for direct/local-git modes */
+  localRepoPath?: string;
   /** GitHub repos from API */
   githubRepos?: GitHubRepoListItem[];
   isLoadingRepos?: boolean;
@@ -23,9 +28,156 @@ interface ModeSelectionCardProps {
   executionStatus?: "idle" | "pending" | "success" | "error";
 }
 
+// --- Directory Browser sub-component ---
+
+const DirectoryBrowser: React.FC<{
+  onSelect: (path: string) => void;
+  onBack: () => void;
+}> = ({ onSelect, onBack }) => {
+  const [browsePath, setBrowsePath] = useState<string | undefined>(undefined);
+  const [projectName, setProjectName] = useState("");
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["system", "browse-directories", browsePath ?? ""],
+    queryFn: () => systemApi.browseDirectories(browsePath),
+  });
+
+  const currentPath = data?.currentPath ?? browsePath ?? "";
+  const parentPath = data?.parentPath ?? null;
+  const entries = data?.entries ?? [];
+  const homePath = data?.homePath ?? "";
+
+  const trimmedName = projectName.trim().replace(/\/+/g, "");
+  const finalPath = currentPath && trimmedName
+    ? `${currentPath}/${trimmedName}`
+    : currentPath;
+
+  // Build breadcrumb segments from currentPath relative to homePath
+  const breadcrumbs: Array<{ label: string; path: string }> = [];
+  if (currentPath && homePath) {
+    const relative = currentPath.startsWith(homePath)
+      ? currentPath.slice(homePath.length)
+      : currentPath;
+    const parts = relative.split("/").filter(Boolean);
+    breadcrumbs.push({ label: "~", path: homePath });
+    let accum = homePath;
+    for (const part of parts) {
+      accum = `${accum}/${part}`;
+      breadcrumbs.push({ label: part, path: accum });
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="text-[11px] text-zinc-500 uppercase tracking-wider">
+        Select Parent Directory
+      </div>
+
+      {/* Breadcrumb */}
+      {breadcrumbs.length > 0 && (
+        <div className="text-[11px] text-zinc-600 flex flex-wrap gap-0.5 items-center">
+          {breadcrumbs.map((b, i) => (
+            <React.Fragment key={b.path}>
+              {i > 0 && <span className="text-zinc-700 mx-0.5">/</span>}
+              <button
+                onClick={() => setBrowsePath(b.path)}
+                className="text-zinc-400 hover:text-term-tiger transition-colors cursor-pointer"
+              >
+                {b.label}
+              </button>
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+
+      {/* Directory listing */}
+      <div className="border border-term-border max-h-52 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center gap-2 px-3 py-3">
+            <BrailleSpinner variant="sort" width={6} className="text-zinc-500" />
+            <span className="text-[11px] text-zinc-500">Loading...</span>
+          </div>
+        ) : (
+          <>
+            {parentPath && (
+              <button
+                onClick={() => setBrowsePath(parentPath)}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200 border-b border-term-border/30 text-left cursor-pointer"
+              >
+                <span className="text-zinc-600">..</span>
+                <span className="text-[10px] text-zinc-700">(parent)</span>
+              </button>
+            )}
+            {entries.length === 0 && !parentPath && (
+              <div className="px-3 py-3 text-[11px] text-zinc-600">No subdirectories</div>
+            )}
+            {entries.length === 0 && parentPath && !isLoading && (
+              <div className="px-3 py-2 text-[11px] text-zinc-600">No subdirectories</div>
+            )}
+            {entries.map((entry) => (
+              <button
+                key={entry.path}
+                onClick={() => setBrowsePath(entry.path)}
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-900 hover:text-zinc-100 border-b border-term-border/30 last:border-b-0 text-left cursor-pointer"
+              >
+                <span className="text-zinc-600 text-[10px] shrink-0">&#9654;</span>
+                <span className="truncate">{entry.name}/</span>
+                {entry.isGitRepo && (
+                  <span className="text-[9px] text-green-600 border border-green-800/50 px-1 py-0 uppercase shrink-0">
+                    git
+                  </span>
+                )}
+              </button>
+            ))}
+          </>
+        )}
+      </div>
+
+      {/* Project name input */}
+      <div className="space-y-1">
+        <div className="text-[11px] text-zinc-500 uppercase tracking-wider">Project Name</div>
+        <input
+          type="text"
+          value={projectName}
+          onChange={(e) => setProjectName(e.target.value)}
+          placeholder="my-project"
+          className="w-full bg-black border border-term-border px-2 py-1.5 text-xs text-term-fg font-mono focus:border-term-tiger focus:outline-none placeholder-zinc-700"
+        />
+      </div>
+
+      {/* Final path preview */}
+      {currentPath && (
+        <div className="text-[10px] text-zinc-600">
+          Path: <span className="text-zinc-400 font-mono">{finalPath}</span>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-3 pt-1">
+        <button
+          onClick={() => onSelect(finalPath)}
+          disabled={!currentPath || !trimmedName}
+          className="bg-term-tiger text-black px-5 py-2 text-xs font-bold uppercase hover:opacity-90 disabled:opacity-30 disabled:bg-zinc-800 disabled:text-zinc-500 cursor-pointer disabled:cursor-not-allowed"
+        >
+          SELECT
+        </button>
+        <button
+          onClick={onBack}
+          className="border border-zinc-700 text-zinc-400 px-4 py-2 text-xs uppercase hover:text-zinc-200 hover:border-zinc-500 cursor-pointer"
+        >
+          BACK
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// --- Main Component ---
+
 export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
   onStartExecution,
   currentRepo,
+  localRepoPath,
   githubRepos = [],
   isLoadingRepos,
   onRefreshRepos,
@@ -33,13 +185,16 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
   isCreatingRepo,
   executionStatus = "idle",
 }) => {
-  const [expanded, setExpanded] = useState<"git" | null>(null);
+  const [expanded, setExpanded] = useState<"github" | "direct" | "local-git" | "browse" | null>(null);
   const [selectedFullName, setSelectedFullName] = useState("");
   const [createOwner, setCreateOwner] = useState("");
   const [createName, setCreateName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [clicked, setClicked] = useState(false);
   const userHasSelected = useRef(false);
+  /** User-overridden local path (from directory browser) — takes precedence over prop */
+  const [overridePath, setOverridePath] = useState<string | undefined>(undefined);
+  const effectiveLocalPath = overridePath ?? localRepoPath;
 
   // Reset clicked state when execution mutation is reset (e.g. conversation switch)
   useEffect(() => {
@@ -67,10 +222,37 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
 
   const busy = clicked || executionStatus === "pending";
 
-  const handleLocal = () => {
+  const handleDirect = () => {
     if (!onStartExecution || busy) return;
+    if (effectiveLocalPath) {
+      setClicked(true);
+      onStartExecution({ mode: "direct", localRepoPath: overridePath });
+    } else {
+      setExpanded("direct");
+    }
+  };
+
+  const handleLocalGit = () => {
+    if (!onStartExecution || busy) return;
+    if (effectiveLocalPath) {
+      setClicked(true);
+      onStartExecution({ mode: "local-git", localRepoPath: overridePath });
+    } else {
+      setExpanded("local-git");
+    }
+  };
+
+  const handleDirectorySelect = (path: string) => {
+    if (!onStartExecution || busy) return;
+    if (expanded === "browse") {
+      // Came from "CHANGE" button — just update the path and go back to mode buttons
+      setOverridePath(path);
+      setExpanded(null);
+      return;
+    }
+    const mode = expanded === "direct" ? "direct" : "local-git";
     setClicked(true);
-    onStartExecution({ mode: "local" });
+    onStartExecution({ mode, localRepoPath: path });
   };
 
   const handleGitStart = () => {
@@ -82,7 +264,7 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
     if (!owner || !repo) return;
     setClicked(true);
     onStartExecution({
-      mode: "git",
+      mode: "github",
       githubOwner: owner,
       githubRepo: repo,
       baseBranch: selectedRepo?.defaultBranch || "main",
@@ -148,23 +330,60 @@ export const ModeSelectionCard: React.FC<ModeSelectionCardProps> = ({
         </div>
 
         {!expanded && (
-          <div className="flex gap-3">
-            <button
-              onClick={handleLocal}
-              className="bg-term-tiger text-black px-5 py-2 text-xs font-bold uppercase hover:opacity-90"
-            >
-              LOCAL MODE
-            </button>
-            <button
-              onClick={() => setExpanded("git")}
-              className="border border-term-tiger text-term-tiger px-5 py-2 text-xs font-bold uppercase hover:bg-term-tiger/10"
-            >
-              GIT MODE
-            </button>
+          <div className="space-y-3">
+            {effectiveLocalPath && (
+              <div className="text-[11px] text-zinc-500 flex items-center gap-2">
+                <span>
+                  Local path: <span className="text-zinc-300 font-mono">{effectiveLocalPath}</span>
+                </span>
+                <button
+                  onClick={() => setExpanded("browse")}
+                  className="text-[10px] text-zinc-600 hover:text-term-tiger uppercase border border-zinc-700 hover:border-term-tiger/50 px-1.5 py-0 transition-colors cursor-pointer"
+                >
+                  change
+                </button>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <div className="flex flex-col items-start">
+                <button
+                  onClick={handleDirect}
+                  className="border border-term-tiger text-term-tiger px-5 py-2 text-xs font-bold uppercase hover:bg-term-tiger/10"
+                >
+                  DIRECT
+                </button>
+                <span className="text-[10px] text-zinc-600 mt-1 px-1">Edit files in-place, no git</span>
+              </div>
+              <div className="flex flex-col items-start">
+                <button
+                  onClick={handleLocalGit}
+                  className="border border-term-tiger text-term-tiger px-5 py-2 text-xs font-bold uppercase hover:bg-term-tiger/10"
+                >
+                  LOCAL GIT
+                </button>
+                <span className="text-[10px] text-zinc-600 mt-1 px-1">Worktree + local commits</span>
+              </div>
+              <div className="flex flex-col items-start">
+                <button
+                  onClick={() => setExpanded("github")}
+                  className="border border-term-tiger text-term-tiger px-5 py-2 text-xs font-bold uppercase hover:bg-term-tiger/10"
+                >
+                  GITHUB
+                </button>
+                <span className="text-[10px] text-zinc-600 mt-1 px-1">Clone, branch, PR</span>
+              </div>
+            </div>
           </div>
         )}
 
-        {expanded === "git" && (
+        {(expanded === "direct" || expanded === "local-git" || expanded === "browse") && (
+          <DirectoryBrowser
+            onSelect={handleDirectorySelect}
+            onBack={() => setExpanded(null)}
+          />
+        )}
+
+        {expanded === "github" && (
           <div className="space-y-3">
             {/* Current repo indicator */}
             {currentRepo?.owner && currentRepo?.repo && (
