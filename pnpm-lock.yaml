@@ -52,8 +52,8 @@ importers:
         specifier: ^4.19.2
         version: 4.21.0
       turbo:
-        specifier: ^2.8.8
-        version: 2.8.8
+        specifier: ^2.9.16
+        version: 2.9.16
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -642,8 +642,8 @@ packages:
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
 
-  '@emnapi/runtime@1.8.1':
-    resolution: {integrity: sha512-mehfKSMWjjNol8659Z8KxEMrdSJDDot5SXMq00dM8BN4o+CLNXQ0xH2V7EchNHV4RmbZLmmPdEaXZc5H2FXmDg==}
+  '@emnapi/runtime@1.10.0':
+    resolution: {integrity: sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA==}
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
@@ -1301,8 +1301,8 @@ packages:
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
 
-  '@img/colour@1.0.0':
-    resolution: {integrity: sha512-A5P/LfWGFSl6nsckYtjw9da+19jB8hkJ6ACTGcDfEJ0aE+l2n2El7dsVM7UVHZQ9s2lmYMWlrS21YLy2IR1LUw==}
+  '@img/colour@1.1.0':
+    resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
     engines: {node: '>=18'}
 
   '@img/sharp-darwin-arm64@0.34.5':
@@ -2254,6 +2254,36 @@ packages:
     peerDependencies:
       react: ^18 || ^19
 
+  '@turbo/darwin-64@2.9.16':
+    resolution: {integrity: sha512-jLjApWTSNd7JZ5JaLYfelW1ytnGQOvB7ivl+2RD1xQvJTbi8I9gBjzcga7tDZVPyaxpl10YTfJt3BrYXR18KDw==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@turbo/darwin-arm64@2.9.16':
+    resolution: {integrity: sha512-YPgrn+5HIGzrx0O2a631SV4MBQUe4W/DafMFUuBVgaU32PW9/OTT0ehviF0QSxTXuRJlHvW2eUTemddF5/spmw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@turbo/linux-64@2.9.16':
+    resolution: {integrity: sha512-vAEf1H6l26lTpl9FJ/peQo1NUB8RC0sbEJJz5mPcUhHA2bPDup2x3CZPgo/bH8S4cUcBLm4FN3UHd5iUO2RAew==}
+    cpu: [x64]
+    os: [linux]
+
+  '@turbo/linux-arm64@2.9.16':
+    resolution: {integrity: sha512-xDBLR2PZg4BrQOchfG6svgpv5FCNJ2TOtT2psLdEJcdKo1BH+pnPs9Xj6pvUjgfkHbuvBOfeE4R6tvxMoQKDHQ==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@turbo/windows-64@2.9.16':
+    resolution: {integrity: sha512-NBAJnaUiGdgkSzQwUIdOvkCkcpTSu58G/sBGa0mvBtzfvFOOgrQwepKOOQ8cp6sWM6OcKDNFj2p1dsZA1OWjPg==}
+    cpu: [x64]
+    os: [win32]
+
+  '@turbo/windows-arm64@2.9.16':
+    resolution: {integrity: sha512-Y7SJppD0Z8wjO3Ec0ZGd9KQ4Yv0BMnA8CIowj5Vp+OEVsosXDG2weK6/t1RRLfJmc2Ozrnd6y4DOgQys+mn3WQ==}
+    cpu: [arm64]
+    os: [win32]
+
   '@types/babel__core@7.20.5':
     resolution: {integrity: sha512-qoQprZvz5wQFJwMDqeseRXWv3rqMvhgpbXFfVyWhbx9X47POIA6i/+dXefEmZKoAgOaTdaIgNSMqMIU61yRyzA==}
 
@@ -2448,8 +2478,8 @@ packages:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
 
-  baseline-browser-mapping@2.10.0:
-    resolution: {integrity: sha512-lIyg0szRfYbiy67j9KN8IyeD7q7hcmqnJ1ddWmNt19ItGpNN64mnllmxUNFIOdOm6by97jlL6wfpTTJrmnjWAA==}
+  baseline-browser-mapping@2.10.34:
+    resolution: {integrity: sha512-IMDedajPifLnHNY0X9n8hKxRTQ6/eTHwr5bDo04WnuqxyKw6LYtQywCuuqPZwhl3aBXMvQpJov42GLCwRRdQzw==}
     engines: {node: '>=6.0.0'}
     hasBin: true
 
@@ -2505,8 +2535,8 @@ packages:
   caniuse-lite@1.0.30001765:
     resolution: {integrity: sha512-LWcNtSyZrakjECqmpP4qdg0MMGdN368D7X8XvvAqOcqMv0RxnlqVKZl2V6/mBR68oYMxOZPLw/gO7DuisMHUvQ==}
 
-  caniuse-lite@1.0.30001772:
-    resolution: {integrity: sha512-mIwLZICj+ntVTw4BT2zfp+yu/AqV6GMKfJVJMx3MwPxs+uk/uj2GLl2dH8LQbjiLDX66amCga5nKFyDgRR43kg==}
+  caniuse-lite@1.0.30001797:
+    resolution: {integrity: sha512-l8xKG+gwAIExZGl9FrF7KUwuOmk6wbEPC9Xoy/RtnWv1XG0Q4LFlagaLpUv3Kiza3W/wm27zy0yWJEieYKAP6w==}
 
   chai@5.3.3:
     resolution: {integrity: sha512-4zNhdJD/iOjSH0A05ea+Ke6MU5mmpQcbQsSOkgdaUMJ9zTlDTD/GYlwohmIE2u0gaxHYiVHEn1Fw9mZ/ktJWgw==}
@@ -3363,6 +3393,11 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  nanoid@3.3.12:
+    resolution: {integrity: sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ==}
+    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
+
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
@@ -3595,6 +3630,11 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
+  semver@7.8.2:
+    resolution: {integrity: sha512-c8jsqUZm3omBOI66G90z1Dyw5z622G8oLG+omfsHBJf3CWQTlOcwOjvOG6wtiNfW6anKm/eA39LMwMtMez2TiQ==}
+    engines: {node: '>=10'}
+    hasBin: true
+
   set-cookie-parser@2.7.2:
     resolution: {integrity: sha512-oeM1lpU/UvhTxw+g3cIfxXHyJRc/uidd3yK1P242gzHds0udQBYzs3y8j4gCCW+ZJ7ad0yctld8RYO+bdurlvw==}
 
@@ -3783,38 +3823,8 @@ packages:
     engines: {node: '>=18.0.0'}
     hasBin: true
 
-  turbo-darwin-64@2.8.8:
-    resolution: {integrity: sha512-7R/XRAleyNB8nIJuenRpS7EnmCM/kYFgcG1rW3F5DF57Nl4WyBO3DzxqwooRheuoXDD1UsJvDse0yRufgxjClA==}
-    cpu: [x64]
-    os: [darwin]
-
-  turbo-darwin-arm64@2.8.8:
-    resolution: {integrity: sha512-whpveO0w/dMcgQ0zFrzqK76mG2W+RBQ/pKIpW+sEvNr+T4UcYd2gZpfV2euehJLvdeFErWgW74dIt/MFfkG1bA==}
-    cpu: [arm64]
-    os: [darwin]
-
-  turbo-linux-64@2.8.8:
-    resolution: {integrity: sha512-BISkcKk+5/Dh11q+YhdQIGONXmdlQ6LY0iQ+GBIK7QOBAJyJFKmKvUeAeMdWGXOa3sImz2oZ6u2StyR+0Y/VVA==}
-    cpu: [x64]
-    os: [linux]
-
-  turbo-linux-arm64@2.8.8:
-    resolution: {integrity: sha512-B+DQWWtM3O+AexFF4aYucT0MvvnQOW4n5y9LA5h3Zc3Lpj10yl9K4dEBzJvMVQ2jTkCRNAvA8q9G3EjqmGmGGA==}
-    cpu: [arm64]
-    os: [linux]
-
-  turbo-windows-64@2.8.8:
-    resolution: {integrity: sha512-KP5TRVrmVnrxDyvERvQq7VXu+h5AiEiBwyr90YsRuYy/Z5zLz8hrNZXejTyUR17xmnuI+RbUSxrQlfmPnxiW1A==}
-    cpu: [x64]
-    os: [win32]
-
-  turbo-windows-arm64@2.8.8:
-    resolution: {integrity: sha512-X45sTOksR8iidk+PZUXpNcfEkOhGCTS2p2J8nSUExr1v7u3T4FixwplzliuWmG7QTPGJapAwItzHbi+d/9ckNQ==}
-    cpu: [arm64]
-    os: [win32]
-
-  turbo@2.8.8:
-    resolution: {integrity: sha512-wP+axjWAKzYfZ7bghuggVST9bX4j5cn3NPMU9NPQqtwaUKL9n9JOnWWBIc9gdrEma1aViYR73EoPjDEpVq+liQ==}
+  turbo@2.9.16:
+    resolution: {integrity: sha512-NqgRQy6j6dPYcdSdv0q1g9QsZg7SWg87RERM8otw/1AtKU2yTFVClOM7cbwKzOonZr/Ek1blTBucw64L9H0Bwg==}
     hasBin: true
 
   type-check@0.4.0:
@@ -4133,7 +4143,7 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
-  '@emnapi/runtime@1.8.1':
+  '@emnapi/runtime@1.10.0':
     dependencies:
       tslib: 2.8.1
     optional: true
@@ -4505,7 +4515,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@img/colour@1.0.0':
+  '@img/colour@1.1.0':
     optional: true
 
   '@img/sharp-darwin-arm64@0.34.5':
@@ -4590,7 +4600,7 @@ snapshots:
 
   '@img/sharp-wasm32@0.34.5':
     dependencies:
-      '@emnapi/runtime': 1.8.1
+      '@emnapi/runtime': 1.10.0
     optional: true
 
   '@img/sharp-win32-arm64@0.34.5':
@@ -5178,6 +5188,24 @@ snapshots:
       '@tanstack/query-core': 5.90.19
       react: 19.2.4
 
+  '@turbo/darwin-64@2.9.16':
+    optional: true
+
+  '@turbo/darwin-arm64@2.9.16':
+    optional: true
+
+  '@turbo/linux-64@2.9.16':
+    optional: true
+
+  '@turbo/linux-arm64@2.9.16':
+    optional: true
+
+  '@turbo/windows-64@2.9.16':
+    optional: true
+
+  '@turbo/windows-arm64@2.9.16':
+    optional: true
+
   '@types/babel__core@7.20.5':
     dependencies:
       '@babel/parser': 7.28.6
@@ -5433,7 +5461,7 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
-  baseline-browser-mapping@2.10.0: {}
+  baseline-browser-mapping@2.10.34: {}
 
   baseline-browser-mapping@2.9.17: {}
 
@@ -5499,7 +5527,7 @@ snapshots:
 
   caniuse-lite@1.0.30001765: {}
 
-  caniuse-lite@1.0.30001772: {}
+  caniuse-lite@1.0.30001797: {}
 
   chai@5.3.3:
     dependencies:
@@ -6219,14 +6247,16 @@ snapshots:
 
   nanoid@3.3.11: {}
 
+  nanoid@3.3.12: {}
+
   natural-compare@1.4.0: {}
 
   next@16.1.6(@babel/core@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@next/env': 16.1.6
       '@swc/helpers': 0.5.15
-      baseline-browser-mapping: 2.10.0
-      caniuse-lite: 1.0.30001772
+      baseline-browser-mapping: 2.10.34
+      caniuse-lite: 1.0.30001797
       postcss: 8.4.31
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
@@ -6373,7 +6403,7 @@ snapshots:
 
   postcss@8.4.31:
     dependencies:
-      nanoid: 3.3.11
+      nanoid: 3.3.12
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
@@ -6465,13 +6495,16 @@ snapshots:
 
   semver@7.7.4: {}
 
+  semver@7.8.2:
+    optional: true
+
   set-cookie-parser@2.7.2: {}
 
   sharp@0.34.5:
     dependencies:
-      '@img/colour': 1.0.0
+      '@img/colour': 1.1.0
       detect-libc: 2.1.2
-      semver: 7.7.4
+      semver: 7.8.2
     optionalDependencies:
       '@img/sharp-darwin-arm64': 0.34.5
       '@img/sharp-darwin-x64': 0.34.5
@@ -6661,32 +6694,14 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  turbo-darwin-64@2.8.8:
-    optional: true
-
-  turbo-darwin-arm64@2.8.8:
-    optional: true
-
-  turbo-linux-64@2.8.8:
-    optional: true
-
-  turbo-linux-arm64@2.8.8:
-    optional: true
-
-  turbo-windows-64@2.8.8:
-    optional: true
-
-  turbo-windows-arm64@2.8.8:
-    optional: true
-
-  turbo@2.8.8:
+  turbo@2.9.16:
     optionalDependencies:
-      turbo-darwin-64: 2.8.8
-      turbo-darwin-arm64: 2.8.8
-      turbo-linux-64: 2.8.8
-      turbo-linux-arm64: 2.8.8
-      turbo-windows-64: 2.8.8
-      turbo-windows-arm64: 2.8.8
+      '@turbo/darwin-64': 2.9.16
+      '@turbo/darwin-arm64': 2.9.16
+      '@turbo/linux-64': 2.9.16
+      '@turbo/linux-arm64': 2.9.16
+      '@turbo/windows-64': 2.9.16
+      '@turbo/windows-arm64': 2.9.16
 
   type-check@0.4.0:
     dependencies:
