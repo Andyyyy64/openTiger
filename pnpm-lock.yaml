@@ -21,8 +21,8 @@ importers:
         specifier: ^17.3.1
         version: 17.3.1
       drizzle-orm:
-        specifier: 0.45.1
-        version: 0.45.1(gel@2.2.0)(postgres@3.4.8)
+        specifier: 0.45.2
+        version: 0.45.2(gel@2.2.0)(postgres@3.4.8)
       lucide-react:
         specifier: 0.575.0
         version: 0.575.0(react@19.2.4)
@@ -94,8 +94,8 @@ importers:
         specifier: ^17.3.1
         version: 17.3.1
       drizzle-orm:
-        specifier: ^0.38.4
-        version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.4)
+        specifier: ^0.45.2
+        version: 0.45.2(gel@2.2.0)(postgres@3.4.8)
       hono:
         specifier: ^4.11.9
         version: 4.11.9
@@ -140,8 +140,8 @@ importers:
         specifier: ^17.3.1
         version: 17.3.1
       drizzle-orm:
-        specifier: ^0.38.4
-        version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.4)
+        specifier: ^0.45.2
+        version: 0.45.2(gel@2.2.0)(postgres@3.4.8)
     devDependencies:
       '@types/node':
         specifier: ^25.2.3
@@ -256,8 +256,8 @@ importers:
         specifier: ^17.3.1
         version: 17.3.1
       drizzle-orm:
-        specifier: ^0.38.4
-        version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.4)
+        specifier: ^0.45.2
+        version: 0.45.2(gel@2.2.0)(postgres@3.4.8)
     devDependencies:
       '@types/node':
         specifier: ^25.2.3
@@ -296,8 +296,8 @@ importers:
         specifier: ^17.3.1
         version: 17.3.1
       drizzle-orm:
-        specifier: ^0.38.4
-        version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.4)
+        specifier: ^0.45.2
+        version: 0.45.2(gel@2.2.0)(postgres@3.4.8)
     devDependencies:
       '@types/node':
         specifier: ^25.2.3
@@ -336,8 +336,8 @@ importers:
         specifier: ^17.3.1
         version: 17.3.1
       drizzle-orm:
-        specifier: ^0.38.4
-        version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.4)
+        specifier: ^0.45.2
+        version: 0.45.2(gel@2.2.0)(postgres@3.4.8)
     devDependencies:
       '@types/node':
         specifier: ^25.2.3
@@ -382,8 +382,8 @@ importers:
         specifier: ^17.3.1
         version: 17.3.1
       drizzle-orm:
-        specifier: ^0.38.4
-        version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.4)
+        specifier: ^0.45.2
+        version: 0.45.2(gel@2.2.0)(postgres@3.4.8)
       minimatch:
         specifier: ^10.2.0
         version: 10.2.0
@@ -429,8 +429,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       drizzle-orm:
-        specifier: ^0.38.4
-        version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.4)
+        specifier: ^0.45.2
+        version: 0.45.2(gel@2.2.0)(postgres@3.4.8)
       postgres:
         specifier: ^3.4.5
         version: 3.4.8
@@ -536,8 +536,8 @@ importers:
         specifier: workspace:^
         version: link:../../packages/vcs
       drizzle-orm:
-        specifier: ^0.38.4
-        version: 0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.4)
+        specifier: ^0.45.2
+        version: 0.45.2(gel@2.2.0)(postgres@3.4.8)
     devDependencies:
       typescript:
         specifier: ^5.7.3
@@ -642,8 +642,8 @@ packages:
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
 
-  '@emnapi/runtime@1.8.1':
-    resolution: {integrity: sha512-mehfKSMWjjNol8659Z8KxEMrdSJDDot5SXMq00dM8BN4o+CLNXQ0xH2V7EchNHV4RmbZLmmPdEaXZc5H2FXmDg==}
+  '@emnapi/runtime@1.10.0':
+    resolution: {integrity: sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA==}
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
@@ -1301,8 +1301,8 @@ packages:
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
 
-  '@img/colour@1.0.0':
-    resolution: {integrity: sha512-A5P/LfWGFSl6nsckYtjw9da+19jB8hkJ6ACTGcDfEJ0aE+l2n2El7dsVM7UVHZQ9s2lmYMWlrS21YLy2IR1LUw==}
+  '@img/colour@1.1.0':
+    resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
     engines: {node: '>=18'}
 
   '@img/sharp-darwin-arm64@0.34.5':
@@ -2448,8 +2448,8 @@ packages:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
 
-  baseline-browser-mapping@2.10.0:
-    resolution: {integrity: sha512-lIyg0szRfYbiy67j9KN8IyeD7q7hcmqnJ1ddWmNt19ItGpNN64mnllmxUNFIOdOm6by97jlL6wfpTTJrmnjWAA==}
+  baseline-browser-mapping@2.10.34:
+    resolution: {integrity: sha512-IMDedajPifLnHNY0X9n8hKxRTQ6/eTHwr5bDo04WnuqxyKw6LYtQywCuuqPZwhl3aBXMvQpJov42GLCwRRdQzw==}
     engines: {node: '>=6.0.0'}
     hasBin: true
 
@@ -2505,8 +2505,8 @@ packages:
   caniuse-lite@1.0.30001765:
     resolution: {integrity: sha512-LWcNtSyZrakjECqmpP4qdg0MMGdN368D7X8XvvAqOcqMv0RxnlqVKZl2V6/mBR68oYMxOZPLw/gO7DuisMHUvQ==}
 
-  caniuse-lite@1.0.30001772:
-    resolution: {integrity: sha512-mIwLZICj+ntVTw4BT2zfp+yu/AqV6GMKfJVJMx3MwPxs+uk/uj2GLl2dH8LQbjiLDX66amCga5nKFyDgRR43kg==}
+  caniuse-lite@1.0.30001797:
+    resolution: {integrity: sha512-l8xKG+gwAIExZGl9FrF7KUwuOmk6wbEPC9Xoy/RtnWv1XG0Q4LFlagaLpUv3Kiza3W/wm27zy0yWJEieYKAP6w==}
 
   chai@5.3.3:
     resolution: {integrity: sha512-4zNhdJD/iOjSH0A05ea+Ke6MU5mmpQcbQsSOkgdaUMJ9zTlDTD/GYlwohmIE2u0gaxHYiVHEn1Fw9mZ/ktJWgw==}
@@ -2606,100 +2606,8 @@ packages:
     resolution: {integrity: sha512-U4wWit0fyZuGuP7iNmRleQyK2V8wCuv57vf5l3MnG4z4fzNTjY/U13M8owyQ5RavqvqxBifWORaR3wIUzlN64g==}
     hasBin: true
 
-  drizzle-orm@0.38.4:
-    resolution: {integrity: sha512-s7/5BpLKO+WJRHspvpqTydxFob8i1vo2rEx4pY6TGY7QSMuUfWUuzaY0DIpXCkgHOo37BaFC+SJQb99dDUXT3Q==}
-    peerDependencies:
-      '@aws-sdk/client-rds-data': '>=3'
-      '@cloudflare/workers-types': '>=4'
-      '@electric-sql/pglite': '>=0.2.0'
-      '@libsql/client': '>=0.10.0'
-      '@libsql/client-wasm': '>=0.10.0'
-      '@neondatabase/serverless': '>=0.10.0'
-      '@op-engineering/op-sqlite': '>=2'
-      '@opentelemetry/api': ^1.4.1
-      '@planetscale/database': '>=1'
-      '@prisma/client': '*'
-      '@tidbcloud/serverless': '*'
-      '@types/better-sqlite3': '*'
-      '@types/pg': '*'
-      '@types/react': '>=18'
-      '@types/sql.js': '*'
-      '@vercel/postgres': '>=0.8.0'
-      '@xata.io/client': '*'
-      better-sqlite3: '>=7'
-      bun-types: '*'
-      expo-sqlite: '>=14.0.0'
-      knex: '*'
-      kysely: '*'
-      mysql2: '>=2'
-      pg: '>=8'
-      postgres: '>=3'
-      prisma: '*'
-      react: '>=18'
-      sql.js: '>=1'
-      sqlite3: '>=5'
-    peerDependenciesMeta:
-      '@aws-sdk/client-rds-data':
-        optional: true
-      '@cloudflare/workers-types':
-        optional: true
-      '@electric-sql/pglite':
-        optional: true
-      '@libsql/client':
-        optional: true
-      '@libsql/client-wasm':
-        optional: true
-      '@neondatabase/serverless':
-        optional: true
-      '@op-engineering/op-sqlite':
-        optional: true
-      '@opentelemetry/api':
-        optional: true
-      '@planetscale/database':
-        optional: true
-      '@prisma/client':
-        optional: true
-      '@tidbcloud/serverless':
-        optional: true
-      '@types/better-sqlite3':
-        optional: true
-      '@types/pg':
-        optional: true
-      '@types/react':
-        optional: true
-      '@types/sql.js':
-        optional: true
-      '@vercel/postgres':
-        optional: true
-      '@xata.io/client':
-        optional: true
-      better-sqlite3:
-        optional: true
-      bun-types:
-        optional: true
-      expo-sqlite:
-        optional: true
-      knex:
-        optional: true
-      kysely:
-        optional: true
-      mysql2:
-        optional: true
-      pg:
-        optional: true
-      postgres:
-        optional: true
-      prisma:
-        optional: true
-      react:
-        optional: true
-      sql.js:
-        optional: true
-      sqlite3:
-        optional: true
-
-  drizzle-orm@0.45.1:
-    resolution: {integrity: sha512-Te0FOdKIistGNPMq2jscdqngBRfBpC8uMFVwqjf6gtTVJHIQ/dosgV/CLBU2N4ZJBsXL5savCba9b0YJskKdcA==}
+  drizzle-orm@0.45.2:
+    resolution: {integrity: sha512-kY0BSaTNYWnoDMVoyY8uxmyHjpJW1geOmBMdSSicKo9CIIWkSxMIj2rkeSR51b8KAPB7m+qysjuHme5nKP+E5Q==}
     peerDependencies:
       '@aws-sdk/client-rds-data': '>=3'
       '@cloudflare/workers-types': '>=4'
@@ -3363,6 +3271,11 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  nanoid@3.3.12:
+    resolution: {integrity: sha512-ZB9RH/39qpq5Vu6Y+NmUaFhQR6pp+M2Xt76XBnEwDaGcVAqhlvxrl3B2bKS5D3NH3QR76v3aSrKaF/Kiy7lEtQ==}
+    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
+
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
@@ -3592,6 +3505,11 @@ packages:
 
   semver@7.7.4:
     resolution: {integrity: sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA==}
+    engines: {node: '>=10'}
+    hasBin: true
+
+  semver@7.8.2:
+    resolution: {integrity: sha512-c8jsqUZm3omBOI66G90z1Dyw5z622G8oLG+omfsHBJf3CWQTlOcwOjvOG6wtiNfW6anKm/eA39LMwMtMez2TiQ==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -4133,7 +4051,7 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
-  '@emnapi/runtime@1.8.1':
+  '@emnapi/runtime@1.10.0':
     dependencies:
       tslib: 2.8.1
     optional: true
@@ -4505,7 +4423,7 @@ snapshots:
 
   '@humanwhocodes/retry@0.4.3': {}
 
-  '@img/colour@1.0.0':
+  '@img/colour@1.1.0':
     optional: true
 
   '@img/sharp-darwin-arm64@0.34.5':
@@ -4590,7 +4508,7 @@ snapshots:
 
   '@img/sharp-wasm32@0.34.5':
     dependencies:
-      '@emnapi/runtime': 1.8.1
+      '@emnapi/runtime': 1.10.0
     optional: true
 
   '@img/sharp-win32-arm64@0.34.5':
@@ -5433,7 +5351,7 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
-  baseline-browser-mapping@2.10.0: {}
+  baseline-browser-mapping@2.10.34: {}
 
   baseline-browser-mapping@2.9.17: {}
 
@@ -5499,7 +5417,7 @@ snapshots:
 
   caniuse-lite@1.0.30001765: {}
 
-  caniuse-lite@1.0.30001772: {}
+  caniuse-lite@1.0.30001797: {}
 
   chai@5.3.3:
     dependencies:
@@ -5580,13 +5498,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.38.4(@types/react@19.2.9)(postgres@3.4.8)(react@19.2.4):
-    optionalDependencies:
-      '@types/react': 19.2.9
-      postgres: 3.4.8
-      react: 19.2.4
-
-  drizzle-orm@0.45.1(gel@2.2.0)(postgres@3.4.8):
+  drizzle-orm@0.45.2(gel@2.2.0)(postgres@3.4.8):
     optionalDependencies:
       gel: 2.2.0
       postgres: 3.4.8
@@ -6219,14 +6131,16 @@ snapshots:
 
   nanoid@3.3.11: {}
 
+  nanoid@3.3.12: {}
+
   natural-compare@1.4.0: {}
 
   next@16.1.6(@babel/core@7.28.6)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@next/env': 16.1.6
       '@swc/helpers': 0.5.15
-      baseline-browser-mapping: 2.10.0
-      caniuse-lite: 1.0.30001772
+      baseline-browser-mapping: 2.10.34
+      caniuse-lite: 1.0.30001797
       postcss: 8.4.31
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
@@ -6373,7 +6287,7 @@ snapshots:
 
   postcss@8.4.31:
     dependencies:
-      nanoid: 3.3.11
+      nanoid: 3.3.12
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
@@ -6465,13 +6379,16 @@ snapshots:
 
   semver@7.7.4: {}
 
+  semver@7.8.2:
+    optional: true
+
   set-cookie-parser@2.7.2: {}
 
   sharp@0.34.5:
     dependencies:
-      '@img/colour': 1.0.0
+      '@img/colour': 1.1.0
       detect-libc: 2.1.2
-      semver: 7.7.4
+      semver: 7.8.2
     optionalDependencies:
       '@img/sharp-darwin-arm64': 0.34.5
       '@img/sharp-darwin-x64': 0.34.5
