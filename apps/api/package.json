@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.13.8",
-    "@hono/zod-validator": "^0.4.2",
+    "@hono/zod-validator": "^0.9.1",
     "@openTiger/core": "workspace:*",
     "@openTiger/db": "workspace:*",
     "@openTiger/llm": "workspace:*",
